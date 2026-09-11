@@ -7,6 +7,26 @@ import org.junit.Test
 
 class NotificationTextExtractorTest {
     @Test
+    fun extractsAndTrimsNotificationTitle() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "  Order executed  ")
+        }
+
+        assertEquals("Order executed", NotificationTextExtractor.extractTitle(extras))
+    }
+
+    @Test
+    fun truncatesLongNotificationTitle() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "x".repeat(NotificationTextExtractor.MAX_TITLE_LENGTH + 100))
+        }
+
+        val result = NotificationTextExtractor.extractTitle(extras)
+        assertEquals(NotificationTextExtractor.MAX_TITLE_LENGTH, result.length)
+        assertTrue(result.all { it == 'x' })
+    }
+
+    @Test
     fun combinesTextBigTextAndLinesWithoutDuplicates() {
         val extras = Bundle().apply {
             putCharSequence("android.text", "Hello")
