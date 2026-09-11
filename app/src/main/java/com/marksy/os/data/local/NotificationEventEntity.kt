@@ -9,7 +9,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["sourcePackage", "sourceKey", "postedAt"], unique = true),
         Index(value = ["category"]),
-        Index(value = ["postedAt"])
+        Index(value = ["postedAt"]),
+        Index(value = ["deliveryState"])
     ]
 )
 data class NotificationEventEntity(
@@ -24,5 +25,16 @@ data class NotificationEventEntity(
     val priority: Int,
     val confidence: Float,
     val isTrading: Boolean,
+    val deliveryState: String = DeliveryState.NOT_APPLICABLE.name,
+    val deliveryAttempts: Int = 0,
+    val lastDeliveryAttemptAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+enum class DeliveryState {
+    NOT_APPLICABLE,
+    PENDING,
+    IN_FLIGHT,
+    DELIVERED,
+    FAILED
+}
