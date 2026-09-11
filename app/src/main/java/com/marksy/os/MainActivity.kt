@@ -32,7 +32,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -87,11 +86,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isNotificationAccessEnabled(): Boolean {
-        val enabled = Settings.Secure.getString(
-            contentResolver,
-            "enabled_notification_listeners"
-        ).orEmpty()
-
+        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
         val component = ComponentName(this, com.marksy.os.notification.MarksyNotificationListenerService::class.java)
         return enabled.split(':').any { value ->
             runCatching { ComponentName.unflattenFromString(value) == component }.getOrDefault(false)
@@ -106,31 +101,17 @@ class MainActivity : ComponentActivity() {
     private fun MarksyApp() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
-        val events by vm.recentEvents.collectAsStateWithLifecycle()
+        val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         var selected by remember { mutableIntStateOf(0) }
-        val tabs = listOf(
-            Tab("Home", Icons.Default.Home),
-            Tab("Inbox", Icons.Default.Inbox),
-            Tab("Ask", Icons.Default.SmartToy),
-            Tab("Trading", Icons.Default.ShowChart),
-            Tab("More", Icons.Default.MoreHoriz)
-        )
+        val tabs = listOf(Tab("Home", Icons.Default.Home), Tab("Inbox", Icons.Default.Inbox), Tab("Ask", Icons.Default.SmartToy), Tab("Trading", Icons.Default.ShowChart), Tab("More", Icons.Default.MoreHoriz))
 
-        Scaffold(
-            containerColor = Background,
-            bottomBar = {
-                NavigationBar(containerColor = Color(0xFF0D1210)) {
-                    tabs.forEachIndexed { index, tab ->
-                        NavigationBarItem(
-                            selected = selected == index,
-                            onClick = { selected = index },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) }
-                        )
-                    }
+        Scaffold(containerColor = Background, bottomBar = {
+            NavigationBar(containerColor = Color(0xFF0D1210)) {
+                tabs.forEachIndexed { index, tab ->
+                    NavigationBarItem(selected = selected == index, onClick = { selected = index }, icon = { Icon(tab.icon, contentDescription = tab.label) }, label = { Text(tab.label) })
                 }
             }
-        ) { padding ->
+        }) { padding ->
             when (selected) {
                 0 -> HomeScreen(events, padding)
                 1 -> InboxScreen(events, padding)
@@ -146,10 +127,7 @@ private data class Tab(val label: String, val icon: androidx.compose.ui.graphics
 
 @Composable
 private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 20.dp),
-        content = content
-    )
+    Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 }
 
 @Composable
@@ -157,7 +135,6 @@ private fun HomeScreen(events: List<NotificationEventEntity>, padding: PaddingVa
     val trading = events.count { it.isTrading }
     val messages = events.count { it.category == "MESSAGES" }
     val recent = events.take(4)
-
     ScreenColumn(padding) {
         Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
         Spacer(Modifier.height(8.dp))
@@ -165,33 +142,22 @@ private fun HomeScreen(events: List<NotificationEventEntity>, padding: PaddingVa
         Spacer(Modifier.height(6.dp))
         Text("Your notifications, organized locally. Trading events can flow to Marksy for analysis.", color = TextSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(20.dp))
-
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Inbox", events.size.toString(), Modifier.weight(1f))
             MetricCard("Trading", trading.toString(), Modifier.weight(1f))
             MetricCard("Messages", messages.toString(), Modifier.weight(1f))
         }
-
         Spacer(Modifier.height(24.dp))
         Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-
-        if (recent.isEmpty()) {
-            EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing events.")
-        } else {
-            recent.forEach { EventCard(it) }
-        }
+        if (recent.isEmpty()) EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing events.") else recent.forEach { EventCard(it) }
     }
 }
 
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Surface)) {
-        Column(Modifier.padding(12.dp)) {
-            Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(2.dp))
-            Text(label, color = TextSecondary, fontSize = 12.sp)
-        }
+        Column(Modifier.padding(12.dp)) { Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(2.dp)); Text(label, color = TextSecondary, fontSize = 12.sp) }
     }
 }
 
@@ -200,33 +166,18 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
     val filters = listOf("All", "TRADING", "MESSAGES", "PAYMENTS", "BANKING", "OTHER")
     var selectedFilter by remember { mutableStateOf("All") }
     val filtered = if (selectedFilter == "All") events else events.filter { it.category == selectedFilter }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text("Smart Inbox", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(5.dp))
             Text("Captured locally. Only eligible trading events leave the device.", color = TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(14.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                filters.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) }
-                    )
-                }
+                filters.forEach { filter -> FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) }) }
             }
         }
-
-        if (filtered.isEmpty()) {
-            item { EmptyState("Nothing here yet.", "New notifications matching this filter will appear here.") }
-        } else {
-            items(filtered, key = { it.id }) { EventCard(it) }
-        }
+        if (filtered.isEmpty()) item { EmptyState("Nothing here yet.", "New notifications matching this filter will appear here.") }
+        else items(filtered, key = { it.id }) { EventCard(it) }
     }
 }
 
@@ -240,9 +191,7 @@ private fun EventCard(event: NotificationEventEntity) {
             }
             Spacer(Modifier.height(6.dp))
             Text(event.title, color = TextPrimary, fontWeight = FontWeight.Medium)
-            if (event.body.isNotBlank()) {
-                Text(event.body, color = Color(0xFFB2BDB6), modifier = Modifier.padding(top = 4.dp), maxLines = 3)
-            }
+            if (event.body.isNotBlank()) Text(event.body, color = Color(0xFFB2BDB6), modifier = Modifier.padding(top = 4.dp), maxLines = 3)
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatTime(event.postedAt), color = TextMuted, fontSize = 11.sp)
@@ -264,63 +213,28 @@ private fun EventCard(event: NotificationEventEntity) {
 @Composable
 private fun TradingScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
     val trading = events.filter { it.isTrading }
-    LazyColumn(
-        Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item {
-            Text("Trading Intelligence", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(5.dp))
-            Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = TextSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(14.dp))
-        }
-        if (trading.isEmpty()) {
-            item { EmptyState("No trading events yet.", "Order and market notifications will appear here when captured.") }
-        } else {
-            items(trading, key = { it.id }) { EventCard(it) }
-        }
+    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { Text("Trading Intelligence", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(5.dp)); Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = TextSecondary, fontSize = 13.sp); Spacer(Modifier.height(14.dp)) }
+        if (trading.isEmpty()) item { EmptyState("No trading events yet.", "Order and market notifications will appear here when captured.") }
+        else items(trading, key = { it.id }) { EventCard(it) }
     }
 }
 
 @Composable
-private fun MoreScreen(
-    notificationAccessEnabled: Boolean,
-    openAccess: () -> Unit,
-    padding: PaddingValues
-) {
+private fun MoreScreen(notificationAccessEnabled: Boolean, openAccess: () -> Unit, padding: PaddingValues) {
     ScreenColumn(padding) {
         Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Surface)) {
             Column(Modifier.padding(16.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Notification access", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        if (notificationAccessEnabled) "ON" else "OFF",
-                        color = if (notificationAccessEnabled) Primary else TextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(if (notificationAccessEnabled) "ON" else "OFF", color = if (notificationAccessEnabled) Primary else TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    if (notificationAccessEnabled) {
-                        "Marksy OS can capture notifications on this device."
-                    } else {
-                        "Allow Marksy OS to capture and organize notifications on this device."
-                    },
-                    color = TextSecondary,
-                    fontSize = 13.sp
-                )
+                Text(if (notificationAccessEnabled) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device.", color = TextSecondary, fontSize = 13.sp)
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = openAccess) {
-                    Text(if (notificationAccessEnabled) "Manage Notification Access" else "Open Notification Access")
-                }
+                Button(onClick = openAccess) { Text(if (notificationAccessEnabled) "Manage Notification Access" else "Open Notification Access") }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -344,13 +258,8 @@ private fun PlaceholderScreen(title: String, subtitle: String, padding: PaddingV
 @Composable
 private fun EmptyState(title: String, subtitle: String) {
     Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.Start) {
-            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(5.dp))
-            Text(subtitle, color = TextSecondary, fontSize = 13.sp)
-        }
+        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.Start) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(5.dp)); Text(subtitle, color = TextSecondary, fontSize = 13.sp) }
     }
 }
 
-private fun formatTime(timestamp: Long): String =
-    SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(timestamp))
+private fun formatTime(timestamp: Long): String = SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(timestamp))
