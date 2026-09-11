@@ -17,14 +17,10 @@ class TradingDeliveryWorker(
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
 
-        // A process death must not leave an event permanently stuck in-flight.
         dao.recoverStaleInFlight(now - STALE_IN_FLIGHT_MS)
-
         val pending = dao.findPendingTrading(BATCH_SIZE)
         if (pending.isEmpty()) return Result.success()
 
-        // The default client is deliberately inert. Do not consume events while
-        // the real Marksy Gateway contract is still unconfigured.
         if (client is UnconfiguredMarksyGatewayClient) {
             Log.i(TAG, "Trading delivery deferred: Marksy Gateway is not configured")
             return Result.success()
@@ -33,8 +29,7 @@ class TradingDeliveryWorker(
         var failed = false
         for (event in pending) {
             val attempts = event.deliveryAttempts + 1
-            val attemptStarted = System.currentTimeMillis()
-            dao.updateDeliveryState(event.id, DeliveryState.IN_FLIGHT.name, attempts, attemptStarted)
+            dao.updateDeliveryState(event.id, DeliveryState.IN_FLIGHT.name, attempts, System.currentTimeMillis())
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
@@ -43,8 +38,10 @@ class TradingDeliveryWorker(
                 continue
             }
 
-            val result = runCatching { client.analyze(request) }.getOrElse {
-                Result.failure<MarksyInsight>(it)
+            val result = try {
+                client.analyze(request)
+            } catch (t: Throwable) {
+                kotlin.Result.failure(t)
             }
 
             if (result.isSuccess) {
@@ -55,7 +52,6 @@ class TradingDeliveryWorker(
             }
         }
 
-        // Leave failed events pending so the next connected-network run can retry.
         return if (failed) Result.retry() else Result.success()
     }
 
