@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,7 +56,6 @@ import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
-import com.marksy.os.gateway.MarksyGatewayProvider
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.MarksyViewModel
@@ -106,6 +104,7 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
         var selected by remember { mutableIntStateOf(0) }
         val tabs = listOf(Tab("Home", Icons.Default.Home), Tab("Inbox", Icons.Default.Inbox), Tab("Ask", Icons.Default.SmartToy), Tab("Trading", Icons.Default.ShowChart), Tab("More", Icons.Default.MoreHoriz))
@@ -118,7 +117,7 @@ class MainActivity : ComponentActivity() {
             }
         }) { padding ->
             when (selected) {
-                0 -> HomeScreen(events, padding)
+                0 -> HomeScreen(events, timelineEvents, padding)
                 1 -> InboxScreen(events, padding)
                 2 -> AskMarksyScreen(padding)
                 3 -> TradingScreen(tradingInsights, padding)
@@ -135,7 +134,7 @@ private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScop
     Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
-private fun HomeScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
+private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<NotificationEventEntity>, padding: PaddingValues) {
     ScreenColumn(padding) {
         Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
         Spacer(Modifier.height(8.dp))
@@ -146,12 +145,13 @@ private fun HomeScreen(events: List<NotificationEventEntity>, padding: PaddingVa
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Inbox", events.size.toString(), Modifier.weight(1f))
             MetricCard("Trading", events.count { it.isTrading }.toString(), Modifier.weight(1f))
-            MetricCard("Messages", events.count { it.category == "MESSAGES" }.toString(), Modifier.weight(1f))
+            MetricCard("Important", timeline.count { it.priority >= 2 }.toString(), Modifier.weight(1f))
         }
         Spacer(Modifier.height(24.dp))
         Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-        if (events.isEmpty()) EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing events.") else events.take(4).forEach { EventCard(it) }
+        if (timeline.isEmpty()) EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
+        else timeline.take(5).forEach { EventCard(it) }
     }
 }
 
@@ -216,9 +216,10 @@ private fun TradingInsightCard(insight: TradingInsight, onClick: () -> Unit) = C
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text(insight.source, color = Primary, fontWeight = FontWeight.SemiBold); Text(insight.status, color = TextSecondary, fontSize = 11.sp) }
         Spacer(Modifier.height(7.dp)); Text(insight.headline, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         if (insight.body.isNotBlank()) { Spacer(Modifier.height(5.dp)); Text(insight.body, color = TextSecondary, fontSize = 13.sp, maxLines = 4) }
+        insight.marksySummary?.takeIf { it.isNotBlank() }?.let { summary -> Spacer(Modifier.height(8.dp)); Text(summary, color = TextPrimary, fontSize = 13.sp, maxLines = 2) }
         Spacer(Modifier.height(10.dp)); Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            Text("Confidence ${(insight.confidence * 100).toInt()}%", color = TextMuted, fontSize = 11.sp)
-            Text("Tap for details", color = Primary, fontSize = 11.sp)
+            Text("Classifier ${(insight.confidence * 100).toInt()}%", color = TextMuted, fontSize = 11.sp)
+            Text(if (insight.marksySummary.isNullOrBlank()) "Tap for details" else "Marksy analysis • Tap for details", color = Primary, fontSize = 11.sp)
         }
     }
 }
@@ -232,7 +233,7 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
         Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(18.dp))
         SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device.") { Button(onClick = openAccess) { Text(if (access) "Manage Notification Access" else "Open Notification Access") } }
         Spacer(Modifier.height(12.dp))
-        SettingsCard("Marksy Gateway", "NOT CONFIGURED", "Trading events remain queued locally until the confirmed Marksy Gateway connection is configured.")
+        SettingsCard("Marksy Gateway", "WAITING", "The Android trading transport is ready. The confirmed Marksy API endpoint and response contract will be connected when available.")
         Spacer(Modifier.height(12.dp))
         SettingsCard("Local data", "LOCAL ONLY", "Ordinary notifications stay on this device. Non-trading events are never sent to the backend.") {
             Text("Retention: 7 days for ordinary events • 30 days for trading events", color = TextSecondary, fontSize = 12.sp); Spacer(Modifier.height(10.dp))
