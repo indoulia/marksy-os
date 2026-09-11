@@ -21,11 +21,18 @@ interface NotificationEventDao {
     suspend fun findPendingTrading(limit: Int): List<NotificationEventEntity>
 
     @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId")
-    suspend fun updateDeliveryState(
+    suspend fun updateDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?)
+
+    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt, insightSummary = :summary, insightAction = :action, insightConfidence = :confidence, insightReceivedAt = :receivedAt WHERE id = :eventId")
+    suspend fun markDeliveredWithInsight(
         eventId: Long,
         state: String,
         attempts: Int,
-        attemptedAt: Long?
+        attemptedAt: Long,
+        summary: String?,
+        action: String?,
+        confidence: Float?,
+        receivedAt: Long
     )
 
     @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
