@@ -37,7 +37,10 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val isTrading = result.category == NotificationClassifier.Category.TRADING
 
         serviceScope.launch {
-            val id = dao.insert(
+            // Room returns -1 when the unique source/package/timestamp key was
+            // already stored. The insert call itself still completed safely, so
+            // the duplicate can be consumed without creating another local row.
+            dao.insert(
                 NotificationEventEntity(
                     sourcePackage = packageName,
                     sourceName = SourceRegistry.displayName(packageName),
@@ -53,14 +56,12 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                 )
             )
 
-            // Consume only after successful local persistence. Never send raw
-            // notifications to the network from this service.
-            if (id != -1L) {
-                try {
-                    cancelNotification(sbn.key)
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Unable to cancel notification", e)
-                }
+            // Never send raw notifications to the network from this service.
+            // Cancellation happens only after the local insert operation returns.
+            try {
+                cancelNotification(sbn.key)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Unable to cancel notification", e)
             }
         }
     }
