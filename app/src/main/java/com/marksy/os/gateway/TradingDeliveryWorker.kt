@@ -29,25 +29,45 @@ class TradingDeliveryWorker(
         var failed = false
         for (event in pending) {
             val attempts = event.deliveryAttempts + 1
-            dao.updateDeliveryState(event.id, DeliveryState.IN_FLIGHT.name, attempts, System.currentTimeMillis())
+            dao.updateDeliveryState(
+                event.id,
+                DeliveryState.IN_FLIGHT.name,
+                attempts,
+                System.currentTimeMillis()
+            )
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
-                dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
+                dao.updateDeliveryState(
+                    event.id,
+                    DeliveryState.FAILED.name,
+                    attempts,
+                    System.currentTimeMillis()
+                )
                 failed = true
                 continue
             }
 
-            val result = try {
+            val result: kotlin.Result<MarksyInsight> = try {
                 client.analyze(request)
             } catch (t: Throwable) {
                 kotlin.Result.failure(t)
             }
 
             if (result.isSuccess) {
-                dao.updateDeliveryState(event.id, DeliveryState.DELIVERED.name, attempts, System.currentTimeMillis())
+                dao.updateDeliveryState(
+                    event.id,
+                    DeliveryState.DELIVERED.name,
+                    attempts,
+                    System.currentTimeMillis()
+                )
             } else {
-                dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                dao.updateDeliveryState(
+                    event.id,
+                    DeliveryState.PENDING.name,
+                    attempts,
+                    System.currentTimeMillis()
+                )
                 failed = true
             }
         }
