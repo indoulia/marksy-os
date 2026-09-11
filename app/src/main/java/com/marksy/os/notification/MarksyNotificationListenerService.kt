@@ -12,7 +12,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/** Android notification -> local Marksy OS event pipeline. */
 class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
@@ -72,14 +71,18 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     }
 
     private fun sourceName(packageName: String): String = when (packageName) {
-        "com.whatsapp" -> "WhatsApp"
+        "com.whatsapp", "com.whatsapp.w4b" -> "WhatsApp"
         "com.upstox.pro" -> "Upstox"
         "com.icicidirect" -> "ICICI Direct"
         "com.etmoney" -> "ET Money"
+        "com.zerodha.kite3", "com.zerodha.kite" -> "Zerodha"
+        "com.nextbillion.groww" -> "Groww"
+        "com.angelbroking.smartmoney", "com.angelbroking.lite" -> "Angel One"
+        "com.fivepaisa.trade" -> "5paisa"
         else -> packageName.substringAfterLast('.').ifBlank { packageName }
     }
 
     companion object {
-        private const val TAG = "MarksyNotification"
+        private const val TAG = "MarksyNotificationListener"
     }
 }
