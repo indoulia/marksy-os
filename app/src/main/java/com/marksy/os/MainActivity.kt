@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
 
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RetentionScheduler.schedule(applicationContext)
+        TradingDeliveryScheduler.schedule(applicationContext)
         setContent { MarksyApp() }
     }
 
