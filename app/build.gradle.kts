@@ -17,14 +17,10 @@ android {
         versionName = "0.1.0"
     }
 
-    buildFeatures {
-        compose = true
-    }
+    buildFeatures { compose = true }
 
     packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
+        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
 }
 
@@ -46,6 +42,7 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
