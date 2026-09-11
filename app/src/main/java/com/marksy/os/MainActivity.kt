@@ -1,5 +1,6 @@
 package com.marksy.os
 
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -9,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,11 +71,31 @@ private val TextSecondary = Color(0xFF9AA9A1)
 private val TextMuted = Color(0xFF657169)
 
 class MainActivity : ComponentActivity() {
+    private var notificationAccessEnabled by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
+        notificationAccessEnabled = isNotificationAccessEnabled()
         setContent { MarksyApp() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        notificationAccessEnabled = isNotificationAccessEnabled()
+    }
+
+    private fun isNotificationAccessEnabled(): Boolean {
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners"
+        ).orEmpty()
+
+        val component = ComponentName(this, com.marksy.os.notification.MarksyNotificationListenerService::class.java)
+        return enabled.split(':').any { value ->
+            runCatching { ComponentName.unflattenFromString(value) == component }.getOrDefault(false)
+        }
     }
 
     private fun openNotificationAccess() {
@@ -115,7 +136,7 @@ class MainActivity : ComponentActivity() {
                 1 -> InboxScreen(events, padding)
                 2 -> PlaceholderScreen("Ask Marksy", "Ask questions about what Marksy has learned.", padding)
                 3 -> TradingScreen(events, padding)
-                else -> MoreScreen(::openNotificationAccess, padding)
+                else -> MoreScreen(notificationAccessEnabled, ::openNotificationAccess, padding)
             }
         }
     }
@@ -263,17 +284,43 @@ private fun TradingScreen(events: List<NotificationEventEntity>, padding: Paddin
 }
 
 @Composable
-private fun MoreScreen(openAccess: () -> Unit, padding: PaddingValues) {
+private fun MoreScreen(
+    notificationAccessEnabled: Boolean,
+    openAccess: () -> Unit,
+    padding: PaddingValues
+) {
     ScreenColumn(padding) {
         Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Surface)) {
             Column(Modifier.padding(16.dp)) {
-                Text("Notification access", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Notification access", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (notificationAccessEnabled) "ON" else "OFF",
+                        color = if (notificationAccessEnabled) Primary else TextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Spacer(Modifier.height(6.dp))
-                Text("Allow Marksy OS to capture and organize notifications on this device.", color = TextSecondary, fontSize = 13.sp)
+                Text(
+                    if (notificationAccessEnabled) {
+                        "Marksy OS can capture notifications on this device."
+                    } else {
+                        "Allow Marksy OS to capture and organize notifications on this device."
+                    },
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
                 Spacer(Modifier.height(12.dp))
-                Button(onClick = openAccess) { Text("Open Notification Access") }
+                Button(onClick = openAccess) {
+                    Text(if (notificationAccessEnabled) "Manage Notification Access" else "Open Notification Access")
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
