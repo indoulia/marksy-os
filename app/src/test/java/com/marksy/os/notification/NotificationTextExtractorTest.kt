@@ -18,9 +18,31 @@ class NotificationTextExtractorTest {
     }
 
     @Test
+    fun includesSecondaryTextUsedBySomeNotifications() {
+        val extras = Bundle().apply {
+            putCharSequence("android.text", "Order executed")
+            putCharSequence("android.subText", "Upstox")
+        }
+
+        assertEquals("Order executed\nUpstox", NotificationTextExtractor.extract(extras))
+    }
+
+    @Test
+    fun removesDuplicateSecondaryText() {
+        val extras = Bundle().apply {
+            putCharSequence("android.text", "Upstox")
+            putCharSequence("android.subText", "Upstox")
+            putCharSequence("android.bigText", "Order executed")
+        }
+
+        assertEquals("Upstox\nOrder executed", NotificationTextExtractor.extract(extras))
+    }
+
+    @Test
     fun ignoresBlankValues() {
         val extras = Bundle().apply {
             putCharSequence("android.text", "  ")
+            putCharSequence("android.subText", "")
             putCharSequence("android.bigText", "Important")
             putCharSequenceArray("android.textLines", arrayOf("", "  "))
         }
