@@ -30,8 +30,24 @@ class NotificationLifecyclePolicyTest {
     }
 
     @Test
+    fun whitespaceAroundOwnPackageIsStillRecognized() {
+        assertFalse(
+            NotificationLifecyclePolicy.shouldCapture(
+                0,
+                "  $ownPackage  ",
+                " $ownPackage "
+            )
+        )
+    }
+
+    @Test
     fun blankSourcePackageIsNotCaptured() {
         assertFalse(NotificationLifecyclePolicy.shouldCapture(0, "   ", ownPackage))
+    }
+
+    @Test
+    fun blankOwnPackageIsNotCaptured() {
+        assertFalse(NotificationLifecyclePolicy.shouldCapture(0, "com.example.app", "   "))
     }
 
     @Test
