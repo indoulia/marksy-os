@@ -30,8 +30,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         // Never consume ongoing notifications such as music playback, active
-        // calls, navigation, VPN, or foreground services. Marksy OS only owns
-        // ordinary user notifications that can safely be moved into its inbox.
+        // calls, navigation, VPN, or foreground services.
         if ((sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
 
         val extras = sbn.notification.extras
@@ -44,14 +43,13 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
         val result = NotificationClassifier.classify(packageName, title, text)
         val isTrading = result.category == NotificationClassifier.Category.TRADING
+        val sourceName = SourceRegistry.displayName(applicationContext, packageName)
 
         serviceScope.launch {
-            // Room returns -1 when the unique source/package/timestamp key was
-            // already stored. The duplicate can still be safely consumed.
             dao.insert(
                 NotificationEventEntity(
                     sourcePackage = packageName,
-                    sourceName = SourceRegistry.displayName(packageName),
+                    sourceName = sourceName,
                     sourceKey = sbn.key,
                     title = title,
                     body = text,
@@ -64,11 +62,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                 )
             )
 
-            if (isTrading) {
-                TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
-            }
+            if (isTrading) TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
 
-            // Never send raw notifications to the network from this service.
+            // Raw notification content never leaves through this collector.
             // Cancellation happens only after the local insert operation returns.
             try {
                 cancelNotification(sbn.key)
