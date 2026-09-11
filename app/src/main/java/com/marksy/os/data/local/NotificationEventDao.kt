@@ -26,6 +26,10 @@ interface NotificationEventDao {
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?
 
+    /** Claims a pending event only if another worker has not claimed it first. */
+    @Query("UPDATE notification_events SET deliveryState = 'IN_FLIGHT', deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'PENDING'")
+    suspend fun claimPendingTrading(eventId: Long, attempts: Int, attemptedAt: Long): Int
+
     @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId")
     suspend fun updateDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?)
 
