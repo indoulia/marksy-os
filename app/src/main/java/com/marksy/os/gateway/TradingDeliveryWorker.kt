@@ -33,7 +33,9 @@ class TradingDeliveryWorker(
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
+                // This is a permanent local contract violation, not a transient network failure.
                 dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
+                Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
                 failed = true
                 continue
             }
