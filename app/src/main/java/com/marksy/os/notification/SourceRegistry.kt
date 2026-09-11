@@ -1,9 +1,11 @@
 package com.marksy.os.notification
 
+import android.content.Context
+
 /**
  * Central source metadata used by the generic notification collector.
- * Unknown packages intentionally remain supported and fall back to a readable
- * package-derived name.
+ * Known trading/messaging packages get stable product names; other installed
+ * apps use their Android application label when it can be resolved.
  */
 object SourceRegistry {
     private val names = mapOf(
@@ -19,6 +21,15 @@ object SourceRegistry {
         "com.angelbroking.lite" to "Angel One",
         "com.fivepaisa.trade" to "5paisa"
     )
+
+    fun displayName(context: Context, packageName: String): String {
+        names[packageName]?.let { return it }
+        return runCatching {
+            val applicationInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            context.packageManager.getApplicationLabel(applicationInfo).toString().trim()
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: packageName.substringAfterLast('.').ifBlank { packageName }
+    }
 
     fun displayName(packageName: String): String =
         names[packageName] ?: packageName.substringAfterLast('.').ifBlank { packageName }
