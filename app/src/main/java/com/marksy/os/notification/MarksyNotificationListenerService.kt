@@ -4,6 +4,7 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
@@ -20,7 +21,12 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.i(TAG, "Notification listener connected")
+        // Android can restore the listener without launching the UI. Re-register
+        // durable background work here so capture remains useful after a reboot
+        // or process restart as well as after a normal app launch.
+        RetentionScheduler.schedule(applicationContext)
+        TradingDeliveryScheduler.schedule(applicationContext)
+        Log.i(TAG, "Notification listener connected; background work scheduled")
     }
 
     override fun onListenerDisconnected() {
