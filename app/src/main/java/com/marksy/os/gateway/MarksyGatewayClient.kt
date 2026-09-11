@@ -18,7 +18,8 @@ class UnconfiguredMarksyGatewayClient : MarksyGatewayClient {
 }
 
 fun NotificationEventEntity.toMarksyTradingEventRequest(): MarksyTradingEventRequest? {
-    if (!isTrading) return null
+    // The routing flag and category must agree before anything can leave the device.
+    if (!isTrading || category != "TRADING" || sourceKey.isBlank()) return null
 
     return MarksyTradingEventRequest(
         eventId = id,
