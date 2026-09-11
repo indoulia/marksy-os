@@ -28,6 +28,10 @@ class TradingDeliveryWorker(
 
         var retryRequested = false
         for (event in pending) {
+            // Clear-data and WorkManager cancellation can stop this worker while
+            // a batch is being drained. Do not claim another event after that.
+            if (isStopped) return Result.success()
+
             val attempts = event.deliveryAttempts + 1
             val claimed = dao.claimPendingTrading(
                 eventId = event.id,
@@ -38,6 +42,19 @@ class TradingDeliveryWorker(
                 // Another worker (for example periodic work overlapping with an
                 // immediate request) claimed this event first.
                 continue
+            }
+
+            // Cancellation may arrive immediately after the atomic claim. Put
+            // the event back into PENDING rather than continuing toward the
+            // gateway after the user has cancelled delivery work.
+            if (isStopped) {
+                dao.updateDeliveryState(
+                    event.id,
+                    DeliveryState.PENDING.name,
+                    attempts,
+                    System.currentTimeMillis()
+                )
+                return Result.success()
             }
 
             val request = event.toMarksyTradingEventRequest()
