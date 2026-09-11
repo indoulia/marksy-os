@@ -28,6 +28,10 @@ data class NotificationEventEntity(
     val deliveryState: String = DeliveryState.NOT_APPLICABLE.name,
     val deliveryAttempts: Int = 0,
     val lastDeliveryAttemptAt: Long? = null,
+    val insightSummary: String? = null,
+    val insightAction: String? = null,
+    val insightConfidence: Float? = null,
+    val insightReceivedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 
