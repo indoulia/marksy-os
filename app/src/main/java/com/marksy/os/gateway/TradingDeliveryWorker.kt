@@ -29,7 +29,16 @@ class TradingDeliveryWorker(
         var retryRequested = false
         for (event in pending) {
             val attempts = event.deliveryAttempts + 1
-            dao.updateDeliveryState(event.id, DeliveryState.IN_FLIGHT.name, attempts, System.currentTimeMillis())
+            val claimed = dao.claimPendingTrading(
+                eventId = event.id,
+                attempts = attempts,
+                attemptedAt = System.currentTimeMillis()
+            )
+            if (claimed != 1) {
+                // Another worker (for example periodic work overlapping with an
+                // immediate request) claimed this event first.
+                continue
+            }
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
