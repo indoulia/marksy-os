@@ -40,7 +40,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             val id = dao.insert(
                 NotificationEventEntity(
                     sourcePackage = packageName,
-                    sourceName = sourceName(packageName),
+                    sourceName = SourceRegistry.displayName(packageName),
                     sourceKey = sbn.key,
                     title = title,
                     body = text,
@@ -68,18 +68,6 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
-    }
-
-    private fun sourceName(packageName: String): String = when (packageName) {
-        "com.whatsapp", "com.whatsapp.w4b" -> "WhatsApp"
-        "com.upstox.pro" -> "Upstox"
-        "com.icicidirect" -> "ICICI Direct"
-        "com.etmoney" -> "ET Money"
-        "com.zerodha.kite3", "com.zerodha.kite" -> "Zerodha"
-        "com.nextbillion.groww" -> "Groww"
-        "com.angelbroking.smartmoney", "com.angelbroking.lite" -> "Angel One"
-        "com.fivepaisa.trade" -> "5paisa"
-        else -> packageName.substringAfterLast('.').ifBlank { packageName }
     }
 
     companion object {
