@@ -11,7 +11,10 @@ class TradingInsightTest {
     private fun event(
         title: String,
         state: String = DeliveryState.PENDING.name,
-        trading: Boolean = true
+        trading: Boolean = true,
+        insightSummary: String? = null,
+        insightAction: String? = null,
+        insightConfidence: Float? = null
     ) = NotificationEventEntity(
         id = 42L,
         sourcePackage = "com.upstox.pro",
@@ -24,7 +27,10 @@ class TradingInsightTest {
         priority = 100,
         confidence = .96f,
         isTrading = trading,
-        deliveryState = state
+        deliveryState = state,
+        insightSummary = insightSummary,
+        insightAction = insightAction,
+        insightConfidence = insightConfidence
     )
 
     @Test fun executedOrderBecomesExecutionInsight() {
@@ -45,10 +51,23 @@ class TradingInsightTest {
         assertEquals("Order cancelled", insight?.headline)
     }
 
-    @Test fun deliveredEventShowsDeliveredState() {
+    @Test fun deliveredEventShowsMarksyResponseState() {
         val insight = event("Trade confirmation", DeliveryState.DELIVERED.name).toTradingInsight()
-        assertEquals("Sent to Marksy", insight?.status)
+        assertEquals("Marksy response received", insight?.status)
         assertEquals(DeliveryState.DELIVERED.name, insight?.deliveryState)
+    }
+
+    @Test fun persistedMarksyResponseIsExposedWithoutFabrication() {
+        val insight = event(
+            "Trade confirmation",
+            DeliveryState.DELIVERED.name,
+            insightSummary = "Momentum remains favorable.",
+            insightAction = "WATCH",
+            insightConfidence = .81f
+        ).toTradingInsight()
+        assertEquals("Momentum remains favorable.", insight?.marksySummary)
+        assertEquals("WATCH", insight?.marksyAction)
+        assertEquals(.81f, insight?.marksyConfidence)
     }
 
     @Test fun failedEventShowsFailureState() {
