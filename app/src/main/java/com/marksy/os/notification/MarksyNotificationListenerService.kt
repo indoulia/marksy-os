@@ -35,7 +35,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString().orEmpty().trim()
-        val text = buildNotificationText(extras)
+        val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
 
         val packageName = sbn.packageName
@@ -74,21 +74,6 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         }
     }
 
-    private fun buildNotificationText(extras: android.os.Bundle): String {
-        val text = extras.getCharSequence("android.text")?.toString().orEmpty().trim()
-        val bigText = extras.getCharSequence("android.bigText")?.toString().orEmpty().trim()
-        val lines = extras.getCharSequenceArray("android.textLines")
-            ?.map { it.toString().trim() }
-            ?.filter { it.isNotBlank() }
-            .orEmpty()
-
-        return listOf(text, bigText, lines.joinToString("\n"))
-            .filter { it.isNotBlank() }
-            .distinct()
-            .joinToString("\n")
-            .take(MAX_BODY_LENGTH)
-    }
-
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
@@ -96,6 +81,5 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "MarksyNotificationListener"
-        private const val MAX_BODY_LENGTH = 4000
     }
 }
