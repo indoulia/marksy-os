@@ -1,0 +1,35 @@
+package com.marksy.os.notification
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class NotificationListenerStatusTest {
+    private val target = "com.marksy.os/com.marksy.os.notification.MarksyNotificationListenerService"
+
+    @Test
+    fun matchingListenerIsDetected() {
+        assertTrue(NotificationListenerStatus.containsListener(target, target))
+    }
+
+    @Test
+    fun matchingListenerAmongOtherServicesIsDetected() {
+        val enabled = "com.example.one/Service:$target:com.example.two/Service"
+        assertTrue(NotificationListenerStatus.containsListener(enabled, target))
+    }
+
+    @Test
+    fun missingListenerIsNotDetected() {
+        assertFalse(
+            NotificationListenerStatus.containsListener(
+                "com.example.one/Service:com.example.two/Service",
+                target
+            )
+        )
+    }
+
+    @Test
+    fun emptyOrMalformedEntriesAreIgnored() {
+        assertFalse(NotificationListenerStatus.containsListener("::not-a-component", target))
+    }
+}
