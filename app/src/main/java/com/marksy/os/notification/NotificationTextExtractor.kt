@@ -8,7 +8,11 @@ import android.os.Bundle
  * deterministic and easy to test.
  */
 object NotificationTextExtractor {
+    const val MAX_TITLE_LENGTH = 500
     const val MAX_BODY_LENGTH = 4000
+
+    fun extractTitle(extras: Bundle): String =
+        extras.getCharSequence("android.title")?.toString().orEmpty().trim().take(MAX_TITLE_LENGTH)
 
     fun extract(extras: Bundle): String {
         val text = extras.getCharSequence("android.text")?.toString().orEmpty().trim()
