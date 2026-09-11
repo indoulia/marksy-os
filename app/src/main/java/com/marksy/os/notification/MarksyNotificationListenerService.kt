@@ -3,6 +3,7 @@ package com.marksy.os.notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
         val packageName = sbn.packageName
         val result = NotificationClassifier.classify(packageName, title, text)
+        val isTrading = result.category == NotificationClassifier.Category.TRADING
 
         serviceScope.launch {
             val id = dao.insert(
@@ -47,7 +49,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                     category = result.category.name,
                     priority = result.priority,
                     confidence = result.confidence,
-                    isTrading = result.category == NotificationClassifier.Category.TRADING
+                    isTrading = isTrading,
+                    deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
                 )
             )
 
