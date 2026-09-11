@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [NotificationEventEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -22,7 +22,10 @@ abstract class MarksyDatabase : RoomDatabase() {
                     context.applicationContext,
                     MarksyDatabase::class.java,
                     "marksy_os.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { INSTANCE = it }
             }
     }
 }
