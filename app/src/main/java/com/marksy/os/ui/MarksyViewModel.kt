@@ -5,9 +5,17 @@ import androidx.lifecycle.ViewModelProvider
 import com.marksy.os.data.NotificationRepository
 import com.marksy.os.data.local.NotificationEventEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-class MarksyViewModel(repository: NotificationRepository) : ViewModel() {
+class MarksyViewModel(private val repository: NotificationRepository) : ViewModel() {
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
+    val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
+
+    fun eventsForCategory(category: String): Flow<List<NotificationEventEntity>> =
+        repository.observeCategory(category)
+
+    fun countByCategory(events: List<NotificationEventEntity>, category: String): Int =
+        events.count { it.category == category }
 }
 
 class MarksyViewModelFactory(private val repository: NotificationRepository) : ViewModelProvider.Factory {
