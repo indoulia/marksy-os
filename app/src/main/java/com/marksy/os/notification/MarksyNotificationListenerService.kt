@@ -1,6 +1,5 @@
 package com.marksy.os.notification
 
-import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -35,17 +34,18 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // Never consume ongoing notifications such as music playback, active
-        // calls, navigation, VPN, or foreground services.
-        if ((sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
+        val packageName = sbn.packageName
+        if (!NotificationLifecyclePolicy.shouldCapture(
+                notificationFlags = sbn.notification.flags,
+                sourcePackage = packageName,
+                ownPackage = applicationContext.packageName
+            )
+        ) return
 
         val extras = sbn.notification.extras
         val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
-
-        val packageName = sbn.packageName
-        if (packageName == applicationContext.packageName) return
 
         val result = NotificationClassifier.classify(packageName, title, text)
         val isTrading = result.category == NotificationClassifier.Category.TRADING
