@@ -19,6 +19,18 @@ class NotificationListenerStatusTest {
     }
 
     @Test
+    fun matchingListenerWithWhitespaceIsDetected() {
+        val enabled = " com.example.one/Service : $target : com.example.two/Service "
+        assertTrue(NotificationListenerStatus.containsListener(enabled, target))
+    }
+
+    @Test
+    fun similarButDifferentServiceIsNotDetected() {
+        val differentService = "com.marksy.os/com.marksy.os.notification.OtherNotificationListenerService"
+        assertFalse(NotificationListenerStatus.containsListener(differentService, target))
+    }
+
+    @Test
     fun missingListenerIsNotDetected() {
         assertFalse(
             NotificationListenerStatus.containsListener(
