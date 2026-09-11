@@ -46,7 +46,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val sourceName = SourceRegistry.displayName(applicationContext, packageName)
 
         serviceScope.launch {
-            dao.insert(
+            val insertedId = dao.insert(
                 NotificationEventEntity(
                     sourcePackage = packageName,
                     sourceName = sourceName,
@@ -62,7 +62,11 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                 )
             )
 
-            if (isTrading) TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
+            // IGNORE conflicts make repeated Android callbacks harmless. Only
+            // newly persisted trading events need a new delivery request.
+            if (insertedId != -1L && isTrading) {
+                TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
+            }
 
             // Raw notification content never leaves through this collector.
             // Cancellation happens only after the local insert operation returns.
