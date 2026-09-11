@@ -26,17 +26,16 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        var failed = false
+        var retryRequested = false
         for (event in pending) {
             val attempts = event.deliveryAttempts + 1
             dao.updateDeliveryState(event.id, DeliveryState.IN_FLIGHT.name, attempts, System.currentTimeMillis())
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
-                // This is a permanent local contract violation, not a transient network failure.
+                // Permanent local validation failure: do not retry this event forever.
                 dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
                 Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
-                failed = true
                 continue
             }
 
@@ -62,12 +61,12 @@ class TradingDeliveryWorker(
                 },
                 onFailure = {
                     dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                    failed = true
+                    retryRequested = true
                 }
             )
         }
 
-        return if (failed) Result.retry() else Result.success()
+        return if (retryRequested) Result.retry() else Result.success()
     }
 
     companion object {
