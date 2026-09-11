@@ -20,9 +20,15 @@ object NotificationListenerStatus {
         return containsListener(enabled, component.flattenToString())
     }
 
-    internal fun containsListener(enabledListeners: String, target: String): Boolean =
-        enabledListeners.split(':').any { entry ->
-            runCatching { ComponentName.unflattenFromString(entry) == ComponentName.unflattenFromString(target) }
-                .getOrDefault(false)
+    internal fun containsListener(enabledListeners: String, target: String): Boolean {
+        val normalizedTarget = target.trim()
+        if (normalizedTarget.isBlank()) return false
+
+        return enabledListeners.split(':').any { entry ->
+            runCatching {
+                ComponentName.unflattenFromString(entry.trim()) ==
+                    ComponentName.unflattenFromString(normalizedTarget)
+            }.getOrDefault(false)
         }
+    }
 }
