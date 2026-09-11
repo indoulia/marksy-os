@@ -4,7 +4,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 
 /**
  * Presentation-only trading insight model.
- * V1 deliberately does not execute orders or invent backend responses.
+ * V1 never invents a recommendation when Marksy has not responded.
  */
 data class TradingInsight(
     val eventId: Long,
@@ -14,7 +14,10 @@ data class TradingInsight(
     val confidence: Float,
     val deliveryState: String,
     val status: String,
-    val body: String
+    val body: String,
+    val marksySummary: String? = null,
+    val marksyAction: String? = null,
+    val marksyConfidence: Float? = null
 )
 
 fun NotificationEventEntity.toTradingInsight(): TradingInsight? {
@@ -36,12 +39,15 @@ fun NotificationEventEntity.toTradingInsight(): TradingInsight? {
         confidence = confidence,
         deliveryState = deliveryState,
         status = when (deliveryState) {
-            "DELIVERED" -> "Sent to Marksy"
+            "DELIVERED" -> "Marksy response received"
             "PENDING" -> "Waiting for Marksy"
             "IN_FLIGHT" -> "Sending to Marksy"
             "FAILED" -> "Delivery failed"
             else -> "Local only"
         },
-        body = body
+        body = body,
+        marksySummary = insightSummary,
+        marksyAction = insightAction,
+        marksyConfidence = insightConfidence
     )
 }
