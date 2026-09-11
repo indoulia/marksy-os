@@ -11,6 +11,10 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
 
+    val tradingInsights: Flow<List<TradingInsight>> = tradingEvents.map { events ->
+        events.mapNotNull(NotificationEventEntity::toTradingInsight)
+    }
+
     fun eventsForCategory(category: String): Flow<List<NotificationEventEntity>> =
         repository.observeCategory(category)
 
