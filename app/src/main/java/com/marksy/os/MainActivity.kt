@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -32,6 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -57,10 +59,12 @@ import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.marksy.os.notification.SourceRegistry
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
+import com.marksy.os.ui.TimelineScreen
 import com.marksy.os.ui.TradingInsight
 import com.marksy.os.ui.TradingInsightDetailDialog
 import kotlinx.coroutines.launch
@@ -108,6 +112,7 @@ class MainActivity : ComponentActivity() {
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
         var selectedTab by remember { mutableIntStateOf(0) }
+        var showTimeline by remember { mutableStateOf(false) }
         val tabs = listOf(
             Tab("Home", Icons.Default.Home),
             Tab("Inbox", Icons.Default.Inbox),
@@ -119,30 +124,67 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             containerColor = Background,
             bottomBar = {
-                NavigationBar(containerColor = Color(0xFF0D1210)) {
-                    tabs.forEachIndexed { index, tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            icon = { Icon(tab.icon, tab.label) },
-                            label = { Text(tab.label) }
-                        )
+                if (!showTimeline) {
+                    NavigationBar(containerColor = Color(0xFF0D1210)) {
+                        tabs.forEachIndexed { index, tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                icon = { Icon(tab.icon, tab.label) },
+                                label = { Text(tab.label) }
+                            )
+                        }
                     }
                 }
             }
         ) { padding ->
-            when (selectedTab) {
-                0 -> HomeScreen(events, timelineEvents, padding)
-                1 -> InboxScreen(events, padding)
-                2 -> AskMarksyScreen(padding)
-                3 -> TradingScreen(tradingInsights, padding)
-                else -> MoreScreen(notificationAccessEnabled, ::openNotificationAccess, repository::clearAll, padding)
+            if (showTimeline) {
+                TimelineHost(
+                    events = timelineEvents,
+                    padding = padding,
+                    onBack = { showTimeline = false }
+                )
+            } else {
+                when (selectedTab) {
+                    0 -> HomeScreen(events, timelineEvents, padding)
+                    1 -> InboxScreen(events, padding)
+                    2 -> AskMarksyScreen(padding)
+                    3 -> TradingScreen(tradingInsights, padding)
+                    else -> MoreScreen(
+                        access = notificationAccessEnabled,
+                        openAccess = ::openNotificationAccess,
+                        clearAll = {
+                            TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
+                            repository.clearAll()
+                        },
+                        openTimeline = { showTimeline = true },
+                        padding = padding
+                    )
+                }
             }
         }
     }
 }
 
 private data class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
+
+@Composable
+private fun TimelineHost(
+    events: List<NotificationEventEntity>,
+    padding: PaddingValues,
+    onBack: () -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+            Text("Timeline", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        }
+        TimelineScreen(events, PaddingValues(bottom = padding.calculateBottomPadding()))
+    }
+}
 
 @Composable
 private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) =
@@ -319,6 +361,7 @@ private fun MoreScreen(
     access: Boolean,
     openAccess: () -> Unit,
     clearAll: suspend () -> Unit,
+    openTimeline: () -> Unit,
     padding: PaddingValues
 ) {
     var showClear by remember { mutableStateOf(false) }
@@ -343,6 +386,22 @@ private fun MoreScreen(
         )
         Spacer(Modifier.height(12.dp))
         SettingsCard(
+            "Timeline",
+            "LOCAL",
+            "Review meaningful events chronologically. Low-value OTHER notifications are excluded."
+        ) {
+            Button(onClick = openTimeline) { Text("Open Timeline") }
+        }
+        Spacer(Modifier.height(12.dp))
+        SettingsCard(
+            "Sources",
+            "REGISTERED",
+            "Trading routing is limited to known broker packages. Other apps use their Android application label and stay local unless explicitly eligible."
+        ) {
+            Text(SourceRegistry.knownSources().joinToString(" • "), color = TextSecondary, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        SettingsCard(
             "Local data",
             "LOCAL ONLY",
             "Ordinary notifications stay on this device. Non-trading events are never sent to the backend."
@@ -352,15 +411,15 @@ private fun MoreScreen(
             Button(onClick = { showClear = true }, enabled = !clearing) { Text(if (clearing) "Clearing…" else "Clear all local data") }
         }
         Spacer(Modifier.height(20.dp))
-        Text("Insights • Timeline • advanced settings", color = TextMuted)
-        Text("Coming Soon", color = Primary, Modifier.padding(top = 4.dp))
+        Text("Advanced settings", color = TextMuted)
+        Text("More controls will be added only when they have a concrete V1 use case.", color = TextSecondary, fontSize = 12.sp, Modifier.padding(top = 4.dp))
     }
 
     if (showClear) {
         AlertDialog(
             onDismissRequest = { if (!clearing) showClear = false },
             title = { Text("Clear local data?") },
-            text = { Text("This removes all captured Marksy OS notification events from this device. Backend data is not affected.") },
+            text = { Text("This removes all captured Marksy OS notification events from this device and cancels the pending immediate trading delivery job. Backend data is not affected.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -389,7 +448,7 @@ private fun SettingsCard(
     Column(Modifier.padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-            Text(value, color = if (value == "ON" || value == "LOCAL ONLY") Primary else TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(value, color = if (value == "ON" || value == "LOCAL ONLY" || value == "LOCAL") Primary else TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(6.dp))
         Text(description, color = TextSecondary, fontSize = 13.sp)
