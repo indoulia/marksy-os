@@ -34,7 +34,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         if ((sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
 
         val extras = sbn.notification.extras
-        val title = extras.getCharSequence("android.title")?.toString().orEmpty().trim()
+        val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
 
