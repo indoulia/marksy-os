@@ -11,8 +11,18 @@ class NotificationClassifierTest {
         assertTrue(result.confidence >= .9f)
     }
 
+    @Test fun nonTradingBrokerPromotionIsNotTrading() {
+        val result = NotificationClassifier.classify("com.upstox.pro", "Special offer", "Get 50% discount on brokerage")
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, result.category)
+    }
+
     @Test fun whatsappMessageIsMessages() {
         val result = NotificationClassifier.classify("com.whatsapp", "New message", "Hello")
+        assertEquals(NotificationClassifier.Category.MESSAGES, result.category)
+    }
+
+    @Test fun whatsappBusinessMessageIsMessages() {
+        val result = NotificationClassifier.classify("com.whatsapp.w4b", "New message", "Hello from a business")
         assertEquals(NotificationClassifier.Category.MESSAGES, result.category)
     }
 
