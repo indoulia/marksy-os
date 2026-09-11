@@ -1,6 +1,5 @@
 package com.marksy.os
 
-import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -44,14 +43,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marksy.os.data.MarksyContainer
+import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
-import com.marksy.os.notification.MarksyNotificationListenerService
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RetentionScheduler.schedule(applicationContext)
         setContent { MarksyApp() }
     }
 
@@ -65,7 +65,6 @@ class MainActivity : ComponentActivity() {
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle()
         var selected by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-
         val tabs = listOf(
             Tab("Home", Icons.Default.Home), Tab("Inbox", Icons.Default.Inbox),
             Tab("Ask", Icons.Default.SmartToy), Tab("Trading", Icons.Default.ShowChart),
@@ -122,7 +121,7 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
     ) {
         item { Text("Smart Inbox", color = Color(0xFFE8F1EC), fontSize = 28.sp, fontWeight = FontWeight.Bold) }
         item { Text("Captured locally. No notification warehouse.", color = Color(0xFF8F9D95)) }
-        items(events, key = { it.id }) { event -> EventCard(event) }
+        items(events, key = { it.id }) { EventCard(it) }
         if (events.isEmpty()) item { Text("Waiting for notifications…", color = Color(0xFF7F8B84)) }
     }
 }
