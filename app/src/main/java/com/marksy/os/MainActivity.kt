@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -36,11 +37,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +57,11 @@ import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.MarksyGatewayProvider
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -117,7 +122,7 @@ class MainActivity : ComponentActivity() {
                 1 -> InboxScreen(events, padding)
                 2 -> PlaceholderScreen("Ask Marksy", "Ask questions about what Marksy has learned.", padding)
                 3 -> TradingScreen(events, padding)
-                else -> MoreScreen(notificationAccessEnabled, ::openNotificationAccess, padding)
+                else -> MoreScreen(notificationAccessEnabled, ::openNotificationAccess, repository::clearAll, padding)
             }
         }
     }
@@ -221,25 +226,97 @@ private fun TradingScreen(events: List<NotificationEventEntity>, padding: Paddin
 }
 
 @Composable
-private fun MoreScreen(notificationAccessEnabled: Boolean, openAccess: () -> Unit, padding: PaddingValues) {
+private fun MoreScreen(
+    notificationAccessEnabled: Boolean,
+    openAccess: () -> Unit,
+    clearAll: suspend () -> Unit,
+    padding: PaddingValues
+) {
+    var showClearDialog by remember { mutableStateOf(false) }
+    var clearInProgress by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     ScreenColumn(padding) {
         Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = Surface)) {
-            Column(Modifier.padding(16.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Notification access", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    Text(if (notificationAccessEnabled) "ON" else "OFF", color = if (notificationAccessEnabled) Primary else TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(if (notificationAccessEnabled) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device.", color = TextSecondary, fontSize = 13.sp)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = openAccess) { Text(if (notificationAccessEnabled) "Manage Notification Access" else "Open Notification Access") }
+
+        SettingsCard(
+            title = "Notification access",
+            value = if (notificationAccessEnabled) "ON" else "OFF",
+            description = if (notificationAccessEnabled) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device."
+        ) {
+            Button(onClick = openAccess) { Text(if (notificationAccessEnabled) "Manage Notification Access" else "Open Notification Access") }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SettingsCard(
+            title = "Marksy Gateway",
+            value = "NOT CONFIGURED",
+            description = if (MarksyGatewayProvider.client() is com.marksy.os.gateway.UnconfiguredMarksyGatewayClient) {
+                "Trading events remain queued locally until the confirmed Marksy Gateway connection is configured."
+            } else {
+                "Trading events can be delivered to Marksy when connectivity is available."
+            }
+        )
+
+        Spacer(Modifier.height(12.dp))
+        SettingsCard(
+            title = "Local data",
+            value = "LOCAL ONLY",
+            description = "Ordinary notifications stay on this device. Non-trading events are never sent to the backend."
+        ) {
+            Text("Retention: 7 days for ordinary events • 30 days for trading events", color = TextSecondary, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = { showClearDialog = true }, enabled = !clearInProgress) {
+                Text(if (clearInProgress) "Clearing…" else "Clear all local data")
             }
         }
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(Modifier.height(20.dp))
         Text("Ask Marksy • Insights • Timeline • advanced settings", color = TextMuted)
         Text("Coming Soon", color = Primary, modifier = Modifier.padding(top = 4.dp))
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!clearInProgress) showClearDialog = false },
+            title = { Text("Clear local data?") },
+            text = { Text("This removes all captured Marksy OS notification events from this device. It cannot be undone. Backend data is not affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    clearInProgress = true
+                    scope.launch {
+                        clearAll()
+                        clearInProgress = false
+                        showClearDialog = false
+                    }
+                }, enabled = !clearInProgress) { Text("Clear") }
+            },
+            dismissButton = { TextButton(onClick = { showClearDialog = false }, enabled = !clearInProgress) { Text("Cancel") } }
+        )
+    }
+}
+
+@Composable
+private fun SettingsCard(
+    title: String,
+    value: String,
+    description: String,
+    action: (@Composable () -> Unit)? = null
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(value, color = if (value == "ON" || value == "LOCAL ONLY") Primary else TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(description, color = TextSecondary, fontSize = 13.sp)
+            if (action != null) {
+                Spacer(Modifier.height(12.dp))
+                action()
+            }
+        }
     }
 }
 
