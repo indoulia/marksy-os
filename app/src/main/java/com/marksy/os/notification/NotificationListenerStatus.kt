@@ -17,9 +17,12 @@ object NotificationListenerStatus {
             context,
             MarksyNotificationListenerService::class.java
         )
-        return enabled.split(':').any { entry ->
-            runCatching { ComponentName.unflattenFromString(entry) == component }
+        return containsListener(enabled, component.flattenToString())
+    }
+
+    internal fun containsListener(enabledListeners: String, target: String): Boolean =
+        enabledListeners.split(':').any { entry ->
+            runCatching { ComponentName.unflattenFromString(entry) == ComponentName.unflattenFromString(target) }
                 .getOrDefault(false)
         }
-    }
 }
