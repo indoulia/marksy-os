@@ -60,11 +60,12 @@ object TradingDeliveryScheduler {
     }
 
     /**
-     * Removes queued/running delivery work when the user explicitly clears
-     * local data. This prevents an old queued job from processing records
-     * after the local store has been wiped.
+     * Cancels both delivery paths when local data is explicitly cleared.
+     * The next app startup schedules the durable periodic path again.
      */
     fun cancelPendingDelivery(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK_NAME)
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(IMMEDIATE_WORK_NAME)
+        workManager.cancelUniqueWork(WORK_NAME)
     }
 }
