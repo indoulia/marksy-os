@@ -23,6 +23,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findPendingTrading(limit: Int): List<NotificationEventEntity>
 
+    @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
+    suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?
+
     @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId")
     suspend fun updateDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?)
 
