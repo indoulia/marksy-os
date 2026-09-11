@@ -61,6 +61,7 @@ import com.marksy.os.gateway.MarksyGatewayProvider
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
+import com.marksy.os.ui.TradingInsight
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
         var selected by remember { mutableIntStateOf(0) }
         val tabs = listOf(Tab("Home", Icons.Default.Home), Tab("Inbox", Icons.Default.Inbox), Tab("Ask", Icons.Default.SmartToy), Tab("Trading", Icons.Default.ShowChart), Tab("More", Icons.Default.MoreHoriz))
 
@@ -121,7 +123,7 @@ class MainActivity : ComponentActivity() {
                 0 -> HomeScreen(events, padding)
                 1 -> InboxScreen(events, padding)
                 2 -> PlaceholderScreen("Ask Marksy", "Ask questions about what Marksy has learned.", padding)
-                3 -> TradingScreen(events, padding)
+                3 -> TradingScreen(tradingInsights, padding)
                 else -> MoreScreen(notificationAccessEnabled, ::openNotificationAccess, repository::clearAll, padding)
             }
         }
@@ -216,12 +218,42 @@ private fun EventCard(event: NotificationEventEntity) {
 }
 
 @Composable
-private fun TradingScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
-    val trading = events.filter { it.isTrading }
+private fun TradingScreen(insights: List<TradingInsight>, padding: PaddingValues) {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("Trading Intelligence", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(5.dp)); Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = TextSecondary, fontSize = 13.sp); Spacer(Modifier.height(14.dp)) }
-        if (trading.isEmpty()) item { EmptyState("No trading events yet.", "Order and market notifications will appear here when captured.") }
-        else items(trading, key = { it.id }) { EventCard(it) }
+        item {
+            Text("Trading Intelligence", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+        }
+        if (insights.isEmpty()) {
+            item { EmptyState("No trading events yet.", "Order and market notifications will appear here when captured.") }
+        } else {
+            items(insights, key = { it.eventId }) { TradingInsightCard(it) }
+        }
+    }
+}
+
+@Composable
+private fun TradingInsightCard(insight: TradingInsight) {
+    Card(colors = CardDefaults.cardColors(containerColor = SurfaceRaised), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(15.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(insight.source, color = Primary, fontWeight = FontWeight.SemiBold)
+                Text(insight.status, color = TextSecondary, fontSize = 11.sp)
+            }
+            Spacer(Modifier.height(7.dp))
+            Text(insight.headline, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            if (insight.body.isNotBlank()) {
+                Spacer(Modifier.height(5.dp))
+                Text(insight.body, color = TextSecondary, fontSize = 13.sp, maxLines = 4)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Confidence ${(insight.confidence * 100).toInt()}%", color = TextMuted, fontSize = 11.sp)
+                Text(insight.eventType.lowercase().replaceFirstChar { it.uppercase() }, color = TextMuted, fontSize = 11.sp)
+            }
+        }
     }
 }
 
