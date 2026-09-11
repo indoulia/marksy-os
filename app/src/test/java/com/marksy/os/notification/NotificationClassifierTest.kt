@@ -11,6 +11,11 @@ class NotificationClassifierTest {
         assertTrue(result.confidence >= .9f)
     }
 
+    @Test fun tradingSignalFromUnknownPackageIsStillTrading() {
+        val result = NotificationClassifier.classify("com.example.broker", "Trade Executed", "SELL 5 TCS")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
+
     @Test fun nonTradingBrokerPromotionIsNotTrading() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Special offer", "Get 50% discount on brokerage")
         assertEquals(NotificationClassifier.Category.PROMOTIONS, result.category)
@@ -29,6 +34,20 @@ class NotificationClassifierTest {
     @Test fun otpTakesPriorityOverGenericPayment() {
         val result = NotificationClassifier.classify("com.bank", "OTP", "Your verification code is 123456")
         assertEquals(NotificationClassifier.Category.OTP, result.category)
+    }
+
+    @Test fun tradingTakesPriorityOverBankingLanguage() {
+        val result = NotificationClassifier.classify("com.upstox.pro", "Order Executed", "Amount credited to trading account")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
+
+    @Test fun deliveryLanguageDoesNotBecomeTradingForBrokerPromotion() {
+        val result = NotificationClassifier.classify("com.upstox.pro", "Delivery", "Your welcome kit shipment is out for delivery")
+        assertEquals(NotificationClassifier.Category.DELIVERY, result.category)
+    }
+
+    @Test fun sourceRegistryNamesWhatsappBusinessExplicitly() {
+        assertEquals("WhatsApp Business", SourceRegistry.displayName("com.whatsapp.w4b"))
     }
 
     @Test fun unknownNotificationFallsBackToOther() {
