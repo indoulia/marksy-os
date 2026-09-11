@@ -11,9 +11,9 @@ class NotificationClassifierTest {
         assertTrue(result.confidence >= .9f)
     }
 
-    @Test fun tradingSignalFromUnknownPackageIsStillTrading() {
+    @Test fun tradingLanguageFromUnknownPackageIsNotRoutedAsTrading() {
         val result = NotificationClassifier.classify("com.example.broker", "Trade Executed", "SELL 5 TCS")
-        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+        assertEquals(NotificationClassifier.Category.OTHER, result.category)
     }
 
     @Test fun nonTradingBrokerPromotionIsNotTrading() {
