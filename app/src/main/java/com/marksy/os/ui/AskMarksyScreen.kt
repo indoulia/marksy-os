@@ -61,6 +61,7 @@ fun AskMarksyScreen(
         }
         items(prompts) { prompt ->
             Card(
+                onClick = { onPromptSelected(prompt) },
                 colors = CardDefaults.cardColors(containerColor = AskSurface),
                 modifier = Modifier.fillMaxWidth()
             ) {
