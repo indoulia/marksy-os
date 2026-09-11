@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -26,14 +29,19 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,10 +52,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
+import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val Background = Color(0xFF070A09)
+private val Surface = Color(0xFF101613)
+private val SurfaceRaised = Color(0xFF151C18)
+private val Primary = Color(0xFF72D49A)
+private val TextPrimary = Color(0xFFE8F1EC)
+private val TextSecondary = Color(0xFF9AA9A1)
+private val TextMuted = Color(0xFF657169)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,15 +86,17 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle()
-        var selected by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        var selected by remember { mutableIntStateOf(0) }
         val tabs = listOf(
-            Tab("Home", Icons.Default.Home), Tab("Inbox", Icons.Default.Inbox),
-            Tab("Ask", Icons.Default.SmartToy), Tab("Trading", Icons.Default.ShowChart),
+            Tab("Home", Icons.Default.Home),
+            Tab("Inbox", Icons.Default.Inbox),
+            Tab("Ask", Icons.Default.SmartToy),
+            Tab("Trading", Icons.Default.ShowChart),
             Tab("More", Icons.Default.MoreHoriz)
         )
 
         Scaffold(
-            containerColor = Color(0xFF070A09),
+            containerColor = Background,
             bottomBar = {
                 NavigationBar(containerColor = Color(0xFF0D1210)) {
                     tabs.forEachIndexed { index, tab ->
@@ -91,7 +113,7 @@ class MainActivity : ComponentActivity() {
             when (selected) {
                 0 -> HomeScreen(events, padding)
                 1 -> InboxScreen(events, padding)
-                2 -> PlaceholderScreen("Ask Marksy", padding)
+                2 -> PlaceholderScreen("Ask Marksy", "Ask questions about what Marksy has learned.", padding)
                 3 -> TradingScreen(events, padding)
                 else -> MoreScreen(::openNotificationAccess, padding)
             }
@@ -102,43 +124,118 @@ class MainActivity : ComponentActivity() {
 private data class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 @Composable
+private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 20.dp),
+        content = content
+    )
+}
+
+@Composable
 private fun HomeScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
-    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Marksy OS", color = Color(0xFFE8F1EC), fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Text("Your Life. One Intelligent View.", color = Color(0xFF9AA9A1), fontSize = 16.sp)
-            Spacer(Modifier.height(20.dp))
-            Text("${events.size} events captured locally", color = Color(0xFF72D49A))
+    val trading = events.count { it.isTrading }
+    val messages = events.count { it.category == "MESSAGES" }
+    val recent = events.take(4)
+
+    ScreenColumn(padding) {
+        Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+        Spacer(Modifier.height(8.dp))
+        Text("Less noise. More intelligence.", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text("Your notifications, organized locally. Trading events can flow to Marksy for analysis.", color = TextSecondary, fontSize = 14.sp)
+        Spacer(Modifier.height(20.dp))
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricCard("Inbox", events.size.toString(), Modifier.weight(1f))
+            MetricCard("Trading", trading.toString(), Modifier.weight(1f))
+            MetricCard("Messages", messages.toString(), Modifier.weight(1f))
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+
+        if (recent.isEmpty()) {
+            EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing events.")
+        } else {
+            recent.forEach { EventCard(it) }
+        }
+    }
+}
+
+@Composable
+private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Surface)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(2.dp))
+            Text(label, color = TextSecondary, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
 private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
+    val filters = listOf("All", "TRADING", "MESSAGES", "PAYMENTS", "BANKING", "OTHER")
+    var selectedFilter by remember { mutableStateOf("All") }
+    val filtered = if (selectedFilter == "All") events else events.filter { it.category == selectedFilter }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { Text("Smart Inbox", color = Color(0xFFE8F1EC), fontSize = 28.sp, fontWeight = FontWeight.Bold) }
-        item { Text("Captured locally. No notification warehouse.", color = Color(0xFF8F9D95)) }
-        items(events, key = { it.id }) { EventCard(it) }
-        if (events.isEmpty()) item { Text("Waiting for notifications…", color = Color(0xFF7F8B84)) }
+        item {
+            Text("Smart Inbox", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            Text("Captured locally. Only eligible trading events leave the device.", color = TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                filters.forEach { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) }
+                    )
+                }
+            }
+        }
+
+        if (filtered.isEmpty()) {
+            item { EmptyState("Nothing here yet.", "New notifications matching this filter will appear here.") }
+        } else {
+            items(filtered, key = { it.id }) { EventCard(it) }
+        }
     }
 }
 
 @Composable
 private fun EventCard(event: NotificationEventEntity) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101613)), modifier = Modifier.fillMaxWidth()) {
+    Card(colors = CardDefaults.cardColors(containerColor = if (event.isTrading) SurfaceRaised else Surface), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(event.sourceName, color = Color(0xFF72D49A), fontWeight = FontWeight.SemiBold)
-                Text(event.category, color = Color(0xFF8F9D95), fontSize = 12.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(event.sourceName, color = if (event.isTrading) Primary else TextSecondary, fontWeight = FontWeight.SemiBold)
+                Text(event.category.lowercase().replaceFirstChar { it.uppercase() }, color = TextMuted, fontSize = 11.sp)
             }
             Spacer(Modifier.height(6.dp))
-            Text(event.title, color = Color(0xFFE8F1EC), fontWeight = FontWeight.Medium)
-            if (event.body.isNotBlank()) Text(event.body, color = Color(0xFFB2BDB6), modifier = Modifier.padding(top = 4.dp))
+            Text(event.title, color = TextPrimary, fontWeight = FontWeight.Medium)
+            if (event.body.isNotBlank()) {
+                Text(event.body, color = Color(0xFFB2BDB6), modifier = Modifier.padding(top = 4.dp), maxLines = 3)
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatTime(event.postedAt), color = TextMuted, fontSize = 11.sp)
+                if (event.isTrading) {
+                    val state = when (event.deliveryState) {
+                        DeliveryState.DELIVERED.name -> "Sent to Marksy"
+                        DeliveryState.PENDING.name -> "Queued for Marksy"
+                        DeliveryState.IN_FLIGHT.name -> "Sending…"
+                        DeliveryState.FAILED.name -> "Delivery failed"
+                        else -> "Trading event"
+                    }
+                    Text(state, color = if (event.deliveryState == DeliveryState.FAILED.name) TextSecondary else Primary, fontSize = 11.sp)
+                }
+            }
         }
     }
 }
@@ -146,36 +243,67 @@ private fun EventCard(event: NotificationEventEntity) {
 @Composable
 private fun TradingScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
     val trading = events.filter { it.isTrading }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("Trading Intelligence", color = Color(0xFFE8F1EC), fontSize = 28.sp, fontWeight = FontWeight.Bold) }
-        item { Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = Color(0xFF8F9D95)) }
-        items(trading, key = { it.id }) { EventCard(it) }
-        if (trading.isEmpty()) item { Text("No trading events yet.", color = Color(0xFF7F8B84)) }
+    LazyColumn(
+        Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Text("Trading Intelligence", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            Text("Trading events are isolated for Marksy analysis. Execution is disabled in V1.", color = TextSecondary, fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+        }
+        if (trading.isEmpty()) {
+            item { EmptyState("No trading events yet.", "Order and market notifications will appear here when captured.") }
+        } else {
+            items(trading, key = { it.id }) { EventCard(it) }
+        }
     }
 }
 
 @Composable
 private fun MoreScreen(openAccess: () -> Unit, padding: PaddingValues) {
-    Column(Modifier.fillMaxSize().padding(padding).padding(20.dp)) {
-        Text("More", color = Color(0xFFE8F1EC), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+    ScreenColumn(padding) {
+        Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
-        Text("Notification access", color = Color(0xFFE8F1EC), fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text("Allow Marksy OS to capture and organize notifications on this device.", color = Color(0xFF9AA9A1))
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = openAccess) { Text("Open Notification Access") }
-        Spacer(Modifier.height(28.dp))
-        Text("Ask Marksy • Insights • Timeline • advanced settings", color = Color(0xFF657169))
-        Text("Coming Soon", color = Color(0xFF72D49A), modifier = Modifier.padding(top = 4.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = Surface)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Notification access", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Text("Allow Marksy OS to capture and organize notifications on this device.", color = TextSecondary, fontSize = 13.sp)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = openAccess) { Text("Open Notification Access") }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Ask Marksy • Insights • Timeline • advanced settings", color = TextMuted)
+        Text("Coming Soon", color = Primary, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
 @Composable
-private fun PlaceholderScreen(title: String, padding: PaddingValues) {
+private fun PlaceholderScreen(title: String, subtitle: String, padding: PaddingValues) {
     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, color = Color(0xFFE8F1EC), fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Text("Coming Soon", color = Color(0xFF72D49A), modifier = Modifier.padding(top = 8.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(28.dp)) {
+            Text(title, color = TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(subtitle, color = TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp))
+            Text("Coming Soon", color = Primary, modifier = Modifier.padding(top = 12.dp))
         }
     }
 }
+
+@Composable
+private fun EmptyState(title: String, subtitle: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.Start) {
+            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(5.dp))
+            Text(subtitle, color = TextSecondary, fontSize = 13.sp)
+        }
+    }
+}
+
+private fun formatTime(timestamp: Long): String =
+    SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(timestamp))
