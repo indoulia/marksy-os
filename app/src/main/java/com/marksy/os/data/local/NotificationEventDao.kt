@@ -28,8 +28,14 @@ interface NotificationEventDao {
         attemptedAt: Long?
     )
 
-    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff")
-    suspend fun deleteOlderThan(cutoff: Long): Int
+    @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
+    suspend fun recoverStaleInFlight(cutoff: Long): Int
+
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
+    suspend fun deleteOldNonTrading(cutoff: Long): Int
+
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1")
+    suspend fun deleteOldTrading(cutoff: Long): Int
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
