@@ -18,13 +18,8 @@ class RetentionWorker(
         val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
         val now = System.currentTimeMillis()
 
-        dao.deleteOldNonTrading(now - SEVEN_DAYS_MS)
-        dao.deleteOldTrading(now - THIRTY_DAYS_MS)
+        dao.deleteOldNonTrading(RetentionPolicy.nonTradingCutoff(now))
+        dao.deleteOldTrading(RetentionPolicy.tradingCutoff(now))
         return Result.success()
-    }
-
-    companion object {
-        private const val SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000
-        private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
     }
 }
