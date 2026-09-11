@@ -6,8 +6,8 @@ import androidx.work.WorkerParameters
 import com.marksy.os.data.local.MarksyDatabase
 
 /**
- * Bounds local notification storage. Ordinary events are intentionally short-lived;
- * trading events get a longer local window for intelligence/audit context.
+ * Keeps ordinary notifications short-lived while preserving trading context
+ * for a longer local audit/intelligence window.
  */
 class RetentionWorker(
     appContext: Context,
@@ -18,15 +18,13 @@ class RetentionWorker(
         val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
         val now = System.currentTimeMillis()
 
-        // DAO cleanup is conservative: the current schema stores one retention
-        // timestamp, so keep a bounded 7-day local inbox. Trading-specific
-        // long-term retention can be introduced when the event lifecycle gains
-        // explicit state/forwarding timestamps.
-        dao.deleteOlderThan(now - SEVEN_DAYS_MS)
+        dao.deleteOldNonTrading(now - SEVEN_DAYS_MS)
+        dao.deleteOldTrading(now - THIRTY_DAYS_MS)
         return Result.success()
     }
 
     companion object {
         private const val SEVEN_DAYS_MS = 7L * 24 * 60 * 60 * 1000
+        private const val THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000
     }
 }
