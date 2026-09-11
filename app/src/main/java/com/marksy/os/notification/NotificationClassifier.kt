@@ -15,6 +15,18 @@ object NotificationClassifier {
         val terms: List<String>
     )
 
+    private val tradingPackages = setOf(
+        "com.upstox.pro",
+        "com.icicidirect",
+        "com.etmoney",
+        "com.zerodha.kite3",
+        "com.zerodha.kite",
+        "com.nextbillion.groww",
+        "com.angelbroking.smartmoney",
+        "com.angelbroking.lite",
+        "com.fivepaisa.trade"
+    )
+
     // High-signal rules come first. Generic words such as "paid" must never
     // override a stronger trading or OTP signal.
     private val rules = listOf(
@@ -22,8 +34,8 @@ object NotificationClassifier {
         Rule(Category.TRADING, 100, .96f, listOf(
             "order executed", "order filled", "buy order", "sell order", "trade executed",
             "trade confirmation", "position opened", "position closed", "stop loss", "target hit",
-            "market alert", "order rejected", "order cancelled", "order canceled",
-            "upstox", "icici direct", "et money", "zerodha", "groww", "angel one", "5paisa"
+            "market alert", "order rejected", "order cancelled", "order canceled", "executed at",
+            "filled at", "quantity executed", "average price", "p&l", "profit and loss"
         )),
         Rule(Category.BANKING, 80, .92f, listOf(
             "credited", "debited", "account balance", "bank alert", "withdrawn", "deposit",
@@ -53,8 +65,22 @@ object NotificationClassifier {
     )
 
     fun classify(packageName: String, title: String, body: String): Result {
-        val haystack = "$packageName $title $body".lowercase()
-        val rule = rules.firstOrNull { candidate -> candidate.terms.any(haystack::contains) }
+        val normalizedPackage = packageName.lowercase()
+        val notificationText = "$title $body".lowercase()
+
+        // A broker package is a source hint, not proof that the notification is
+        // a trade. Require an actual trading signal before routing it to Marksy.
+        if (normalizedPackage in tradingPackages) {
+            val tradingRule = rules.first { it.category == Category.TRADING }
+            if (tradingRule.terms.any(notificationText::contains)) {
+                return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
+            }
+        }
+
+        val haystack = "$normalizedPackage $title $body".lowercase()
+        val rule = rules.firstOrNull { candidate ->
+            candidate.category != Category.TRADING && candidate.terms.any(haystack::contains)
+        }
         return rule?.let { Result(it.category, it.priority, it.confidence) }
             ?: Result(Category.OTHER, 10, .50f)
     }
