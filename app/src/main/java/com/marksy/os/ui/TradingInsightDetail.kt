@@ -22,15 +22,9 @@ private val DetailSecondary = Color(0xFF9AA9A1)
 private val DetailPrimary = Color(0xFF72D49A)
 private val DetailMuted = Color(0xFF657169)
 
-/**
- * Read-only V1 detail surface. This presents captured event information and
- * delivery state without implying that a recommendation or broker action exists.
- */
+/** Read-only V1 detail surface; no broker action is possible here. */
 @Composable
-fun TradingInsightDetailDialog(
-    insight: TradingInsight,
-    onDismiss: () -> Unit
-) {
+fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(insight.headline, color = DetailText) },
@@ -44,6 +38,25 @@ fun TradingInsightDetailDialog(
                 Text("Captured notification", color = DetailMuted, fontSize = 11.sp)
                 Spacer(Modifier.height(4.dp))
                 Text(insight.body.ifBlank { "No notification body was captured." }, color = DetailSecondary, fontSize = 13.sp)
+                if (insight.marksySummary != null) {
+                    Spacer(Modifier.height(14.dp))
+                    Text("Marksy analysis", color = DetailPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(insight.marksySummary, color = DetailText, fontSize = 14.sp)
+                }
+                insight.marksyAction?.takeIf { it.isNotBlank() }?.let { action ->
+                    Spacer(Modifier.height(10.dp))
+                    Text("Marksy action", color = DetailMuted, fontSize = 11.sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text(action, color = DetailText, fontSize = 13.sp)
+                }
+                insight.marksyConfidence?.let { confidence ->
+                    Spacer(Modifier.height(7.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Marksy confidence", color = DetailMuted, fontSize = 11.sp)
+                        Text("${(confidence * 100).toInt()}%", color = DetailSecondary, fontSize = 11.sp)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Classification", color = DetailMuted, fontSize = 11.sp)
@@ -55,16 +68,9 @@ fun TradingInsightDetailDialog(
                     Text("${(insight.confidence * 100).toInt()}%", color = DetailSecondary, fontSize = 11.sp)
                 }
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "Live execution is disabled in V1. This screen does not place, modify, or cancel brokerage orders.",
-                    color = DetailPrimary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+                Text("Live execution is disabled in V1. This screen cannot place, modify, or cancel brokerage orders.", color = DetailPrimary, fontSize = 12.sp)
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
 }
