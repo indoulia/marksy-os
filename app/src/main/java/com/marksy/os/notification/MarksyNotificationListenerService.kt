@@ -1,5 +1,6 @@
 package com.marksy.os.notification
 
+import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -27,19 +28,25 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // Never consume ongoing notifications such as music playback, active
+        // calls, navigation, VPN, or foreground services. Marksy OS only owns
+        // ordinary user notifications that can safely be moved into its inbox.
+        if ((sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
+
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString().orEmpty().trim()
         val text = extras.getCharSequence("android.text")?.toString().orEmpty().trim()
         if (title.isBlank() && text.isBlank()) return
 
         val packageName = sbn.packageName
+        if (packageName == applicationContext.packageName) return
+
         val result = NotificationClassifier.classify(packageName, title, text)
         val isTrading = result.category == NotificationClassifier.Category.TRADING
 
         serviceScope.launch {
             // Room returns -1 when the unique source/package/timestamp key was
-            // already stored. The insert call itself still completed safely, so
-            // the duplicate can be consumed without creating another local row.
+            // already stored. The duplicate can still be safely consumed.
             dao.insert(
                 NotificationEventEntity(
                     sourcePackage = packageName,
