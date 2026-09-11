@@ -58,4 +58,13 @@ object TradingDeliveryScheduler {
             request
         )
     }
+
+    /**
+     * Removes queued/running delivery work when the user explicitly clears
+     * local data. This prevents an old queued job from processing records
+     * after the local store has been wiped.
+     */
+    fun cancelPendingDelivery(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK_NAME)
+    }
 }
