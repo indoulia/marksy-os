@@ -22,6 +22,9 @@ object SourceRegistry {
         "com.fivepaisa.trade" to "5paisa"
     )
 
+    /** Stable list for diagnostics/settings UI. */
+    fun knownSources(): List<String> = names.values.distinct().sorted()
+
     fun displayName(context: Context, packageName: String): String {
         names[packageName]?.let { return it }
         return runCatching {
