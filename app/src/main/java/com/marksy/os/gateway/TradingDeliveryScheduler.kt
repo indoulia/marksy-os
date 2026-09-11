@@ -38,6 +38,10 @@ object TradingDeliveryScheduler {
      * Requests a prompt delivery attempt after a new trading event is stored.
      * Network constraints still apply, and the periodic worker remains the
      * durable fallback if this one-time request cannot run immediately.
+     *
+     * KEEP avoids replacing a delivery request that is already queued/running.
+     * The worker drains a batch of pending trading events, so one request is
+     * sufficient even when several notifications arrive close together.
      */
     fun requestImmediateDelivery(context: Context) {
         val constraints = Constraints.Builder()
@@ -50,7 +54,7 @@ object TradingDeliveryScheduler {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             IMMEDIATE_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             request
         )
     }
