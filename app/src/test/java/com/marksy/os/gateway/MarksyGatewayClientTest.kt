@@ -1,7 +1,7 @@
 package com.marksy.os.gateway
 
 import com.marksy.os.data.local.NotificationEventEntity
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -27,7 +27,7 @@ class MarksyGatewayClientTest {
     }
 
     @Test
-    fun unconfiguredClientDoesNotPretendDeliverySucceeded() = runTest {
+    fun unconfiguredClientDoesNotPretendDeliverySucceeded() = runBlocking {
         val request = requireNotNull(event(isTrading = true).toMarksyTradingEventRequest())
 
         val result = UnconfiguredMarksyGatewayClient().analyze(request)
