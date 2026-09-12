@@ -19,6 +19,9 @@ class MarksyTipsApiClient(
             val payload = MarksyTipPayloadBuilder.from(request)
                 ?: throw IllegalArgumentException("Trading notification does not contain a safe symbol candidate")
             val created = postTip(payload)
+            if (created.status.equals("FAILED", ignoreCase = true)) {
+                throw MarksyTerminalException("Marksy rejected the trading tip")
+            }
             if (created.tipId.isBlank()) {
                 MarksyInsight(request.eventId, "Marksy tip status: ${created.status}", created.status)
             } else {
@@ -96,7 +99,11 @@ class MarksyTipsApiClient(
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IOException("Marksy Tips API returned HTTP $code${errorDetail(response)}")
+            if (code !in 200..299) {
+                val detail = errorDetail(response)
+                if (code in 400..499) throw MarksyTerminalException("Marksy Tips API returned HTTP $code$detail")
+                throw IOException("Marksy Tips API returned HTTP $code$detail")
+            }
             return JSONObject(response).also { envelope ->
                 if (!envelope.has("data") || !envelope.has("meta")) {
                     throw IOException("Marksy Tips API returned an invalid response envelope")
@@ -127,6 +134,8 @@ class MarksyTipsApiClient(
         const val MAX_LIST_ITEMS = 20
     }
 }
+
+class MarksyTerminalException(message: String) : IOException(message)
 
 private const val DEFAULT_MARKSY_API_BASE_URL = "https://marksy.indoulia.com/api/v1"
 
