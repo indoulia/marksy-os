@@ -5,4 +5,4 @@
     android:notificationTimeout="250"
     android:canRetrieveWindowContent="true"
     android:description="@string/whatsapp_accessibility_description"
-    android:settingsActivity="com.marksy.os.MainActivity" />
+    android:settingsActivity="com.marksy.os.notification.WhatsAppSettingsActivity" />
