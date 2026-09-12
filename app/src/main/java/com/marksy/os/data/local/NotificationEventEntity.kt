@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
     tableName = "notification_events",
     indices = [
         Index(value = ["sourcePackage", "sourceKey"], unique = true),
+        Index(value = ["sourcePackage", "eventFingerprint"], unique = true),
         Index(value = ["category"]),
         Index(value = ["postedAt"]),
         Index(value = ["deliveryState"])
@@ -18,6 +19,7 @@ data class NotificationEventEntity(
     val sourcePackage: String,
     val sourceName: String,
     val sourceKey: String,
+    val eventFingerprint: String,
     val title: String,
     val body: String,
     val postedAt: Long,
