@@ -1,5 +1,6 @@
 package com.marksy.os.gateway
 
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -15,7 +16,7 @@ class MarksyTipsApiClient(
 
     override suspend fun analyze(request: MarksyTradingEventRequest): Result<MarksyInsight> {
         if (integrationKey.isBlank()) return Result.failure(IllegalStateException("MARKSY_INTEGRATION_KEY is not configured"))
-        return runCatching {
+        return try {
             val payload = MarksyTipPayloadBuilder.from(request)
                 ?: throw IllegalArgumentException("Trading notification does not contain a safe symbol candidate")
             val created = postTip(payload)
@@ -23,10 +24,14 @@ class MarksyTipsApiClient(
                 throw MarksyTerminalException("Marksy rejected the trading tip")
             }
             if (created.tipId.isBlank()) {
-                MarksyInsight(request.eventId, "Marksy tip status: ${created.status}", created.status)
+                Result.success(MarksyInsight(request.eventId, "Marksy tip status: ${created.status}", created.status))
             } else {
-                fetchTip(created.tipId, request.eventId, created.status)
+                Result.success(fetchTip(created.tipId, request.eventId, created.status))
             }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Throwable) {
+            Result.failure(error)
         }
     }
 
