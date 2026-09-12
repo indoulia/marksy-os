@@ -48,7 +48,13 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val result = NotificationClassifier.classify(packageName, title, text)
         val isTrading = result.category == NotificationClassifier.Category.TRADING
         val sourceName = SourceRegistry.displayName(applicationContext, packageName)
-        val fingerprint = EventFingerprint.create(packageName, result.category.name, title, text)
+        val fingerprint = EventFingerprint.create(
+            packageName,
+            result.category.name,
+            title,
+            text,
+            sbn.postTime
+        )
 
         serviceScope.launch {
             try {
