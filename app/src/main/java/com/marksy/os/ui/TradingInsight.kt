@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 
 /**
@@ -20,34 +21,40 @@ data class TradingInsight(
     val marksyConfidence: Float? = null
 )
 
+/** Keep confidence display bounded even if a future classifier/backend returns bad values. */
+fun confidencePercent(confidence: Float): Int =
+    (confidence.coerceIn(0f, 1f) * 100f).toInt()
+
+private fun tradingHeadline(title: String): String = when {
+    title.contains("rejected", ignoreCase = true) -> "Order rejected"
+    title.contains("cancel", ignoreCase = true) -> "Order cancelled"
+    title.contains("execut", ignoreCase = true) || title.contains("fill", ignoreCase = true) -> "Trade execution detected"
+    title.contains("order", ignoreCase = true) -> "Trading order detected"
+    else -> "Trading event detected"
+}
+
+private fun deliveryStatus(deliveryState: String): String = when (deliveryState) {
+    DeliveryState.DELIVERED.name -> "Marksy response received"
+    DeliveryState.PENDING.name -> "Waiting for Marksy"
+    DeliveryState.IN_FLIGHT.name -> "Sending to Marksy"
+    DeliveryState.FAILED.name -> "Delivery failed"
+    else -> "Local only"
+}
+
 fun NotificationEventEntity.toTradingInsight(): TradingInsight? {
     if (!isTrading) return null
 
-    val headline = when {
-        title.contains("rejected", ignoreCase = true) -> "Order rejected"
-        title.contains("cancel", ignoreCase = true) -> "Order cancelled"
-        title.contains("execut", ignoreCase = true) || title.contains("fill", ignoreCase = true) -> "Trade execution detected"
-        title.contains("order", ignoreCase = true) -> "Trading order detected"
-        else -> "Trading event detected"
-    }
-
     return TradingInsight(
         eventId = id,
-        headline = headline,
+        headline = tradingHeadline(title),
         source = sourceName,
         eventType = category,
-        confidence = confidence,
+        confidence = confidence.coerceIn(0f, 1f),
         deliveryState = deliveryState,
-        status = when (deliveryState) {
-            "DELIVERED" -> "Marksy response received"
-            "PENDING" -> "Waiting for Marksy"
-            "IN_FLIGHT" -> "Sending to Marksy"
-            "FAILED" -> "Delivery failed"
-            else -> "Local only"
-        },
+        status = deliveryStatus(deliveryState),
         body = body,
-        marksySummary = insightSummary,
-        marksyAction = insightAction,
-        marksyConfidence = insightConfidence
+        marksySummary = insightSummary?.takeIf { it.isNotBlank() },
+        marksyAction = insightAction?.takeIf { it.isNotBlank() },
+        marksyConfidence = insightConfidence?.coerceIn(0f, 1f)
     )
 }
