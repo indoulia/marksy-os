@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,26 +33,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val WhatsAppBackground = Color(0xFF070A09)
 private val WhatsAppSurface = Color(0xFF101613)
 private val WhatsAppPrimary = Color(0xFF72D49A)
 private val WhatsAppText = Color(0xFFE8F1EC)
 private val WhatsAppSecondary = Color(0xFF9AA9A1)
 
 class WhatsAppSettingsActivity : ComponentActivity() {
+    private var accessibilityEnabled by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        accessibilityEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent {
             MaterialTheme {
                 WhatsAppSettingsScreen(
-                    isEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this),
+                    isEnabled = accessibilityEnabled,
                     senders = WhatsAppSenderWatchlist.get(this),
-                    onOpenAccessibility = {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    },
+                    onOpenAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                     onAddSender = { WhatsAppSenderWatchlist.add(this, it) },
                     onRemoveSender = { WhatsAppSenderWatchlist.remove(this, it) },
                     onBack = { finish() }
@@ -61,22 +64,11 @@ class WhatsAppSettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        setContent {
-            MaterialTheme {
-                WhatsAppSettingsScreen(
-                    isEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this),
-                    senders = WhatsAppSenderWatchlist.get(this),
-                    onOpenAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                    onAddSender = { WhatsAppSenderWatchlist.add(this, it) },
-                    onRemoveSender = { WhatsAppSenderWatchlist.remove(this, it) },
-                    onBack = { finish() }
-                )
-            }
-        }
+        accessibilityEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun WhatsAppSettingsScreen(
     isEnabled: Boolean,
     senders: Set<String>,
@@ -85,9 +77,9 @@ private fun WhatsAppSettingsScreen(
     onRemoveSender: (String) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     var sender by remember { mutableStateOf("") }
-    var refreshKey by remember { mutableStateOf(0) }
-    val currentSenders = remember(senders, refreshKey) { senders.toList().sorted() }
+    var watchedSenders by remember(senders) { mutableStateOf(senders.toList().sorted()) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(18.dp),
@@ -115,7 +107,7 @@ private fun WhatsAppSettingsScreen(
             }
         }
 
-        Text("Watched senders (${currentSenders.size}/25)", color = WhatsAppText, fontSize = 18.sp)
+        Text("Watched senders (${watchedSenders.size}/25)", color = WhatsAppText, fontSize = 18.sp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = sender,
@@ -125,26 +117,29 @@ private fun WhatsAppSettingsScreen(
                 label = { Text("Sender name") },
                 placeholder = { Text("e.g. Trading Desk") }
             )
-            Spacer(Modifier.padding(4.dp))
+            Spacer(Modifier.width(8.dp))
             Button(
-                enabled = sender.trim().isNotBlank() && currentSenders.size < 25,
+                enabled = sender.trim().isNotBlank() && watchedSenders.size < 25,
                 onClick = {
                     onAddSender(sender)
+                    watchedSenders = WhatsAppSenderWatchlist.get(context).toList().sorted()
                     sender = ""
-                    refreshKey++
                 }
             ) { Text("Add") }
         }
 
-        if (currentSenders.isEmpty()) {
+        if (watchedSenders.isEmpty()) {
             Text("No senders are watched. The connector will capture nothing from WhatsApp until you add one.", color = WhatsAppSecondary, fontSize = 13.sp)
         } else {
             LazyColumn(contentPadding = PaddingValues(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(currentSenders, key = { it }) { watched ->
+                items(watchedSenders, key = { it }) { watched ->
                     Card(colors = CardDefaults.cardColors(containerColor = WhatsAppSurface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(watched, color = WhatsAppText, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { onRemoveSender(watched); refreshKey++ }) { Text("Remove") }
+                            TextButton(onClick = {
+                                onRemoveSender(watched)
+                                watchedSenders = watchedSenders.filterNot { it == watched }
+                            }) { Text("Remove") }
                         }
                     }
                 }
