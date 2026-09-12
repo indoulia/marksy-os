@@ -28,7 +28,9 @@ interface NotificationEventDao {
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?
 
-    /** Claims a pending event only if another worker has not claimed it first. */
+    @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND eventFingerprint = :eventFingerprint LIMIT 1")
+    suspend fun findIdByFingerprint(sourcePackage: String, eventFingerprint: String): Long?
+
     @Query("UPDATE notification_events SET deliveryState = 'IN_FLIGHT', deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'PENDING'")
     suspend fun claimPendingTrading(eventId: Long, attempts: Int, attemptedAt: Long): Int
 
@@ -58,7 +60,6 @@ interface NotificationEventDao {
     @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1")
     suspend fun deleteOldTrading(cutoff: Long): Int
 
-    /** Runs the two retention classes as one database transaction. */
     @Transaction
     suspend fun pruneExpired(nowMillis: Long) {
         deleteOldNonTrading(RetentionPolicy.nonTradingCutoff(nowMillis))
