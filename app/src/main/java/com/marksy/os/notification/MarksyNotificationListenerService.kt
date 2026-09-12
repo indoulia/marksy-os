@@ -38,7 +38,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         if (!NotificationLifecyclePolicy.shouldCapture(
                 notificationFlags = sbn.notification.flags,
                 sourcePackage = packageName,
-                ownPackage = applicationContext.packageName
+                ownPackage = applicationContext.packageName,
+                sourceKey = sbn.key
             )
         ) return
 
@@ -52,38 +53,44 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val sourceName = SourceRegistry.displayName(applicationContext, packageName)
 
         serviceScope.launch {
-            val insertedId = dao.insert(
-                NotificationEventEntity(
-                    sourcePackage = packageName,
-                    sourceName = sourceName,
-                    sourceKey = sbn.key,
-                    title = title,
-                    body = text,
-                    postedAt = sbn.postTime,
-                    category = result.category.name,
-                    priority = result.priority,
-                    confidence = result.confidence,
-                    isTrading = isTrading,
-                    deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+            try {
+                val insertedId = dao.insert(
+                    NotificationEventEntity(
+                        sourcePackage = packageName,
+                        sourceName = sourceName,
+                        sourceKey = sbn.key,
+                        title = title,
+                        body = text,
+                        postedAt = sbn.postTime,
+                        category = result.category.name,
+                        priority = result.priority,
+                        confidence = result.confidence,
+                        isTrading = isTrading,
+                        deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+                    )
                 )
-            )
 
-            // IGNORE conflicts make repeated Android callbacks harmless. Only
-            // newly persisted trading events need a new delivery request.
-            if (insertedId != -1L && isTrading) {
-                TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
-            }
-
-            // Raw notification content never leaves through this collector.
-            // Cancellation is performed only after a NEW local insert succeeds.
-            // A duplicate callback must not remove a notification that was not
-            // newly captured by this callback.
-            if (insertedId != -1L) {
-                try {
-                    cancelNotification(sbn.key)
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Unable to cancel notification", e)
+                // IGNORE conflicts make repeated Android callbacks harmless. Only
+                // newly persisted trading events need a new delivery request.
+                if (insertedId != -1L && isTrading) {
+                    TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
+
+                // Raw notification content never leaves through this collector.
+                // Cancellation is performed only after a NEW local insert succeeds.
+                // A duplicate callback must not remove a notification that was not
+                // newly captured by this callback.
+                if (insertedId != -1L) {
+                    try {
+                        cancelNotification(sbn.key)
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "Unable to cancel notification", e)
+                    }
+                }
+            } catch (e: Exception) {
+                // Never log notification content, title, body, or source key.
+                // Capture failures should be diagnosable without exposing user data.
+                Log.e(TAG, "Failed to persist notification event", e)
             }
         }
     }
