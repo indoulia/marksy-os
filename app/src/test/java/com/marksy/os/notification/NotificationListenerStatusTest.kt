@@ -44,4 +44,14 @@ class NotificationListenerStatusTest {
     fun emptyOrMalformedEntriesAreIgnored() {
         assertFalse(NotificationListenerStatus.containsListener("::not-a-component", target))
     }
+
+    @Test
+    fun malformedTargetIsNotDetected() {
+        assertFalse(NotificationListenerStatus.containsListener(target, "not-a-component"))
+    }
+
+    @Test
+    fun blankTargetIsNotDetected() {
+        assertFalse(NotificationListenerStatus.containsListener(target, "   "))
+    }
 }
