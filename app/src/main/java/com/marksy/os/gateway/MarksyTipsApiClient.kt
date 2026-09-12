@@ -69,7 +69,9 @@ class MarksyTipsApiClient(
             decisionOutcome = marksyView?.optString("decisionOutcome")?.takeIf { it.isNotBlank() },
             evidence = marksyView?.stringList("evidence").orEmpty(),
             marksySource = comparison?.optString("marksySource")?.takeIf { it.isNotBlank() },
-            marksyView = comparison?.optString("marksyView")?.takeIf { it.isNotBlank() }
+            marksyView = comparison?.optString("marksyView")?.takeIf { it.isNotBlank() },
+            tipId = tipId,
+            rawResponseJson = data.toString().take(MAX_RESPONSE_CHARS)
         )
     }
 
@@ -107,6 +109,7 @@ class MarksyTipsApiClient(
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
+        const val MAX_RESPONSE_CHARS = 50_000
     }
 }
 
