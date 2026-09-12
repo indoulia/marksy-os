@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.map
 
 class MarksyViewModel(private val repository: NotificationRepository) : ViewModel() {
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
+    val importantEvents: Flow<List<NotificationEventEntity>> = repository.observeImportant()
+    val attentionEvents: Flow<List<NotificationEventEntity>> = repository.observeAttention()
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
     val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
