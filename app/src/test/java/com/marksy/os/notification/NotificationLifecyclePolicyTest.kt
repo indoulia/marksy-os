@@ -52,6 +52,17 @@ class NotificationLifecyclePolicyTest {
     }
 
     @Test
+    fun packageIdentityIsCaseInsensitive() {
+        assertFalse(
+            NotificationLifecyclePolicy.shouldCapture(
+                0,
+                "  COM.MARKSY.OS  ",
+                " com.marksy.os "
+            )
+        )
+    }
+
+    @Test
     fun whitespaceAroundOwnPackageIsStillRecognized() {
         assertFalse(
             NotificationLifecyclePolicy.shouldCapture(
