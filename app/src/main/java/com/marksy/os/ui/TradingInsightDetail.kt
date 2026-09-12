@@ -1,5 +1,7 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -25,11 +28,12 @@ private val DetailMuted = Color(0xFF657169)
 /** Read-only V1 detail surface; no broker action is possible here. */
 @Composable
 fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
+    val scrollState = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(insight.headline, color = DetailText) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(scrollState)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(insight.source, color = DetailPrimary, fontWeight = FontWeight.SemiBold)
                     Text(insight.status, color = DetailSecondary, fontSize = 11.sp)
@@ -44,7 +48,7 @@ fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(4.dp))
                     Text(insight.marksySummary, color = DetailText, fontSize = 14.sp)
                 }
-                insight.marksyAction?.takeIf { it.isNotBlank() }?.let { action ->
+                insight.marksyAction?.let { action ->
                     Spacer(Modifier.height(10.dp))
                     Text("Marksy action", color = DetailMuted, fontSize = 11.sp)
                     Spacer(Modifier.height(3.dp))
@@ -54,7 +58,7 @@ fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(7.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Marksy confidence", color = DetailMuted, fontSize = 11.sp)
-                        Text("${(confidence * 100).toInt()}%", color = DetailSecondary, fontSize = 11.sp)
+                        Text("${confidencePercent(confidence)}%", color = DetailSecondary, fontSize = 11.sp)
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -65,7 +69,7 @@ fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(5.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Classifier confidence", color = DetailMuted, fontSize = 11.sp)
-                    Text("${(insight.confidence * 100).toInt()}%", color = DetailSecondary, fontSize = 11.sp)
+                    Text("${confidencePercent(insight.confidence)}%", color = DetailSecondary, fontSize = 11.sp)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text("Live execution is disabled in V1. This screen cannot place, modify, or cancel brokerage orders.", color = DetailPrimary, fontSize = 12.sp)
