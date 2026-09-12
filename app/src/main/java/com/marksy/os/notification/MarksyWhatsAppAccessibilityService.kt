@@ -64,7 +64,13 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
         val occurredAt = System.currentTimeMillis()
         val sourcePackage = event.packageName.toString().trim().lowercase()
         val category = NotificationClassifier.classify(sourcePackage, sender, message)
-        val fingerprint = EventFingerprint.create(sourcePackage, category.category.name, sender, message)
+        val fingerprint = EventFingerprint.create(
+            sourcePackage,
+            category.category.name,
+            sender,
+            message,
+            occurredAt
+        )
         val sourceKey = "wa-accessibility:$fingerprint"
         val isTrading = category.category == NotificationClassifier.Category.TRADING
 
