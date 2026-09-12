@@ -33,7 +33,7 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId")
     suspend fun updateDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?)
 
-    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt, insightSummary = :summary, insightAction = :action, insightConfidence = :confidence, insightReceivedAt = :receivedAt WHERE id = :eventId")
+    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt, insightSummary = :summary, insightAction = :action, insightConfidence = :confidence, insightReceivedAt = :receivedAt, marksyTipId = :tipId, marksyResponseJson = :responseJson WHERE id = :eventId")
     suspend fun markDeliveredWithInsight(
         eventId: Long,
         state: String,
@@ -42,7 +42,9 @@ interface NotificationEventDao {
         summary: String?,
         action: String?,
         confidence: Float?,
-        receivedAt: Long
+        receivedAt: Long,
+        tipId: String?,
+        responseJson: String?
     )
 
     @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
