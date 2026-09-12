@@ -37,51 +37,53 @@ class MarksyTipsApiClient(
 
     private fun postTip(payload: MarksyTipPayload): CreatedTip {
         val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
-        return CreatedTip(data.optString("tipId"), data.optString("status", "UNKNOWN"))
+        return CreatedTip(data.optString("tipId"), data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
     }
 
     private fun fetchTip(tipId: String, eventId: Long, createdStatus: String): MarksyInsight {
         val data = execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data")
         val comparison = data.optJSONObject("comparison")
         val marksyView = data.optJSONObject("marksyView")
-        val verdict = comparison?.optString("verdict")?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
+        val verdict = comparison?.optString("verdict")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
         val reasons = comparison?.stringList("verdictReasons").orEmpty()
-        val recommendation = marksyView?.optString("recommendation")?.takeIf { it.isNotBlank() }
+        val recommendation = marksyView?.optString("recommendation")
+            ?.boundedText(MAX_LONG_TEXT_CHARS)
+            ?.takeIf { it.isNotBlank() }
         val probability = marksyView?.finiteDouble("probability")
         val summary = buildString {
             append(verdict)
             if (reasons.isNotEmpty()) append(" — ").append(reasons.joinToString("; "))
             if (recommendation != null) append(" | ").append(recommendation)
-        }.ifBlank { "Marksy comparison available." }
+        }.boundedText(MAX_SUMMARY_CHARS).ifBlank { "Marksy comparison available." }
 
         return MarksyInsight(
             eventId = eventId,
             summary = summary,
-            action = recommendation ?: createdStatus,
+            action = (recommendation ?: createdStatus).boundedText(MAX_LONG_TEXT_CHARS),
             confidence = marksyView?.finiteDouble("confidence")?.toFloat()?.coerceIn(0f, 1f)
                 ?: probability?.toFloat()?.coerceIn(0f, 1f),
             verdict = verdict,
-            verdictReasons = reasons.take(MAX_LIST_ITEMS),
+            verdictReasons = reasons,
             recommendation = recommendation,
             probability = probability,
             opportunityScore = marksyView?.finiteDouble("opportunityScore"),
             trustScore = marksyView?.finiteDouble("trustScore"),
-            trustQuality = marksyView?.optString("trustQuality")?.takeIf { it.isNotBlank() },
-            uncertaintyLevel = marksyView?.optString("uncertaintyLevel")?.takeIf { it.isNotBlank() },
+            trustQuality = marksyView?.optString("trustQuality")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            uncertaintyLevel = marksyView?.optString("uncertaintyLevel")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             entryPrice = marksyView?.finiteDouble("entryPrice"),
             targetPrice = marksyView?.finiteDouble("targetPrice"),
             stopLoss = marksyView?.finiteDouble("stopLoss"),
             upsidePct = marksyView?.finiteDouble("upsidePct"),
             horizonDays = marksyView?.optInt("horizonDays")?.takeIf { it > 0 },
-            levelState = marksyView?.optString("levelState")?.takeIf { it.isNotBlank() },
-            modelVersion = marksyView?.optString("modelVersion")?.takeIf { it.isNotBlank() },
-            asOf = marksyView?.optString("asOf")?.takeIf { it.isNotBlank() },
-            failedCriteria = marksyView?.stringList("failedCriteria").orEmpty().take(MAX_LIST_ITEMS),
-            decisionOutcome = marksyView?.optString("decisionOutcome")?.takeIf { it.isNotBlank() },
-            evidence = marksyView?.stringList("evidence").orEmpty().take(MAX_LIST_ITEMS),
-            marksySource = comparison?.optString("marksySource")?.takeIf { it.isNotBlank() },
-            marksyView = comparison?.optString("marksyView")?.takeIf { it.isNotBlank() },
-            tipId = tipId,
+            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            modelVersion = marksyView?.optString("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            asOf = marksyView?.optString("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            failedCriteria = marksyView?.stringList("failedCriteria").orEmpty(),
+            decisionOutcome = marksyView?.optString("decisionOutcome")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            evidence = marksyView?.stringList("evidence").orEmpty(),
+            marksySource = comparison?.optString("marksySource")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            marksyView = comparison?.optString("marksyView")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            tipId = tipId.boundedText(MAX_SHORT_TEXT_CHARS),
             rawResponseJson = data.toString().take(MAX_RESPONSE_CHARS)
         )
     }
@@ -150,6 +152,10 @@ class MarksyTipsApiClient(
         const val MAX_RESPONSE_CHARS = 50_000
         const val MAX_ERROR_DETAIL_CHARS = 300
         const val MAX_LIST_ITEMS = 20
+        const val MAX_STATUS_CHARS = 100
+        const val MAX_SHORT_TEXT_CHARS = 200
+        const val MAX_LONG_TEXT_CHARS = 1_000
+        const val MAX_SUMMARY_CHARS = 2_000
     }
 }
 
@@ -172,7 +178,9 @@ private fun JSONObject.finiteDouble(name: String): Double? =
 
 private fun JSONObject.stringList(name: String): List<String> =
     optJSONArray(name)?.let { array ->
-        (0 until array.length()).mapNotNull { i ->
-            array.optString(i).takeIf { it.isNotBlank() }
+        (0 until minOf(array.length(), MAX_LIST_ITEMS)).mapNotNull { i ->
+            array.optString(i).boundedText(MAX_LONG_TEXT_CHARS).takeIf { it.isNotBlank() }
         }
     }.orEmpty()
+
+private fun String.boundedText(maxChars: Int): String = take(maxChars)
