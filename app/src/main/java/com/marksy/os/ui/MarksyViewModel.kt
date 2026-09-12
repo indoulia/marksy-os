@@ -28,16 +28,8 @@ class MarksyViewModelFactory(private val repository: NotificationRepository) : V
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MarksyViewModel::class.java)) {
-            return MarksyViewModelFactoryResult(repository, modelClass).create()
+            return MarksyViewModel(repository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
-}
-
-private class MarksyViewModelFactoryResult<T : ViewModel>(
-    private val repository: NotificationRepository,
-    private val modelClass: Class<T>
-) {
-    @Suppress("UNCHECKED_CAST")
-    fun create(): T = MarksyViewModel(repository) as T
 }
