@@ -74,7 +74,7 @@ class MarksyTipsApiClient(
             stopLoss = marksyView?.finiteDouble("stopLoss"),
             upsidePct = marksyView?.finiteDouble("upsidePct"),
             horizonDays = marksyView?.optInt("horizonDays")?.takeIf { it > 0 },
-            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank" },
+            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             modelVersion = marksyView?.optString("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             asOf = marksyView?.optString("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             failedCriteria = marksyView?.stringList("failedCriteria").orEmpty(),
