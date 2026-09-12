@@ -129,12 +129,7 @@ class MainActivity : ComponentActivity() {
                 if (!showTimeline && !showCalendar) {
                     NavigationBar(containerColor = Color(0xFF0D1210)) {
                         tabs.forEachIndexed { index, tab ->
-                            NavigationBarItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { Icon(tab.icon, tab.label) },
-                                label = { Text(tab.label) }
-                            )
+                            NavigationBarItem(selected = selectedTab == index, onClick = { selectedTab = index }, icon = { Icon(tab.icon, tab.label) }, label = { Text(tab.label) })
                         }
                     }
                 }
@@ -181,6 +176,7 @@ private fun TimelineHost(events: List<NotificationEventEntity>, padding: Padding
 
 @Composable
 private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
+    var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
@@ -189,15 +185,10 @@ private fun CalendarHost(events: List<NotificationEventEntity>, padding: Padding
         CalendarScreen(
             events = events,
             padding = PaddingValues(bottom = padding.calculateBottomPadding()),
-            onEventSelected = { selected ->
-                CalendarSelectionHolder.selected = selected
-            }
+            onEventSelected = { selectedEvent = it }
         )
     }
-}
-
-private object CalendarSelectionHolder {
-    var selected: NotificationEventEntity? = null
+    selectedEvent?.let { EventDetailDialog(it) { selectedEvent = null } }
 }
 
 @Composable
@@ -232,11 +223,7 @@ private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<Not
 
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) = Card(modifier, colors = CardDefaults.cardColors(containerColor = Surface)) {
-    Column(Modifier.padding(12.dp)) {
-        Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(2.dp))
-        Text(label, color = TextSecondary, fontSize = 12.sp)
-    }
+    Column(Modifier.padding(12.dp)) { Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(2.dp)); Text(label, color = TextSecondary, fontSize = 12.sp) }
 }
 
 @Composable
@@ -252,11 +239,7 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
             Spacer(Modifier.height(5.dp))
             Text("Captured locally. Only eligible trading events leave the device.", color = TextSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                filters.forEach { filter ->
-                    FilterChip(selected = safeFilter == filter, onClick = { selectedFilter = filter }, label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) })
-                }
-            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { filters.forEach { filter -> FilterChip(selected = safeFilter == filter, onClick = { selectedFilter = filter }, label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) }) } }
         }
         if (filtered.isEmpty()) item { EmptyState("Nothing here yet.", "New notifications matching this filter will appear here.") }
         else items(filtered, key = { it.id }) { event -> EventCard(event) { selectedEvent = event } }
@@ -348,12 +331,7 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
             TextButton(enabled = !clearing, onClick = {
                 clearing = true
                 scope.launch {
-                    try {
-                        clearAll()
-                        showClear = false
-                    } finally {
-                        clearing = false
-                    }
+                    try { clearAll(); showClear = false } finally { clearing = false }
                 }
             }) { Text("Clear") }
         },
