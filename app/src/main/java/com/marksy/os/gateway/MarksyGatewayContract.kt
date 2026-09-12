@@ -44,5 +44,7 @@ data class MarksyInsight(
     val decisionOutcome: String? = null,
     val evidence: List<String> = emptyList(),
     val marksySource: String? = null,
-    val marksyView: String? = null
+    val marksyView: String? = null,
+    val tipId: String? = null,
+    val rawResponseJson: String? = null
 )
