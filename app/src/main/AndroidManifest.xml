@@ -19,6 +19,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".notification.WhatsAppSettingsActivity"
+            android:exported="false"
+            android:label="WhatsApp Connector Settings" />
+
         <service
             android:name=".notification.MarksyNotificationListenerService"
             android:exported="true"
