@@ -1,6 +1,7 @@
 package com.marksy.os.notification
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -24,5 +25,22 @@ class SourceRegistryTest {
         assertTrue(sources.contains("Upstox"))
         assertTrue(sources.contains("WhatsApp"))
         assertTrue(sources.contains("WhatsApp Business"))
+    }
+
+    @Test fun whatsappVariantsAreExplicitlyRecognized() {
+        assertTrue(SourceRegistry.isWhatsApp("com.whatsapp"))
+        assertTrue(SourceRegistry.isWhatsApp(" COM.WHATSAPP.W4B "))
+        assertFalse(SourceRegistry.isWhatsApp("com.example.whatsapp"))
+    }
+
+    @Test fun tradingSourcesAreExplicitlyRecognized() {
+        assertTrue(SourceRegistry.isTradingSource("com.upstox.pro"))
+        assertTrue(SourceRegistry.isTradingSource(" COM.ZERODHA.KITE3 "))
+        assertFalse(SourceRegistry.isTradingSource("com.example"))
+    }
+
+    @Test fun knownSourceLookupNormalizesPackageName() {
+        assertTrue(SourceRegistry.isKnownSource(" COM.UPSTOX.PRO "))
+        assertEquals("Upstox", SourceRegistry.displayName(" COM.UPSTOX.PRO "))
     }
 }
