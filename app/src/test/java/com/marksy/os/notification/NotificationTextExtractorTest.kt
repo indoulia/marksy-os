@@ -80,4 +80,36 @@ class NotificationTextExtractorTest {
         assertEquals(NotificationTextExtractor.MAX_BODY_LENGTH, result.length)
         assertTrue(result.all { it == 'x' })
     }
+
+    @Test
+    fun boundsLongNotificationLines() {
+        val extras = Bundle().apply {
+            putCharSequenceArray(
+                "android.textLines",
+                arrayOf(
+                    "a".repeat(NotificationTextExtractor.MAX_LINE_LENGTH + 100),
+                    "second"
+                )
+            )
+        }
+
+        val result = NotificationTextExtractor.extract(extras)
+        assertEquals(NotificationTextExtractor.MAX_LINE_LENGTH + 1 + "second".length, result.length)
+        assertTrue(result.startsWith("a".repeat(NotificationTextExtractor.MAX_LINE_LENGTH)))
+        assertTrue(result.endsWith("second"))
+    }
+
+    @Test
+    fun limitsNumberOfNotificationLines() {
+        val extras = Bundle().apply {
+            putCharSequenceArray(
+                "android.textLines",
+                Array(NotificationTextExtractor.MAX_LINE_COUNT + 10) { index -> "line$index" }
+            )
+        }
+
+        val result = NotificationTextExtractor.extract(extras)
+        assertTrue(result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT - 1}"))
+        assertTrue(!result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT}"))
+    }
 }
