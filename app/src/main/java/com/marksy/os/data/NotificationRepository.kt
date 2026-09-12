@@ -14,5 +14,8 @@ class NotificationRepository(private val dao: NotificationEventDao) {
     fun observeTimeline(limit: Int = 100): Flow<List<NotificationEventEntity>> =
         dao.observeTimeline(limit)
 
+    /** All retained meaningful events, used by the interactive local history calendar. */
+    fun observeHistory(): Flow<List<NotificationEventEntity>> = dao.observeHistory()
+
     suspend fun clearAll() = dao.deleteAll()
 }
