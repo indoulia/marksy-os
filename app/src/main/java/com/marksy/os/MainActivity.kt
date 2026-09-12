@@ -50,7 +50,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -100,8 +99,7 @@ class MainActivity : ComponentActivity() {
         notificationAccessEnabled = isNotificationAccessEnabled()
     }
 
-    private fun isNotificationAccessEnabled(): Boolean =
-        NotificationListenerStatus.isEnabled(this)
+    private fun isNotificationAccessEnabled(): Boolean = NotificationListenerStatus.isEnabled(this)
 
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
 
@@ -182,12 +180,7 @@ private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScop
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
-private fun HomeScreen(
-    events: List<NotificationEventEntity>,
-    timeline: List<NotificationEventEntity>,
-    notificationAccessEnabled: Boolean,
-    padding: PaddingValues
-) {
+private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<NotificationEventEntity>, notificationAccessEnabled: Boolean, padding: PaddingValues) {
     var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
     ScreenColumn(padding) {
         Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
@@ -205,14 +198,9 @@ private fun HomeScreen(
         Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
         if (timeline.isEmpty()) {
-            if (notificationAccessEnabled) {
-                EmptyState("Everything is quiet.", "Notification access is enabled. Meaningful notifications will appear here when they arrive.")
-            } else {
-                EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
-            }
-        } else {
-            timeline.take(5).forEach { event -> EventCard(event) { selectedEvent = event } }
-        }
+            if (notificationAccessEnabled) EmptyState("Everything is quiet.", "Notification access is enabled. Meaningful notifications will appear here when they arrive.")
+            else EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
+        } else timeline.take(5).forEach { event -> EventCard(event) { selectedEvent = event } }
     }
     selectedEvent?.let { EventDetailDialog(it) { selectedEvent = null } }
 }
