@@ -20,3 +20,26 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("ALTER TABLE notification_events ADD COLUMN insightReceivedAt INTEGER")
     }
 }
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // A notification key identifies the Android notification instance. The
+        // old index also included postedAt, so an update/re-post of the same
+        // key could create another local row. Keep the newest row and remove
+        // older duplicates before enforcing the stronger invariant.
+        db.execSQL(
+            """
+            DELETE FROM notification_events
+            WHERE id NOT IN (
+                SELECT MAX(id)
+                FROM notification_events
+                WHERE sourceKey != ''
+                GROUP BY sourcePackage, sourceKey
+            )
+            AND sourceKey != ''
+            """.trimIndent()
+        )
+        db.execSQL("DROP INDEX IF EXISTS index_notification_events_sourcePackage_sourceKey_postedAt")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_notification_events_sourcePackage_sourceKey ON notification_events(sourcePackage, sourceKey)")
+    }
+}
