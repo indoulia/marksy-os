@@ -32,6 +32,9 @@ data class NotificationEventEntity(
     val insightAction: String? = null,
     val insightConfidence: Float? = null,
     val insightReceivedAt: Long? = null,
+    val marksyTipId: String? = null,
+    /** Bounded JSON from Marksy's GET /tips/{tipId} data object for forward compatibility. */
+    val marksyResponseJson: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 
