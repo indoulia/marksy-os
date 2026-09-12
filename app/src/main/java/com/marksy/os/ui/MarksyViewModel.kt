@@ -11,6 +11,7 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
+    val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
 
     val tradingInsights: Flow<List<TradingInsight>> = tradingEvents.map { events ->
         events.mapNotNull(NotificationEventEntity::toTradingInsight)
@@ -27,8 +28,16 @@ class MarksyViewModelFactory(private val repository: NotificationRepository) : V
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MarksyViewModel::class.java)) {
-            return MarksyViewModel(repository) as T
+            return MarksyViewModelFactoryResult(repository, modelClass).create()
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
+}
+
+private class MarksyViewModelFactoryResult<T : ViewModel>(
+    private val repository: NotificationRepository,
+    private val modelClass: Class<T>
+) {
+    @Suppress("UNCHECKED_CAST")
+    fun create(): T = MarksyViewModel(repository) as T
 }
