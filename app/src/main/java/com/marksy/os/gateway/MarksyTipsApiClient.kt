@@ -34,9 +34,7 @@ class MarksyTipsApiClient(
     private fun postTip(payload: MarksyTipPayload): CreatedTip {
         val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
         val tipId = data.optString("tipId").trim()
-        if (tipId.isBlank()) {
-            throw IOException("Marksy Tips API returned a successful response without tipId")
-        }
+        if (tipId.isBlank()) throw IOException("Marksy Tips API returned a successful response without tipId")
         return CreatedTip(tipId, data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
     }
 
@@ -46,9 +44,7 @@ class MarksyTipsApiClient(
         val marksyView = data.optJSONObject("marksyView")
         val verdict = comparison?.optString("verdict")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
         val reasons = comparison?.stringList("verdictReasons").orEmpty()
-        val recommendation = marksyView?.optString("recommendation")
-            ?.boundedText(MAX_LONG_TEXT_CHARS)
-            ?.takeIf { it.isNotBlank() }
+        val recommendation = marksyView?.optString("recommendation")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() }
         val summary = buildString {
             append(verdict)
             if (reasons.isNotEmpty()) append(" — ").append(reasons.joinToString("; "))
@@ -92,6 +88,7 @@ class MarksyTipsApiClient(
             requestMethod = method
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
+            instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Marksy-Integration-Key", integrationKey)
@@ -103,6 +100,9 @@ class MarksyTipsApiClient(
                 connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
             }
             val code = connection.responseCode
+            if (code in REDIRECT_CODES) {
+                throw MarksyTerminalException("Marksy Tips API redirect refused")
+            }
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val response = stream?.bufferedReader()?.use { reader ->
                 val buffer = CharArray(4096)
@@ -111,9 +111,7 @@ class MarksyTipsApiClient(
                     val read = reader.read(buffer)
                     if (read < 0) break
                     builder.append(buffer, 0, read)
-                    if (builder.length > MAX_HTTP_RESPONSE_CHARS) {
-                        throw IOException("Marksy Tips API response exceeded the safety limit")
-                    }
+                    if (builder.length > MAX_HTTP_RESPONSE_CHARS) throw IOException("Marksy Tips API response exceeded the safety limit")
                 }
                 builder.toString()
             }.orEmpty()
@@ -123,9 +121,7 @@ class MarksyTipsApiClient(
                 throw IOException("Marksy Tips API returned HTTP $code$detail")
             }
             return JSONObject(response).also { envelope ->
-                if (!envelope.has("data") || !envelope.has("meta")) {
-                    throw IOException("Marksy Tips API returned an invalid response envelope")
-                }
+                if (!envelope.has("data") || !envelope.has("meta")) throw IOException("Marksy Tips API returned an invalid response envelope")
             }
         } finally {
             connection.disconnect()
@@ -138,9 +134,7 @@ class MarksyTipsApiClient(
         val message = error?.optString("message")?.takeIf { it.isNotBlank() }
             ?: envelope.optString("message").takeIf { it.isNotBlank() }
         message?.let { ": ${it.take(MAX_ERROR_DETAIL_CHARS)}" } ?: ""
-    } catch (_: Exception) {
-        ""
-    }
+    } catch (_: Exception) { "" }
 
     private data class CreatedTip(val tipId: String, val status: String)
 
@@ -155,6 +149,7 @@ class MarksyTipsApiClient(
         const val MAX_SHORT_TEXT_CHARS = 200
         const val MAX_LONG_TEXT_CHARS = 1_000
         const val MAX_SUMMARY_CHARS = 2_000
+        val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
     }
 }
 
@@ -165,21 +160,18 @@ private const val DEFAULT_MARKSY_API_BASE_URL = "https://marksy.indoulia.com/api
 private fun normalizeBaseUrl(value: String): String {
     val trimmed = value.trim().trimEnd('/')
     if (trimmed.isBlank()) return DEFAULT_MARKSY_API_BASE_URL
-    val uri = runCatching { URI(trimmed) }.getOrNull()
-        ?: throw IllegalArgumentException("MARKSY_API_BASE_URL is not a valid URL")
+    val uri = runCatching { URI(trimmed) }.getOrNull() ?: throw IllegalArgumentException("MARKSY_API_BASE_URL is not a valid URL")
     require(uri.scheme.equals("https", ignoreCase = true)) { "MARKSY_API_BASE_URL must use HTTPS" }
     require(uri.host?.isNotBlank() == true) { "MARKSY_API_BASE_URL must include a host" }
     return trimmed
 }
 
-private fun JSONObject.finiteDouble(name: String): Double? =
-    optDouble(name).takeIf { it.isFinite() }
+private fun JSONObject.finiteDouble(name: String): Double? = optDouble(name).takeIf { it.isFinite() }
 
-private fun JSONObject.stringList(name: String): List<String> =
-    optJSONArray(name)?.let { array ->
-        (0 until minOf(array.length(), MAX_LIST_ITEMS)).mapNotNull { i ->
-            array.optString(i).boundedText(MAX_LONG_TEXT_CHARS).takeIf { it.isNotBlank() }
-        }
-    }.orEmpty()
+private fun JSONObject.stringList(name: String): List<String> = optJSONArray(name)?.let { array ->
+    (0 until minOf(array.length(), MAX_LIST_ITEMS)).mapNotNull { i ->
+        array.optString(i).boundedText(MAX_LONG_TEXT_CHARS).takeIf { it.isNotBlank() }
+    }
+}.orEmpty()
 
 private fun String.boundedText(maxChars: Int): String = take(maxChars)
