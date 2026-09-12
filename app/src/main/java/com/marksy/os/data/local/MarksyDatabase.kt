@@ -5,9 +5,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
+/**
+ * V1 pre-release database baseline. Marksy OS has not shipped yet, so the schema
+ * is intentionally kept clean rather than carrying compatibility migrations.
+ */
 @Database(
     entities = [NotificationEventEntity::class],
-    version = 5,
+    version = 1,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -23,7 +27,6 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }
