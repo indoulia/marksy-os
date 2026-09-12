@@ -4,6 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
+import com.marksy.os.data.RetentionPolicy
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -55,6 +57,13 @@ interface NotificationEventDao {
 
     @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1")
     suspend fun deleteOldTrading(cutoff: Long): Int
+
+    /** Runs the two retention classes as one database transaction. */
+    @Transaction
+    suspend fun pruneExpired(nowMillis: Long) {
+        deleteOldNonTrading(RetentionPolicy.nonTradingCutoff(nowMillis))
+        deleteOldTrading(RetentionPolicy.tradingCutoff(nowMillis))
+    }
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
