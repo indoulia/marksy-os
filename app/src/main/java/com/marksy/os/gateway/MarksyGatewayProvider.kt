@@ -6,6 +6,6 @@ import com.marksy.os.BuildConfig
 object MarksyGatewayProvider {
     fun client(): MarksyGatewayClient =
         BuildConfig.MARKSY_INTEGRATION_KEY.trim().takeIf { it.isNotBlank() }
-            ?.let { MarksyTipsApiClient(it) }
+            ?.let { MarksyTipsApiClient(it, BuildConfig.MARKSY_API_BASE_URL.trimEnd('/')) }
             ?: UnconfiguredMarksyGatewayClient()
 }
