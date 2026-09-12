@@ -23,10 +23,6 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
 
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // A notification key identifies the Android notification instance. The
-        // old index also included postedAt, so an update/re-post of the same
-        // key could create another local row. Keep the newest row and remove
-        // older duplicates before enforcing the stronger invariant.
         db.execSQL("DELETE FROM notification_events WHERE sourceKey = ''")
         db.execSQL(
             """
@@ -42,5 +38,12 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         )
         db.execSQL("DROP INDEX IF EXISTS index_notification_events_sourcePackage_sourceKey_postedAt")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_notification_events_sourcePackage_sourceKey ON notification_events(sourcePackage, sourceKey)")
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE notification_events ADD COLUMN marksyTipId TEXT")
+        db.execSQL("ALTER TABLE notification_events ADD COLUMN marksyResponseJson TEXT")
     }
 }
