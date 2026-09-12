@@ -21,7 +21,7 @@
 
         <activity
             android:name=".notification.WhatsAppSettingsActivity"
-            android:exported="false"
+            android:exported="true"
             android:label="WhatsApp Connector Settings" />
 
         <service
