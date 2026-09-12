@@ -37,10 +37,10 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET deliveryState = 'IN_FLIGHT', deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'PENDING'")
     suspend fun claimPendingTrading(eventId: Long, attempts: Int, attemptedAt: Long): Int
 
-    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId")
-    suspend fun updateDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?)
+    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'IN_FLIGHT'")
+    suspend fun updateInFlightDeliveryState(eventId: Long, state: String, attempts: Int, attemptedAt: Long?): Int
 
-    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt, insightSummary = :summary, insightAction = :action, insightConfidence = :confidence, insightReceivedAt = :receivedAt, marksyTipId = :tipId, marksyResponseJson = :responseJson WHERE id = :eventId")
+    @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt, insightSummary = :summary, insightAction = :action, insightConfidence = :confidence, insightReceivedAt = :receivedAt, marksyTipId = :tipId, marksyResponseJson = :responseJson WHERE id = :eventId AND deliveryState = 'IN_FLIGHT'")
     suspend fun markDeliveredWithInsight(
         eventId: Long,
         state: String,
@@ -52,7 +52,7 @@ interface NotificationEventDao {
         receivedAt: Long,
         tipId: String?,
         responseJson: String?
-    )
+    ): Int
 
     @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
     suspend fun recoverStaleInFlight(cutoff: Long): Int
