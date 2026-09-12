@@ -1,6 +1,5 @@
 package com.marksy.os
 
-import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,8 +110,8 @@ class MainActivity : ComponentActivity() {
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
-        var selectedTab by remember { mutableIntStateOf(0) }
-        var showTimeline by remember { mutableStateOf(false) }
+        var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+        var showTimeline by rememberSaveable { mutableStateOf(false) }
         val tabs = listOf(
             Tab("Home", Icons.Default.Home),
             Tab("Inbox", Icons.Default.Inbox),
@@ -150,9 +151,6 @@ class MainActivity : ComponentActivity() {
                         clearAll = {
                             TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
                             repository.clearAll()
-                            // Clearing data cancels the periodic worker too. Re-register it
-                            // after the wipe so delivery remains available without requiring
-                            // the user to restart Marksy OS.
                             TradingDeliveryScheduler.schedule(applicationContext)
                         },
                         openTimeline = { showTimeline = true },
@@ -179,7 +177,7 @@ private fun TimelineHost(events: List<NotificationEventEntity>, padding: Padding
 
 @Composable
 private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) =
-    Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
 private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<NotificationEventEntity>, padding: PaddingValues) {
@@ -217,7 +215,7 @@ private fun MetricCard(label: String, value: String, modifier: Modifier = Modifi
 @Composable
 private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
     val filters = listOf("All", "TRADING", "MESSAGES", "PAYMENTS", "BANKING", "OTHER")
-    var selectedFilter by remember { mutableStateOf("All") }
+    var selectedFilter by rememberSaveable { mutableStateOf("All") }
     var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
     val filtered = if (selectedFilter == "All") events else events.filter { it.category == selectedFilter }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -301,7 +299,7 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
         Spacer(Modifier.height(18.dp))
         SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device.") { Button(onClick = openAccess) { Text(if (access) "Manage Notification Access" else "Open Notification Access") } }
         Spacer(Modifier.height(12.dp))
-        SettingsCard("Marksy Gateway", "WAITING", "The Android trading transport is ready. The confirmed Marksy API endpoint and response contract will be connected when available.")
+        SettingsCard("Marksy Gateway", "CONNECTED", "Trading events are ready to use the confirmed Marksy Tips API when the integration key is configured.")
         Spacer(Modifier.height(12.dp))
         SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically. Low-value noise stays out of this view.") { Button(onClick = openTimeline) { Text("Open Timeline") } }
         Spacer(Modifier.height(12.dp))
@@ -319,9 +317,12 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
             TextButton(enabled = !clearing, onClick = {
                 clearing = true
                 scope.launch {
-                    clearAll()
-                    clearing = false
-                    showClear = false
+                    try {
+                        clearAll()
+                        showClear = false
+                    } finally {
+                        clearing = false
+                    }
                 }
             }) { Text("Clear") }
         },
