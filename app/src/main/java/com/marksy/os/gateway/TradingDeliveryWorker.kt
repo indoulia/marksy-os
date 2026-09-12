@@ -18,7 +18,7 @@ class TradingDeliveryWorker(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Exception) {
-            Log.w(TAG, "Trading delivery storage operation failed; retrying", error)
+            Log.w(TAG, "Trading delivery storage operation failed; retrying")
             Result.retry()
         }
     }
@@ -81,7 +81,6 @@ class TradingDeliveryWorker(
                         tipId = insight.tipId,
                         responseJson = insight.rawResponseJson
                     )
-                    // Zero means another worker already changed this event state.
                     if (updated != 1) Log.i(TAG, "Trading event ${event.id} was already transitioned by another worker")
                 },
                 onFailure = { error ->
@@ -97,7 +96,9 @@ class TradingDeliveryWorker(
                     } else if (state == DeliveryState.PENDING) {
                         retryRequested = true
                     } else {
-                        Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
+                        // Deliberately do not log the exception message: backend error
+                        // details must never become a notification-content side channel.
+                        Log.w(TAG, "Trading event ${event.id} permanently rejected")
                     }
                 }
             )
