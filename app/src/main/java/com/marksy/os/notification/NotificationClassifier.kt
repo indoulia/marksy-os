@@ -65,13 +65,13 @@ object NotificationClassifier {
     )
 
     fun classify(packageName: String, title: String, body: String): Result {
-        val normalizedPackage = packageName.lowercase()
-        val notificationText = "$title $body".lowercase()
+        val normalizedPackage = packageName.trim().lowercase()
+        val notificationText = "$title $body".trim().lowercase()
 
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
-        if (otpRule.terms.any(notificationText::contains)) {
+        if (otpRule.terms.any(notificationText::containsRuleTerm)) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
 
@@ -79,16 +79,38 @@ object NotificationClassifier {
         // a trade. Require an actual trading signal before routing it to Marksy.
         if (normalizedPackage in tradingPackages) {
             val tradingRule = rules.first { it.category == Category.TRADING }
-            if (tradingRule.terms.any(notificationText::contains)) {
+            if (tradingRule.terms.any(notificationText::containsRuleTerm)) {
                 return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
             }
         }
 
-        val haystack = "$normalizedPackage $title $body".lowercase()
+        val haystack = "$normalizedPackage $notificationText"
         val rule = rules.firstOrNull { candidate ->
-            candidate.category != Category.TRADING && candidate.terms.any(haystack::contains)
+            candidate.category != Category.TRADING && candidate.terms.any(haystack::containsRuleTerm)
         }
         return rule?.let { Result(it.category, it.priority, it.confidence) }
             ?: Result(Category.OTHER, 10, .50f)
+    }
+
+    /**
+     * Matches phrases as substrings but requires standalone boundaries for a
+     * single alphanumeric word. This prevents short signals such as "otp",
+     * "upi", or "sale" from matching unrelated words such as "stop", while
+     * preserving natural phrase matching for signals like "order executed".
+     */
+    private fun String.containsRuleTerm(term: String): Boolean {
+        val normalizedTerm = term.trim().lowercase()
+        if (normalizedTerm.isBlank()) return false
+        if (normalizedTerm.any(Char::isWhitespace)) return contains(normalizedTerm)
+
+        var start = indexOf(normalizedTerm)
+        while (start >= 0) {
+            val end = start + normalizedTerm.length
+            val before = start == 0 || !this[start - 1].isLetterOrDigit()
+            val after = end == length || !this[end].isLetterOrDigit()
+            if (before && after) return true
+            start = indexOf(normalizedTerm, start + 1)
+        }
+        return false
     }
 }
