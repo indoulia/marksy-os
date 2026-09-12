@@ -17,8 +17,10 @@ class TradingDeliveryWorker(
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
 
-        dao.recoverStaleInFlight(now - STALE_IN_FLIGHT_MS)
-        val pending = dao.findPendingTrading(BATCH_SIZE)
+        // A process death/cancellation can leave an event IN_FLIGHT. Requeue only
+        // entries older than the safety window so an active request is not duplicated.
+        dao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
+        val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
         if (pending.isEmpty()) return Result.success()
 
         if (client is UnconfiguredMarksyGatewayClient) {
@@ -38,6 +40,8 @@ class TradingDeliveryWorker(
             )
             if (claimed != 1) continue
 
+            // WorkManager can stop this worker between the claim and the network call.
+            // Return the event to PENDING so it is eligible for the next run.
             if (isStopped) {
                 dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 return Result.success()
@@ -81,22 +85,17 @@ class TradingDeliveryWorker(
                     )
                 },
                 onFailure = { error ->
-                    if (error is MarksyTerminalException || error is IllegalArgumentException) {
-                        dao.updateDeliveryState(
-                            event.id,
-                            DeliveryState.FAILED.name,
-                            attempts,
-                            System.currentTimeMillis()
-                        )
-                        Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
-                    } else {
-                        dao.updateDeliveryState(
-                            event.id,
-                            DeliveryState.PENDING.name,
-                            attempts,
-                            System.currentTimeMillis()
-                        )
+                    val state = TradingDeliveryPolicy.retryState(error)
+                    dao.updateDeliveryState(
+                        event.id,
+                        state.name,
+                        attempts,
+                        System.currentTimeMillis()
+                    )
+                    if (state == DeliveryState.PENDING) {
                         retryRequested = true
+                    } else {
+                        Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
                     }
                 }
             )
@@ -106,7 +105,5 @@ class TradingDeliveryWorker(
 
     private companion object {
         const val TAG = "MarksyTradingDelivery"
-        const val BATCH_SIZE = 10
-        const val STALE_IN_FLIGHT_MS = 15 * 60 * 1000L
     }
 }
