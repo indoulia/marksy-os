@@ -50,7 +50,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,7 +143,7 @@ class MainActivity : ComponentActivity() {
                 TimelineHost(events = timelineEvents, padding = padding, onBack = { showTimeline = false })
             } else {
                 when (selectedTab) {
-                    0 -> HomeScreen(events, timelineEvents, padding)
+                    0 -> HomeScreen(events, timelineEvents, notificationAccessEnabled, padding)
                     1 -> InboxScreen(events, padding)
                     2 -> AskMarksyScreen(padding)
                     3 -> TradingScreen(tradingInsights, padding)
@@ -180,7 +182,12 @@ private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScop
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
-private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<NotificationEventEntity>, padding: PaddingValues) {
+private fun HomeScreen(
+    events: List<NotificationEventEntity>,
+    timeline: List<NotificationEventEntity>,
+    notificationAccessEnabled: Boolean,
+    padding: PaddingValues
+) {
     var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
     ScreenColumn(padding) {
         Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
@@ -197,8 +204,15 @@ private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<Not
         Spacer(Modifier.height(24.dp))
         Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-        if (timeline.isEmpty()) EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
-        else timeline.take(5).forEach { event -> EventCard(event) { selectedEvent = event } }
+        if (timeline.isEmpty()) {
+            if (notificationAccessEnabled) {
+                EmptyState("Everything is quiet.", "Notification access is enabled. Meaningful notifications will appear here when they arrive.")
+            } else {
+                EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
+            }
+        } else {
+            timeline.take(5).forEach { event -> EventCard(event) { selectedEvent = event } }
+        }
     }
     selectedEvent?.let { EventDetailDialog(it) { selectedEvent = null } }
 }
@@ -217,7 +231,8 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
     val filters = listOf("All", "TRADING", "MESSAGES", "PAYMENTS", "BANKING", "OTHER")
     var selectedFilter by rememberSaveable { mutableStateOf("All") }
     var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
-    val filtered = if (selectedFilter == "All") events else events.filter { it.category == selectedFilter }
+    val safeFilter = if (selectedFilter == "All" || selectedFilter in filters) selectedFilter else "All"
+    val filtered = if (safeFilter == "All") events else events.filter { it.category == safeFilter }
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text("Smart Inbox", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -226,7 +241,7 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
             Spacer(Modifier.height(14.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 filters.forEach { filter ->
-                    FilterChip(selected = selectedFilter == filter, onClick = { selectedFilter = filter }, label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) })
+                    FilterChip(selected = safeFilter == filter, onClick = { selectedFilter = filter }, label = { Text(if (filter == "All") "All" else filter.lowercase().replaceFirstChar { it.uppercase() }) })
                 }
             }
         }
@@ -240,16 +255,16 @@ private fun InboxScreen(events: List<NotificationEventEntity>, padding: PaddingV
 private fun EventCard(event: NotificationEventEntity, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = if (event.isTrading) SurfaceRaised else Surface), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
     Column(Modifier.padding(14.dp)) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Text(event.sourceName, color = if (event.isTrading) Primary else TextSecondary, fontWeight = FontWeight.SemiBold)
-            Text(event.category.lowercase().replaceFirstChar { it.uppercase() }, color = TextMuted, fontSize = 11.sp)
+            Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) Primary else TextSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(event.category.lowercase().replaceFirstChar { it.uppercase() }, color = TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
         }
         Spacer(Modifier.height(6.dp))
-        Text(event.title, color = TextPrimary, fontWeight = FontWeight.Medium)
-        if (event.body.isNotBlank()) Text(event.body, color = Color(0xFFB2BDB6), Modifier.padding(top = 4.dp), maxLines = 3)
+        Text(event.title.ifBlank { "Untitled notification" }, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (event.body.isNotBlank()) Text(event.body, color = Color(0xFFB2BDB6), Modifier.padding(top = 4.dp), maxLines = 3, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            Text(formatTime(event.postedAt), color = TextMuted, fontSize = 11.sp)
-            if (event.isTrading) Text(deliveryLabel(event.deliveryState), color = if (event.deliveryState == DeliveryState.FAILED.name) TextSecondary else Primary, fontSize = 11.sp)
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text(formatTime(event.postedAt), color = TextMuted, fontSize = 11.sp, maxLines = 1)
+            if (event.isTrading) Text(deliveryLabel(event.deliveryState), color = if (event.deliveryState == DeliveryState.FAILED.name) TextSecondary else Primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
@@ -274,17 +289,17 @@ private fun TradingScreen(insights: List<TradingInsight>, padding: PaddingValues
 private fun TradingInsightCard(insight: TradingInsight, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = SurfaceRaised), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
     Column(Modifier.padding(15.dp)) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Text(insight.source, color = Primary, fontWeight = FontWeight.SemiBold)
-            Text(insight.status, color = TextSecondary, fontSize = 11.sp)
+            Text(insight.source.ifBlank { "Trading source" }, color = Primary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(insight.status.ifBlank { "Unknown status" }, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
         }
         Spacer(Modifier.height(7.dp))
-        Text(insight.headline, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        if (insight.body.isNotBlank()) { Spacer(Modifier.height(5.dp)); Text(insight.body, color = TextSecondary, fontSize = 13.sp, maxLines = 4) }
-        insight.marksySummary?.takeIf { it.isNotBlank() }?.let { summary -> Spacer(Modifier.height(8.dp)); Text(summary, color = TextPrimary, fontSize = 13.sp, maxLines = 2) }
+        Text(insight.headline.ifBlank { "Trading event" }, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (insight.body.isNotBlank()) { Spacer(Modifier.height(5.dp)); Text(insight.body, color = TextSecondary, fontSize = 13.sp, maxLines = 4, overflow = TextOverflow.Ellipsis) }
+        insight.marksySummary?.takeIf { it.isNotBlank() }?.let { summary -> Spacer(Modifier.height(8.dp)); Text(summary, color = TextPrimary, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-            Text("Classifier ${(insight.confidence * 100).toInt()}%", color = TextMuted, fontSize = 11.sp)
-            Text(if (insight.marksySummary.isNullOrBlank()) "Tap for details" else "Marksy analysis • Tap for details", color = Primary, fontSize = 11.sp)
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text("Classifier ${(insight.confidence * 100).toInt()}%", color = TextMuted, fontSize = 11.sp, maxLines = 1)
+            Text(if (insight.marksySummary.isNullOrBlank()) "Tap for details" else "Marksy analysis • Tap for details", color = Primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
@@ -294,12 +309,13 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
     var showClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val gatewayConfigured = BuildConfig.MARKSY_INTEGRATION_KEY.trim().isNotBlank() && BuildConfig.MARKSY_API_BASE_URL.trim().isNotBlank()
     ScreenColumn(padding) {
         Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
         SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications on this device." else "Allow Marksy OS to capture and organize notifications on this device.") { Button(onClick = openAccess) { Text(if (access) "Manage Notification Access" else "Open Notification Access") } }
         Spacer(Modifier.height(12.dp))
-        SettingsCard("Marksy Gateway", "CONNECTED", "Trading events are ready to use the confirmed Marksy Tips API when the integration key is configured.")
+        SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", if (gatewayConfigured) "The Marksy Tips API endpoint and integration key are configured for trading analysis." else "Configure the Marksy API endpoint and integration key before trading events can be sent for analysis.")
         Spacer(Modifier.height(12.dp))
         SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically. Low-value noise stays out of this view.") { Button(onClick = openTimeline) { Text("Open Timeline") } }
         Spacer(Modifier.height(12.dp))
@@ -333,15 +349,18 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
 @Composable
 private fun SettingsCard(title: String, value: String, description: String, action: (@Composable () -> Unit)? = null) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
     Column(Modifier.padding(15.dp)) {
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Text(value, color = Primary, fontSize = 11.sp) }
-        Spacer(Modifier.height(5.dp)); Text(description, color = TextSecondary, fontSize = 13.sp)
+        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(value, color = Primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+        }
+        Spacer(Modifier.height(5.dp)); Text(description, color = TextSecondary, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
         action?.let { Spacer(Modifier.height(10.dp)); it() }
     }
 }
 
 @Composable
 private fun EmptyState(title: String, description: String) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(18.dp)) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp)); Text(description, color = TextSecondary, fontSize = 13.sp) }
+    Column(Modifier.padding(18.dp)) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(4.dp)); Text(description, color = TextSecondary, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis) }
 }
 
 private fun deliveryLabel(state: String): String = when (state) {
