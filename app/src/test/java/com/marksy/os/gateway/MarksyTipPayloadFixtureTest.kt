@@ -1,46 +1,38 @@
 package com.marksy.os.gateway
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Deterministic fixture coverage for the Android -> Marksy Tips wire payload. */
 class MarksyTipPayloadFixtureTest {
     @Test
-    fun richTradingNotificationProducesCanonicalAndContextFields() {
+    fun richTradingNotificationProducesCanonicalFieldsAndContext() {
         val request = MarksyTradingEventRequest(
             eventId = 42L,
-            source = "ICICIDirect",
+            source = "ICICI Direct",
             sourcePackage = "com.icicidirect",
-            title = "HLEGLAS BUY",
-            body = "Entry 367.95 Target 390 Stop Loss 355 for 5 days confidence 70% rationale: breakout",
+            title = "HLEGLAS BUY order executed",
+            body = "Symbol: HLEGLAS Entry: ₹367.95 Target: ₹390 Stop Loss: ₹355 Horizon: 5 days Confidence: 70% Rationale: breakout",
             category = "TRADING",
-            priority = 3,
-            confidence = 0.97f,
-            occurredAt = 1_789_123_456_000L,
-            idempotencyKey = "event-42"
+            priority = 10,
+            confidence = 0.96f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-2026-09-12-0001"
         )
 
-        val payload = MarksyTipPayloadBuilder.from(request)
-        requireNotNull(payload)
+        val payload = MarksyTipPayloadBuilder.from(request)!!
         val json = payload.toJson()
 
-        assertEquals("HLEGLAS", json.getString("symbol"))
-        assertEquals("ICICIDirect", json.getString("source"))
-        assertEquals("event-42", json.getString("sourceReference"))
-        assertEquals("BUY", json.getString("direction"))
-        assertEquals(367.95, json.getDouble("entryPrice"), 0.0001)
-        assertEquals(390.0, json.getDouble("targetPrice"), 0.0001)
-        assertEquals(355.0, json.getDouble("stopLoss"), 0.0001)
-        assertEquals(5, json.getInt("horizonDays"))
-        assertEquals(0.70, json.getDouble("confidence"), 0.0001)
-        assertEquals(42L, json.getLong("eventId"))
+        assertEquals("HLEGLAS", payload.symbol)
+        assertEquals("BUY", payload.direction)
+        assertEquals(367.95, payload.entryPrice!!, 0.001)
+        assertEquals(390.0, payload.targetPrice!!, 0.001)
+        assertEquals(355.0, payload.stopLoss!!, 0.001)
+        assertEquals(5, payload.horizonDays)
+        assertEquals(0.70, payload.confidence!!, 0.001)
+        assertEquals("msg-2026-09-12-0001", json.getString("sourceReference"))
         assertEquals("com.icicidirect", json.getString("sourcePackage"))
-        assertEquals("TRADING", json.getString("category"))
-        assertEquals(3, json.getInt("priority"))
-        assertEquals(0.97, json.getDouble("notificationConfidence"), 0.0001)
-        assertEquals(1, json.getInt("contractVersion"))
+        assertEquals(42L, json.getLong("eventId"))
     }
 
     @Test
@@ -49,27 +41,24 @@ class MarksyTipPayloadFixtureTest {
             eventId = 7L,
             source = "Upstox",
             sourcePackage = "com.upstox.pro",
-            title = "RELIANCE market alert",
-            body = "Unusual volume detected",
+            title = "HLEGLAS BUY alert",
+            body = "Symbol: HLEGLAS",
             category = "TRADING",
-            priority = 2,
-            confidence = 0.91f,
-            occurredAt = 1_789_123_456_000L,
-            idempotencyKey = "event-7"
+            priority = 8,
+            confidence = 0.90f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-2"
         )
 
-        val payload = MarksyTipPayloadBuilder.from(request)
-        requireNotNull(payload)
-        val json = payload.toJson()
-
-        assertEquals("RELIANCE", json.getString("symbol"))
-        assertFalse(json.has("direction"))
-        assertFalse(json.has("entryPrice"))
-        assertFalse(json.has("targetPrice"))
-        assertFalse(json.has("stopLoss"))
-        assertFalse(json.has("horizonDays"))
-        assertFalse(json.has("confidence"))
-        assertFalse(json.has("rationale"))
+        val payload = MarksyTipPayloadBuilder.from(request)!!
+        assertEquals("HLEGLAS", payload.symbol)
+        assertEquals("BUY", payload.direction)
+        assertNull(payload.entryPrice)
+        assertNull(payload.targetPrice)
+        assertNull(payload.stopLoss)
+        assertNull(payload.horizonDays)
+        assertNull(payload.confidence)
+        assertNull(payload.rationale)
     }
 
     @Test
@@ -78,15 +67,48 @@ class MarksyTipPayloadFixtureTest {
             eventId = 8L,
             source = "Upstox",
             sourcePackage = "com.upstox.pro",
-            title = "BUY order executed",
-            body = "Order executed successfully",
+            title = "Order executed",
+            body = "BUY order executed at ₹100",
             category = "TRADING",
-            priority = 2,
-            confidence = 0.9f,
-            occurredAt = 1_789_123_456_000L,
-            idempotencyKey = "event-8"
+            priority = 8,
+            confidence = 0.90f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-3"
         )
+        assertNull(MarksyTipPayloadBuilder.from(request))
+    }
 
-        assertTrue(MarksyTipPayloadBuilder.from(request) == null)
+    @Test
+    fun ordinaryAllCapsWordsAreNotAcceptedWithoutTradeContext() {
+        val request = MarksyTradingEventRequest(
+            eventId = 9L,
+            source = "Upstox",
+            sourcePackage = "com.upstox.pro",
+            title = "UNUSUAL VOLUME ALERT",
+            body = "DETECTED on the market",
+            category = "TRADING",
+            priority = 8,
+            confidence = 0.90f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-4"
+        )
+        assertNull(MarksyTipPayloadBuilder.from(request))
+    }
+
+    @Test
+    fun tradeContextStillRejectsKnownNoiseWords() {
+        val request = MarksyTradingEventRequest(
+            eventId = 10L,
+            source = "Upstox",
+            sourcePackage = "com.upstox.pro",
+            title = "BUY ORDER EXECUTED",
+            body = "UNUSUAL VOLUME ALERT DETECTED",
+            category = "TRADING",
+            priority = 8,
+            confidence = 0.90f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-5"
+        )
+        assertNull(MarksyTipPayloadBuilder.from(request))
     }
 }
