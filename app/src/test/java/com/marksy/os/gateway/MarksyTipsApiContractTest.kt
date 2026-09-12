@@ -73,7 +73,7 @@ class MarksyTipsApiContractTest {
         assertEquals(355.0, view.getDouble("stopLoss"), 0.0001)
         assertEquals(5, view.getInt("horizonDays"))
         assertTrue(view.getJSONArray("evidence").length() > 0)
-        assertFalse(view.getBoolean("failedCriteria"))
+        assertEquals(0, view.getJSONArray("failedCriteria").length())
     }
 
     @Test
