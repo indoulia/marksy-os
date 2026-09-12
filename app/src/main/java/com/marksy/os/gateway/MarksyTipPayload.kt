@@ -43,9 +43,6 @@ data class MarksyTipPayload(
         confidence?.let { put("confidence", it) }
         rationale?.let { put("rationale", it) }
         put("tipAsOf", tipAsOf)
-
-        // Full Android event context. These fields are intentionally retained
-        // even when today's backend does not use them yet.
         put("eventId", eventId)
         put("sourcePackage", sourcePackage)
         put("title", title)
@@ -73,7 +70,7 @@ object MarksyTipPayloadBuilder {
             source = request.source,
             sourceReference = request.idempotencyKey,
             direction = direction,
-            entryPrice = extractNumber(text, "(?:entry|entry price|executed at|filled at|avg(?:erage)? price)"),
+            entryPrice = extractNumber(text, "(?:entry|entry price|executed at|filled at|avg(?:erage) price)"),
             targetPrice = extractNumber(text, "(?:target|target price)"),
             stopLoss = extractNumber(text, "(?:stop loss|stoploss|sl)"),
             horizonDays = extractDays(text),
@@ -97,9 +94,18 @@ object MarksyTipPayloadBuilder {
             .find(text)?.groupValues?.getOrNull(1)
         if (!labelled.isNullOrBlank()) return labelled.uppercase()
 
+        // Do not guess a ticker from arbitrary ALL-CAPS notification prose.
+        // An unlabelled symbol is accepted only when strong trade context exists.
+        val hasTradeContext = Regex(
+            "(?i)\\b(?:BUY|SELL|ORDER|EXECUTED|FILLED|TRADE|POSITION|QTY|QUANTITY|ENTRY|TARGET|STOP\\s*LOSS|AVG(?:ERAGE)?\\s*PRICE)\\b"
+        ).containsMatchIn(text)
+        if (!hasTradeContext) return null
+
         val excluded = setOf(
-            "BUY", "SELL", "ORDER", "EXECUTED", "TRADE", "PRICE", "TARGET", "STOP", "LOSS",
-            "MARKET", "LIMIT", "QTY", "QUANTITY", "PERCENT", "NSE", "BSE", "INR", "UPI", "P&L"
+            "BUY", "SELL", "ORDER", "EXECUTED", "FILLED", "TRADE", "POSITION", "OPENED", "CLOSED",
+            "PRICE", "ENTRY", "TARGET", "STOP", "LOSS", "MARKET", "LIMIT", "QTY", "QUANTITY",
+            "PERCENT", "CONFIDENCE", "PROBABILITY", "UNUSUAL", "VOLUME", "ALERT", "DETECTED",
+            "NSE", "BSE", "INR", "UPI", "P&L", "PNL"
         )
         return Regex("\\b[A-Z][A-Z0-9.-]{2,14}\\b").findAll(text)
             .map { it.value.uppercase() }
