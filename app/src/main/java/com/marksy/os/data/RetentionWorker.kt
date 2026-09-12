@@ -15,8 +15,14 @@ class RetentionWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
-        dao.pruneExpired(System.currentTimeMillis())
-        return Result.success()
+        return try {
+            val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
+            dao.pruneExpired(System.currentTimeMillis())
+            Result.success()
+        } catch (e: Exception) {
+            // Retention is local housekeeping. A transient database failure should
+            // retry instead of silently waiting for the next daily schedule.
+            Result.retry()
+        }
     }
 }
