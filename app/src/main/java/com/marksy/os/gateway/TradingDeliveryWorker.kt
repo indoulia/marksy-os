@@ -13,6 +13,20 @@ class TradingDeliveryWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
+        return try {
+            deliverPending()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            // Room/storage failures are transient from WorkManager's perspective.
+            // Retrying here prevents a temporary database problem from stranding
+            // trading events in PENDING or IN_FLIGHT indefinitely.
+            Log.w(TAG, "Trading delivery storage operation failed; retrying", error)
+            Result.retry()
+        }
+    }
+
+    private suspend fun deliverPending(): Result {
         val dao = MarksyContainer.database(applicationContext).notificationEventDao()
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
