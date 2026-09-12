@@ -24,10 +24,13 @@ object NotificationListenerStatus {
         val normalizedTarget = target.trim()
         if (normalizedTarget.isBlank()) return false
 
+        val targetComponent = runCatching {
+            ComponentName.unflattenFromString(normalizedTarget)
+        }.getOrNull() ?: return false
+
         return enabledListeners.split(':').any { entry ->
             runCatching {
-                ComponentName.unflattenFromString(entry.trim()) ==
-                    ComponentName.unflattenFromString(normalizedTarget)
+                ComponentName.unflattenFromString(entry.trim()) == targetComponent
             }.getOrDefault(false)
         }
     }
