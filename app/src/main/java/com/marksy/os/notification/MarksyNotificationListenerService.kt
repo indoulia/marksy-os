@@ -76,16 +76,16 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
 
-                // Raw notification content never leaves through this collector.
-                // Cancellation is performed only after a NEW local insert succeeds.
-                // A duplicate callback must not remove a notification that was not
-                // newly captured by this callback.
-                if (insertedId != -1L) {
-                    try {
-                        cancelNotification(sbn.key)
-                    } catch (e: SecurityException) {
-                        Log.w(TAG, "Unable to cancel notification", e)
-                    }
+                // A successful local write means this notification identity is safely
+                // represented in Marksy OS. A conflict means Android replayed an
+                // already-captured notification, which can happen after a listener
+                // restart. Cancel in both cases so consumed notifications cannot be
+                // stranded in the system shade. If persistence fails, leave the
+                // notification untouched so the event is not lost before capture.
+                try {
+                    cancelNotification(sbn.key)
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "Unable to cancel notification", e)
                 }
             } catch (e: Exception) {
                 // Never log notification content, title, body, or source key.
