@@ -9,7 +9,7 @@ import java.net.URL
 /** Direct client for the confirmed Marksy Tips API. */
 class MarksyTipsApiClient(
     private val integrationKey: String,
-    baseUrl: String = DEFAULT_BASE_URL
+    baseUrl: String = DEFAULT_MARKSY_API_BASE_URL
 ) : MarksyGatewayClient {
     private val apiBaseUrl = normalizeBaseUrl(baseUrl)
 
@@ -96,9 +96,7 @@ class MarksyTipsApiClient(
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) {
-                throw IOException("Marksy Tips API returned HTTP $code${errorDetail(response)}")
-            }
+            if (code !in 200..299) throw IOException("Marksy Tips API returned HTTP $code${errorDetail(response)}")
             return JSONObject(response).also { envelope ->
                 if (!envelope.has("data") || !envelope.has("meta")) {
                     throw IOException("Marksy Tips API returned an invalid response envelope")
@@ -109,23 +107,19 @@ class MarksyTipsApiClient(
         }
     }
 
-    private fun errorDetail(response: String): String {
-        if (response.isBlank()) return ""
-        return try {
-            val envelope = JSONObject(response)
-            val error = envelope.optJSONObject("error")
-            val message = error?.optString("message")?.takeIf { it.isNotBlank() }
-                ?: envelope.optString("message").takeIf { it.isNotBlank() }
-            message?.let { ": ${it.take(MAX_ERROR_DETAIL_CHARS)}" } ?: ""
-        } catch (_: Exception) {
-            ""
-        }
+    private fun errorDetail(response: String): String = try {
+        val envelope = JSONObject(response)
+        val error = envelope.optJSONObject("error")
+        val message = error?.optString("message")?.takeIf { it.isNotBlank() }
+            ?: envelope.optString("message").takeIf { it.isNotBlank() }
+        message?.let { ": ${it.take(MAX_ERROR_DETAIL_CHARS)}" } ?: ""
+    } catch (_: Exception) {
+        ""
     }
 
     private data class CreatedTip(val tipId: String, val status: String)
 
     private companion object {
-        const val DEFAULT_BASE_URL = "https://marksy.indoulia.com/api/v1"
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
         const val MAX_RESPONSE_CHARS = 50_000
@@ -134,9 +128,11 @@ class MarksyTipsApiClient(
     }
 }
 
+private const val DEFAULT_MARKSY_API_BASE_URL = "https://marksy.indoulia.com/api/v1"
+
 private fun normalizeBaseUrl(value: String): String {
     val trimmed = value.trim().trimEnd('/')
-    if (trimmed.isBlank()) return MarksyTipsApiClient.DEFAULT_BASE_URL
+    if (trimmed.isBlank()) return DEFAULT_MARKSY_API_BASE_URL
     val uri = runCatching { URI(trimmed) }.getOrNull()
         ?: throw IllegalArgumentException("MARKSY_API_BASE_URL is not a valid URL")
     require(uri.scheme.equals("https", ignoreCase = true)) { "MARKSY_API_BASE_URL must use HTTPS" }
