@@ -25,6 +25,14 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
+    /** High-value events for the V2 Home/Smart Inbox attention surfaces. */
+    @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority ORDER BY priority DESC, postedAt DESC LIMIT :limit")
+    fun observeByMinimumPriority(minimumPriority: Int, limit: Int): Flow<List<NotificationEventEntity>>
+
+    /** Trading events remain source-driven and are independently delivered to Marksy. */
+    @Query("SELECT * FROM notification_events WHERE isTrading = 1 ORDER BY postedAt DESC LIMIT :limit")
+    fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
+
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findPendingTrading(limit: Int): List<NotificationEventEntity>
 
