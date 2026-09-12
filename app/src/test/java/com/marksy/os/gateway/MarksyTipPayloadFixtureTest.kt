@@ -111,4 +111,21 @@ class MarksyTipPayloadFixtureTest {
         )
         assertNull(MarksyTipPayloadBuilder.from(request))
     }
+
+    @Test
+    fun labelledSymbolWinsEvenWhenItMatchesAnAllCapsNoisePattern() {
+        val request = MarksyTradingEventRequest(
+            eventId = 11L,
+            source = "Upstox",
+            sourcePackage = "com.upstox.pro",
+            title = "BUY ORDER EXECUTED",
+            body = "Symbol: HLEGLAS UNUSUAL VOLUME ALERT",
+            category = "TRADING",
+            priority = 8,
+            confidence = 0.90f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-6"
+        )
+        assertEquals("HLEGLAS", MarksyTipPayloadBuilder.from(request)!!.symbol)
+    }
 }
