@@ -14,8 +14,16 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+
+        // Never commit credentials. Supply these through the local/CI build environment.
         val integrationKey = providers.environmentVariable("MARKSY_INTEGRATION_KEY").orNull ?: ""
+        val apiBaseUrl = providers.environmentVariable("MARKSY_API_BASE_URL").orNull
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "https://marksy.indoulia.com/api/v1"
+
         buildConfigField("String", "MARKSY_INTEGRATION_KEY", "\"${integrationKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "MARKSY_API_BASE_URL", "\"${apiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     buildFeatures {
