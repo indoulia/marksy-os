@@ -12,8 +12,8 @@ object NotificationLifecyclePolicy {
         if ((notificationFlags and Notification.FLAG_ONGOING_EVENT) != 0) return false
         if ((notificationFlags and Notification.FLAG_GROUP_SUMMARY) != 0) return false
 
-        val normalizedSource = sourcePackage.trim()
-        val normalizedOwnPackage = ownPackage.trim()
+        val normalizedSource = sourcePackage.trim().lowercase()
+        val normalizedOwnPackage = ownPackage.trim().lowercase()
         if (normalizedSource.isBlank() || normalizedOwnPackage.isBlank()) return false
         if (normalizedSource == normalizedOwnPackage) return false
 
