@@ -75,11 +75,15 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             }
 
             // Raw notification content never leaves through this collector.
-            // Cancellation happens only after the local insert operation returns.
-            try {
-                cancelNotification(sbn.key)
-            } catch (e: SecurityException) {
-                Log.w(TAG, "Unable to cancel notification", e)
+            // Cancellation is performed only after a NEW local insert succeeds.
+            // A duplicate callback must not remove a notification that was not
+            // newly captured by this callback.
+            if (insertedId != -1L) {
+                try {
+                    cancelNotification(sbn.key)
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "Unable to cancel notification", e)
+                }
             }
         }
     }
