@@ -4,5 +4,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="250"
     android:canRetrieveWindowContent="true"
+    android:packageNames="com.whatsapp,com.whatsapp.w4b"
     android:description="@string/whatsapp_accessibility_description"
     android:settingsActivity="com.marksy.os.notification.WhatsAppSettingsActivity" />
