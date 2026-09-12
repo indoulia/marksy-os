@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.marksy.os.data.NotificationRepository
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,11 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     /** Shared deterministic understanding envelope; presentation does not invent its own rules. */
     val intelligentEvents: Flow<List<EventIntelligence.Result>> = recentEvents.map { events ->
         events.map { EventIntelligence.analyze(it) }
+    }
+
+    /** One source of truth for the Home dashboard metrics and attention state. */
+    val dashboardSnapshot: Flow<DashboardSnapshot> = recentEvents.map { events ->
+        DashboardSnapshot.from(events)
     }
 
     val tradingInsights: Flow<List<TradingInsight>> = tradingEvents.map { events ->
