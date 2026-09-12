@@ -14,9 +14,14 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+        val integrationKey = providers.environmentVariable("MARKSY_INTEGRATION_KEY").orNull ?: ""
+        buildConfigField("String", "MARKSY_INTEGRATION_KEY", "\"${integrationKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
