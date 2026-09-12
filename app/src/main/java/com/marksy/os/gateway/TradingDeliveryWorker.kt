@@ -18,9 +18,6 @@ class TradingDeliveryWorker(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Exception) {
-            // Room/storage failures are transient from WorkManager's perspective.
-            // Retrying here prevents a temporary database problem from stranding
-            // trading events in PENDING or IN_FLIGHT indefinitely.
             Log.w(TAG, "Trading delivery storage operation failed; retrying", error)
             Result.retry()
         }
@@ -31,8 +28,6 @@ class TradingDeliveryWorker(
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
 
-        // A process death/cancellation can leave an event IN_FLIGHT. Requeue only
-        // entries older than the safety window so an active request is not duplicated.
         dao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
         val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
         if (pending.isEmpty()) return Result.success()
@@ -47,23 +42,17 @@ class TradingDeliveryWorker(
             if (isStopped) return Result.success()
 
             val attempts = event.deliveryAttempts + 1
-            val claimed = dao.claimPendingTrading(
-                eventId = event.id,
-                attempts = attempts,
-                attemptedAt = System.currentTimeMillis()
-            )
+            val claimed = dao.claimPendingTrading(event.id, attempts, System.currentTimeMillis())
             if (claimed != 1) continue
 
-            // WorkManager can stop this worker between the claim and the network call.
-            // Return the event to PENDING so it is eligible for the next run.
             if (isStopped) {
-                dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 return Result.success()
             }
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
-                dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
+                dao.updateInFlightDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
                 Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
                 continue
             }
@@ -71,12 +60,7 @@ class TradingDeliveryWorker(
             val result: Result<MarksyInsight> = try {
                 client.analyze(request)
             } catch (cancellation: CancellationException) {
-                dao.updateDeliveryState(
-                    event.id,
-                    DeliveryState.PENDING.name,
-                    attempts,
-                    System.currentTimeMillis()
-                )
+                dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 throw cancellation
             } catch (t: Throwable) {
                 Result.failure(t)
@@ -85,7 +69,7 @@ class TradingDeliveryWorker(
             result.fold(
                 onSuccess = { insight ->
                     val receivedAt = System.currentTimeMillis()
-                    dao.markDeliveredWithInsight(
+                    val updated = dao.markDeliveredWithInsight(
                         eventId = event.id,
                         state = DeliveryState.DELIVERED.name,
                         attempts = attempts,
@@ -97,16 +81,20 @@ class TradingDeliveryWorker(
                         tipId = insight.tipId,
                         responseJson = insight.rawResponseJson
                     )
+                    // Zero means another worker already changed this event state.
+                    if (updated != 1) Log.i(TAG, "Trading event ${event.id} was already transitioned by another worker")
                 },
                 onFailure = { error ->
                     val state = TradingDeliveryPolicy.retryState(error)
-                    dao.updateDeliveryState(
+                    val updated = dao.updateInFlightDeliveryState(
                         event.id,
                         state.name,
                         attempts,
                         System.currentTimeMillis()
                     )
-                    if (state == DeliveryState.PENDING) {
+                    if (updated != 1) {
+                        Log.i(TAG, "Trading event ${event.id} was already transitioned by another worker")
+                    } else if (state == DeliveryState.PENDING) {
                         retryRequested = true
                     } else {
                         Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
