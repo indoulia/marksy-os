@@ -1,11 +1,9 @@
 package com.marksy.os.gateway
 
-/**
- * Single construction point for the gateway client.
- *
- * Keep this unconfigured until the existing Marksy Gateway exposes a confirmed
- * Android-facing endpoint, authentication method, and wire contract.
- */
+import com.marksy.os.BuildConfig
+
+/** Single construction point for the Marksy API client. */
 object MarksyGatewayProvider {
-    fun client(): MarksyGatewayClient = UnconfiguredMarksyGatewayClient()
+    fun client(): MarksyGatewayClient =
+        MarksyTipsApiClient(BuildConfig.MARKSY_INTEGRATION_KEY)
 }
