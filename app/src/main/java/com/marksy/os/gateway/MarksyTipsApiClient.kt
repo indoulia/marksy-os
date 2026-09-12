@@ -23,11 +23,7 @@ class MarksyTipsApiClient(
             if (created.status.equals("FAILED", ignoreCase = true)) {
                 throw MarksyTerminalException("Marksy rejected the trading tip")
             }
-            if (created.tipId.isBlank()) {
-                Result.success(MarksyInsight(request.eventId, "Marksy tip status: ${created.status}", created.status))
-            } else {
-                Result.success(fetchTip(created.tipId, request.eventId, created.status))
-            }
+            Result.success(fetchTip(created.tipId, request.eventId, created.status))
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -37,7 +33,11 @@ class MarksyTipsApiClient(
 
     private fun postTip(payload: MarksyTipPayload): CreatedTip {
         val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
-        return CreatedTip(data.optString("tipId"), data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
+        val tipId = data.optString("tipId").trim()
+        if (tipId.isBlank()) {
+            throw IOException("Marksy Tips API returned a successful response without tipId")
+        }
+        return CreatedTip(tipId, data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
     }
 
     private fun fetchTip(tipId: String, eventId: Long, createdStatus: String): MarksyInsight {
@@ -49,7 +49,6 @@ class MarksyTipsApiClient(
         val recommendation = marksyView?.optString("recommendation")
             ?.boundedText(MAX_LONG_TEXT_CHARS)
             ?.takeIf { it.isNotBlank() }
-        val probability = marksyView?.finiteDouble("probability")
         val summary = buildString {
             append(verdict)
             if (reasons.isNotEmpty()) append(" — ").append(reasons.joinToString("; "))
@@ -61,11 +60,11 @@ class MarksyTipsApiClient(
             summary = summary,
             action = (recommendation ?: createdStatus).boundedText(MAX_LONG_TEXT_CHARS),
             confidence = marksyView?.finiteDouble("confidence")?.toFloat()?.coerceIn(0f, 1f)
-                ?: probability?.toFloat()?.coerceIn(0f, 1f),
+                ?: marksyView?.finiteDouble("probability")?.toFloat()?.coerceIn(0f, 1f),
             verdict = verdict,
             verdictReasons = reasons,
             recommendation = recommendation,
-            probability = probability,
+            probability = marksyView?.finiteDouble("probability"),
             opportunityScore = marksyView?.finiteDouble("opportunityScore"),
             trustScore = marksyView?.finiteDouble("trustScore"),
             trustQuality = marksyView?.optString("trustQuality")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
@@ -75,7 +74,7 @@ class MarksyTipsApiClient(
             stopLoss = marksyView?.finiteDouble("stopLoss"),
             upsidePct = marksyView?.finiteDouble("upsidePct"),
             horizonDays = marksyView?.optInt("horizonDays")?.takeIf { it > 0 },
-            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank" },
             modelVersion = marksyView?.optString("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             asOf = marksyView?.optString("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             failedCriteria = marksyView?.stringList("failedCriteria").orEmpty(),
