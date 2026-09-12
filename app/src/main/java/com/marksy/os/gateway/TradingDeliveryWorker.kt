@@ -39,12 +39,7 @@ class TradingDeliveryWorker(
             if (claimed != 1) continue
 
             if (isStopped) {
-                dao.updateDeliveryState(
-                    event.id,
-                    DeliveryState.PENDING.name,
-                    attempts,
-                    System.currentTimeMillis()
-                )
+                dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 return Result.success()
             }
 
@@ -77,9 +72,14 @@ class TradingDeliveryWorker(
                         responseJson = insight.rawResponseJson
                     )
                 },
-                onFailure = {
-                    dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                    retryRequested = true
+                onFailure = { error ->
+                    if (error is MarksyTerminalException || error is IllegalArgumentException) {
+                        dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
+                        Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
+                    } else {
+                        dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                        retryRequested = true
+                    }
                 }
             )
         }
