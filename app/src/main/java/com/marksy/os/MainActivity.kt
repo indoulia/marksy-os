@@ -5,21 +5,10 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
@@ -27,44 +16,34 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
-import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.notification.NotificationListenerStatus
-import com.marksy.os.notification.SourceRegistry
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
+import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
@@ -72,6 +51,28 @@ import com.marksy.os.ui.TimelineScreen
 import com.marksy.os.ui.TradingInsight
 import com.marksy.os.ui.TradingInsightDetailDialog
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
+import com.marksy.os.data.local.DeliveryState
+import com.marksy.os.notification.SourceRegistry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -109,7 +110,7 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
-        val importantEvents by vm.importantEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val dashboardSnapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = com.marksy.os.intelligence.DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -140,7 +141,7 @@ class MainActivity : ComponentActivity() {
                 showTimeline -> TimelineHost(events = timelineEvents, padding = padding, onBack = { showTimeline = false })
                 showCalendar -> CalendarHost(events = historyEvents, padding = padding, onBack = { showCalendar = false })
                 else -> when (selectedTab) {
-                    0 -> HomeScreen(events, timelineEvents, importantEvents, notificationAccessEnabled, padding)
+                    0 -> DashboardScreen(snapshot = dashboardSnapshot, events = events, onEventSelected = { selectedEvent = it }, modifier = Modifier.fillMaxSize().padding(padding))
                     1 -> InboxScreen(events, padding)
                     2 -> AskMarksyScreen(padding)
                     3 -> TradingScreen(tradingInsights, padding)
@@ -160,6 +161,8 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private var selectedEvent: NotificationEventEntity? = null
 }
 
 private data class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
@@ -183,62 +186,9 @@ private fun CalendarHost(events: List<NotificationEventEntity>, padding: Padding
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
             Text("Calendar", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
-        CalendarScreen(
-            events = events,
-            padding = PaddingValues(bottom = padding.calculateBottomPadding()),
-            onEventSelected = { selectedEvent = it }
-        )
+        CalendarScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onEventSelected = { selectedEvent = it })
     }
     selectedEvent?.let { EventDetailDialog(it) { selectedEvent = null } }
-}
-
-@Composable
-private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) =
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
-
-@Composable
-private fun HomeScreen(
-    events: List<NotificationEventEntity>,
-    timeline: List<NotificationEventEntity>,
-    important: List<NotificationEventEntity>,
-    notificationAccessEnabled: Boolean,
-    padding: PaddingValues
-) {
-    var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
-    ScreenColumn(padding) {
-        Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
-        Spacer(Modifier.height(8.dp))
-        Text("Less noise. More intelligence.", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        Text("Your notifications, organized locally. Trading events can flow to Marksy for analysis.", color = TextSecondary, fontSize = 14.sp)
-        Spacer(Modifier.height(20.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard("Inbox", events.size.toString(), Modifier.weight(1f))
-            MetricCard("Trading", events.count { it.isTrading }.toString(), Modifier.weight(1f))
-            MetricCard("Important", important.size.toString(), Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(24.dp))
-        Text("AI attention", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
-        if (important.isEmpty()) {
-            EmptyState("Nothing needs your attention yet.", "Marksy OS is watching for high-priority events and will surface them here instead of making you scan everything.")
-        } else {
-            important.take(3).forEach { event -> EventCard(event) { selectedEvent = event } }
-        }
-        Spacer(Modifier.height(18.dp))
-        Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(10.dp))
-        if (timeline.isEmpty()) {
-            if (notificationAccessEnabled) EmptyState("Everything is quiet.", "Notification access is enabled. Meaningful notifications will appear here when they arrive.")
-            else EmptyState("Your intelligent inbox is ready.", "Enable notification access to start capturing meaningful events.")
-        } else timeline.take(5).forEach { event -> EventCard(event) { selectedEvent = event } }
-    }
-    selectedEvent?.let { EventDetailDialog(it) { selectedEvent = null } }
-}
-
-@Composable
-private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) = Card(modifier, colors = CardDefaults.cardColors(containerColor = Surface)) {
-    Column(Modifier.padding(12.dp)) { Text(value, color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(2.dp)); Text(label, color = TextSecondary, fontSize = 12.sp) }
 }
 
 @Composable
@@ -338,45 +288,17 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
         Spacer(Modifier.height(12.dp))
         Text("Advanced settings will be added only when they are needed by V1.", color = TextMuted, fontSize = 12.sp)
     }
-    if (showClear) AlertDialog(
-        onDismissRequest = { if (!clearing) showClear = false },
-        title = { Text("Clear local data?") },
-        text = { Text("This removes captured notifications and trading intelligence stored on this device. It cannot be undone.") },
-        confirmButton = {
-            TextButton(enabled = !clearing, onClick = {
-                clearing = true
-                scope.launch {
-                    try { clearAll(); showClear = false } finally { clearing = false }
-                }
-            }) { Text("Clear") }
-        },
-        dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel") } }
-    )
+    if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?") }, text = { Text("This removes captured notifications and trading intelligence stored on this device. It cannot be undone.") }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll(); showClear = false } finally { clearing = false } } }) { Text("Clear") } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel") } })
 }
 
 @Composable
-private fun SettingsCard(title: String, value: String, description: String, action: (@Composable () -> Unit)? = null) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(15.dp)) {
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text(value, color = Primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
-        }
-        Spacer(Modifier.height(5.dp)); Text(description, color = TextSecondary, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
-        action?.let { Spacer(Modifier.height(10.dp)); it() }
-    }
-}
+private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) = Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
-private fun EmptyState(title: String, description: String) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(18.dp)) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(4.dp)); Text(description, color = TextSecondary, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis) }
-}
+private fun SettingsCard(title: String, value: String, description: String, action: (@Composable () -> Unit)? = null) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(15.dp)) { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)); Text(value, color = Primary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp)) }; Spacer(Modifier.height(5.dp)); Text(description, color = TextSecondary, fontSize = 13.sp, maxLines = 6, overflow = TextOverflow.Ellipsis); action?.let { Spacer(Modifier.height(10.dp)); it() } } }
 
-private fun deliveryLabel(state: String): String = when (state) {
-    DeliveryState.DELIVERED.name -> "Marksy response received"
-    DeliveryState.PENDING.name -> "Waiting for Marksy"
-    DeliveryState.IN_FLIGHT.name -> "Sending to Marksy"
-    DeliveryState.FAILED.name -> "Delivery failed"
-    else -> "Local only"
-}
+@Composable
+private fun EmptyState(title: String, description: String) = Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp)) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp)); Text(description, color = TextSecondary, fontSize = 13.sp) } }
 
+private fun deliveryLabel(state: String): String = when (state) { DeliveryState.DELIVERED.name -> "Marksy response received"; DeliveryState.PENDING.name -> "Waiting for Marksy"; DeliveryState.IN_FLIGHT.name -> "Sending to Marksy"; DeliveryState.FAILED.name -> "Delivery failed"; else -> "Local only" }
 private fun formatTime(timestamp: Long): String = SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(timestamp))
