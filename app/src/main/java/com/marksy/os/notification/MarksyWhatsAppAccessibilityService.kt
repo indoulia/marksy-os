@@ -5,6 +5,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.TradingDeliveryScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,6 +66,7 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
         val category = NotificationClassifier.classify(sourcePackage, sender, message)
         val fingerprint = EventFingerprint.create(sourcePackage, category.category.name, sender, message)
         val sourceKey = "wa-accessibility:$fingerprint"
+        val isTrading = category.category == NotificationClassifier.Category.TRADING
 
         scope.launch {
             runCatching {
@@ -80,12 +82,14 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
                         category = category.category.name,
                         priority = category.priority,
                         confidence = category.confidence,
-                        isTrading = category.category == NotificationClassifier.Category.TRADING,
-                        deliveryState = if (category.category == NotificationClassifier.Category.TRADING)
-                            DeliveryState.PENDING.name
+                        isTrading = isTrading,
+                        deliveryState = if (isTrading) DeliveryState.PENDING.name
                         else DeliveryState.NOT_APPLICABLE.name
                     )
                 )
+                if (isTrading) {
+                    TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
+                }
             }
         }
     }
