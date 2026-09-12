@@ -5,5 +5,7 @@ import com.marksy.os.BuildConfig
 /** Single construction point for the Marksy API client. */
 object MarksyGatewayProvider {
     fun client(): MarksyGatewayClient =
-        MarksyTipsApiClient(BuildConfig.MARKSY_INTEGRATION_KEY)
+        BuildConfig.MARKSY_INTEGRATION_KEY.trim().takeIf { it.isNotBlank() }
+            ?.let { MarksyTipsApiClient(it) }
+            ?: UnconfiguredMarksyGatewayClient()
 }
