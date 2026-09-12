@@ -59,6 +59,7 @@ import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.SourceRegistry
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.EventDetailDialog
@@ -96,11 +97,8 @@ class MainActivity : ComponentActivity() {
         notificationAccessEnabled = isNotificationAccessEnabled()
     }
 
-    private fun isNotificationAccessEnabled(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
-        val component = ComponentName(this, com.marksy.os.notification.MarksyNotificationListenerService::class.java)
-        return enabled.split(':').any { runCatching { ComponentName.unflattenFromString(it) == component }.getOrDefault(false) }
-    }
+    private fun isNotificationAccessEnabled(): Boolean =
+        NotificationListenerStatus.isEnabled(this)
 
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
 
