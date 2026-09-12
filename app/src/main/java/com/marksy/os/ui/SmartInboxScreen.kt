@@ -76,9 +76,17 @@ private fun InboxThreadCard(thread: SmartInboxModel.Thread, onEventSelected: (No
                 Text(formatInboxTime(event.postedAt), color = InboxMuted, fontSize = 11.sp, modifier = Modifier.padding(start = 10.dp))
             }
             if (thread.count > 1) Text("${thread.count} related events", color = InboxPrimary, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
-            if (event.isTrading && event.deliveryState != DeliveryState.NOT_APPLICABLE.name) Text(deliveryLabel(event.deliveryState), color = InboxPrimary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            if (event.isTrading && event.deliveryState != DeliveryState.NOT_APPLICABLE.name) Text(inboxDeliveryLabel(event.deliveryState), color = InboxPrimary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
 
 private fun formatInboxTime(timestamp: Long): String = SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+private fun inboxDeliveryLabel(state: String): String = when (state) {
+    DeliveryState.PENDING.name -> "Pending Marksy analysis"
+    DeliveryState.IN_FLIGHT.name -> "Sending to Marksy"
+    DeliveryState.DELIVERED.name -> "Marksy analysis received"
+    DeliveryState.FAILED.name -> "Analysis failed"
+    else -> state.lowercase(Locale.ROOT).replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
