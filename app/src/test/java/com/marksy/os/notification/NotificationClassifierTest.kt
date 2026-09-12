@@ -36,6 +36,15 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.OTP, result.category)
     }
 
+    @Test fun otpTakesPriorityOverBrokerTradingLanguage() {
+        val result = NotificationClassifier.classify(
+            "com.upstox.pro",
+            "Order verification OTP",
+            "Your OTP is 123456 to authorize the order"
+        )
+        assertEquals(NotificationClassifier.Category.OTP, result.category)
+    }
+
     @Test fun tradingTakesPriorityOverBankingLanguage() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Order Executed", "Amount credited to trading account")
         assertEquals(NotificationClassifier.Category.TRADING, result.category)
