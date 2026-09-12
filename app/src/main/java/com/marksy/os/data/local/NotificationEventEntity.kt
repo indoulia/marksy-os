@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "notification_events",
     indices = [
-        Index(value = ["sourcePackage", "sourceKey", "postedAt"], unique = true),
+        Index(value = ["sourcePackage", "sourceKey"], unique = true),
         Index(value = ["category"]),
         Index(value = ["postedAt"]),
         Index(value = ["deliveryState"])
