@@ -98,7 +98,19 @@ class MarksyTipsApiClient(
             }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val response = stream?.bufferedReader()?.use { reader ->
+                val buffer = CharArray(4096)
+                val builder = StringBuilder()
+                while (true) {
+                    val read = reader.read(buffer)
+                    if (read < 0) break
+                    builder.append(buffer, 0, read)
+                    if (builder.length > MAX_HTTP_RESPONSE_CHARS) {
+                        throw IOException("Marksy Tips API response exceeded the safety limit")
+                    }
+                }
+                builder.toString()
+            }.orEmpty()
             if (code !in 200..299) {
                 val detail = errorDetail(response)
                 if (code in 400..499) throw MarksyTerminalException("Marksy Tips API returned HTTP $code$detail")
@@ -129,6 +141,7 @@ class MarksyTipsApiClient(
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
+        const val MAX_HTTP_RESPONSE_CHARS = 100_000
         const val MAX_RESPONSE_CHARS = 50_000
         const val MAX_ERROR_DETAIL_CHARS = 300
         const val MAX_LIST_ITEMS = 20
