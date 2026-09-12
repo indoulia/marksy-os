@@ -28,8 +28,6 @@ class TradingDeliveryWorker(
 
         var retryRequested = false
         for (event in pending) {
-            // Clear-data and WorkManager cancellation can stop this worker while
-            // a batch is being drained. Do not claim another event after that.
             if (isStopped) return Result.success()
 
             val attempts = event.deliveryAttempts + 1
@@ -38,15 +36,8 @@ class TradingDeliveryWorker(
                 attempts = attempts,
                 attemptedAt = System.currentTimeMillis()
             )
-            if (claimed != 1) {
-                // Another worker (for example periodic work overlapping with an
-                // immediate request) claimed this event first.
-                continue
-            }
+            if (claimed != 1) continue
 
-            // Cancellation may arrive immediately after the atomic claim. Put
-            // the event back into PENDING rather than continuing toward the
-            // gateway after the user has cancelled delivery work.
             if (isStopped) {
                 dao.updateDeliveryState(
                     event.id,
@@ -59,7 +50,6 @@ class TradingDeliveryWorker(
 
             val request = event.toMarksyTradingEventRequest()
             if (request == null) {
-                // Permanent local validation failure: do not retry this event forever.
                 dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
                 Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
                 continue
@@ -82,7 +72,9 @@ class TradingDeliveryWorker(
                         summary = insight.summary,
                         action = insight.action,
                         confidence = insight.confidence,
-                        receivedAt = receivedAt
+                        receivedAt = receivedAt,
+                        tipId = insight.tipId,
+                        responseJson = insight.rawResponseJson
                     )
                 },
                 onFailure = {
