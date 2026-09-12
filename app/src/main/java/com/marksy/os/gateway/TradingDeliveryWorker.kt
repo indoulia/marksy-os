@@ -4,16 +4,16 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
-import com.marksy.os.data.local.MarksyDatabase
+import kotlinx.coroutines.CancellationException
 
 class TradingDeliveryWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
-
     override suspend fun doWork(): Result {
-        val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
+        val dao = MarksyContainer.database(applicationContext).notificationEventDao()
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
 
@@ -50,10 +50,18 @@ class TradingDeliveryWorker(
                 continue
             }
 
-            val result: kotlin.Result<MarksyInsight> = try {
+            val result: Result<MarksyInsight> = try {
                 client.analyze(request)
+            } catch (cancellation: CancellationException) {
+                dao.updateDeliveryState(
+                    event.id,
+                    DeliveryState.PENDING.name,
+                    attempts,
+                    System.currentTimeMillis()
+                )
+                throw cancellation
             } catch (t: Throwable) {
-                kotlin.Result.failure(t)
+                Result.failure(t)
             }
 
             result.fold(
@@ -74,22 +82,31 @@ class TradingDeliveryWorker(
                 },
                 onFailure = { error ->
                     if (error is MarksyTerminalException || error is IllegalArgumentException) {
-                        dao.updateDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
+                        dao.updateDeliveryState(
+                            event.id,
+                            DeliveryState.FAILED.name,
+                            attempts,
+                            System.currentTimeMillis()
+                        )
                         Log.w(TAG, "Trading event ${event.id} permanently rejected: ${error.message}")
                     } else {
-                        dao.updateDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                        dao.updateDeliveryState(
+                            event.id,
+                            DeliveryState.PENDING.name,
+                            attempts,
+                            System.currentTimeMillis()
+                        )
                         retryRequested = true
                     }
                 }
             )
         }
-
         return if (retryRequested) Result.retry() else Result.success()
     }
 
-    companion object {
-        private const val TAG = "TradingDeliveryWorker"
-        private const val BATCH_SIZE = 10
-        private const val STALE_IN_FLIGHT_MS = 30L * 60 * 1000
+    private companion object {
+        const val TAG = "MarksyTradingDelivery"
+        const val BATCH_SIZE = 10
+        const val STALE_IN_FLIGHT_MS = 15 * 60 * 1000L
     }
 }
