@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val importantEvents by vm.importantEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -139,7 +140,7 @@ class MainActivity : ComponentActivity() {
                 showTimeline -> TimelineHost(events = timelineEvents, padding = padding, onBack = { showTimeline = false })
                 showCalendar -> CalendarHost(events = historyEvents, padding = padding, onBack = { showCalendar = false })
                 else -> when (selectedTab) {
-                    0 -> HomeScreen(events, timelineEvents, notificationAccessEnabled, padding)
+                    0 -> HomeScreen(events, timelineEvents, importantEvents, notificationAccessEnabled, padding)
                     1 -> InboxScreen(events, padding)
                     2 -> AskMarksyScreen(padding)
                     3 -> TradingScreen(tradingInsights, padding)
@@ -196,7 +197,13 @@ private fun ScreenColumn(padding: PaddingValues, content: @Composable ColumnScop
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = 18.dp, vertical = 20.dp), content = content)
 
 @Composable
-private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<NotificationEventEntity>, notificationAccessEnabled: Boolean, padding: PaddingValues) {
+private fun HomeScreen(
+    events: List<NotificationEventEntity>,
+    timeline: List<NotificationEventEntity>,
+    important: List<NotificationEventEntity>,
+    notificationAccessEnabled: Boolean,
+    padding: PaddingValues
+) {
     var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
     ScreenColumn(padding) {
         Text("MARKSY OS", color = Primary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
@@ -208,9 +215,17 @@ private fun HomeScreen(events: List<NotificationEventEntity>, timeline: List<Not
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Inbox", events.size.toString(), Modifier.weight(1f))
             MetricCard("Trading", events.count { it.isTrading }.toString(), Modifier.weight(1f))
-            MetricCard("Important", timeline.count { it.priority >= 2 }.toString(), Modifier.weight(1f))
+            MetricCard("Important", important.size.toString(), Modifier.weight(1f))
         }
         Spacer(Modifier.height(24.dp))
+        Text("AI attention", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        if (important.isEmpty()) {
+            EmptyState("Nothing needs your attention yet.", "Marksy OS is watching for high-priority events and will surface them here instead of making you scan everything.")
+        } else {
+            important.take(3).forEach { event -> EventCard(event) { selectedEvent = event } }
+        }
+        Spacer(Modifier.height(18.dp))
         Text("Latest activity", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
         if (timeline.isEmpty()) {
