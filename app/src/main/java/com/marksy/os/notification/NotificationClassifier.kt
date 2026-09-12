@@ -68,6 +68,13 @@ object NotificationClassifier {
         val normalizedPackage = packageName.lowercase()
         val notificationText = "$title $body".lowercase()
 
+        // OTP is a safety-critical notification type. It must win even when a
+        // broker package or other text also contains trading-looking language.
+        val otpRule = rules.first { it.category == Category.OTP }
+        if (otpRule.terms.any(notificationText::contains)) {
+            return Result(otpRule.category, otpRule.priority, otpRule.confidence)
+        }
+
         // A broker package is a source hint, not proof that the notification is
         // a trade. Require an actual trading signal before routing it to Marksy.
         if (normalizedPackage in tradingPackages) {
