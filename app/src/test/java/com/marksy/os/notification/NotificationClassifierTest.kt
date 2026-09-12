@@ -45,6 +45,21 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.OTP, result.category)
     }
 
+    @Test fun shortOtpTermDoesNotMatchInsideAnotherWord() {
+        val result = NotificationClassifier.classify("com.example", "Status", "The operation stopped successfully")
+        assertEquals(NotificationClassifier.Category.OTHER, result.category)
+    }
+
+    @Test fun shortUpiTermDoesNotMatchInsideAnotherWord() {
+        val result = NotificationClassifier.classify("com.example", "Status", "The pupil account is ready")
+        assertEquals(NotificationClassifier.Category.OTHER, result.category)
+    }
+
+    @Test fun shortPromotionTermDoesNotMatchInsideAnotherWord() {
+        val result = NotificationClassifier.classify("com.example", "Status", "Wholesale pricing updated")
+        assertEquals(NotificationClassifier.Category.OTHER, result.category)
+    }
+
     @Test fun tradingTakesPriorityOverBankingLanguage() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Order Executed", "Amount credited to trading account")
         assertEquals(NotificationClassifier.Category.TRADING, result.category)
@@ -53,6 +68,11 @@ class NotificationClassifierTest {
     @Test fun deliveryLanguageDoesNotBecomeTradingForBrokerPromotion() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Delivery", "Your welcome kit shipment is out for delivery")
         assertEquals(NotificationClassifier.Category.DELIVERY, result.category)
+    }
+
+    @Test fun packageWhitespaceDoesNotPreventTradingRecognition() {
+        val result = NotificationClassifier.classify("  COM.UPSTOX.PRO  ", "Order Executed", "BUY 10 RELIANCE")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
     }
 
     @Test fun sourceRegistryNamesWhatsappBusinessExplicitly() {
