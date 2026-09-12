@@ -7,19 +7,28 @@ import java.util.Locale
  * Builds a source-aware semantic identity for notifications.
  *
  * The source is deliberately part of the fingerprint: the same trading event
- * reported by ICICI Direct, Zerodha and Upstox represents three independent
+ * reported by ICICI Direct, Zerodha and Upstox represents independent
  * observations rather than one duplicate.
+ *
+ * The fingerprint also contains a short time bucket. This prevents an
+ * identical notification from the same source from suppressing a genuinely
+ * new occurrence hours later while still collapsing rapid notification
+ * updates/reposts of the same event.
  */
 object EventFingerprint {
+    const val DEDUP_WINDOW_MS = 5 * 60 * 1000L
+
     fun create(
         sourcePackage: String,
         category: String,
         title: String,
-        body: String
+        body: String,
+        occurredAt: Long = 0L
     ): String {
         val source = normalize(sourcePackage)
         val semantic = normalizeSemantic("$title $body")
-        return sha256(listOf(source, normalize(category), semantic).joinToString("|"))
+        val timeBucket = if (occurredAt > 0L) occurredAt / DEDUP_WINDOW_MS else 0L
+        return sha256(listOf(source, normalize(category), semantic, timeBucket).joinToString("|"))
     }
 
     private fun normalize(value: String): String =
