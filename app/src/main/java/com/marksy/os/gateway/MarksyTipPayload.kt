@@ -2,7 +2,13 @@ package com.marksy.os.gateway
 
 import org.json.JSONObject
 
-/** Conservative parser for the fields the Tips API can accept from a notification. */
+/**
+ * Rich wire payload for a Marksy trading tip.
+ *
+ * The canonical Tips API fields are kept at the top level. The additional
+ * event fields preserve the complete notification context so the Marksy side
+ * can start consuming more of the event without requiring an Android update.
+ */
 data class MarksyTipPayload(
     val symbol: String,
     val source: String,
@@ -14,7 +20,16 @@ data class MarksyTipPayload(
     val horizonDays: Int? = null,
     val confidence: Double? = null,
     val rationale: String? = null,
-    val tipAsOf: String
+    val tipAsOf: String,
+    val eventId: Long,
+    val sourcePackage: String,
+    val title: String,
+    val body: String,
+    val category: String,
+    val priority: Int,
+    val notificationConfidence: Double,
+    val occurredAt: String,
+    val contractVersion: Int
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("symbol", symbol)
@@ -28,6 +43,18 @@ data class MarksyTipPayload(
         confidence?.let { put("confidence", it) }
         rationale?.let { put("rationale", it) }
         put("tipAsOf", tipAsOf)
+
+        // Full Android event context. These fields are intentionally retained
+        // even when today's backend does not use them yet.
+        put("eventId", eventId)
+        put("sourcePackage", sourcePackage)
+        put("title", title)
+        put("body", body)
+        put("category", category)
+        put("priority", priority)
+        put("notificationConfidence", notificationConfidence)
+        put("occurredAt", occurredAt)
+        put("contractVersion", contractVersion)
     }
 }
 
@@ -40,6 +67,7 @@ object MarksyTipPayloadBuilder {
             Regex("\\bSELL\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "SELL"
             else -> null
         }
+        val occurredAt = java.time.Instant.ofEpochMilli(request.occurredAt).toString()
         return MarksyTipPayload(
             symbol = symbol,
             source = request.source,
@@ -51,7 +79,16 @@ object MarksyTipPayloadBuilder {
             horizonDays = extractDays(text),
             confidence = extractPercent(text)?.div(100.0),
             rationale = extractRationale(text),
-            tipAsOf = java.time.Instant.ofEpochMilli(request.occurredAt).toString()
+            tipAsOf = occurredAt,
+            eventId = request.eventId,
+            sourcePackage = request.sourcePackage,
+            title = request.title,
+            body = request.body,
+            category = request.category,
+            priority = request.priority,
+            notificationConfidence = request.confidence.toDouble(),
+            occurredAt = occurredAt,
+            contractVersion = request.contractVersion
         )
     }
 
@@ -60,7 +97,10 @@ object MarksyTipPayloadBuilder {
             .find(text)?.groupValues?.getOrNull(1)
         if (!labelled.isNullOrBlank()) return labelled.uppercase()
 
-        val excluded = setOf("BUY", "SELL", "ORDER", "EXECUTED", "TRADE", "PRICE", "TARGET", "STOP", "LOSS", "MARKET", "LIMIT", "QTY", "QUANTITY", "PERCENT", "NSE", "BSE", "INR", "UPI", "P&L")
+        val excluded = setOf(
+            "BUY", "SELL", "ORDER", "EXECUTED", "TRADE", "PRICE", "TARGET", "STOP", "LOSS",
+            "MARKET", "LIMIT", "QTY", "QUANTITY", "PERCENT", "NSE", "BSE", "INR", "UPI", "P&L"
+        )
         return Regex("\\b[A-Z][A-Z0-9.-]{2,14}\\b").findAll(text)
             .map { it.value.uppercase() }
             .firstOrNull { it !in excluded }
