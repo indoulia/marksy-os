@@ -1,6 +1,7 @@
 package com.marksy.os.notification
 
 import android.content.Context
+import java.util.Locale
 
 /**
  * Local-only allow-list for WhatsApp senders that Marksy OS is permitted to inspect
@@ -12,16 +13,22 @@ import android.content.Context
 object WhatsAppSenderWatchlist {
     private const val PREFS = "whatsapp_connector"
     private const val KEY_SENDERS = "watched_senders"
+    private const val MAX_SENDER_LENGTH = 120
+    private const val MAX_SENDERS = 25
 
     fun get(context: Context): Set<String> =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getStringSet(KEY_SENDERS, emptySet())
             .orEmpty()
             .mapNotNull(::normalize)
+            .take(MAX_SENDERS)
             .toSet()
 
     fun replace(context: Context, senders: Collection<String>) {
-        val normalized = senders.mapNotNull(::normalize).toSet()
+        val normalized = senders.mapNotNull(::normalize)
+            .distinct()
+            .take(MAX_SENDERS)
+            .toSet()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putStringSet(KEY_SENDERS, normalized)
@@ -30,7 +37,7 @@ object WhatsAppSenderWatchlist {
 
     fun add(context: Context, sender: String): Boolean {
         val normalized = normalize(sender) ?: return false
-        val updated = get(context) + normalized
+        val updated = (get(context) + normalized).take(MAX_SENDERS)
         replace(context, updated)
         return true
     }
@@ -46,5 +53,9 @@ object WhatsAppSenderWatchlist {
     }
 
     private fun normalize(value: String): String? =
-        value.trim().replace(Regex("\\s+"), " ").takeIf { it.isNotBlank() }?.lowercase()
+        value.trim()
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_SENDER_LENGTH)
+            .takeIf { it.isNotBlank() }
+            ?.lowercase(Locale.ROOT)
 }
