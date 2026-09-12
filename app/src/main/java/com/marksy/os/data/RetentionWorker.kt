@@ -16,10 +16,7 @@ class RetentionWorker(
 
     override suspend fun doWork(): Result {
         val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
-        val now = System.currentTimeMillis()
-
-        dao.deleteOldNonTrading(RetentionPolicy.nonTradingCutoff(now))
-        dao.deleteOldTrading(RetentionPolicy.tradingCutoff(now))
+        dao.pruneExpired(System.currentTimeMillis())
         return Result.success()
     }
 }
