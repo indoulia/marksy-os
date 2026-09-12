@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
+import com.marksy.os.intelligence.EventIntelligence
 import com.marksy.os.intelligence.dashboardAgeLabel
 
 private val DashboardSurface = Color(0xFF101613)
@@ -39,10 +40,7 @@ fun DashboardScreen(
     onEventSelected: (NotificationEventEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Column(Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
                 Text("MARKSY OS", color = DashboardPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
@@ -56,49 +54,38 @@ fun DashboardScreen(
                 TradingHealthCard(snapshot)
             }
         }
-
-        item {
-            SectionTitle("AI attention")
-        }
+        item { SectionTitle("AI attention") }
         if (snapshot.topAttention.isEmpty()) {
             item { EmptyDashboardCard("Nothing needs attention yet.", "Marksy OS will surface high-priority events here.") }
         } else {
             items(snapshot.topAttention, key = { it.eventId }) { result ->
-                val event = events.firstOrNull { it.id == result.eventId } ?: return@items
-                AttentionCard(result, event) { onEventSelected(event) }
+                events.firstOrNull { it.id == result.eventId }?.let { event ->
+                    AttentionCard(result, event, snapshot.generatedAt) { onEventSelected(event) }
+                }
             }
         }
-
         item { SectionTitle("Activity mix") }
         item { BreakdownCard("Categories", snapshot.categoryCounts) }
         item { BreakdownCard("Sources", snapshot.sourceCounts) }
-
         item { SectionTitle("Latest activity") }
         if (events.isEmpty()) {
             item { EmptyDashboardCard("Everything is quiet.", "Captured events will appear here when they arrive.") }
         } else {
-            items(events.take(5), key = { it.id }) { event ->
-                CompactEventCard(event) { onEventSelected(event) }
-            }
+            items(events.take(5), key = { it.id }) { event -> CompactEventCard(event, snapshot.generatedAt) { onEventSelected(event) } }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-private fun MetricRow(snapshot: DashboardSnapshot) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Metric("Inbox", snapshot.totalEvents.toString(), Modifier.weight(1f))
-        Metric("Trading", snapshot.tradingEvents.toString(), Modifier.weight(1f))
-        Metric("Attention", snapshot.importantEvents.toString(), Modifier.weight(1f))
-    }
+private fun MetricRow(snapshot: DashboardSnapshot) = Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Metric("Inbox", snapshot.totalEvents.toString(), Modifier.weight(1f))
+    Metric("Trading", snapshot.tradingEvents.toString(), Modifier.weight(1f))
+    Metric("Attention", snapshot.importantEvents.toString(), Modifier.weight(1f))
 }
 
 @Composable
-private fun Metric(label: String, value: String, modifier: Modifier) = Card(
-    modifier = modifier,
-    colors = CardDefaults.cardColors(containerColor = DashboardSurface)
-) {
+private fun Metric(label: String, value: String, modifier: Modifier) = Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = DashboardSurface)) {
     Column(Modifier.padding(12.dp)) {
         Text(value, color = DashboardText, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text(label, color = DashboardSecondary, fontSize = 11.sp)
@@ -124,16 +111,10 @@ private fun TradingHealthCard(snapshot: DashboardSnapshot) {
 }
 
 @Composable
-private fun SectionTitle(title: String) = Text(
-    title,
-    color = DashboardText,
-    fontSize = 18.sp,
-    fontWeight = FontWeight.SemiBold,
-    modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp)
-)
+private fun SectionTitle(title: String) = Text(title, color = DashboardText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp))
 
 @Composable
-private fun AttentionCard(result: com.marksy.os.intelligence.EventIntelligence.Result, event: NotificationEventEntity, onClick: () -> Unit) = Card(
+private fun AttentionCard(result: EventIntelligence.Result, event: NotificationEventEntity, nowMillis: Long, onClick: () -> Unit) = Card(
     colors = CardDefaults.cardColors(containerColor = if (event.isTrading) DashboardRaised else DashboardSurface),
     modifier = Modifier.fillMaxWidth(),
     onClick = onClick
@@ -146,12 +127,9 @@ private fun AttentionCard(result: com.marksy.os.intelligence.EventIntelligence.R
         Spacer(Modifier.height(5.dp))
         Text(event.title.ifBlank { "Untitled notification" }, color = DashboardText, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(result.reasons.joinToString(" • "), color = DashboardMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
-        Text(dashboardAgeLabel(event.postedAt, resultEventNow(result, event)), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+        Text(dashboardAgeLabel(event.postedAt, nowMillis), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
     }
 }
-
-private fun resultEventNow(result: com.marksy.os.intelligence.EventIntelligence.Result, event: NotificationEventEntity): Long =
-    if (result.attentionLevel == com.marksy.os.intelligence.EventIntelligence.AttentionLevel.CRITICAL && event.postedAt > 0L) event.postedAt else System.currentTimeMillis()
 
 @Composable
 private fun BreakdownCard(title: String, values: Map<String, Int>) = Card(colors = CardDefaults.cardColors(containerColor = DashboardSurface), modifier = Modifier.fillMaxWidth()) {
@@ -167,11 +145,11 @@ private fun BreakdownCard(title: String, values: Map<String, Int>) = Card(colors
 }
 
 @Composable
-private fun CompactEventCard(event: NotificationEventEntity, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = DashboardSurface), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+private fun CompactEventCard(event: NotificationEventEntity, nowMillis: Long, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = DashboardSurface), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
     Column(Modifier.padding(13.dp)) {
         Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) DashboardPrimary else DashboardSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(event.title.ifBlank { "Untitled notification" }, color = DashboardText, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-        Text(if (event.isTrading) deliveryLabel(event.deliveryState) else dashboardAgeLabel(event.postedAt, System.currentTimeMillis()), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+        Text(if (event.isTrading) deliveryLabel(event.deliveryState) else dashboardAgeLabel(event.postedAt, nowMillis), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
     }
 }
 
