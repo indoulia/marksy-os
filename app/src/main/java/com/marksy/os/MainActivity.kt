@@ -64,6 +64,7 @@ import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.SourceRegistry
 import com.marksy.os.ui.AskMarksyScreen
+import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
@@ -109,9 +110,11 @@ class MainActivity : ComponentActivity() {
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var showTimeline by rememberSaveable { mutableStateOf(false) }
+        var showCalendar by rememberSaveable { mutableStateOf(false) }
         val tabs = listOf(
             Tab("Home", Icons.Default.Home),
             Tab("Inbox", Icons.Default.Inbox),
@@ -123,7 +126,7 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             containerColor = Background,
             bottomBar = {
-                if (!showTimeline) {
+                if (!showTimeline && !showCalendar) {
                     NavigationBar(containerColor = Color(0xFF0D1210)) {
                         tabs.forEachIndexed { index, tab ->
                             NavigationBarItem(
@@ -137,10 +140,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         ) { padding ->
-            if (showTimeline) {
-                TimelineHost(events = timelineEvents, padding = padding, onBack = { showTimeline = false })
-            } else {
-                when (selectedTab) {
+            when {
+                showTimeline -> TimelineHost(events = timelineEvents, padding = padding, onBack = { showTimeline = false })
+                showCalendar -> CalendarHost(events = historyEvents, padding = padding, onBack = { showCalendar = false })
+                else -> when (selectedTab) {
                     0 -> HomeScreen(events, timelineEvents, notificationAccessEnabled, padding)
                     1 -> InboxScreen(events, padding)
                     2 -> AskMarksyScreen(padding)
@@ -154,6 +157,7 @@ class MainActivity : ComponentActivity() {
                             TradingDeliveryScheduler.schedule(applicationContext)
                         },
                         openTimeline = { showTimeline = true },
+                        openCalendar = { showCalendar = true },
                         padding = padding
                     )
                 }
@@ -173,6 +177,27 @@ private fun TimelineHost(events: List<NotificationEventEntity>, padding: Padding
         }
         TimelineScreen(events, PaddingValues(bottom = padding.calculateBottomPadding()))
     }
+}
+
+@Composable
+private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+            Text("Calendar", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        }
+        CalendarScreen(
+            events = events,
+            padding = PaddingValues(bottom = padding.calculateBottomPadding()),
+            onEventSelected = { selected ->
+                CalendarSelectionHolder.selected = selected
+            }
+        )
+    }
+}
+
+private object CalendarSelectionHolder {
+    var selected: NotificationEventEntity? = null
 }
 
 @Composable
@@ -293,7 +318,7 @@ private fun TradingInsightCard(insight: TradingInsight, onClick: () -> Unit) = C
 }
 
 @Composable
-private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspend () -> Unit, openTimeline: () -> Unit, padding: PaddingValues) {
+private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspend () -> Unit, openTimeline: () -> Unit, openCalendar: () -> Unit, padding: PaddingValues) {
     var showClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -306,6 +331,8 @@ private fun MoreScreen(access: Boolean, openAccess: () -> Unit, clearAll: suspen
         SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", if (gatewayConfigured) "The Marksy Tips API endpoint and integration key are configured for trading analysis." else "Configure the Marksy API endpoint and integration key before trading events can be sent for analysis.")
         Spacer(Modifier.height(12.dp))
         SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically. Low-value noise stays out of this view.") { Button(onClick = openTimeline) { Text("Open Timeline") } }
+        Spacer(Modifier.height(12.dp))
+        SettingsCard("Calendar", "LOCAL", "Browse retained notification history by month and day. Tap any event for its full details.") { Button(onClick = openCalendar) { Text("Open Calendar") } }
         Spacer(Modifier.height(12.dp))
         SettingsCard("Sources", "LOCAL", SourceRegistry.knownSources().joinToString(" • "))
         Spacer(Modifier.height(12.dp))
