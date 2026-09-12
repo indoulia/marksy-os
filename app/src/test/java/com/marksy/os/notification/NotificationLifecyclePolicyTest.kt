@@ -25,6 +25,28 @@ class NotificationLifecyclePolicyTest {
     }
 
     @Test
+    fun groupSummaryNotificationIsNotCaptured() {
+        assertFalse(
+            NotificationLifecyclePolicy.shouldCapture(
+                Notification.FLAG_GROUP_SUMMARY,
+                "com.example.app",
+                ownPackage
+            )
+        )
+    }
+
+    @Test
+    fun ongoingGroupSummaryNotificationIsNotCaptured() {
+        assertFalse(
+            NotificationLifecyclePolicy.shouldCapture(
+                Notification.FLAG_ONGOING_EVENT or Notification.FLAG_GROUP_SUMMARY,
+                "com.example.app",
+                ownPackage
+            )
+        )
+    }
+
+    @Test
     fun marksyOwnNotificationIsNotCaptured() {
         assertFalse(NotificationLifecyclePolicy.shouldCapture(0, ownPackage, ownPackage))
     }
