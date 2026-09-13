@@ -114,7 +114,14 @@ class MainActivity : ComponentActivity() {
                 }, openTimeline = { showTimeline = true }, openCalendar = { showCalendar = true }, openInsights = { showInsights = true }, openRules = { showRules = true }, padding = padding)
             }
         }
-        selectedEvent?.let { event -> EventDetailDialog(event) { selectedEvent = null } }
+        selectedEvent?.let { event ->
+            EventDetailDialog(
+                event = event,
+                onArchive = { vm.archive(event.id); selectedEvent = null },
+                onUnarchive = { vm.unarchive(event.id); selectedEvent = null },
+                onDismiss = { selectedEvent = null }
+            )
+        }
     }
 }
 
