@@ -14,12 +14,14 @@ class TradingInsightTest {
         trading: Boolean = true,
         insightSummary: String? = null,
         insightAction: String? = null,
-        insightConfidence: Float? = null
+        insightConfidence: Float? = null,
+        marksyResponseJson: String? = null
     ) = NotificationEventEntity(
         id = 42L,
         sourcePackage = "com.upstox.pro",
         sourceName = "Upstox",
         sourceKey = "key-42",
+        eventFingerprint = "fingerprint-42",
         title = title,
         body = "BUY 10 RELIANCE",
         postedAt = 1_000L,
@@ -30,7 +32,8 @@ class TradingInsightTest {
         deliveryState = state,
         insightSummary = insightSummary,
         insightAction = insightAction,
-        insightConfidence = insightConfidence
+        insightConfidence = insightConfidence,
+        marksyResponseJson = marksyResponseJson
     )
 
     @Test fun executedOrderBecomesExecutionInsight() {
@@ -70,6 +73,40 @@ class TradingInsightTest {
         assertEquals(.81f, insight?.marksyConfidence)
     }
 
+    @Test fun structuredMarksyResponseIsExposed() {
+        val insight = event(
+            "Trade confirmation",
+            DeliveryState.DELIVERED.name,
+            marksyResponseJson = """
+                {"comparison":{"verdict":"FAVORABLE","verdictReasons":["Momentum","Liquidity"],"marksySource":"local"},"marksyView":{"recommendation":"WATCH","probability":0.82,"opportunityScore":78.5,"trustScore":91,"trustQuality":"HIGH","uncertaintyLevel":"LOW","entryPrice":2500.0,"targetPrice":2650.0,"stopLoss":2420.0,"upsidePct":6.0,"horizonDays":5,"levelState":"VALID","modelVersion":"v1","asOf":"2026-09-13","failedCriteria":[],"decisionOutcome":"REVIEW","evidence":["Momentum","Volume"]}}
+            """.trimIndent()
+        ).toTradingInsight()
+        assertEquals("FAVORABLE", insight?.marksyVerdict)
+        assertEquals(listOf("Momentum", "Liquidity"), insight?.marksyVerdictReasons)
+        assertEquals("WATCH", insight?.marksyRecommendation)
+        assertEquals(0.82, insight?.marksyProbability)
+        assertEquals(78.5, insight?.marksyOpportunityScore)
+        assertEquals(91.0, insight?.marksyTrustScore)
+        assertEquals("HIGH", insight?.marksyTrustQuality)
+        assertEquals(2500.0, insight?.marksyEntryPrice)
+        assertEquals(2650.0, insight?.marksyTargetPrice)
+        assertEquals(2420.0, insight?.marksyStopLoss)
+        assertEquals(6.0, insight?.marksyUpsidePct)
+        assertEquals(5, insight?.marksyHorizonDays)
+        assertEquals(listOf("Momentum", "Volume"), insight?.marksyEvidence)
+    }
+
+    @Test fun invalidStructuredResponseDoesNotBreakInsight() {
+        val insight = event(
+            "Trade confirmation",
+            DeliveryState.DELIVERED.name,
+            marksyResponseJson = "not-json"
+        ).toTradingInsight()
+        assertNotNull(insight)
+        assertNull(insight?.marksyVerdict)
+        assertNull(insight?.marksyRecommendation)
+    }
+
     @Test fun failedEventShowsFailureState() {
         val insight = event("Trade confirmation", DeliveryState.FAILED.name).toTradingInsight()
         assertEquals("Delivery failed", insight?.status)
@@ -77,5 +114,11 @@ class TradingInsightTest {
 
     @Test fun nonTradingEventCannotBecomeTradingInsight() {
         assertNull(event("New message", trading = false).toTradingInsight())
+    }
+
+    @Test fun confidenceDisplayIsBounded() {
+        assertEquals(0, confidencePercent(-1f))
+        assertEquals(81, confidencePercent(.81f))
+        assertEquals(100, confidencePercent(2f))
     }
 }
