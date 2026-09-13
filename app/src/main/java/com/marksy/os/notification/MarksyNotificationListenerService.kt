@@ -8,6 +8,8 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.marksy.os.intelligence.RuleEngine
+import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
+    private val ruleStore by lazy { RuleStore(applicationContext) }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
@@ -55,25 +58,26 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             text,
             sbn.postTime
         )
+        val baseEvent = NotificationEventEntity(
+            sourcePackage = packageName,
+            sourceName = sourceName,
+            sourceKey = sbn.key,
+            eventFingerprint = fingerprint,
+            title = title,
+            body = text,
+            postedAt = sbn.postTime,
+            category = result.category.name,
+            priority = result.priority,
+            confidence = result.confidence,
+            isTrading = isTrading,
+            deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+        )
+        val ruleEvaluation = RuleEngine.evaluate(ruleStore.load(), baseEvent)
+        val event = baseEvent.copy(priority = ruleEvaluation.priority)
 
         serviceScope.launch {
             try {
-                val insertedId = dao.insert(
-                    NotificationEventEntity(
-                        sourcePackage = packageName,
-                        sourceName = sourceName,
-                        sourceKey = sbn.key,
-                        eventFingerprint = fingerprint,
-                        title = title,
-                        body = text,
-                        postedAt = sbn.postTime,
-                        category = result.category.name,
-                        priority = result.priority,
-                        confidence = result.confidence,
-                        isTrading = isTrading,
-                        deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
-                    )
-                )
+                val insertedId = dao.insert(event)
 
                 if (insertedId != -1L && isTrading) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
