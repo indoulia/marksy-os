@@ -77,6 +77,11 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
 
         scope.launch {
             runCatching {
+                // Accessibility can emit several callbacks for the same visible
+                // conversation state. The five-minute fingerprint bucket gives
+                // those callbacks one stable source key; check it before insert.
+                if (dao.findIdBySourceKey(sourcePackage, sourceKey) != null) return@runCatching
+
                 dao.insert(
                     NotificationEventEntity(
                         sourcePackage = sourcePackage,
