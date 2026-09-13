@@ -2,12 +2,12 @@ package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.NotificationEventEntity
 
-/** Applies deterministic rule outcomes to a captured event without performing external actions. */
+/** Applies deterministic local rules before an event enters the active store. */
 object RuleApplication {
     data class Result(
         val event: NotificationEventEntity,
         val evaluation: RuleEngine.Evaluation,
-        val archived: Boolean
+        val archived: Boolean,
     )
 
     fun apply(rules: List<RuleEngine.Rule>, event: NotificationEventEntity): Result {
@@ -16,10 +16,10 @@ object RuleApplication {
         return Result(
             event = event.copy(
                 priority = evaluation.priority,
-                archived = archived
+                archived = archived,
             ),
             evaluation = evaluation,
-            archived = archived
+            archived = archived,
         )
     }
 }
