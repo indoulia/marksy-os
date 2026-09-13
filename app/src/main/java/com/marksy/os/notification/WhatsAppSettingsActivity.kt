@@ -44,18 +44,25 @@ private val WhatsAppSecondary = Color(0xFF9AA9A1)
 
 class WhatsAppSettingsActivity : ComponentActivity() {
     private var accessibilityEnabled by mutableStateOf(false)
+    private var watchedSenders by mutableStateOf(emptySet<String>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        accessibilityEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
+        refreshState()
         setContent {
             MaterialTheme {
                 WhatsAppSettingsScreen(
                     isEnabled = accessibilityEnabled,
-                    senders = WhatsAppSenderWatchlist.get(this),
+                    senders = watchedSenders,
                     onOpenAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                    onAddSender = { WhatsAppSenderWatchlist.add(this, it) },
-                    onRemoveSender = { WhatsAppSenderWatchlist.remove(this, it) },
+                    onAddSender = {
+                        WhatsAppSenderWatchlist.add(this, it)
+                        refreshState()
+                    },
+                    onRemoveSender = {
+                        WhatsAppSenderWatchlist.remove(this, it)
+                        refreshState()
+                    },
                     onBack = { finish() }
                 )
             }
@@ -64,7 +71,12 @@ class WhatsAppSettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshState()
+    }
+
+    private fun refreshState() {
         accessibilityEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
+        watchedSenders = WhatsAppSenderWatchlist.get(this)
     }
 }
 
@@ -77,9 +89,8 @@ private fun WhatsAppSettingsScreen(
     onRemoveSender: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
     var sender by remember { mutableStateOf("") }
-    var watchedSenders by remember(senders) { mutableStateOf(senders.toList().sorted()) }
+    val watchedSenders = remember(senders) { senders.toList().sorted() }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(18.dp),
@@ -122,7 +133,6 @@ private fun WhatsAppSettingsScreen(
                 enabled = sender.trim().isNotBlank() && watchedSenders.size < 25,
                 onClick = {
                     onAddSender(sender)
-                    watchedSenders = WhatsAppSenderWatchlist.get(context).toList().sorted()
                     sender = ""
                 }
             ) { Text("Add") }
@@ -136,10 +146,7 @@ private fun WhatsAppSettingsScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = WhatsAppSurface), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(watched, color = WhatsAppText, modifier = Modifier.weight(1f))
-                            TextButton(onClick = {
-                                onRemoveSender(watched)
-                                watchedSenders = watchedSenders.filterNot { it == watched }
-                            }) { Text("Remove") }
+                            TextButton(onClick = { onRemoveSender(watched) }) { Text("Remove") }
                         }
                     }
                 }
