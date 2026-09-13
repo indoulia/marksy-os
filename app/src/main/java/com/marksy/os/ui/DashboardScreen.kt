@@ -32,7 +32,6 @@ private val DashboardText = Color(0xFFE8F1EC)
 private val DashboardSecondary = Color(0xFF9AA9A1)
 private val DashboardMuted = Color(0xFF657169)
 
-/** Complete Home dashboard presentation. It renders only the supplied snapshot/events. */
 @Composable
 fun DashboardScreen(
     snapshot: DashboardSnapshot,
@@ -47,7 +46,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(7.dp))
                 Text("Less noise. More intelligence.", color = DashboardText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(5.dp))
-                Text("One view of what needs attention, what Marksy is analyzing, and what changed recently.", color = DashboardSecondary, fontSize = 14.sp)
+                Text("Your attention queue, trading intelligence and recent activity — in one place.", color = DashboardSecondary, fontSize = 14.sp)
                 Spacer(Modifier.height(18.dp))
                 MetricRow(snapshot)
                 Spacer(Modifier.height(12.dp))
@@ -95,7 +94,7 @@ private fun Metric(label: String, value: String, modifier: Modifier) = Card(modi
 @Composable
 private fun TradingHealthCard(snapshot: DashboardSnapshot) {
     val (headline, detail) = when (snapshot.tradingHealth) {
-        DashboardSnapshot.TradingHealth.ACTION_REQUIRED -> "Trading needs attention" to "${snapshot.failedTrading} event(s) failed to reach Marksy."
+        DashboardSnapshot.TradingHealth.ACTION_REQUIRED -> "Trading needs attention" to "${snapshot.failedTrading} event(s) failed to reach Marksy. Open the event to inspect and retry status."
         DashboardSnapshot.TradingHealth.ANALYZING -> "Marksy is analyzing" to "${snapshot.pendingTrading} trading event(s) are waiting for a response."
         DashboardSnapshot.TradingHealth.CLEAR -> "Trading intelligence is clear" to "${snapshot.deliveredTrading} trading event(s) have received a Marksy response."
         DashboardSnapshot.TradingHealth.QUIET -> "Trading is quiet" to "No trading events are currently retained."
@@ -115,26 +114,34 @@ private fun SectionTitle(title: String) = Text(title, color = DashboardText, fon
 
 @Composable
 private fun AttentionCard(result: EventIntelligence.Result, event: NotificationEventEntity, nowMillis: Long, onClick: () -> Unit) = Card(
-    colors = CardDefaults.cardColors(containerColor = if (event.isTrading) DashboardRaised else DashboardSurface),
+    colors = CardDefaults.cardColors(containerColor = if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) DashboardRaised else DashboardSurface),
     modifier = Modifier.fillMaxWidth(),
     onClick = onClick
 ) {
     Column(Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) DashboardPrimary else DashboardSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${result.attentionScore}/100", color = DashboardPrimary, fontSize = 11.sp)
+            Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) DashboardPrimary else DashboardSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(attentionLabel(result), color = DashboardPrimary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
         }
         Spacer(Modifier.height(5.dp))
         Text(event.title.ifBlank { "Untitled notification" }, color = DashboardText, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(result.reasons.joinToString(" • "), color = DashboardMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
-        Text(dashboardAgeLabel(event.postedAt, nowMillis), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+        Text(result.reasons.take(2).joinToString(" • "), color = DashboardMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+        Text("${result.attentionScore}/100 • ${dashboardAgeLabel(event.postedAt, nowMillis)}", color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
     }
+}
+
+private fun attentionLabel(result: EventIntelligence.Result): String = when (result.attentionLevel) {
+    EventIntelligence.AttentionLevel.CRITICAL -> "CRITICAL"
+    EventIntelligence.AttentionLevel.HIGH -> "HIGH ATTENTION"
+    EventIntelligence.AttentionLevel.NORMAL -> "NORMAL"
+    EventIntelligence.AttentionLevel.LOW -> "LOW"
 }
 
 @Composable
 private fun BreakdownCard(title: String, values: Map<String, Int>) = Card(colors = CardDefaults.cardColors(containerColor = DashboardSurface), modifier = Modifier.fillMaxWidth()) {
     Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(title, color = DashboardText, fontWeight = FontWeight.SemiBold)
+        if (values.isEmpty()) Text("No activity yet", color = DashboardMuted, fontSize = 12.sp)
         values.entries.take(5).forEach { (name, count) ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(name.lowercase().replaceFirstChar { it.uppercase() }, color = DashboardSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -147,9 +154,12 @@ private fun BreakdownCard(title: String, values: Map<String, Int>) = Card(colors
 @Composable
 private fun CompactEventCard(event: NotificationEventEntity, nowMillis: Long, onClick: () -> Unit) = Card(colors = CardDefaults.cardColors(containerColor = DashboardSurface), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
     Column(Modifier.padding(13.dp)) {
-        Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) DashboardPrimary else DashboardSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(event.sourceName.ifBlank { "Unknown source" }, color = if (event.isTrading) DashboardPrimary else DashboardSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (event.isTrading) Text(deliveryLabel(event.deliveryState), color = DashboardPrimary, fontSize = 10.sp, modifier = Modifier.padding(start = 8.dp))
+        }
         Text(event.title.ifBlank { "Untitled notification" }, color = DashboardText, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-        Text(if (event.isTrading) deliveryLabel(event.deliveryState) else dashboardAgeLabel(event.postedAt, nowMillis), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+        Text(dashboardAgeLabel(event.postedAt, nowMillis), color = DashboardMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
     }
 }
 
@@ -162,9 +172,9 @@ private fun EmptyDashboardCard(title: String, description: String) = Card(colors
 }
 
 private fun deliveryLabel(state: String): String = when (state) {
-    DeliveryState.DELIVERED.name -> "Marksy response received"
-    DeliveryState.PENDING.name -> "Waiting for Marksy"
-    DeliveryState.IN_FLIGHT.name -> "Sending to Marksy"
-    DeliveryState.FAILED.name -> "Delivery failed"
-    else -> "Local only"
+    DeliveryState.DELIVERED.name -> "MARKSY ✓"
+    DeliveryState.PENDING.name -> "PENDING"
+    DeliveryState.IN_FLIGHT.name -> "ANALYZING"
+    DeliveryState.FAILED.name -> "FAILED"
+    else -> "LOCAL"
 }
