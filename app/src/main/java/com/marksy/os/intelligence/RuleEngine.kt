@@ -19,6 +19,11 @@ object RuleEngine {
         val action: Action = Action.HIGHLIGHT
     )
 
+    data class Evaluation(
+        val matchedRules: List<Rule>,
+        val priority: Int
+    )
+
     fun matches(rule: Rule, event: NotificationEventEntity): Boolean {
         if (!rule.enabled) return false
         if (rule.sourcePackage != null && rule.sourcePackage != event.sourcePackage) return false
@@ -34,4 +39,19 @@ object RuleEngine {
 
     fun matchingRules(rules: List<Rule>, event: NotificationEventEntity): List<Rule> =
         rules.filter { matches(it, event) }
+
+    fun evaluate(rules: List<Rule>, event: NotificationEventEntity): Evaluation {
+        val matched = matchingRules(rules, event)
+        val boost = matched.sumOf { rule ->
+            when (rule.action) {
+                Action.HIGHLIGHT -> HIGHLIGHT_BOOST
+                Action.MARK_TRADING_PRIORITY -> TRADING_PRIORITY_BOOST
+                Action.ARCHIVE -> 0
+            }
+        }
+        return Evaluation(matched, (event.priority + boost).coerceIn(0, 100))
+    }
+
+    private const val HIGHLIGHT_BOOST = 15
+    private const val TRADING_PRIORITY_BOOST = 20
 }
