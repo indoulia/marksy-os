@@ -39,6 +39,32 @@ class RuleEngineTest {
         assertEquals(listOf("a"), RuleEngine.matchingRules(rules, event).map { it.id })
     }
 
+    @Test
+    fun highlightRuleRaisesPriorityWithoutExceedingMaximum() {
+        val event = event(category = "PAYMENTS").copy(priority = 90)
+        val rules = listOf(RuleEngine.Rule("a", "Highlight", category = "PAYMENTS", action = RuleEngine.Action.HIGHLIGHT))
+        assertEquals(100, RuleEngine.evaluate(rules, event).priority)
+    }
+
+    @Test
+    fun tradingPriorityRuleAddsItsOwnBoost() {
+        val event = event(category = "TRADING").copy(priority = 50)
+        val rules = listOf(RuleEngine.Rule("a", "Trading", category = "TRADING", action = RuleEngine.Action.MARK_TRADING_PRIORITY))
+        assertEquals(70, RuleEngine.evaluate(rules, event).priority)
+    }
+
+    @Test
+    fun multipleMatchingRulesAccumulateAndClampPriority() {
+        val event = event(category = "TRADING").copy(priority = 80)
+        val rules = listOf(
+            RuleEngine.Rule("a", "Trading", category = "TRADING", action = RuleEngine.Action.MARK_TRADING_PRIORITY),
+            RuleEngine.Rule("b", "Highlight", category = "TRADING", action = RuleEngine.Action.HIGHLIGHT)
+        )
+        val evaluation = RuleEngine.evaluate(rules, event)
+        assertEquals(listOf("a", "b"), evaluation.matchedRules.map { it.id })
+        assertEquals(100, evaluation.priority)
+    }
+
     private fun event(
         sourcePackage: String = "com.example",
         category: String = "OTHER",
