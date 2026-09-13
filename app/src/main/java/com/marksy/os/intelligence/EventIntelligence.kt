@@ -28,20 +28,37 @@ object EventIntelligence {
             reasons += "Trading event"
         }
 
-        if (event.deliveryState == DeliveryState.FAILED.name) {
-            score += 15
-            reasons += "Marksy delivery needs attention"
+        when (event.deliveryState) {
+            DeliveryState.FAILED.name -> {
+                score += 15
+                reasons += "Marksy delivery needs attention"
+            }
+            DeliveryState.IN_FLIGHT.name -> {
+                score += 5
+                reasons += "Marksy analysis in progress"
+            }
+            DeliveryState.PENDING.name -> {
+                if (event.isTrading) reasons += "Waiting for Marksy analysis"
+            }
+            DeliveryState.DELIVERED.name -> {
+                if (event.isTrading) reasons += "Marksy response received"
+            }
         }
 
         val age = (nowMillis - event.postedAt).coerceAtLeast(0L)
-        if (age <= FRESH_WINDOW_MS) {
-            score += 5
-            reasons += "Recent"
+        when {
+            age <= FRESH_WINDOW_MS -> {
+                score += 5
+                reasons += "Recent"
+            }
+            age >= STALE_WINDOW_MS && event.isTrading && event.deliveryState == DeliveryState.PENDING.name -> {
+                score += 10
+                reasons += "Trading analysis is taking longer than expected"
+            }
         }
 
-        if (event.confidence >= HIGH_CONFIDENCE) {
-            reasons += "High classification confidence"
-        }
+        if (event.confidence >= HIGH_CONFIDENCE) reasons += "High classification confidence"
+        if (event.priority >= 85) reasons += "High base priority"
 
         val bounded = score.coerceIn(0, 100)
         return Result(
@@ -49,7 +66,7 @@ object EventIntelligence {
             attentionScore = bounded,
             attentionLevel = levelFor(bounded),
             threadKey = threadKey(event),
-            reasons = reasons.ifEmpty { listOf("Standard notification") }
+            reasons = reasons.distinct().ifEmpty { listOf("Standard notification") }
         )
     }
 
@@ -67,12 +84,6 @@ object EventIntelligence {
         else -> AttentionLevel.LOW
     }
 
-    /**
-     * Prefer a recognizable uppercase market symbol for trading threads.
-     * Otherwise use a normalized source/category/title key. This is deliberately
-     * conservative: it groups obvious continuations but never claims semantic
-     * equivalence across unrelated sources.
-     */
     private fun threadKey(event: NotificationEventEntity): String {
         val symbol = SYMBOL_PATTERN.find("${event.title} ${event.body}".uppercase(Locale.ROOT))
             ?.value
@@ -95,5 +106,6 @@ object EventIntelligence {
     )
 
     private const val FRESH_WINDOW_MS = 30 * 60 * 1000L
+    private const val STALE_WINDOW_MS = 15 * 60 * 1000L
     private const val HIGH_CONFIDENCE = 0.90f
 }
