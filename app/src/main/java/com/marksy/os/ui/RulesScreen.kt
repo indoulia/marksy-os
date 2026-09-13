@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.intelligence.RuleEngine
+import com.marksy.os.intelligence.RuleStore
+import kotlinx.coroutines.launch
 
 private val RuleSurface = Color(0xFF101613)
 private val RuleRaised = Color(0xFF151C18)
@@ -35,12 +38,13 @@ private val RuleSecondary = Color(0xFF9AA9A1)
 
 @Composable
 fun RulesScreen(padding: PaddingValues) {
-    val rules = remember {
-        mutableStateListOf(
-            RuleEngine.Rule("trading-priority", "Trading notifications", category = "TRADING", action = RuleEngine.Action.MARK_TRADING_PRIORITY),
-            RuleEngine.Rule("failed-analysis", "Failed Marksy analysis", category = "TRADING", action = RuleEngine.Action.HIGHLIGHT),
-            RuleEngine.Rule("payments", "Payment notifications", category = "PAYMENTS", action = RuleEngine.Action.HIGHLIGHT)
-        )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val store = remember(context) { RuleStore(context.applicationContext) }
+    val rules = remember(store) { mutableStateListOf<RuleEngine.Rule>().apply { addAll(store.load()) } }
+    val scope = rememberCoroutineScope()
+
+    fun persist() {
+        scope.launch { store.save(rules.toList()) }
     }
 
     LazyColumn(
@@ -57,10 +61,21 @@ fun RulesScreen(padding: PaddingValues) {
         items(rules, key = { it.id }) { rule ->
             RuleCard(rule) { enabled ->
                 val index = rules.indexOfFirst { it.id == rule.id }
-                if (index >= 0) rules[index] = rule.copy(enabled = enabled)
+                if (index >= 0) {
+                    rules[index] = rule.copy(enabled = enabled)
+                    persist()
+                }
             }
         }
         item {
+            Spacer(Modifier.height(4.dp))
+            Button(onClick = {
+                rules.clear()
+                rules.addAll(RuleStore.defaultRules())
+                persist()
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text("Reset to defaults")
+            }
             Spacer(Modifier.height(4.dp))
             Card(colors = CardDefaults.cardColors(containerColor = RuleRaised), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(15.dp)) {
