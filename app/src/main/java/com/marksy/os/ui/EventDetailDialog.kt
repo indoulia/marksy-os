@@ -24,7 +24,12 @@ private val DetailSecondary = Color(0xFF9AA9A1)
 private val DetailMuted = Color(0xFF657169)
 
 @Composable
-fun EventDetailDialog(event: NotificationEventEntity, onDismiss: () -> Unit) {
+fun EventDetailDialog(
+    event: NotificationEventEntity,
+    onArchive: () -> Unit,
+    onUnarchive: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val scrollState = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -46,10 +51,17 @@ fun EventDetailDialog(event: NotificationEventEntity, onDismiss: () -> Unit) {
                     event.insightConfidence?.let { DetailRow("Marksy confidence", "${(it * 100).toInt()}%") }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("Stored locally on this device", color = DetailMuted, fontSize = 11.sp)
+                Text(if (event.archived) "Archived locally on this device" else "Stored locally on this device", color = DetailMuted, fontSize = 11.sp)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = {
+            Column {
+                TextButton(onClick = if (event.archived) onUnarchive else onArchive) {
+                    Text(if (event.archived) "Restore to Inbox" else "Archive")
+                }
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        }
     )
 }
 
