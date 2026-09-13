@@ -13,20 +13,20 @@ class NotificationRepository(private val dao: NotificationEventDao) {
     fun observeCategory(category: String, limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeByCategory(category, limit)
 
-    /** High-value events used by the V2 Home Dashboard and Smart Inbox. */
     fun observeImportant(limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeByMinimumPriority(minimumPriority = 65, limit = limit)
 
-    /** Attention-worthy events; lower-value noise stays out of this stream. */
     fun observeAttention(limit: Int = 100): Flow<List<NotificationEventEntity>> =
         dao.observeByMinimumPriority(minimumPriority = 40, limit = limit)
 
-    /** Events useful for the chronological Timeline; excludes low-value OTHER noise. */
     fun observeTimeline(limit: Int = 100): Flow<List<NotificationEventEntity>> =
         dao.observeTimeline(limit)
 
-    /** All retained meaningful events, used by the interactive local history calendar. */
     fun observeHistory(): Flow<List<NotificationEventEntity>> = dao.observeHistory()
+
+    suspend fun archive(eventId: Long): Boolean = dao.setArchived(eventId, true) > 0
+
+    suspend fun unarchive(eventId: Long): Boolean = dao.setArchived(eventId, false) > 0
 
     suspend fun clearAll() = dao.deleteAll()
 }
