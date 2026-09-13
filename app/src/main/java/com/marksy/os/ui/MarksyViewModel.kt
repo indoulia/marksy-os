@@ -2,12 +2,14 @@ package com.marksy.os.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.marksy.os.data.NotificationRepository
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class MarksyViewModel(private val repository: NotificationRepository) : ViewModel() {
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
@@ -17,12 +19,10 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
     val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
 
-    /** Shared deterministic understanding envelope; presentation does not invent its own rules. */
     val intelligentEvents: Flow<List<EventIntelligence.Result>> = recentEvents.map { events ->
         events.map { EventIntelligence.analyze(it) }
     }
 
-    /** One source of truth for the Home dashboard metrics and attention state. */
     val dashboardSnapshot: Flow<DashboardSnapshot> = recentEvents.map { events ->
         DashboardSnapshot.from(events)
     }
@@ -36,6 +36,14 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
 
     fun countByCategory(events: List<NotificationEventEntity>, category: String): Int =
         events.count { it.category == category }
+
+    fun archive(eventId: Long) {
+        viewModelScope.launch { repository.archive(eventId) }
+    }
+
+    fun unarchive(eventId: Long) {
+        viewModelScope.launch { repository.unarchive(eventId) }
+    }
 }
 
 class MarksyViewModelFactory(private val repository: NotificationRepository) : ViewModelProvider.Factory {
