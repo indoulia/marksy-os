@@ -85,11 +85,11 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
                 try {
                     cancelNotification(sbn.key)
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "Unable to cancel notification", e)
+                } catch (_: SecurityException) {
+                    Log.w(TAG, "Unable to cancel notification")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to persist notification event", e)
+            } catch (_: Exception) {
+                Log.e(TAG, "Failed to persist notification event")
             }
         }
     }
