@@ -27,6 +27,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
+import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DashboardScreen
@@ -68,7 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-    private fun openAccessibilitySettings() = startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    private fun openWhatsAppConnector() = startActivity(Intent(this, WhatsAppSettingsActivity::class.java))
 
     @Composable
     private fun MarksyApp() {
@@ -106,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 selectedTab == 1 -> SmartInboxScreen(events = events, padding = padding, onEventSelected = openEvent)
                 selectedTab == 2 -> AskMarksyScreen(padding)
                 selectedTab == 3 -> TradingScreen(tradingInsights, padding)
-                else -> MoreScreen(access = notificationAccessEnabled, whatsappAccess = whatsappConnectorEnabled, openAccess = ::openNotificationAccess, openWhatsAppAccess = ::openAccessibilitySettings, clearAll = {
+                else -> MoreScreen(access = notificationAccessEnabled, whatsappAccess = whatsappConnectorEnabled, openAccess = ::openNotificationAccess, openWhatsAppAccess = ::openWhatsAppConnector, clearAll = {
                     TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
                     repository.clearAll()
                     TradingDeliveryScheduler.schedule(applicationContext)
@@ -168,7 +169,7 @@ class MainActivity : ComponentActivity() {
     LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("More", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text("Marksy OS settings and local data controls.", color = TextSecondary, fontSize = 13.sp) }
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(onClick = openAccess) { Text(if (access) "Manage Access" else "Open Access") } } }
-        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text only for senders on your local allow-list.") { Button(onClick = openWhatsAppAccess) { Text(if (whatsappAccess) "Manage Connector" else "Open Accessibility") } } }
+        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text only for senders on your local allow-list.") { Button(onClick = openWhatsAppAccess) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector") } } }
         item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Trading events are delivered for Marksy analysis. Live brokerage execution is disabled in V1.") }
         item { SettingsCard("Insights", "LOCAL", "Review notification patterns, attention levels, and trading intelligence delivery health.") { Button(onClick = openInsights) { Text("Open Insights") } } }
         item { SettingsCard("Rules & Automation", "LOCAL", "Create deterministic local rules for highlighting and prioritizing events. Brokerage execution is not available.") { Button(onClick = openRules) { Text("Open Rules") } } }
