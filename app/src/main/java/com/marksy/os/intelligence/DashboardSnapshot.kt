@@ -4,13 +4,7 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import java.util.concurrent.TimeUnit
 
-/**
- * Single deterministic snapshot for the Marksy OS home experience.
- *
- * The dashboard consumes this model instead of independently inventing metrics,
- * priority rules, or trading status. It is local-only and contains no notification
- * body text beyond the event references already held by the UI.
- */
+/** Single deterministic snapshot for the Marksy OS home experience. */
 data class DashboardSnapshot(
     val totalEvents: Int,
     val tradingEvents: Int,
@@ -40,25 +34,24 @@ data class DashboardSnapshot(
     companion object {
         const val TOP_ATTENTION_LIMIT = 5
 
-        fun from(
-            events: List<NotificationEventEntity>,
-            nowMillis: Long = System.currentTimeMillis()
-        ): DashboardSnapshot {
-            val intelligence = events
+        fun from(events: List<NotificationEventEntity>, nowMillis: Long = System.currentTimeMillis()): DashboardSnapshot {
+            val active = events.filterNot { it.archived }
+            val byId = active.associateBy { it.id }
+            val intelligence = active
                 .map { EventIntelligence.analyze(it, nowMillis) }
                 .sortedWith(
                     compareByDescending<EventIntelligence.Result> { it.attentionScore }
-                        .thenByDescending { events.firstOrNull { event -> event.id == it.eventId }?.postedAt ?: 0L }
+                        .thenByDescending { byId[it.eventId]?.postedAt ?: 0L }
                 )
 
-            val trading = events.filter { it.isTrading }
-            val categoryCounts = events
+            val trading = active.filter { it.isTrading }
+            val categoryCounts = active
                 .groupingBy { it.category.trim().uppercase() }
                 .eachCount()
                 .toList()
                 .sortedByDescending { it.second }
                 .toMap()
-            val sourceCounts = events
+            val sourceCounts = active
                 .groupingBy { it.sourceName.ifBlank { "Unknown source" } }
                 .eachCount()
                 .toList()
@@ -66,7 +59,7 @@ data class DashboardSnapshot(
                 .toMap()
 
             return DashboardSnapshot(
-                totalEvents = events.size,
+                totalEvents = active.size,
                 tradingEvents = trading.size,
                 importantEvents = intelligence.count { it.attentionScore >= IMPORTANT_THRESHOLD },
                 criticalEvents = intelligence.count { it.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL },
@@ -77,7 +70,7 @@ data class DashboardSnapshot(
                 categoryCounts = categoryCounts,
                 sourceCounts = sourceCounts,
                 latestTradingEventId = trading.maxByOrNull { it.postedAt }?.id,
-                latestEventId = events.maxByOrNull { it.postedAt }?.id,
+                latestEventId = active.maxByOrNull { it.postedAt }?.id,
                 generatedAt = nowMillis
             )
         }
@@ -86,7 +79,6 @@ data class DashboardSnapshot(
     }
 }
 
-/** Lightweight freshness helper for dashboard copy and tests. */
 fun dashboardAgeLabel(eventPostedAt: Long, nowMillis: Long): String {
     val age = (nowMillis - eventPostedAt).coerceAtLeast(0L)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(age)
