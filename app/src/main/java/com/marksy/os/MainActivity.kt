@@ -30,6 +30,7 @@ import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.ui.EventDetailDialog
+import com.marksy.os.ui.InsightsScreen
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
 import com.marksy.os.ui.SmartInboxScreen
@@ -76,6 +77,7 @@ class MainActivity : ComponentActivity() {
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var showTimeline by rememberSaveable { mutableStateOf(false) }
         var showCalendar by rememberSaveable { mutableStateOf(false) }
+        var showInsights by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
 
         val tabs = listOf(
@@ -89,7 +91,7 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             containerColor = Background,
             bottomBar = {
-                if (!showTimeline && !showCalendar) {
+                if (!showTimeline && !showCalendar && !showInsights) {
                     NavigationBar(containerColor = Color(0xFF0D1210)) {
                         tabs.forEachIndexed { index, (label, icon) ->
                             NavigationBarItem(
@@ -106,6 +108,7 @@ class MainActivity : ComponentActivity() {
             when {
                 showTimeline -> TimelineHost(timelineEvents, padding) { showTimeline = false }
                 showCalendar -> CalendarHost(historyEvents, padding) { showCalendar = false }
+                showInsights -> InsightsHost(events, padding) { showInsights = false }
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = snapshot,
                     events = events,
@@ -129,6 +132,7 @@ class MainActivity : ComponentActivity() {
                     },
                     openTimeline = { showTimeline = true },
                     openCalendar = { showCalendar = true },
+                    openInsights = { showInsights = true },
                     padding = padding
                 )
             }
@@ -153,6 +157,14 @@ private fun CalendarHost(events: List<NotificationEventEntity>, padding: Padding
     Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
         ScreenHeader("Calendar", onBack)
         CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = {})
+    }
+}
+
+@Composable
+private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        ScreenHeader("Insights", onBack)
+        InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()))
     }
 }
 
@@ -219,6 +231,7 @@ private fun MoreScreen(
     clearAll: suspend () -> Unit,
     openTimeline: () -> Unit,
     openCalendar: () -> Unit,
+    openInsights: () -> Unit,
     padding: PaddingValues
 ) {
     var showClear by remember { mutableStateOf(false) }
@@ -243,6 +256,9 @@ private fun MoreScreen(
         }
         item {
             SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Trading events are delivered for Marksy analysis. Live brokerage execution is disabled in V1.")
+        }
+        item {
+            SettingsCard("Insights", "LOCAL", "Review notification patterns, attention levels, and trading intelligence delivery health.") { Button(onClick = openInsights) { Text("Open Insights") } }
         }
         item {
             SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(onClick = openTimeline) { Text("Open Timeline") } }
