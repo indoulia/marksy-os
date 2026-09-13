@@ -25,6 +25,7 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.packageName?.toString()?.let(SourceRegistry::isWhatsApp) != true) return
+        if (!isActive) return
 
         val watchlist = WhatsAppSenderWatchlist.get(applicationContext)
         if (watchlist.isEmpty()) return
@@ -93,7 +94,7 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
                         else DeliveryState.NOT_APPLICABLE.name
                     )
                 )
-                if (isTrading) {
+                if (isTrading && isActive) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
             }
@@ -103,7 +104,10 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        isActive = false
         scope.cancel()
         super.onDestroy()
     }
+
+    private var isActive: Boolean = true
 }
