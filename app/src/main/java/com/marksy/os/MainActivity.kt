@@ -26,6 +26,7 @@ import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.notification.NotificationListenerStatus
+import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DashboardScreen
@@ -48,21 +49,26 @@ private val TextMuted = Color(0xFF657169)
 
 class MainActivity : ComponentActivity() {
     private var notificationAccessEnabled by mutableStateOf(false)
+    private var whatsappConnectorEnabled by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
+        whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { MarksyApp() }
     }
 
     override fun onResume() {
         super.onResume()
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
+        whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
     }
 
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+
+    private fun openAccessibilitySettings() = startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
 
     @Composable
     private fun MarksyApp() {
@@ -124,7 +130,9 @@ class MainActivity : ComponentActivity() {
                 selectedTab == 3 -> TradingScreen(tradingInsights, padding)
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
+                    whatsappAccess = whatsappConnectorEnabled,
                     openAccess = ::openNotificationAccess,
+                    openWhatsAppAccess = ::openAccessibilitySettings,
                     clearAll = {
                         TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
                         repository.clearAll()
@@ -227,7 +235,9 @@ private fun TradingInsightCard(insight: TradingInsight, onClick: () -> Unit) {
 @Composable
 private fun MoreScreen(
     access: Boolean,
+    whatsappAccess: Boolean,
     openAccess: () -> Unit,
+    openWhatsAppAccess: () -> Unit,
     clearAll: suspend () -> Unit,
     openTimeline: () -> Unit,
     openCalendar: () -> Unit,
@@ -252,6 +262,11 @@ private fun MoreScreen(
         item {
             SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") {
                 Button(onClick = openAccess) { Text(if (access) "Manage Access" else "Open Access") }
+            }
+        }
+        item {
+            SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text only for senders on your local allow-list.") {
+                Button(onClick = openWhatsAppAccess) { Text(if (whatsappAccess) "Manage Connector" else "Open Accessibility") }
             }
         }
         item {
