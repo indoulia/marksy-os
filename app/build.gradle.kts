@@ -15,14 +15,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Legacy private-build fallback. New runtime provisioning uses Android Keystore.
-        // Keep this only until an in-app provisioning flow is available.
-        val integrationKey = providers.environmentVariable("MARKSY_INTEGRATION_KEY").orNull ?: ""
+        // Non-secret endpoint configuration only. Integration credentials are provisioned
+        // at runtime and encrypted with Android Keystore.
         val apiBaseUrl = providers.environmentVariable("MARKSY_API_BASE_URL").orNull
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "https://marksy.indoulia.com/api/v1"
-        buildConfigField("String", "MARKSY_INTEGRATION_KEY", "\"${integrationKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "MARKSY_API_BASE_URL", "\"${apiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
