@@ -10,25 +10,62 @@ object SmartInboxModel {
         WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY")
     }
 
-    data class Thread(val key: String, val events: List<NotificationEventEntity>, val intelligence: List<EventIntelligence.Result>) {
+    data class Thread(
+        val key: String,
+        val events: List<NotificationEventEntity>,
+        val intelligence: List<EventIntelligence.Result>
+    ) {
         val latest: NotificationEventEntity get() = events.first()
         val count: Int get() = events.size
         val highestAttention: Int get() = intelligence.maxOfOrNull { it.attentionScore } ?: 0
-        val primaryReason: String get() = intelligence.maxByOrNull { it.attentionScore }?.reasons?.firstOrNull() ?: "Standard notification"
+        val attentionLevel: EventIntelligence.AttentionLevel
+            get() = intelligence.maxByOrNull { it.attentionScore }?.attentionLevel
+                ?: EventIntelligence.AttentionLevel.LOW
+        val primaryReason: String
+            get() = intelligence
+                .maxByOrNull { it.attentionScore }
+                ?.reasons
+                ?.firstOrNull()
+                ?: "Standard notification"
+        val isTrading: Boolean get() = events.any { it.isTrading }
+        val hasDeliveryFailure: Boolean get() = events.any { it.isTrading && it.deliveryState == "FAILED" }
     }
 
-    data class Sectioned(val needsAttention: List<Thread>, val recent: List<Thread>, val quiet: List<Thread>)
+    data class Sectioned(
+        val needsAttention: List<Thread>,
+        val recent: List<Thread>,
+        val quiet: List<Thread>
+    )
 
-    fun filter(events: List<NotificationEventEntity>, filter: Filter): List<NotificationEventEntity> =
-        filter.category?.let { category -> events.filter { it.category == category } } ?: events
+    /** Archived events never re-enter the active inbox. */
+    fun filter(events: List<NotificationEventEntity>, filter: Filter): List<NotificationEventEntity> {
+        val active = events.filterNot { it.archived }
+        return filter.category?.let { category -> active.filter { it.category == category } } ?: active
+    }
 
     fun section(events: List<NotificationEventEntity>, nowMillis: Long = System.currentTimeMillis()): Sectioned {
-        val threads = EventIntelligence.groupByThread(events, nowMillis).map { (key, intelligence) ->
-            val ids = intelligence.map { it.eventId }.toSet()
-            Thread(key, events.filter { it.id in ids }.sortedByDescending { it.postedAt }, intelligence.sortedByDescending { it.attentionScore })
-        }.sortedWith(compareByDescending<Thread> { it.highestAttention }.thenByDescending { it.latest.postedAt })
+        val active = events.filterNot { it.archived }
+        if (active.isEmpty()) return Sectioned(emptyList(), emptyList(), emptyList())
+
+        val byId = active.associateBy { it.id }
+        val threads = EventIntelligence.groupByThread(active, nowMillis)
+            .map { (key, intelligence) ->
+                val orderedIds = intelligence
+                    .sortedWith(compareByDescending<EventIntelligence.Result> { it.attentionScore }
+                        .thenByDescending { byId[it.eventId]?.postedAt ?: 0L })
+                    .map { it.eventId }
+                val threadEvents = orderedIds
+                    .mapNotNull { byId[it] }
+                    .sortedByDescending { it.postedAt }
+                Thread(key, threadEvents, intelligence.sortedByDescending { it.attentionScore })
+            }
+            .sortedWith(compareByDescending<Thread> { it.highestAttention }.thenByDescending { it.latest.postedAt })
+
         val needs = threads.filter { it.highestAttention >= ATTENTION_THRESHOLD }
-        val recent = threads.filter { it.highestAttention < ATTENTION_THRESHOLD && nowMillis - it.latest.postedAt <= RECENT_WINDOW_MS }
+        val recent = threads.filter {
+            it.highestAttention < ATTENTION_THRESHOLD &&
+                nowMillis - it.latest.postedAt in 0..RECENT_WINDOW_MS
+        }
         val quiet = threads.filter { it !in needs && it !in recent }
         return Sectioned(needs, recent, quiet)
     }
