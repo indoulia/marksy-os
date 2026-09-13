@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.InsightsModel
 
@@ -42,12 +43,12 @@ fun InsightsScreen(events: List<NotificationEventEntity>, padding: PaddingValues
             Text("Patterns from what Marksy OS has actually captured — no invented intelligence.", color = InsightSecondary, fontSize = 13.sp)
             Spacer(Modifier.height(16.dp))
         }
-        item { MetricCard("Meaningful activity", "${snapshot.meaningfulCount}", "of ${snapshot.eventCount} captured events", InsightRaised) }
-        item { MetricCard("Needs attention", "${snapshot.attentionRate}%", "${snapshot.attentionCount} elevated events", InsightSurface) }
+        item { MetricCard("Meaningful activity", "${snapshot.meaningfulCount}", "of ${snapshot.eventCount} active events", InsightRaised) }
+        item { MetricCard("Needs attention", "${snapshot.attentionRate}%", "${snapshot.attentionCount} elevated meaningful events", if (snapshot.attentionCount > 0) InsightRaised else InsightSurface) }
         snapshot.topCategory?.let { item { MetricCard("Top category", pretty(it), "most frequent meaningful category", InsightSurface) } }
         snapshot.topSource?.let { item { MetricCard("Top source", it, "most active meaningful source", InsightSurface) } }
         snapshot.busiestHour?.let { item { MetricCard("Peak hour", String.format("%02d:00", it), "local notification activity", InsightSurface) } }
-        snapshot.tradingDeliveryRate?.let { item { MetricCard("Trading intelligence", "$it%", "events with Marksy responses", InsightRaised) } }
+        snapshot.tradingDeliveryRate?.let { item { MetricCard("Trading intelligence", "$it%", "events with Marksy responses", if (it < 100) InsightRaised else InsightSurface) } }
         item {
             Spacer(Modifier.height(6.dp))
             Text("What stands out", color = InsightText, fontWeight = FontWeight.SemiBold)
@@ -55,14 +56,38 @@ fun InsightsScreen(events: List<NotificationEventEntity>, padding: PaddingValues
         if (snapshot.observations.isEmpty()) {
             item { Text("More history is needed before Marksy OS can identify useful patterns.", color = InsightMuted, fontSize = 12.sp) }
         } else {
-            snapshot.observations.forEach { observation ->
-                item { ObservationCard(observation) }
+            snapshot.observations.forEach { observation -> item { ObservationCard(observation) } }
+        }
+        if (snapshot.tradingCount > 0) {
+            item {
+                Spacer(Modifier.height(6.dp))
+                TradingStatusCard(snapshot, events)
             }
         }
         item {
             Spacer(Modifier.height(6.dp))
             Text("Local analysis only", color = InsightPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             Text("Insights are derived from retained notification metadata and Event Intelligence. They do not imply a trading recommendation.", color = InsightMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun TradingStatusCard(snapshot: InsightsModel.Snapshot, events: List<NotificationEventEntity>) {
+    val pending = snapshot.tradingCount - snapshot.deliveredTrading - snapshot.failedTrading
+    val detail = when {
+        snapshot.failedTrading > 0 -> "${snapshot.failedTrading} trading event(s) failed delivery and should be inspected."
+        pending > 0 -> "$pending trading event(s) are still waiting for a Marksy response."
+        else -> "All active trading events have a recorded Marksy response."
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = InsightRaised), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(15.dp)) {
+            Text("Trading processing", color = InsightPrimary, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = InsightSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+            val latest = events.filter { it.isTrading }.maxByOrNull { it.postedAt }
+            latest?.let {
+                Text("Latest: ${it.title.ifBlank { "Trading event" }} • ${deliveryLabel(it.deliveryState)}", color = InsightMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
+            }
         }
     }
 }
@@ -87,3 +112,11 @@ private fun ObservationCard(text: String) {
 }
 
 private fun pretty(category: String): String = category.lowercase().replaceFirstChar { it.uppercase() }
+
+private fun deliveryLabel(state: String): String = when (state) {
+    DeliveryState.DELIVERED.name -> "Marksy response received"
+    DeliveryState.PENDING.name -> "Waiting for Marksy"
+    DeliveryState.IN_FLIGHT.name -> "Analyzing"
+    DeliveryState.FAILED.name -> "Delivery failed"
+    else -> "Local only"
+}
