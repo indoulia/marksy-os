@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Small persistent local rule store. Only rule configuration is persisted. */
+/** Persistent local rule configuration. Rule content never leaves the device. */
 class RuleStore(context: Context) {
     private val preferences = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
 
@@ -13,34 +13,39 @@ class RuleStore(context: Context) {
         return runCatching {
             val json = JSONArray(raw)
             buildList {
-                for (index in 0 until json.length()) {
+                for (index in 0 until minOf(json.length(), MAX_RULES)) {
                     val item = json.getJSONObject(index)
+                    val name = item.optString("name").trim().take(MAX_NAME)
+                    if (name.isBlank()) continue
+                    val action = runCatching {
+                        RuleEngine.Action.valueOf(item.optString("action", RuleEngine.Action.HIGHLIGHT.name))
+                    }.getOrDefault(RuleEngine.Action.HIGHLIGHT)
                     add(
                         RuleEngine.Rule(
-                            id = item.getString("id"),
-                            name = item.getString("name"),
+                            id = item.optString("id").trim().take(MAX_ID).ifBlank { "rule-$index" },
+                            name = name,
                             enabled = item.optBoolean("enabled", true),
-                            sourcePackage = item.optString("sourcePackage").takeIf { it.isNotBlank() },
-                            category = item.optString("category").takeIf { it.isNotBlank() },
-                            containsText = item.optString("containsText").takeIf { it.isNotBlank() },
-                            action = RuleEngine.Action.valueOf(item.optString("action", RuleEngine.Action.HIGHLIGHT.name))
+                            sourcePackage = item.optString("sourcePackage").trim().take(MAX_FILTER).ifBlank { null },
+                            category = item.optString("category").trim().take(MAX_FILTER).uppercase().ifBlank { null },
+                            containsText = item.optString("containsText").trim().take(MAX_FILTER).ifBlank { null },
+                            action = action
                         )
                     )
                 }
-            }
+            }.takeIf { it.isNotEmpty() } ?: defaultRules()
         }.getOrElse { defaultRules() }
     }
 
     fun save(rules: List<RuleEngine.Rule>) {
         val json = JSONArray()
-        rules.forEach { rule ->
+        rules.take(MAX_RULES).forEach { rule ->
             json.put(JSONObject().apply {
-                put("id", rule.id)
-                put("name", rule.name)
+                put("id", rule.id.take(MAX_ID))
+                put("name", rule.name.trim().take(MAX_NAME))
                 put("enabled", rule.enabled)
-                put("sourcePackage", rule.sourcePackage ?: "")
-                put("category", rule.category ?: "")
-                put("containsText", rule.containsText ?: "")
+                put("sourcePackage", rule.sourcePackage?.trim()?.take(MAX_FILTER) ?: "")
+                put("category", rule.category?.trim()?.take(MAX_FILTER)?.uppercase() ?: "")
+                put("containsText", rule.containsText?.trim()?.take(MAX_FILTER) ?: "")
                 put("action", rule.action.name)
             })
         }
@@ -52,6 +57,10 @@ class RuleStore(context: Context) {
     companion object {
         private const val FILE_NAME = "marksy_rules"
         private const val KEY_RULES = "rules_v1"
+        private const val MAX_RULES = 25
+        private const val MAX_NAME = 60
+        private const val MAX_FILTER = 120
+        private const val MAX_ID = 80
 
         fun defaultRules(): List<RuleEngine.Rule> = listOf(
             RuleEngine.Rule("trading-priority", "Trading notifications", category = "TRADING", action = RuleEngine.Action.MARK_TRADING_PRIORITY),
