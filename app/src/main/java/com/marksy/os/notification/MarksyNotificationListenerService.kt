@@ -8,7 +8,7 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
-import com.marksy.os.intelligence.RuleEngine
+import com.marksy.os.intelligence.RuleApplication
 import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,14 +72,14 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             isTrading = isTrading,
             deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
         )
-        val ruleEvaluation = RuleEngine.evaluate(ruleStore.load(), baseEvent)
-        val event = baseEvent.copy(priority = ruleEvaluation.priority)
+        val applied = RuleApplication.apply(ruleStore.load(), baseEvent)
+        val event = applied.event
 
         serviceScope.launch {
             try {
                 val insertedId = dao.insert(event)
 
-                if (insertedId != -1L && isTrading) {
+                if (insertedId != -1L && isTrading && !applied.archived) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
 
