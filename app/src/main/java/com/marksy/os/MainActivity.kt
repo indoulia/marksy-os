@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
         var showRules by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
 
+        val openEvent: (NotificationEventEntity) -> Unit = { selectedEvent = it }
         val tabs = listOf("Home" to Icons.Default.Home, "Inbox" to Icons.Default.Inbox, "Ask" to Icons.Default.SmartToy, "Trading" to Icons.Default.ShowChart, "More" to Icons.Default.MoreHoriz)
 
         Scaffold(containerColor = Background, bottomBar = {
@@ -97,12 +98,12 @@ class MainActivity : ComponentActivity() {
             }
         }) { padding ->
             when {
-                showTimeline -> TimelineHost(timelineEvents, padding) { showTimeline = false }
-                showCalendar -> CalendarHost(historyEvents, padding) { showCalendar = false }
+                showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }
+                showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
                 showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
                 showRules -> RulesHost(padding) { showRules = false }
-                selectedTab == 0 -> DashboardScreen(snapshot = snapshot, events = events, onEventSelected = { selectedEvent = it }, modifier = Modifier.fillMaxSize().padding(padding))
-                selectedTab == 1 -> SmartInboxScreen(events = events, padding = padding, onEventSelected = { selectedEvent = it })
+                selectedTab == 0 -> DashboardScreen(snapshot = snapshot, events = events, onEventSelected = openEvent, modifier = Modifier.fillMaxSize().padding(padding))
+                selectedTab == 1 -> SmartInboxScreen(events = events, padding = padding, onEventSelected = openEvent)
                 selectedTab == 2 -> AskMarksyScreen(padding)
                 selectedTab == 3 -> TradingScreen(tradingInsights, padding)
                 else -> MoreScreen(access = notificationAccessEnabled, whatsappAccess = whatsappConnectorEnabled, openAccess = ::openNotificationAccess, openWhatsAppAccess = ::openAccessibilitySettings, clearAll = {
@@ -116,12 +117,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues()) }
+@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) }
 }
 
-@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = {}) }
+@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) }
 }
 
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) {
