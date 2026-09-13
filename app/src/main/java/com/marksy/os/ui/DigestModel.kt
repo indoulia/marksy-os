@@ -1,0 +1,68 @@
+package com.marksy.os.ui
+
+import com.marksy.os.data.local.DeliveryState
+import com.marksy.os.data.local.NotificationEventEntity
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+/** Deterministic local aggregation for the Daily Digest. No network or fabricated AI content. */
+data class DailyDigest(
+    val date: ZonedDateTime,
+    val totalNotifications: Int,
+    val attentionEvents: List<NotificationEventEntity>,
+    val tradingEvents: List<NotificationEventEntity>,
+    val deliveredTrading: Int,
+    val failedTrading: Int,
+    val pendingTrading: Int,
+    val categoryCounts: Map<String, Int>,
+    val topSources: List<Pair<String, Int>>,
+    val tomorrowEvents: List<NotificationEventEntity>
+) {
+    val title: String get() = "Today in 60 Seconds"
+}
+
+object DailyDigestModel {
+    fun build(
+        events: List<NotificationEventEntity>,
+        nowMillis: Long = System.currentTimeMillis(),
+        zone: ZoneId = ZoneId.systemDefault()
+    ): DailyDigest {
+        val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
+        val start = now.toLocalDate().atStartOfDay(zone)
+        val tomorrow = start.plusDays(1)
+        val dayAfter = start.plusDays(2)
+
+        val today = events.filter { event ->
+            val posted = Instant.ofEpochMilli(event.postedAt).atZone(zone)
+            !posted.isBefore(start) && posted.isBefore(tomorrow)
+        }
+        val tomorrowEvents = events.filter { event ->
+            val posted = Instant.ofEpochMilli(event.postedAt).atZone(zone)
+            !posted.isBefore(tomorrow) && posted.isBefore(dayAfter)
+        }.sortedByDescending { it.priority }
+
+        val attention = today
+            .filter { it.priority >= 65 }
+            .sortedWith(compareByDescending<NotificationEventEntity> { it.priority }.thenByDescending { it.postedAt })
+            .take(5)
+        val trading = today.filter { it.isTrading }.sortedByDescending { it.postedAt }
+        val categories = today.groupingBy { it.category.ifBlank { "other" } }.eachCount().toList()
+            .sortedByDescending { it.second }.take(5).toMap()
+        val sources = today.groupingBy { it.sourceName.ifBlank { "Unknown source" } }.eachCount()
+            .toList().sortedByDescending { it.second }.take(5)
+
+        return DailyDigest(
+            date = now,
+            totalNotifications = today.size,
+            attentionEvents = attention,
+            tradingEvents = trading,
+            deliveredTrading = trading.count { it.deliveryState == DeliveryState.DELIVERED.name },
+            failedTrading = trading.count { it.deliveryState == DeliveryState.FAILED.name },
+            pendingTrading = trading.count { it.deliveryState == DeliveryState.PENDING.name || it.deliveryState == DeliveryState.IN_FLIGHT.name },
+            categoryCounts = categories,
+            topSources = sources,
+            tomorrowEvents = tomorrowEvents.take(5)
+        )
+    }
+}
