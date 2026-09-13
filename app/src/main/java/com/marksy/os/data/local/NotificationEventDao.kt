@@ -13,24 +13,24 @@ interface NotificationEventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(event: NotificationEventEntity): Long
 
-    @Query("SELECT * FROM notification_events ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE category = :category ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE category = :category AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeByCategory(category: String, limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE category != 'OTHER' ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeTimeline(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE category != 'OTHER' ORDER BY postedAt DESC")
+    @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
-    /** High-value events for the V2 Home/Smart Inbox attention surfaces. */
-    @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority ORDER BY priority DESC, postedAt DESC LIMIT :limit")
+    /** High-value active events for the Home/Smart Inbox attention surfaces. */
+    @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 ORDER BY priority DESC, postedAt DESC LIMIT :limit")
     fun observeByMinimumPriority(minimumPriority: Int, limit: Int): Flow<List<NotificationEventEntity>>
 
-    /** Trading events remain source-driven and are independently delivered to Marksy. */
-    @Query("SELECT * FROM notification_events WHERE isTrading = 1 ORDER BY postedAt DESC LIMIT :limit")
+    /** Trading events remain source-driven and independently delivered to Marksy. */
+    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
@@ -64,6 +64,12 @@ interface NotificationEventDao {
 
     @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
     suspend fun recoverStaleInFlight(cutoff: Long): Int
+
+    @Query("UPDATE notification_events SET archived = :archived WHERE id = :eventId")
+    suspend fun setArchived(eventId: Long, archived: Boolean): Int
+
+    @Query("UPDATE notification_events SET archived = :archived WHERE isTrading = :isTrading AND postedAt < :beforeMillis")
+    suspend fun setArchivedForType(isTrading: Boolean, beforeMillis: Long, archived: Boolean): Int
 
     @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
     suspend fun deleteOldNonTrading(cutoff: Long): Int
