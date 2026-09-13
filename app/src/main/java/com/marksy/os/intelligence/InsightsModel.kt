@@ -5,7 +5,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import java.util.Calendar
 import java.util.Locale
 
-/** Deterministic local patterns derived from retained events; no network or LLM required. */
+/** Deterministic local patterns derived from retained active events; no network or LLM required. */
 object InsightsModel {
     data class Snapshot(
         val eventCount: Int,
@@ -23,9 +23,10 @@ object InsightsModel {
     )
 
     fun from(events: List<NotificationEventEntity>, nowMillis: Long = System.currentTimeMillis()): Snapshot {
-        val meaningful = events.filter { it.category != "OTHER" }
-        val trading = events.filter { it.isTrading }
-        val attention = events.count { EventIntelligence.analyze(it, nowMillis).attentionScore >= 70 }
+        val active = events.filterNot { it.archived }
+        val meaningful = active.filter { it.category != "OTHER" }
+        val trading = meaningful.filter { it.isTrading }
+        val attention = meaningful.count { EventIntelligence.analyze(it, nowMillis).attentionScore >= 70 }
         val delivered = trading.count { it.deliveryState == DeliveryState.DELIVERED.name }
         val failed = trading.count { it.deliveryState == DeliveryState.FAILED.name }
         val topCategory = meaningful.groupingBy { it.category }.eachCount().maxByOrNull { it.value }?.key
@@ -41,14 +42,16 @@ object InsightsModel {
             busiestHour?.let { add("Activity peaks around ${formatHour(it)}.") }
             if (attentionRate > 0) add("$attentionRate% of meaningful events currently deserve elevated attention.")
             if (trading.isNotEmpty()) {
-                if (failed > 0) add("$failed trading event${if (failed == 1) "" else "s"} still need delivery attention.")
-                else if (delivered == trading.size) add("All retained trading events have a Marksy response recorded.")
-                else add("Trading intelligence is still being processed for ${trading.size - delivered} event${if (trading.size - delivered == 1) "" else "s"}.")
+                when {
+                    failed > 0 -> add("$failed trading event${if (failed == 1) "" else "s"} still need delivery attention.")
+                    delivered == trading.size -> add("All retained trading events have a Marksy response recorded.")
+                    else -> add("Trading intelligence is still being processed for ${trading.size - delivered} event${if (trading.size - delivered == 1) "" else "s"}.")
+                }
             }
             if (isQuiet(meaningful, nowMillis)) add("There has been little meaningful activity recently.")
         }
 
-        return Snapshot(events.size, meaningful.size, trading.size, attention, delivered, failed, topCategory, topSource, busiestHour, attentionRate, deliveryRate, observations)
+        return Snapshot(active.size, meaningful.size, trading.size, attention, delivered, failed, topCategory, topSource, busiestHour, attentionRate, deliveryRate, observations)
     }
 
     private fun hourOf(timestamp: Long): Int = Calendar.getInstance().apply { timeInMillis = timestamp }.get(Calendar.HOUR_OF_DAY)
