@@ -4,20 +4,25 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-/**
- * V1 pre-release database baseline. Marksy OS has not shipped yet, so the schema
- * is intentionally kept clean rather than carrying compatibility migrations.
- */
 @Database(
     entities = [NotificationEventEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
     abstract fun notificationEventDao(): NotificationEventDao
 
     companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE notification_events ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_archived ON notification_events(archived)")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -27,6 +32,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
+                    .addMigrations(MIGRATION_1_2)
                     .build()
                     .also { INSTANCE = it }
             }
