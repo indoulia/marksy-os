@@ -11,7 +11,8 @@ import androidx.room.PrimaryKey
         Index(value = ["sourcePackage", "eventFingerprint"], unique = true),
         Index(value = ["category"]),
         Index(value = ["postedAt"]),
-        Index(value = ["deliveryState"])
+        Index(value = ["deliveryState"]),
+        Index(value = ["archived"])
     ]
 )
 data class NotificationEventEntity(
@@ -37,6 +38,8 @@ data class NotificationEventEntity(
     val marksyTipId: String? = null,
     /** Bounded JSON from Marksy's GET /tips/{tipId} data object for forward compatibility. */
     val marksyResponseJson: String? = null,
+    /** True when the user has archived the event from active surfaces. */
+    val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )
 
