@@ -33,7 +33,7 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findPendingTrading(limit: Int): List<NotificationEventEntity>
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
@@ -42,7 +42,7 @@ interface NotificationEventDao {
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND eventFingerprint = :eventFingerprint LIMIT 1")
     suspend fun findIdByFingerprint(sourcePackage: String, eventFingerprint: String): Long?
 
-    @Query("UPDATE notification_events SET deliveryState = 'IN_FLIGHT', deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'PENDING'")
+    @Query("UPDATE notification_events SET deliveryState = 'IN_FLIGHT', deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND archived = 0 AND deliveryState = 'PENDING'")
     suspend fun claimPendingTrading(eventId: Long, attempts: Int, attemptedAt: Long): Int
 
     @Query("UPDATE notification_events SET deliveryState = :state, deliveryAttempts = :attempts, lastDeliveryAttemptAt = :attemptedAt WHERE id = :eventId AND deliveryState = 'IN_FLIGHT'")
@@ -68,7 +68,7 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET archived = :archived WHERE id = :eventId")
     suspend fun setArchived(eventId: Long, archived: Boolean): Int
 
-    @Query("UPDATE notification_events SET archived = :archived WHERE isTrading = :isTrading AND postedAt < :beforeMillis")
+    @Query("UPDATE notification_events SET archived = :archived WHERE isTrading = :isTrading AND postedAt < :beforeMillis AND deliveryState != 'IN_FLIGHT'")
     suspend fun setArchivedForType(isTrading: Boolean, beforeMillis: Long, archived: Boolean): Int
 
     @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
