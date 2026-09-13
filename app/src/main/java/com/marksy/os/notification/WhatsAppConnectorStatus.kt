@@ -8,10 +8,13 @@ import android.view.accessibility.AccessibilityManager
 object WhatsAppConnectorStatus {
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         val manager = context.getSystemService(AccessibilityManager::class.java) ?: return false
+        val packageName = context.packageName
+        val serviceName = MarksyWhatsAppAccessibilityService::class.java.name
         return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { info ->
-                info.resolveInfo?.serviceInfo?.packageName == context.packageName &&
-                    info.resolveInfo?.serviceInfo?.name == MarksyWhatsAppAccessibilityService::class.java.name
+                val serviceInfo = info.resolveInfo?.serviceInfo ?: return@any false
+                serviceInfo.packageName.equals(packageName, ignoreCase = true) &&
+                    serviceInfo.name.equals(serviceName, ignoreCase = true)
             }
     }
 }
