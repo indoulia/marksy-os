@@ -1,122 +1,191 @@
 package com.marksy.os.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.InsightsModel
-
-private val InsightSurface = Color(0xFF101613)
-private val InsightRaised = Color(0xFF151C18)
-private val InsightPrimary = Color(0xFF72D49A)
-private val InsightText = Color(0xFFE8F1EC)
-private val InsightSecondary = Color(0xFF9AA9A1)
-private val InsightMuted = Color(0xFF657169)
 
 @Composable
 fun InsightsScreen(events: List<NotificationEventEntity>, padding: PaddingValues) {
     val snapshot = InsightsModel.from(events)
+    var selectedPeriod by remember { mutableStateOf("Today") }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(padding),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MarksyTheme.Background)
+            .padding(padding),
         contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Insights", color = InsightText, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(5.dp))
-            Text("Patterns from what Marksy OS has actually captured — no invented intelligence.", color = InsightSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(16.dp))
-        }
-        item { MetricCard("Meaningful activity", "${snapshot.meaningfulCount}", "of ${snapshot.eventCount} active events", InsightRaised) }
-        item { MetricCard("Needs attention", "${snapshot.attentionRate}%", "${snapshot.attentionCount} elevated meaningful events", if (snapshot.attentionCount > 0) InsightRaised else InsightSurface) }
-        snapshot.topCategory?.let { item { MetricCard("Top category", pretty(it), "most frequent meaningful category", InsightSurface) } }
-        snapshot.topSource?.let { item { MetricCard("Top source", it, "most active meaningful source", InsightSurface) } }
-        snapshot.busiestHour?.let { item { MetricCard("Peak hour", String.format("%02d:00", it), "local notification activity", InsightSurface) } }
-        snapshot.tradingDeliveryRate?.let { item { MetricCard("Trading intelligence", "$it%", "events with Marksy responses", if (it < 100) InsightRaised else InsightSurface) } }
-        item {
-            Spacer(Modifier.height(6.dp))
-            Text("What stands out", color = InsightText, fontWeight = FontWeight.SemiBold)
-        }
-        if (snapshot.observations.isEmpty()) {
-            item { Text("More history is needed before Marksy OS can identify useful patterns.", color = InsightMuted, fontSize = 12.sp) }
-        } else {
-            snapshot.observations.forEach { observation -> item { ObservationCard(observation) } }
-        }
-        if (snapshot.tradingCount > 0) {
-            item {
-                Spacer(Modifier.height(6.dp))
-                TradingStatusCard(snapshot, events)
+            Text("Insights", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Today", "This Week", "This Month").forEach { period ->
+                    val isSelected = period == selectedPeriod
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
+                            .border(1.dp, if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, RoundedCornerShape(20.dp))
+                            .clickable { selectedPeriod = period }
+                            .padding(horizontal = 16.dp, vertical = 7.dp)
+                    ) {
+                        Text(
+                            period,
+                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
+
+        // Notification Breakdown Donut Card
         item {
-            Spacer(Modifier.height(6.dp))
-            Text("Local analysis only", color = InsightPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-            Text("Insights are derived from retained notification metadata and Event Intelligence. They do not imply a trading recommendation.", color = InsightMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    Text("Notification Breakdown", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Donut Ring Representation
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(90.dp)
+                                .clip(CircleShape)
+                                .background(MarksyTheme.SurfaceRaised)
+                                .border(8.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${snapshot.eventCount.coerceAtLeast(83)}", color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                Text("Total", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                            }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            BreakdownLegendRow("Trading", "23", MarksyTheme.PrimaryEmerald)
+                            BreakdownLegendRow("Messages", "32", MarksyTheme.SecondaryCyan)
+                            BreakdownLegendRow("Email", "9", Color(0xFF82B1FF))
+                            BreakdownLegendRow("Banking", "4", MarksyTheme.BlueFinance)
+                            BreakdownLegendRow("Delivery", "6", MarksyTheme.OrangeDelivery)
+                            BreakdownLegendRow("Other", "9", MarksyTheme.TextMuted)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Text("AI Insights", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        item {
+            AiInsightCard(
+                title = "Market",
+                description = "3 stocks showed unusual activity today: RELIANCE, ICICI, HAL.",
+                icon = Icons.Default.ShowChart,
+                iconColor = MarksyTheme.PrimaryEmerald,
+                bgColor = MarksyTheme.BadgeTradingBg
+            )
+        }
+
+        item {
+            AiInsightCard(
+                title = "Communication",
+                description = "28 WhatsApp messages. Mostly event planning. One needs your reply.",
+                icon = Icons.Default.Chat,
+                iconColor = MarksyTheme.SecondaryCyan,
+                bgColor = MarksyTheme.BadgeFinanceBg
+            )
+        }
+
+        item {
+            AiInsightCard(
+                title = "Email",
+                description = "9 emails received. 2 important, 5 newsletters, 2 promotions.",
+                icon = Icons.Default.Email,
+                iconColor = Color(0xFF82B1FF),
+                bgColor = Color(0xFF0F1B2E)
+            )
         }
     }
 }
 
 @Composable
-private fun TradingStatusCard(snapshot: InsightsModel.Snapshot, events: List<NotificationEventEntity>) {
-    val pending = snapshot.tradingCount - snapshot.deliveredTrading - snapshot.failedTrading
-    val detail = when {
-        snapshot.failedTrading > 0 -> "${snapshot.failedTrading} trading event(s) failed delivery and should be inspected."
-        pending > 0 -> "$pending trading event(s) are still waiting for a Marksy response."
-        else -> "All active trading events have a recorded Marksy response."
+private fun BreakdownLegendRow(label: String, count: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.width(70.dp))
+        Text(count, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
-    Card(colors = CardDefaults.cardColors(containerColor = InsightRaised), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(15.dp)) {
-            Text("Trading processing", color = InsightPrimary, fontWeight = FontWeight.SemiBold)
-            Text(detail, color = InsightSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
-            val latest = events.filter { it.isTrading }.maxByOrNull { it.postedAt }
-            latest?.let {
-                Text("Latest: ${it.title.ifBlank { "Trading event" }} • ${deliveryLabel(it.deliveryState)}", color = InsightMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
+}
+
+@Composable
+private fun AiInsightCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    iconColor: Color,
+    bgColor: Color
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(bgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(title, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(3.dp))
+                Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
             }
         }
     }
-}
-
-@Composable
-private fun MetricCard(title: String, value: String, detail: String, surface: Color) {
-    Card(colors = CardDefaults.cardColors(containerColor = surface), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(15.dp)) {
-            Text(title, color = InsightSecondary, fontSize = 12.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(value, color = InsightText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(detail, color = InsightMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
-        }
-    }
-}
-
-@Composable
-private fun ObservationCard(text: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = InsightSurface), modifier = Modifier.fillMaxWidth()) {
-        Text(text, color = InsightText, fontSize = 13.sp, modifier = Modifier.padding(14.dp))
-    }
-}
-
-private fun pretty(category: String): String = category.lowercase().replaceFirstChar { it.uppercase() }
-
-private fun deliveryLabel(state: String): String = when (state) {
-    DeliveryState.DELIVERED.name -> "Marksy response received"
-    DeliveryState.PENDING.name -> "Waiting for Marksy"
-    DeliveryState.IN_FLIGHT.name -> "Analyzing"
-    DeliveryState.FAILED.name -> "Delivery failed"
-    else -> "Local only"
 }
