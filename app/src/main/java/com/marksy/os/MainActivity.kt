@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
@@ -199,4 +200,4 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun SettingsCard(title: String, status: String, description: String, action: (@Composable () -> Unit)? = null) { Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(15.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Text(status, color = Primary, fontSize = 11.sp, fontWeight = FontWeight.Bold) }; Spacer(Modifier.height(6.dp)); Text(description, color = TextSecondary, fontSize = 13.sp); action?.let { Spacer(Modifier.height(10.dp)); it() } } } }
-@Composable private fun EmptyState(title: String, message: String) { Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp)); Text(message, color = TextSecondary, fontSize = 13.sp) } } }
+@Composable internal fun EmptyState(title: String, message: String) { Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp)); Text(message, color = TextSecondary, fontSize = 13.sp) } } }

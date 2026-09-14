@@ -137,21 +137,19 @@ class MarksyTipsApiClient(
     } catch (_: Exception) { "" }
 
     private data class CreatedTip(val tipId: String, val status: String)
-
-    private companion object {
-        const val CONNECT_TIMEOUT_MS = 10_000
-        const val READ_TIMEOUT_MS = 20_000
-        const val MAX_HTTP_RESPONSE_CHARS = 100_000
-        const val MAX_RESPONSE_CHARS = 50_000
-        const val MAX_ERROR_DETAIL_CHARS = 300
-        const val MAX_LIST_ITEMS = 20
-        const val MAX_STATUS_CHARS = 100
-        const val MAX_SHORT_TEXT_CHARS = 200
-        const val MAX_LONG_TEXT_CHARS = 1_000
-        const val MAX_SUMMARY_CHARS = 2_000
-        val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
-    }
 }
+
+private const val CONNECT_TIMEOUT_MS = 10_000
+private const val READ_TIMEOUT_MS = 20_000
+private const val MAX_HTTP_RESPONSE_CHARS = 100_000
+private const val MAX_RESPONSE_CHARS = 50_000
+private const val MAX_ERROR_DETAIL_CHARS = 300
+private const val MAX_LIST_ITEMS = 20
+private const val MAX_STATUS_CHARS = 100
+private const val MAX_SHORT_TEXT_CHARS = 200
+private const val MAX_LONG_TEXT_CHARS = 1_000
+private const val MAX_SUMMARY_CHARS = 2_000
+private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
 class MarksyTerminalException(message: String) : IOException(message)
 

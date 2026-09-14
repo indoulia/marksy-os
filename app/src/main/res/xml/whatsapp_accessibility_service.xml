@@ -4,5 +4,5 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="150"
     android:canRetrieveWindowContent="true"
-    android:description="Reads only WhatsApp accessibility text needed for configured sender watches."
+    android:description="@string/whatsapp_accessibility_description"
     android:settingsActivity="com.marksy.os.MainActivity" />
