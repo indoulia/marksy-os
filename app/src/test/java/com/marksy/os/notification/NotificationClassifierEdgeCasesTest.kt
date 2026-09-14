@@ -13,7 +13,7 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.upstox.pro",
                 title = "OTP",
                 body = "Your OTP for buy order is 482913"
-            ).category
+            ).category.name
         )
     }
 
@@ -25,7 +25,7 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.example.notes",
                 title = "Market alert",
                 body = "Buy order executed at 367.95"
-            ).category
+            ).category.name
         )
     }
 
@@ -37,7 +37,7 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.upstox.pro",
                 title = "Order executed",
                 body = "HLEGLAS BUY 10 @ 367.95"
-            ).category
+            ).category.name
         )
     }
 
@@ -49,43 +49,43 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.zerodha.kite3",
                 title = "Order rejected",
                 body = "Your SELL order was rejected"
-            ).category
+            ).category.name
         )
     }
 
     @Test
     fun whatsappMessageIsMessage() {
         assertEquals(
-            "MESSAGE",
+            "MESSAGES",
             NotificationClassifier.classify(
                 packageName = "com.whatsapp",
                 title = "Asha",
                 body = "Can you call me when you are free?"
-            ).category
+            ).category.name
         )
     }
 
     @Test
     fun whatsappBusinessMessageIsMessage() {
         assertEquals(
-            "MESSAGE",
+            "MESSAGES",
             NotificationClassifier.classify(
                 packageName = "com.whatsapp.w4b",
                 title = "Store",
                 body = "Your order is ready for pickup"
-            ).category
+            ).category.name
         )
     }
 
     @Test
     fun paymentNotificationDoesNotBecomeTrading() {
         assertEquals(
-            "PAYMENT",
+            "PAYMENTS",
             NotificationClassifier.classify(
                 packageName = "com.google.android.apps.nbu.paisa.user",
                 title = "Payment received",
                 body = "₹1,000 received successfully"
-            ).category
+            ).category.name
         )
     }
 
@@ -97,7 +97,7 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.icicidirect",
                 title = "Trade confirmation",
                 body = "HLEGLAS\nBUY\n10 shares\nAverage price ₹367.95\nTarget ₹390"
-            ).category
+            ).category.name
         )
     }
 
@@ -109,7 +109,7 @@ class NotificationClassifierEdgeCasesTest {
                 packageName = "com.example.app",
                 title = "",
                 body = ""
-            ).category
+            ).category.name
         )
     }
 }

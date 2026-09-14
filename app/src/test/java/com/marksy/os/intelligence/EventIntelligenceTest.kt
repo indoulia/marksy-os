@@ -43,9 +43,11 @@ class EventIntelligenceTest {
 
     @Test
     fun failedDeliveryRaisesAttention() {
+        // Advance well past the "recent" window so this isolates the failed-delivery
+        // contribution (priority 60 + trading + failed = HIGH, not CRITICAL).
         val result = EventIntelligence.analyze(
             event(priority = 60, deliveryState = DeliveryState.FAILED.name),
-            nowMillis = 1_000_000L
+            nowMillis = 1_000_000L + 31 * 60 * 1000L
         )
 
         assertTrue(result.attentionScore >= 70)

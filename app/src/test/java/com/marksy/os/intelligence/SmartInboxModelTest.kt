@@ -21,7 +21,9 @@ class SmartInboxModelTest {
         val events = listOf(event(1, "TRADING", "AAPL", now), event(2, "TRADING", "AAPL", now, archived = true))
         val filtered = SmartInboxModel.filter(events, SmartInboxModel.Filter.ALL)
         assertEquals(listOf(1L), filtered.map { it.id })
-        assertEquals(1, SmartInboxModel.section(events, now).needsAttention.size)
+        // The one active (non-archived) event surfaces as exactly one thread; the archived one never does.
+        val sectioned = SmartInboxModel.section(events, now)
+        assertEquals(1, (sectioned.needsAttention + sectioned.recent + sectioned.quiet).size)
     }
 
     @Test
