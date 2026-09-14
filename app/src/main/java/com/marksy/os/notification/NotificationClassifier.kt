@@ -3,7 +3,7 @@ package com.marksy.os.notification
 object NotificationClassifier {
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
-        WORK, DELIVERY, PROMOTIONS, SYSTEM, OTHER
+        WORK, EMAIL, DELIVERY, PROMOTIONS, SYSTEM, OTHER
     }
 
     data class Result(val category: Category, val priority: Int, val confidence: Float)
@@ -25,6 +25,40 @@ object NotificationClassifier {
         "com.angelbroking.smartmoney",
         "com.angelbroking.lite",
         "com.fivepaisa.trade"
+    )
+
+    // Package identity is a strong fallback signal for apps whose notification text
+    // carries no explicit keyword. Consulted only AFTER term rules, so it never
+    // overrides a stronger textual signal (OTP, trading, payment, etc.).
+    private val packageHints: List<Pair<String, Category>> = listOf(
+        "com.google.android.gm" to Category.EMAIL,
+        "outlook" to Category.EMAIL,
+        "yahoo" to Category.EMAIL,
+        "protonmail" to Category.EMAIL,
+        "whatsapp" to Category.MESSAGES,
+        "telegram" to Category.MESSAGES,
+        "securesms" to Category.MESSAGES,
+        "com.facebook.orca" to Category.MESSAGES,
+        "phonepe" to Category.PAYMENTS,
+        "paytm" to Category.PAYMENTS,
+        "nbu.paisa" to Category.PAYMENTS,
+        "bhim" to Category.PAYMENTS,
+        "myntra" to Category.PROMOTIONS,
+        "flipkart" to Category.PROMOTIONS,
+        "amazon" to Category.PROMOTIONS,
+        "ajio" to Category.PROMOTIONS,
+        "nykaa" to Category.PROMOTIONS,
+        "meesho" to Category.PROMOTIONS,
+        "swiggy" to Category.PROMOTIONS,
+        "zomato" to Category.PROMOTIONS,
+        "delhivery" to Category.DELIVERY,
+        "bluedart" to Category.DELIVERY,
+        "ekart" to Category.DELIVERY,
+        "shadowfax" to Category.DELIVERY,
+        "hdfc" to Category.BANKING,
+        "kotak" to Category.BANKING,
+        "sbi" to Category.BANKING,
+        "axisbank" to Category.BANKING
     )
 
     // High-signal rules come first. Generic words such as "paid" must never
@@ -53,6 +87,9 @@ object NotificationClassifier {
         )),
         Rule(Category.WORK, 50, .82f, listOf(
             "meeting", "calendar", "slack", "teams", "deadline", "assigned you", "task due"
+        )),
+        Rule(Category.EMAIL, 48, .82f, listOf(
+            "new email", "unread email", "unread emails", "mailbox", "sent you an email"
         )),
         Rule(Category.REMINDERS, 45, .80f, listOf("reminder", "remind me", "alarm")),
         Rule(Category.PROMOTIONS, 20, .90f, listOf(
@@ -88,8 +125,17 @@ object NotificationClassifier {
         val rule = rules.firstOrNull { candidate ->
             candidate.category != Category.TRADING && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
         }
-        return rule?.let { Result(it.category, it.priority, it.confidence) }
-            ?: Result(Category.OTHER, 10, .50f)
+        if (rule != null) return Result(rule.category, rule.priority, rule.confidence)
+
+        // Fallback: infer from the source app when the text alone was inconclusive.
+        // Modest priority/confidence marks it as a weaker, package-only inference.
+        val hinted = packageHints.firstOrNull { (token, _) -> normalizedPackage.contains(token) }?.second
+        if (hinted != null) {
+            val hintPriority = (rules.firstOrNull { it.category == hinted }?.priority ?: 25).coerceAtMost(50)
+            return Result(hinted, hintPriority, .65f)
+        }
+
+        return Result(Category.OTHER, 10, .50f)
     }
 
     /**

@@ -31,6 +31,7 @@ fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
     val scrollState = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MarksyTheme.Surface,
         title = { Text(insight.headline, color = DetailText) },
         text = {
             Column(Modifier.verticalScroll(scrollState)) {
@@ -99,7 +100,7 @@ fun TradingInsightDetailDialog(insight: TradingInsight, onDismiss: () -> Unit) {
                 Text("Live execution is disabled in V1. This screen cannot place, modify, or cancel brokerage orders.", color = DetailPrimary, fontSize = 12.sp)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.PrimaryEmerald) } }
     )
 }
 

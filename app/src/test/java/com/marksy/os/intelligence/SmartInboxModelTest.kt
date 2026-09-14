@@ -17,6 +17,18 @@ class SmartInboxModelTest {
     }
 
     @Test
+    fun categoryLabelsMapToMatchingFilterOrFallBackToAll() {
+        // Home dashboard tiles whose labels match a filter category.
+        assertEquals(SmartInboxModel.Filter.TRADING, SmartInboxModel.Filter.forCategoryLabel("Trading"))
+        assertEquals(SmartInboxModel.Filter.MESSAGES, SmartInboxModel.Filter.forCategoryLabel("Messages"))
+        assertEquals(SmartInboxModel.Filter.BANKING, SmartInboxModel.Filter.forCategoryLabel("Banking"))
+        assertEquals(SmartInboxModel.Filter.DELIVERY, SmartInboxModel.Filter.forCategoryLabel("Delivery"))
+        assertEquals(SmartInboxModel.Filter.EMAIL, SmartInboxModel.Filter.forCategoryLabel("Emails"))
+        // Tiles with no matching category filter fall back to ALL.
+        assertEquals(SmartInboxModel.Filter.ALL, SmartInboxModel.Filter.forCategoryLabel("Important"))
+    }
+
+    @Test
     fun archivedEventsNeverEnterActiveInbox() {
         val events = listOf(event(1, "TRADING", "AAPL", now), event(2, "TRADING", "AAPL", now, archived = true))
         val filtered = SmartInboxModel.filter(events, SmartInboxModel.Filter.ALL)

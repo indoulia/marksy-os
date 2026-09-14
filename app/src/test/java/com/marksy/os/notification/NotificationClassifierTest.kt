@@ -83,4 +83,30 @@ class NotificationClassifierTest {
         val result = NotificationClassifier.classify("com.example", "Hello", "Something happened")
         assertEquals(NotificationClassifier.Category.OTHER, result.category)
     }
+
+    @Test fun gmailWithoutKeywordsIsEmail() {
+        val result = NotificationClassifier.classify("com.google.android.gm", "Aisha", "Lunch tomorrow?")
+        assertEquals(NotificationClassifier.Category.EMAIL, result.category)
+    }
+
+    @Test fun outlookWithoutKeywordsIsEmail() {
+        val result = NotificationClassifier.classify("com.microsoft.office.outlook", "Q3 Report", "Please review the deck")
+        assertEquals(NotificationClassifier.Category.EMAIL, result.category)
+    }
+
+    @Test fun shoppingAppMarketingWithoutKeywordsIsPromotions() {
+        val result = NotificationClassifier.classify("com.myntra.android", "The mall's closed", "We're not")
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, result.category)
+    }
+
+    @Test fun paymentAppFallsBackToPayments() {
+        val result = NotificationClassifier.classify("com.phonepe.app", "PhonePe", "Your friend just joined")
+        assertEquals(NotificationClassifier.Category.PAYMENTS, result.category)
+    }
+
+    @Test fun packageHintNeverOverridesAnExplicitTermSignal() {
+        // A promo term must still win over the shopping-app package hint.
+        val result = NotificationClassifier.classify("com.myntra.android", "OTP", "Your verification code is 4321")
+        assertEquals(NotificationClassifier.Category.OTP, result.category)
+    }
 }

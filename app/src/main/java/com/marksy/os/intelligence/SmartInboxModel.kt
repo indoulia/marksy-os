@@ -6,8 +6,14 @@ import com.marksy.os.data.local.NotificationEventEntity
 object SmartInboxModel {
     enum class Filter(val label: String, val category: String? = null) {
         ALL("All"), TRADING("Trading", "TRADING"), MESSAGES("Messages", "MESSAGES"),
-        PAYMENTS("Payments", "PAYMENTS"), BANKING("Banking", "BANKING"), BILLS("Bills", "BILLS"),
-        WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY")
+        EMAIL("Emails", "EMAIL"), PAYMENTS("Payments", "PAYMENTS"), BANKING("Banking", "BANKING"),
+        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY");
+
+        companion object {
+            /** Maps a Home dashboard tile label to its inbox filter; unmatched labels fall back to ALL. */
+            fun forCategoryLabel(label: String): Filter =
+                entries.firstOrNull { it.label.equals(label, ignoreCase = true) } ?: ALL
+        }
     }
 
     data class Thread(

@@ -33,10 +33,13 @@ fun EventDetailDialog(
     val scrollState = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(event.title.ifBlank { "Notification event" }) },
+        containerColor = MarksyTheme.Surface,
+        titleContentColor = MarksyTheme.TextPrimary,
+        textContentColor = MarksyTheme.TextSecondary,
+        title = { Text(event.title.ifBlank { "Notification event" }, color = MarksyTheme.TextPrimary) },
         text = {
             Column(Modifier.verticalScroll(scrollState)) {
-                Text(event.sourceName, fontWeight = FontWeight.SemiBold)
+                Text(event.sourceName, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Text(event.body.ifBlank { "No notification body was captured." }, color = DetailSecondary, fontSize = 13.sp)
                 Spacer(Modifier.height(14.dp))
@@ -57,9 +60,9 @@ fun EventDetailDialog(
         confirmButton = {
             Column {
                 TextButton(onClick = if (event.archived) onUnarchive else onArchive) {
-                    Text(if (event.archived) "Restore to Inbox" else "Archive")
+                    Text(if (event.archived) "Restore to Inbox" else "Archive", color = MarksyTheme.PrimaryEmerald)
                 }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.PrimaryEmerald) }
             }
         }
     )
