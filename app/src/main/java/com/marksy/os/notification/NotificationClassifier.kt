@@ -71,7 +71,7 @@ object NotificationClassifier {
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
-        if (otpRule.terms.any(notificationText::containsRuleTerm)) {
+        if (otpRule.terms.any { term -> notificationText.containsRuleTerm(term) }) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
 
@@ -79,14 +79,14 @@ object NotificationClassifier {
         // a trade. Require an actual trading signal before routing it to Marksy.
         if (normalizedPackage in tradingPackages) {
             val tradingRule = rules.first { it.category == Category.TRADING }
-            if (tradingRule.terms.any(notificationText::containsRuleTerm)) {
+            if (tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }) {
                 return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
             }
         }
 
         val haystack = "$normalizedPackage $notificationText"
         val rule = rules.firstOrNull { candidate ->
-            candidate.category != Category.TRADING && candidate.terms.any(haystack::containsRuleTerm)
+            candidate.category != Category.TRADING && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
         }
         return rule?.let { Result(it.category, it.priority, it.confidence) }
             ?: Result(Category.OTHER, 10, .50f)

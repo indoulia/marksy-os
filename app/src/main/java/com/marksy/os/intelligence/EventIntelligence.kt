@@ -85,9 +85,9 @@ object EventIntelligence {
     }
 
     private fun threadKey(event: NotificationEventEntity): String {
-        val symbol = SYMBOL_PATTERN.find("${event.title} ${event.body}".uppercase(Locale.ROOT))
-            ?.value
-            ?.takeUnless { it in NOISE_SYMBOLS }
+        val symbol = SYMBOL_PATTERN.findAll("${event.title} ${event.body}".uppercase(Locale.ROOT))
+            .map { it.value }
+            .firstOrNull { it !in NOISE_SYMBOLS }
         return if (symbol != null && event.isTrading) {
             "${event.sourcePackage.trim().lowercase(Locale.ROOT)}|trading|$symbol"
         } else {
@@ -102,7 +102,9 @@ object EventIntelligence {
     private val NOISE_SYMBOLS = setOf(
         "BUY", "SELL", "ORDER", "TRADE", "EXECUTED", "FILLED", "AT", "AVG", "PRICE",
         "TARGET", "STOP", "LOSS", "PROFIT", "P&L", "MARKET", "ALERT", "POSITION",
-        "OPENED", "CLOSED", "QTY", "PNL", "INR", "OTP"
+        "OPENED", "CLOSED", "QTY", "PNL", "INR", "OTP",
+        // Common non-ticker words that appear in trading notification copy.
+        "UPDATE", "MOVED", "MOVE", "TO", "NEW", "CONFIRMATION", "REJECTED", "CANCELLED"
     )
 
     private const val FRESH_WINDOW_MS = 30 * 60 * 1000L

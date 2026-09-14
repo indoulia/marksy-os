@@ -29,8 +29,9 @@ object NotificationTextExtractor {
             .orEmpty()
 
         // Preserve useful secondary text that some banking/broker notifications
-        // place in android.subText. Duplicate fragments are removed before truncation.
-        return listOf(text, subText, bigText, lines.joinToString("\n"))
+        // place in android.subText. Duplicate fragments (e.g. android.text repeated
+        // inside android.textLines) are removed at the fragment level before truncation.
+        return (listOf(text, subText, bigText) + lines)
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString("\n")

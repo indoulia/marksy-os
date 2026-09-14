@@ -78,6 +78,7 @@ class MarksyResponsePersistenceMappingTest {
         sourcePackage = "com.upstox.pro",
         sourceName = "Upstox",
         sourceKey = "notification-1",
+        eventFingerprint = "notification-1",
         title = "Buy HLEGLAS at 367.95",
         body = "Order executed",
         postedAt = 1_757_650_000_000,

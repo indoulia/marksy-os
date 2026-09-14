@@ -44,6 +44,7 @@ class MarksyGatewayClientTest {
         sourcePackage = "com.upstox.pro",
         sourceName = "Upstox",
         sourceKey = sourceKey,
+        eventFingerprint = sourceKey,
         title = "Order update",
         body = "Order executed",
         postedAt = 1_700_000_000_000L,

@@ -4,6 +4,9 @@ import android.content.Context
 import com.marksy.os.data.local.MarksyDatabase
 
 object MarksyContainer {
+    fun database(context: Context): MarksyDatabase =
+        MarksyDatabase.getInstance(context)
+
     fun repository(context: Context): NotificationRepository =
-        NotificationRepository(MarksyDatabase.getInstance(context).notificationEventDao())
+        NotificationRepository(database(context).notificationEventDao())
 }

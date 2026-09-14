@@ -36,6 +36,7 @@ class MarksyTradingEventMappingTest {
         sourcePackage = "com.upstox.pro",
         sourceName = "Upstox",
         sourceKey = sourceKey,
+        eventFingerprint = sourceKey,
         title = "Order executed",
         body = "BUY 10 RELIANCE",
         postedAt = 1_700_000_000_000L,

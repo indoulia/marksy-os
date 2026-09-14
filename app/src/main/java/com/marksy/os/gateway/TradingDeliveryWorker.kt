@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
 import kotlinx.coroutines.CancellationException
+import kotlin.Result as KotlinResult
 
 class TradingDeliveryWorker(
     appContext: Context,
@@ -57,13 +58,13 @@ class TradingDeliveryWorker(
                 continue
             }
 
-            val result: Result<MarksyInsight> = try {
+            val result: KotlinResult<MarksyInsight> = try {
                 client.analyze(request)
             } catch (cancellation: CancellationException) {
                 dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 throw cancellation
             } catch (t: Throwable) {
-                Result.failure(t)
+                KotlinResult.failure(t)
             }
 
             result.fold(
