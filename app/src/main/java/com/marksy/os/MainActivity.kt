@@ -232,7 +232,7 @@ class MainActivity : ComponentActivity() {
                     selectedFilterName = inboxFilterName,
                     onFilterSelected = { inboxFilterName = it }
                 )
-                selectedTab == 2 -> AskMarksyScreen(padding)
+                selectedTab == 2 -> AskMarksyScreen(padding, inboxEvents, market, openEvent)
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
