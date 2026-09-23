@@ -187,7 +187,12 @@ class MainActivity : ComponentActivity() {
                 showCalendar -> CalendarHost(historyEvents, padding, openEvent)
                 showInsights -> InsightsHost(historyEvents, padding)
                 showRules -> RulesHost(padding)
-                showDigest -> DigestHost(events, padding)
+                showDigest -> DigestHost(
+                    inboxEvents, padding,
+                    onOpenInbox = { showDigest = false; inboxFilterName = it; selectedTab = 1 },
+                    onOpenTrading = { showDigest = false; selectedTab = 3 },
+                    onEventSelected = openEvent
+                )
                 showGatewaySettings -> GatewaySettingsHost(padding)
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = snapshot,
@@ -366,7 +371,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights"); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
 @Composable private fun RulesHost(padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation"); RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest"); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest"); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
 
 @Composable private fun ScreenHeader(title: String) {
     // Same title style as the tab screens (Inbox, Trading); navigation is via the bottom bar and system back.
