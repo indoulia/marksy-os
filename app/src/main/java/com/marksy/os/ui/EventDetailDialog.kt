@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,12 +23,14 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -55,7 +58,7 @@ import java.util.Locale
 private val DetailSecondary = Color(0xFF9AA9A1)
 private val DetailMuted = Color(0xFF657169)
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun EventDetailDialog(
     event: NotificationEventEntity,
@@ -71,106 +74,108 @@ fun EventDetailDialog(
         add("Priority" to event.priority.toString())
         add("Classifier" to "${(event.confidence * 100).toInt()}%")
         if (event.isTrading) {
-            add("Marksy delivery" to event.deliveryState.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
-            event.insightConfidence?.let { add("Marksy confidence" to "${(it * 100).toInt()}%") }
+            add("Delivery" to event.deliveryState.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
+            event.insightConfidence?.let { add("Marksy conf." to "${(it * 100).toInt()}%") }
         }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.Surface,
-        titleContentColor = MarksyTheme.TextPrimary,
-        textContentColor = MarksyTheme.TextSecondary,
-        title = {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        event.title.ifBlank { "Notification event" },
-                        color = MarksyTheme.TextPrimary,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        "${event.sourceName.ifBlank { "System" }} · ${formatTimestamp(event.postedAt)}",
-                        color = DetailMuted,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), color = MarksyTheme.Surface) {
+            Column(Modifier.padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f).padding(top = 4.dp)) {
+                        Text(
+                            event.title.ifBlank { "Notification event" },
+                            color = MarksyTheme.TextPrimary,
+                            fontSize = 16.sp,
+                            lineHeight = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "${event.sourceName.ifBlank { "System" }} · ${formatTimestamp(event.postedAt)}",
+                            color = DetailMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(20.dp))
+                    }
                 }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = DetailSecondary, modifier = Modifier.size(18.dp))
-                }
-            }
-        },
-        text = {
-            Column(Modifier.verticalScroll(scrollState)) {
-                Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = DetailSecondary, fontSize = 13.sp)
-                if (actions.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        actions.forEach { action ->
-                            OutlinedButton(
-                                onClick = {
-                                    if (!OriginalAppLauncher.send(context, action.intent)) {
-                                        Toast.makeText(context, "\"${action.title}\" is no longer available", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.height(32.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp)
-                            ) { Text(action.title, color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.weight(1f, fill = false).padding(end = 6.dp).verticalScroll(scrollState)) {
+                    Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = DetailSecondary, fontSize = 13.sp)
+                    if (actions.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            actions.forEach { action ->
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!OriginalAppLauncher.send(context, action.intent)) {
+                                            Toast.makeText(context, "\"${action.title}\" is no longer available", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp)
+                                ) { Text(action.title, color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+                            }
                         }
                     }
-                }
-                Spacer(Modifier.height(12.dp))
-                details.chunked(2).forEach { pair ->
-                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        pair.forEach { (label, value) -> DetailCell(label, value, Modifier.weight(1f)) }
-                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.height(10.dp))
+                    details.chunked(3).forEach { row ->
+                        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { (label, value) -> DetailCell(label, value, Modifier.weight(1f)) }
+                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
+                    if (event.isTrading) {
+                        event.insightSummary?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
+                        event.insightAction?.takeIf { it.isNotBlank() }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
+                    }
+                    Text(if (event.archived) "Archived locally on this device" else "Stored locally on this device", color = DetailMuted, fontSize = 11.sp)
                 }
-                if (event.isTrading) {
-                    event.insightSummary?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp)) }
-                    event.insightAction?.takeIf { it.isNotBlank() }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp)) }
-                }
-                Text(if (event.archived) "Archived locally on this device" else "Stored locally on this device", color = DetailMuted, fontSize = 11.sp)
-            }
-        },
-        confirmButton = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = if (event.archived) onUnarchive else onArchive,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(if (event.archived) Icons.Default.Unarchive else Icons.Default.Archive, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (event.archived) "Restore" else "Archive", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp)
-                }
-                Button(
-                    onClick = {
-                        if (OriginalAppLauncher.open(context, event.sourcePackage, event.sourceKey)) onDismiss()
-                        else Toast.makeText(context, "${event.sourceName} can't be opened", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.weight(1.4f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Open ${event.sourceName.ifBlank { "app" }}",
-                        color = Color.Black,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = if (event.archived) onUnarchive else onArchive,
+                        modifier = Modifier.weight(1f).height(40.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(if (event.archived) Icons.Default.Unarchive else Icons.Default.Archive, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (event.archived) "Restore" else "Archive", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp)
+                    }
+                    Button(
+                        onClick = {
+                            if (OriginalAppLauncher.open(context, event.sourcePackage, event.sourceKey)) onDismiss()
+                            else Toast.makeText(context, "${event.sourceName} can't be opened", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1.4f).height(40.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "Open ${event.sourceName.ifBlank { "app" }}",
+                            color = Color.Black,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
-    )
+    }
 }
 
 private val UrlPattern = Regex("""(https?://|www\.)[^\s<>"]+""", RegexOption.IGNORE_CASE)
@@ -189,15 +194,23 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
 }
 
 @Composable
-private fun DetailCell(label: String, value: String, modifier: Modifier = Modifier) {
+private fun DetailCell(label: String, value: String, modifier: Modifier = Modifier, singleLine: Boolean = true) {
     Column(
         modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(MarksyTheme.SurfaceRaised)
-            .padding(horizontal = 10.dp, vertical = 7.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
-        Text(label, color = DetailMuted, fontSize = 10.sp, maxLines = 1)
-        Text(value, color = Color(0xFFE8F1EC), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = DetailMuted, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1)
+        Text(
+            value,
+            color = Color(0xFFE8F1EC),
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
