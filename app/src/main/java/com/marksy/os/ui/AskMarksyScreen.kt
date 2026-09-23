@@ -275,6 +275,9 @@ private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEv
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(event.title.ifBlank { "Notification" }, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        event.body.lines().lastOrNull { it.isNotBlank() }?.let {
+                            Text(it.trim(), color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
                         Text(
                             event.sourceName.ifBlank { "System" } + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(event.postedAt)),
                             color = MarksyTheme.TextMuted,

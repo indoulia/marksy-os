@@ -50,6 +50,35 @@ class AskMarksyEngineTest {
         assertTrue(answer.text, answer.text.contains("target ₹4,300"))
     }
 
+    private fun teams(title: String, body: String, hour: Int = 10) =
+        event("WORK", title, "Teams", "com.microsoft.teams", hour = hour).copy(body = body)
+
+    // Regression (device, 2026-09-23): speech gave "mate" for "Matt"; search demanded every word incl. "was"/"saying" and found nothing.
+    @Test
+    fun personQuestionOnNamedAppToleratesSpeechSlipsAndFillers() {
+        val events = listOf(
+            teams("Product: Matt Carter", "Product\nMatt Carter: Alex - quick update", hour = 12),
+            teams("Release: Jo Lee", "Release\nJo Lee: thanks for finding it", hour = 11),
+            event("MESSAGES", "Carter", "Telegram")
+        )
+
+        val answer = AskMarksyEngine.answer("what mate Carter was saying on teams", events, null, now, zone)
+
+        assertEquals("Product: Matt Carter", answer.events.first().title)
+        assertTrue(answer.events.all { it.sourceName == "Teams" })
+    }
+
+    // Regression (device, 2026-09-23): "messages … from Teams" ignored Teams and listed Telegram/Outlook.
+    @Test
+    fun howManyFromNamedAppCountsThatAppOnly() {
+        val events = listOf(teams("A", "a"), teams("B", "b"), event("MESSAGES", "Mom", "Telegram"))
+
+        val answer = AskMarksyEngine.answer("how many messages I have received today from own teams", events, null, now, zone)
+
+        assertTrue(answer.text, answer.text.startsWith("2 Teams notifications today"))
+        assertTrue(answer.events.all { it.sourceName == "Teams" })
+    }
+
     @Test
     fun unknownQuestionSearchesNotifications() {
         val events = listOf(event("DELIVERY", "Your Swiggy order is on the way"), event("EMAIL", "Weekly report"))
