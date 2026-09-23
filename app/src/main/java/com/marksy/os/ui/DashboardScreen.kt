@@ -53,6 +53,7 @@ fun DashboardScreen(
     market: MarketState = MarketState.Loading,
     todayDigest: DailyDigest? = null,
     onOpenTrading: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
@@ -130,7 +131,8 @@ fun DashboardScreen(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(MarksyTheme.SurfaceRaised)
-                            .border(1.dp, MarksyTheme.BorderGlow, CircleShape),
+                            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
+                            .clickable(onClick = onOpenProfile),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

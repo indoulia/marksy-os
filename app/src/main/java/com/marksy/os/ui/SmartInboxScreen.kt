@@ -74,21 +74,7 @@ fun SmartInboxScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MarksyTheme.Surface)
-                        .border(1.dp, MarksyTheme.BorderGlow, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Tune,
-                        contentDescription = "Filter",
-                        tint = MarksyTheme.PrimaryEmerald,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Text("${filtered.size} shown", color = MarksyTheme.TextMuted, fontSize = 12.sp)
             }
 
             Spacer(Modifier.height(12.dp))

@@ -223,6 +223,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
+                    onOpenProfile = { selectedTab = 4 },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
