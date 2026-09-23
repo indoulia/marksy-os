@@ -18,11 +18,8 @@ data class NotificationTrend(
         get() = if (yesterdaySoFar == 0) null else ((today - yesterdaySoFar) * 100.0 / yesterdaySoFar).roundToInt()
 
     companion object {
-        fun from(events: List<NotificationEventEntity>, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): NotificationTrend =
-            fromTimestamps(events.filterNot { it.archived }.map { it.postedAt }, nowMillis, zone)
-
-        /** [postedAt] must already exclude archived events. */
-        fun fromTimestamps(postedAt: List<Long>, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): NotificationTrend {
+        fun from(events: List<NotificationEventEntity>, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): NotificationTrend {
+            val postedAt = events.filterNot { it.archived }.map { it.postedAt }
             val todayDate = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
             val byDay = postedAt.groupingBy { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }.eachCount()
             // Compare against yesterday up to the same time of day, so mornings aren't always "down".

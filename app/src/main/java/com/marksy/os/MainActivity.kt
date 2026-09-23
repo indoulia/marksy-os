@@ -100,10 +100,10 @@ class MainActivity : ComponentActivity() {
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
-        val activePostedAt by vm.activePostedAt.collectAsStateWithLifecycle(initialValue = emptyList())
+        val trend by vm.notificationTrend.collectAsStateWithLifecycle(initialValue = NotificationTrend(0, 0, List(7) { 0 }, 0))
+        val categoryStats by vm.homeCategoryStats.collectAsStateWithLifecycle(initialValue = emptyMap())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
 
-        val trend = remember(activePostedAt) { NotificationTrend.fromTimestamps(activePostedAt, System.currentTimeMillis()) }
         var locationGranted by remember { mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
         val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationGranted = it }
         val weather by produceState<Weather?>(null, locationGranted) {
@@ -197,6 +197,7 @@ class MainActivity : ComponentActivity() {
                     onOpenCalendar = { showCalendar = true },
                     onOpenInsights = { showInsights = true },
                     trend = trend,
+                    categoryStats = categoryStats,
                     weather = weather,
                     weatherAvailable = locationGranted,
                     onRequestWeather = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },

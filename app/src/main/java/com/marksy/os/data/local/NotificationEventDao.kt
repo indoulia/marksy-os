@@ -25,8 +25,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT postedAt FROM notification_events WHERE archived = 0")
-    fun observeActivePostedAt(): Flow<List<Long>>
+    /** Bounded by retention (7 days, 30 for trading), so safe to observe in full. */
+    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC")
+    fun observeActive(): Flow<List<NotificationEventEntity>>
 
     /** High-value active events for the Home/Smart Inbox attention surfaces. */
     @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 ORDER BY priority DESC, postedAt DESC LIMIT :limit")

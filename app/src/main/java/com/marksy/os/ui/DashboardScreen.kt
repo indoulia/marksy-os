@@ -28,6 +28,8 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
+import com.marksy.os.intelligence.HomeCategoryStats
+import com.marksy.os.intelligence.HomePeriod
 import com.marksy.os.intelligence.NotificationTrend
 import com.marksy.os.weather.Weather
 import com.marksy.os.intelligence.dashboardAgeLabel
@@ -42,6 +44,7 @@ fun DashboardScreen(
     onOpenCalendar: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
     trend: NotificationTrend = NotificationTrend(0, 0, List(7) { 0 }, 0),
+    categoryStats: Map<HomePeriod, HomeCategoryStats> = emptyMap(),
     weather: Weather? = null,
     weatherAvailable: Boolean = false,
     onRequestWeather: () -> Unit = {},
@@ -281,6 +284,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(14.dp))
 
                 // Category Quick Cards Grid
+                val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -288,8 +292,8 @@ fun DashboardScreen(
                     ) {
                         CategoryGridCard(
                             title = "Trading",
-                            count = snapshot.tradingEvents,
-                            subtitle = "4 high priority",
+                            count = stats?.trading?.count ?: 0,
+                            subtitle = stats?.trading?.subtitle.orEmpty(),
                             icon = Icons.Default.ShowChart,
                             iconColor = MarksyTheme.PrimaryEmerald,
                             bgColor = MarksyTheme.BadgeTradingBg,
@@ -298,8 +302,8 @@ fun DashboardScreen(
                         )
                         CategoryGridCard(
                             title = "Important",
-                            count = snapshot.importantEvents,
-                            subtitle = "Requires action",
+                            count = stats?.important?.count ?: 0,
+                            subtitle = stats?.important?.subtitle.orEmpty(),
                             icon = Icons.Default.Bolt,
                             iconColor = MarksyTheme.YellowImportant,
                             bgColor = MarksyTheme.BadgeImportantBg,
@@ -308,8 +312,8 @@ fun DashboardScreen(
                         )
                         CategoryGridCard(
                             title = "Messages",
-                            count = snapshot.categoryCounts["MESSAGES"] ?: 0,
-                            subtitle = "2 important",
+                            count = stats?.messages?.count ?: 0,
+                            subtitle = stats?.messages?.subtitle.orEmpty(),
                             icon = Icons.Default.Chat,
                             iconColor = MarksyTheme.SecondaryCyan,
                             bgColor = MarksyTheme.BadgeFinanceBg,
@@ -323,8 +327,8 @@ fun DashboardScreen(
                     ) {
                         CategoryGridCard(
                             title = "Emails",
-                            count = snapshot.categoryCounts["EMAIL"] ?: 0,
-                            subtitle = "Gmail & Outlook",
+                            count = stats?.emails?.count ?: 0,
+                            subtitle = stats?.emails?.subtitle.orEmpty(),
                             icon = Icons.Default.Email,
                             iconColor = Color(0xFF82B1FF),
                             bgColor = Color(0xFF0F1B2E),
@@ -333,8 +337,8 @@ fun DashboardScreen(
                         )
                         CategoryGridCard(
                             title = "Banking",
-                            count = snapshot.categoryCounts["BANKING"] ?: 0,
-                            subtitle = "1 transaction",
+                            count = stats?.banking?.count ?: 0,
+                            subtitle = stats?.banking?.subtitle.orEmpty(),
                             icon = Icons.Default.AccountBalance,
                             iconColor = MarksyTheme.BlueFinance,
                             bgColor = MarksyTheme.BadgeFinanceBg,
@@ -343,8 +347,8 @@ fun DashboardScreen(
                         )
                         CategoryGridCard(
                             title = "Delivery",
-                            count = snapshot.categoryCounts["DELIVERY"] ?: 0,
-                            subtitle = "Arriving tomorrow",
+                            count = stats?.delivery?.count ?: 0,
+                            subtitle = stats?.delivery?.subtitle.orEmpty(),
                             icon = Icons.Default.LocalShipping,
                             iconColor = MarksyTheme.OrangeDelivery,
                             bgColor = MarksyTheme.BadgeDeliveryBg,

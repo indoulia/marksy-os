@@ -24,7 +24,7 @@ class NotificationRepository(private val dao: NotificationEventDao) {
 
     fun observeHistory(): Flow<List<NotificationEventEntity>> = dao.observeHistory()
 
-    fun observeActivePostedAt(): Flow<List<Long>> = dao.observeActivePostedAt()
+    fun observeActive(): Flow<List<NotificationEventEntity>> = dao.observeActive()
 
     suspend fun archive(eventId: Long): Boolean = dao.setArchived(eventId, true) > 0
 
