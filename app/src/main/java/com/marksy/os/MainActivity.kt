@@ -110,6 +110,7 @@ class MainActivity : ComponentActivity() {
     private fun MarksyApp() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
+        LaunchedEffect(Unit) { repository.stripStoredMarkup() }
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val inboxEvents by vm.activeEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))

@@ -17,7 +17,7 @@ object NotificationTextExtractor {
     const val MAX_LINE_COUNT = 50
 
     fun extractTitle(extras: Bundle): String =
-        extras.getCharSequence("android.title")?.toString().orEmpty().trim().take(MAX_TITLE_LENGTH)
+        stripMarkup(extras.getCharSequence("android.title")?.toString().orEmpty()).trim().take(MAX_TITLE_LENGTH)
 
     fun extract(extras: Bundle): String {
         val title = extractTitle(extras)
@@ -44,10 +44,24 @@ object NotificationTextExtractor {
         // place in android.subText. Duplicate fragments (e.g. android.text repeated
         // inside android.textLines) are removed at the fragment level before truncation.
         return (headers + content + listOf(subText, summaryText, infoText))
+            .map { stripMarkup(it).trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString("\n")
             .take(MAX_BODY_LENGTH)
+    }
+
+    // Only well-known formatting tags, so text like "price < 500 > 400" survives.
+    private val markupTag = Regex("</?(b|i|u|s|em|strong|small|big|font|span|div|p|a|sub|sup|strike|ul|ol|li|h[1-6])(\\s[^<>]*)?>", RegexOption.IGNORE_CASE)
+    private val lineBreakTag = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
+    private val entities = listOf("&lt;" to "<", "&gt;" to ">", "&quot;" to "\"", "&#39;" to "'", "&apos;" to "'", "&nbsp;" to " ", "&amp;" to "&")
+
+    /** Some apps (e.g. ChatGPT) post literal HTML as notification text; reduce it to what the user would read. */
+    fun stripMarkup(text: String): String {
+        if ('<' !in text && '&' !in text) return text
+        var plain = text.replace(lineBreakTag, "\n").replace(markupTag, "")
+        entities.forEach { (entity, value) -> plain = plain.replace(entity, value, ignoreCase = true) }
+        return plain
     }
 
     /**

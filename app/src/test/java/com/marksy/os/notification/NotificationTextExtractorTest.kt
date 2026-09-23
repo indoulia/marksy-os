@@ -12,6 +12,26 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class NotificationTextExtractorTest {
     @Test
+    fun stripsHtmlMarkupSomeAppsPostAsLiteralText() {
+        assertEquals(
+            "Material EOD update — 23 Sep 2026 - P-001 HDFCBANK\nline two & more",
+            NotificationTextExtractor.stripMarkup("<b>Material EOD update — 23 Sep 2026</b> - <b>P-001 HDFCBANK</b><br>line two &amp; more")
+        )
+        // Comparison operators and unknown angle-bracket text are left alone.
+        assertEquals("price < 500 and > 400, <not a tag>", NotificationTextExtractor.stripMarkup("price < 500 and > 400, <not a tag>"))
+    }
+
+    @Test
+    fun extractedTitleAndBodyAreFreeOfMarkup() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "<i>Update</i>")
+            putCharSequence("android.text", "<b>HDFCBANK</b> &gt; target")
+        }
+        assertEquals("Update", NotificationTextExtractor.extractTitle(extras))
+        assertEquals("HDFCBANK > target", NotificationTextExtractor.extract(extras).lines().last())
+    }
+
+    @Test
     fun extractsAndTrimsNotificationTitle() {
         val extras = Bundle().apply {
             putCharSequence("android.title", "  Order executed  ")

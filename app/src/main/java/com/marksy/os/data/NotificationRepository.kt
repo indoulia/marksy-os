@@ -2,6 +2,7 @@ package com.marksy.os.data
 
 import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.notification.NotificationTextExtractor
 import kotlinx.coroutines.flow.Flow
 
 class NotificationRepository(private val dao: NotificationEventDao) {
@@ -25,6 +26,15 @@ class NotificationRepository(private val dao: NotificationEventDao) {
     fun observeHistory(): Flow<List<NotificationEventEntity>> = dao.observeHistory()
 
     fun observeActive(): Flow<List<NotificationEventEntity>> = dao.observeActive()
+
+    /** One-off repair for rows captured before HTML stripping existed; leaves read state untouched. */
+    suspend fun stripStoredMarkup() {
+        dao.findWithPossibleMarkup().forEach { event ->
+            val title = NotificationTextExtractor.stripMarkup(event.title).trim()
+            val body = NotificationTextExtractor.stripMarkup(event.body).trim()
+            if (title != event.title || body != event.body) dao.updateText(event.id, title, body)
+        }
+    }
 
     suspend fun archive(eventId: Long): Boolean = dao.setArchived(eventId, true) > 0
 
