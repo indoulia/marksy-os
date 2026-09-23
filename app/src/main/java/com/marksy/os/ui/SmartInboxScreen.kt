@@ -38,7 +38,10 @@ fun SmartInboxScreen(
     padding: PaddingValues,
     onEventSelected: (NotificationEventEntity) -> Unit,
     selectedFilterName: String,
-    onFilterSelected: (String) -> Unit
+    onFilterSelected: (String) -> Unit,
+    onArchive: (NotificationEventEntity) -> Unit = {},
+    onDelete: (NotificationEventEntity) -> Unit = {},
+    onHide: (NotificationEventEntity) -> Unit = {}
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
@@ -144,7 +147,9 @@ fun SmartInboxScreen(
                 }
             } else {
                 items(filtered, key = { it.id }) { event ->
-                    InboxNotificationCard(event = event) { onEventSelected(event) }
+                    SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
+                        InboxNotificationCard(event = event) { onEventSelected(event) }
+                    }
                 }
             }
         }
@@ -194,18 +199,34 @@ private fun InboxNotificationCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        event.sourceName.ifBlank { "System" },
-                        color = MarksyTheme.TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        if (!event.isRead) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            event.sourceName.ifBlank { "System" },
+                            color = MarksyTheme.TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (event.kept) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.Star, contentDescription = "Kept", tint = MarksyTheme.YellowImportant, modifier = Modifier.size(13.dp))
+                        }
+                        if (event.remindAt != null) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.Alarm, contentDescription = "Reminder set", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(13.dp))
+                        }
+                    }
                     Text(
                         formatInboxTime(event.postedAt),
-                        color = MarksyTheme.TextMuted,
-                        fontSize = 10.sp
+                        color = if (event.isRead) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald,
+                        fontSize = 10.sp,
+                        fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold
                     )
                 }
 
@@ -213,9 +234,9 @@ private fun InboxNotificationCard(
 
                 Text(
                     event.title.ifBlank { "Notification event" },
-                    color = MarksyTheme.TextSecondary,
+                    color = if (event.isRead) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

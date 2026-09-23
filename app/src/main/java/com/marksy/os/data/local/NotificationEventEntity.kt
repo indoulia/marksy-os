@@ -40,7 +40,13 @@ data class NotificationEventEntity(
     val marksyResponseJson: String? = null,
     /** True when the user has archived the event from active surfaces. */
     val archived: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** Opened by the user; unread rows render bold. New content for the same source key resets it. */
+    val isRead: Boolean = false,
+    /** Kept forever: retention pruning never deletes it. */
+    val kept: Boolean = false,
+    /** Pending reminder time; retention skips the row until the reminder fires. */
+    val remindAt: Long? = null
 )
 
 enum class DeliveryState {

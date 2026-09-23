@@ -50,6 +50,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.delay
 import com.marksy.os.intelligence.SmartInboxModel
 import com.marksy.os.notification.MarksyNotificationListenerService
+import com.marksy.os.notification.ReminderScheduler
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
@@ -76,14 +77,22 @@ import com.marksy.os.ui.toTradingInsight
 class MainActivity : ComponentActivity() {
     private var notificationAccessEnabled by mutableStateOf(false)
     private var whatsappConnectorEnabled by mutableStateOf(false)
+    /** Set when a reminder notification is tapped; the event dialog opens for it. */
+    private var pendingEventId by mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingEventId = intent?.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L)?.takeIf { it >= 0 }
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { MarksyApp() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L).takeIf { it >= 0 }?.let { pendingEventId = it }
     }
 
     override fun onResume() {
@@ -140,7 +149,34 @@ class MainActivity : ComponentActivity() {
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
         var selectedTradingInsight by remember { mutableStateOf<TradingInsight?>(null) }
 
-        val openEvent: (NotificationEventEntity) -> Unit = { selectedEvent = it }
+        val openEvent: (NotificationEventEntity) -> Unit = { event ->
+            selectedEvent = event
+            if (!event.isRead) vm.setRead(event.id, true)
+        }
+        val snackbar = remember { SnackbarHostState() }
+        val scope = rememberCoroutineScope()
+        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        LaunchedEffect(pendingEventId, inboxEvents) {
+            val id = pendingEventId ?: return@LaunchedEffect
+            inboxEvents.firstOrNull { it.id == id }?.let { openEvent(it); pendingEventId = null }
+        }
+        val archiveWithUndo: (NotificationEventEntity) -> Unit = { event ->
+            vm.archive(event.id)
+            scope.launch {
+                if (snackbar.showSnackbar("Archived", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.unarchive(event.id)
+            }
+        }
+        // Delete is permanent and immediate by request; Archive keeps its undo.
+        val deleteNow: (NotificationEventEntity) -> Unit = { event ->
+            vm.delete(event.id)
+            ReminderScheduler.cancel(applicationContext, event.id)
+            if (selectedEvent?.id == event.id) selectedEvent = null
+        }
+        // "Hide" drops a row from one page only; nothing changes in storage.
+        var inboxHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
+        var homeHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
+        val homeEvents = remember(events, homeHidden) { events.filterNot { it.id in homeHidden } }
+        val homeSnapshot = remember(homeEvents) { DashboardSnapshot.from(homeEvents) }
         val openCategory: (String) -> Unit = { label ->
             inboxFilterName = SmartInboxModel.Filter.forCategoryLabel(label).name
             selectedTab = 1
@@ -169,6 +205,7 @@ class MainActivity : ComponentActivity() {
 
         Scaffold(
             containerColor = MarksyTheme.Background,
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 NavigationBar(
                     containerColor = MarksyTheme.Surface,
@@ -210,8 +247,8 @@ class MainActivity : ComponentActivity() {
                 )
                 showGatewaySettings -> GatewaySettingsHost(padding)
                 selectedTab == 0 -> DashboardScreen(
-                    snapshot = snapshot,
-                    events = events,
+                    snapshot = homeSnapshot,
+                    events = homeEvents,
                     onEventSelected = openEvent,
                     onCategorySelected = openCategory,
                     onOpenTimeline = { showTimeline = true },
@@ -226,14 +263,20 @@ class MainActivity : ComponentActivity() {
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
                     onOpenProfile = { selectedTab = 4 },
+                    onArchive = archiveWithUndo,
+                    onDelete = deleteNow,
+                    onHide = { homeHidden = homeHidden + it.id },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
-                    events = inboxEvents,
+                    events = inboxEvents.filterNot { it.id in inboxHidden },
                     padding = padding,
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
-                    onFilterSelected = { inboxFilterName = it }
+                    onFilterSelected = { inboxFilterName = it },
+                    onArchive = archiveWithUndo,
+                    onDelete = deleteNow,
+                    onHide = { inboxHidden = inboxHidden + it.id }
                 )
                 selectedTab == 2 -> AskMarksyScreen(padding, inboxEvents, market, openEvent, askConversation)
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
@@ -258,12 +301,27 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        selectedEvent?.let { event ->
+        selectedEvent?.let { opened ->
+            // Follow the live row so Keep/Remind changes show immediately.
+            val event = inboxEvents.firstOrNull { it.id == opened.id } ?: opened
             EventDetailDialog(
                 event = event,
                 onArchive = { vm.archive(event.id); selectedEvent = null },
                 onUnarchive = { vm.unarchive(event.id); selectedEvent = null },
-                onDismiss = { selectedEvent = null }
+                onDismiss = { selectedEvent = null },
+                onToggleKeep = { vm.setKept(event.id, !event.kept) },
+                onSetReminder = { at ->
+                    vm.setReminder(event.id, at)
+                    if (at == null) {
+                        ReminderScheduler.cancel(applicationContext, event.id)
+                    } else {
+                        ReminderScheduler.schedule(applicationContext, event.id, at)
+                        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+                onMarkUnread = { vm.setRead(event.id, false) }
             )
         }
 

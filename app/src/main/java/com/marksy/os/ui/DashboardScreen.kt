@@ -54,10 +54,12 @@ fun DashboardScreen(
     todayDigest: DailyDigest? = null,
     onOpenTrading: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
+    onArchive: (NotificationEventEntity) -> Unit = {},
+    onDelete: (NotificationEventEntity) -> Unit = {},
+    onHide: (NotificationEventEntity) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
-    val greeting = remember { greetingFor(java.time.LocalTime.now().hour) }
 
     LazyColumn(
         modifier = modifier.background(MarksyTheme.Background),
@@ -147,7 +149,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(14.dp))
 
                 // Time Filter Pills
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     listOf("Today", "This Week", "All Time").forEach { filter ->
                         val isSelected = filter == selectedTimeFilter
                         Box(
@@ -170,11 +172,13 @@ fun DashboardScreen(
                             )
                         }
                     }
+                    Spacer(Modifier.weight(1f))
+                    WeatherBadge(weather, weatherAvailable, onRequestWeather)
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                // Greeting & Notification Counter Card
+                // Notification Counter Card
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
                     shape = RoundedCornerShape(16.dp),
@@ -183,35 +187,6 @@ fun DashboardScreen(
                         .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2B2200)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(greeting.emoji, fontSize = 14.sp)
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    greeting.title,
-                                    color = MarksyTheme.TextPrimary,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    greeting.subtitle,
-                                    color = MarksyTheme.TextSecondary,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            WeatherBadge(weather, weatherAvailable, onRequestWeather)
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -300,7 +275,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Trading",
                             count = stats?.trading?.count ?: 0,
-                            subtitle = stats?.trading?.subtitle.orEmpty(),
                             icon = Icons.Default.ShowChart,
                             iconColor = MarksyTheme.PrimaryEmerald,
                             bgColor = MarksyTheme.BadgeTradingBg,
@@ -310,7 +284,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Important",
                             count = stats?.important?.count ?: 0,
-                            subtitle = stats?.important?.subtitle.orEmpty(),
                             icon = Icons.Default.Bolt,
                             iconColor = MarksyTheme.YellowImportant,
                             bgColor = MarksyTheme.BadgeImportantBg,
@@ -320,7 +293,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Messages",
                             count = stats?.messages?.count ?: 0,
-                            subtitle = stats?.messages?.subtitle.orEmpty(),
                             icon = Icons.Default.Chat,
                             iconColor = MarksyTheme.SecondaryCyan,
                             bgColor = MarksyTheme.BadgeFinanceBg,
@@ -335,7 +307,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Emails",
                             count = stats?.emails?.count ?: 0,
-                            subtitle = stats?.emails?.subtitle.orEmpty(),
                             icon = Icons.Default.Email,
                             iconColor = Color(0xFF82B1FF),
                             bgColor = Color(0xFF0F1B2E),
@@ -345,7 +316,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Banking",
                             count = stats?.banking?.count ?: 0,
-                            subtitle = stats?.banking?.subtitle.orEmpty(),
                             icon = Icons.Default.AccountBalance,
                             iconColor = MarksyTheme.BlueFinance,
                             bgColor = MarksyTheme.BadgeFinanceBg,
@@ -355,7 +325,6 @@ fun DashboardScreen(
                         CategoryGridCard(
                             title = "Delivery",
                             count = stats?.delivery?.count ?: 0,
-                            subtitle = stats?.delivery?.subtitle.orEmpty(),
                             icon = Icons.Default.LocalShipping,
                             iconColor = MarksyTheme.OrangeDelivery,
                             bgColor = MarksyTheme.BadgeDeliveryBg,
@@ -390,7 +359,9 @@ fun DashboardScreen(
             // Keys are namespaced per section: the same event can be in both Attention and Latest Activity.
             items(snapshot.topAttention, key = { "attention-${it.eventId}" }) { result ->
                 events.firstOrNull { it.id == result.eventId }?.let { event ->
-                    AttentionCard(result, event, snapshot.generatedAt) { onEventSelected(event) }
+                    SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
+                        AttentionCard(result, event, snapshot.generatedAt) { onEventSelected(event) }
+                    }
                 }
             }
         }
@@ -405,7 +376,9 @@ fun DashboardScreen(
             }
         } else {
             items(events.take(5), key = { "latest-${it.id}" }) { event ->
-                CompactEventCard(event, snapshot.generatedAt) { onEventSelected(event) }
+                SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
+                    CompactEventCard(event, snapshot.generatedAt) { onEventSelected(event) }
+                }
             }
         }
     }
@@ -413,29 +386,28 @@ fun DashboardScreen(
 
 @Composable
 private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () -> Unit) {
-    Box(
+    Row(
         modifier = Modifier
-            .size(46.dp)
-            .clip(CircleShape)
-            .background(MarksyTheme.SurfaceRaised)
-            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
-            .then(if (available) Modifier else Modifier.clickable(onClick = onRequest)),
-        contentAlignment = Alignment.Center
+            .clip(RoundedCornerShape(20.dp))
+            .background(MarksyTheme.Surface)
+            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(20.dp))
+            .then(if (available) Modifier else Modifier.clickable(onClick = onRequest))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn,
-                contentDescription = weather?.condition?.name ?: "Enable weather",
-                tint = weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
-                color = MarksyTheme.TextPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Icon(
+            weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn,
+            contentDescription = weather?.condition?.name ?: "Enable weather",
+            tint = weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
+            color = MarksyTheme.TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -455,19 +427,10 @@ private fun weatherTint(condition: Weather.Condition): Color = when (condition) 
     else -> MarksyTheme.TextSecondary
 }
 
-private data class Greeting(val title: String, val subtitle: String, val emoji: String)
-
-private fun greetingFor(hour: Int): Greeting = when (hour) {
-    in 5..11 -> Greeting("Good Morning", "Let's make it a productive day!", "☀️")
-    in 12..16 -> Greeting("Good Afternoon", "Keep the momentum going.", "🌤️")
-    else -> Greeting("Good Evening", "Here's how your day went.", "🌙")
-}
-
 @Composable
 private fun CategoryGridCard(
     title: String,
     count: Int,
-    subtitle: String,
     icon: ImageVector,
     iconColor: Color,
     bgColor: Color,
@@ -480,7 +443,7 @@ private fun CategoryGridCard(
         onClick = onClick,
         modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -494,9 +457,6 @@ private fun CategoryGridCard(
                 Spacer(Modifier.width(8.dp))
                 Text("$count", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(4.dp))
-            Text(title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

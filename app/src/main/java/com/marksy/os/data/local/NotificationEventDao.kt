@@ -46,7 +46,7 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findBySourceKey(sourcePackage: String, sourceKey: String): NotificationEventEntity?
 
-    @Query("UPDATE notification_events SET title = :title, body = :body, postedAt = :postedAt WHERE id = :eventId")
+    @Query("UPDATE notification_events SET title = :title, body = :body, postedAt = :postedAt, isRead = 0 WHERE id = :eventId")
     suspend fun updateContent(eventId: Long, title: String, body: String, postedAt: Long): Int
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND eventFingerprint = :eventFingerprint LIMIT 1")
@@ -81,10 +81,10 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET archived = :archived WHERE isTrading = :isTrading AND postedAt < :beforeMillis AND deliveryState != 'IN_FLIGHT'")
     suspend fun setArchivedForType(isTrading: Boolean, beforeMillis: Long, archived: Boolean): Int
 
-    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0 AND kept = 0 AND remindAt IS NULL")
     suspend fun deleteOldNonTrading(cutoff: Long): Int
 
-    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1")
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1 AND kept = 0 AND remindAt IS NULL")
     suspend fun deleteOldTrading(cutoff: Long): Int
 
     @Transaction
@@ -95,4 +95,19 @@ interface NotificationEventDao {
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
+
+    @Query("SELECT * FROM notification_events WHERE id = :eventId")
+    suspend fun findById(eventId: Long): NotificationEventEntity?
+
+    @Query("DELETE FROM notification_events WHERE id = :eventId")
+    suspend fun deleteById(eventId: Long): Int
+
+    @Query("UPDATE notification_events SET isRead = :read WHERE id = :eventId")
+    suspend fun setRead(eventId: Long, read: Boolean): Int
+
+    @Query("UPDATE notification_events SET kept = :kept WHERE id = :eventId")
+    suspend fun setKept(eventId: Long, kept: Boolean): Int
+
+    @Query("UPDATE notification_events SET remindAt = :remindAt WHERE id = :eventId")
+    suspend fun setReminder(eventId: Long, remindAt: Long?): Int
 }

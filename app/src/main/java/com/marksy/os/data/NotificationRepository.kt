@@ -31,4 +31,15 @@ class NotificationRepository(private val dao: NotificationEventDao) {
     suspend fun unarchive(eventId: Long): Boolean = dao.setArchived(eventId, false) > 0
 
     suspend fun clearAll() = dao.deleteAll()
+
+    suspend fun delete(eventId: Long): Boolean = dao.deleteById(eventId) > 0
+
+    /** Undo for delete: re-inserts the exact row, id included. */
+    suspend fun restore(event: NotificationEventEntity) { dao.insert(event) }
+
+    suspend fun setRead(eventId: Long, read: Boolean) = dao.setRead(eventId, read)
+
+    suspend fun setKept(eventId: Long, kept: Boolean) = dao.setKept(eventId, kept)
+
+    suspend fun setReminder(eventId: Long, remindAt: Long?) = dao.setReminder(eventId, remindAt)
 }

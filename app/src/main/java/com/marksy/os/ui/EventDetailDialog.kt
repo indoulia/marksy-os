@@ -20,7 +20,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Unarchive
@@ -34,7 +40,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.marksy.os.notification.ReminderTimes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +79,11 @@ fun EventDetailDialog(
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onDismiss: () -> Unit,
+    onToggleKeep: () -> Unit = {},
+    onSetReminder: (Long?) -> Unit = {},
+    onMarkUnread: () -> Unit = {},
 ) {
+    var showReminderOptions by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val actions = OriginalAppLauncher.actionsFor(event.sourcePackage, event.sourceKey)
@@ -147,7 +163,46 @@ fun EventDetailDialog(
                         event.insightSummary?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
                         event.insightAction?.takeIf { it.isNotBlank() }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
                     }
-                    Text(if (event.archived) "Archived locally on this device" else "Stored locally on this device", color = DetailMuted, fontSize = 11.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                        ActionChip(
+                            if (event.kept) Icons.Default.Star else Icons.Default.StarBorder,
+                            if (event.kept) "Kept" else "Keep",
+                            selected = event.kept,
+                            onClick = onToggleKeep
+                        )
+                        ActionChip(
+                            Icons.Default.Alarm,
+                            event.remindAt?.let { "Remind " + formatTimestamp(it) } ?: "Remind me",
+                            selected = event.remindAt != null,
+                            onClick = { showReminderOptions = !showReminderOptions }
+                        )
+                        ActionChip(Icons.Default.MarkEmailUnread, "Mark unread", selected = false) { onMarkUnread(); onDismiss() }
+                    }
+                    if (showReminderOptions) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                            ReminderTimes.options().forEach { option ->
+                                ActionChip(Icons.Default.Schedule, option.label, selected = false) {
+                                    onSetReminder(option.atMillis)
+                                    showReminderOptions = false
+                                }
+                            }
+                            if (event.remindAt != null) {
+                                ActionChip(Icons.Default.AlarmOff, "Cancel reminder", selected = false) {
+                                    onSetReminder(null)
+                                    showReminderOptions = false
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        when {
+                            event.kept -> "Kept forever on this device"
+                            event.archived -> "Archived locally on this device"
+                            else -> "Stored locally on this device"
+                        },
+                        color = DetailMuted,
+                        fontSize = 11.sp
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -199,6 +254,24 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
         last = match.range.first + url.length
     }
     append(text.substring(last))
+}
+
+@Composable
+private fun ActionChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    val tint = if (selected) Color.Black else MarksyTheme.PrimaryEmerald
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+            .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label, color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
 }
 
 @Composable

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [NotificationEventEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -23,6 +23,16 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        // Existing rows start read so the upgrade doesn't turn the whole inbox bold.
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE notification_events ADD COLUMN isRead INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE notification_events ADD COLUMN kept INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE notification_events ADD COLUMN remindAt INTEGER")
+                database.execSQL("UPDATE notification_events SET isRead = 1")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -32,7 +42,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

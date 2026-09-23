@@ -58,6 +58,26 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
         viewModelScope.launch { repository.archive(eventId) }
     }
 
+    fun delete(eventId: Long) {
+        viewModelScope.launch { repository.delete(eventId) }
+    }
+
+    fun restore(event: NotificationEventEntity) {
+        viewModelScope.launch { repository.restore(event) }
+    }
+
+    fun setRead(eventId: Long, read: Boolean) {
+        viewModelScope.launch { repository.setRead(eventId, read) }
+    }
+
+    fun setKept(eventId: Long, kept: Boolean) {
+        viewModelScope.launch { repository.setKept(eventId, kept) }
+    }
+
+    fun setReminder(eventId: Long, remindAt: Long?) {
+        viewModelScope.launch { repository.setReminder(eventId, remindAt) }
+    }
+
     fun unarchive(eventId: Long) {
         viewModelScope.launch { repository.unarchive(eventId) }
     }
