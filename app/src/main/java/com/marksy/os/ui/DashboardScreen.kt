@@ -176,7 +176,7 @@ fun DashboardScreen(
                     WeatherBadge(weather, weatherAvailable, onRequestWeather)
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
 
                 // Notification Counter Card
                 Card(
@@ -186,7 +186,7 @@ fun DashboardScreen(
                         .fillMaxWidth()
                         .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
                 ) {
-                    Column(Modifier.padding(16.dp)) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -197,16 +197,16 @@ fun DashboardScreen(
                                     Text(
                                         "${when (selectedTimeFilter) { "Today" -> trend.today; "This Week" -> trend.lastSevenDays.sum(); else -> trend.total }}",
                                         color = MarksyTheme.TextPrimary,
-                                        fontSize = 36.sp,
+                                        fontSize = 24.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         "Notifications",
                                         color = MarksyTheme.TextSecondary,
-                                        fontSize = 15.sp,
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(bottom = 6.dp)
+                                        modifier = Modifier.padding(bottom = 3.dp)
                                     )
                                 }
                                 val change = trend.changeVsYesterdayPercent
@@ -235,7 +235,7 @@ fun DashboardScreen(
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.Bottom,
-                                modifier = Modifier.height(36.dp)
+                                modifier = Modifier.height(24.dp)
                             ) {
                                 // Last 7 days, oldest → today; today's bar is highlighted.
                                 val peak = (trend.lastSevenDays.maxOrNull() ?: 0).coerceAtLeast(1)
@@ -243,7 +243,7 @@ fun DashboardScreen(
                                     Box(
                                         modifier = Modifier
                                             .width(5.dp)
-                                            .height((4 + 32f * count / peak).dp)
+                                            .height((4 + 20f * count / peak).dp)
                                             .clip(RoundedCornerShape(3.dp))
                                             .background(
                                                 if (index == trend.lastSevenDays.lastIndex) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow
@@ -255,82 +255,30 @@ fun DashboardScreen(
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
                     QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
                     QuickAccessButton("Insights", Icons.Default.Insights, onOpenInsights, Modifier.weight(1f))
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(8.dp))
 
                 // Category Quick Cards Grid
                 val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CategoryGridCard(
-                            title = "Trading",
-                            count = stats?.trading?.count ?: 0,
-                            icon = Icons.Default.ShowChart,
-                            iconColor = MarksyTheme.PrimaryEmerald,
-                            bgColor = MarksyTheme.BadgeTradingBg,
-                            onClick = { onCategorySelected("Trading") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        CategoryGridCard(
-                            title = "Important",
-                            count = stats?.important?.count ?: 0,
-                            icon = Icons.Default.Bolt,
-                            iconColor = MarksyTheme.YellowImportant,
-                            bgColor = MarksyTheme.BadgeImportantBg,
-                            onClick = { onCategorySelected("Important") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        CategoryGridCard(
-                            title = "Messages",
-                            count = stats?.messages?.count ?: 0,
-                            icon = Icons.Default.Chat,
-                            iconColor = MarksyTheme.SecondaryCyan,
-                            bgColor = MarksyTheme.BadgeFinanceBg,
-                            onClick = { onCategorySelected("Messages") },
-                            modifier = Modifier.weight(1f)
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, { onCategorySelected("Trading") }, Modifier.weight(1f))
+                        CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg, { onCategorySelected("Important") }, Modifier.weight(1f))
+                        CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksyTheme.SecondaryCyan, MarksyTheme.BadgeFinanceBg, { onCategorySelected("Messages") }, Modifier.weight(1f))
+                        CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, Color(0xFF9EA7FF), Color(0xFF1A1B33), { onCategorySelected("Teams") }, Modifier.weight(1f))
                     }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CategoryGridCard(
-                            title = "Emails",
-                            count = stats?.emails?.count ?: 0,
-                            icon = Icons.Default.Email,
-                            iconColor = Color(0xFF82B1FF),
-                            bgColor = Color(0xFF0F1B2E),
-                            onClick = { onCategorySelected("Emails") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        CategoryGridCard(
-                            title = "Banking",
-                            count = stats?.banking?.count ?: 0,
-                            icon = Icons.Default.AccountBalance,
-                            iconColor = MarksyTheme.BlueFinance,
-                            bgColor = MarksyTheme.BadgeFinanceBg,
-                            onClick = { onCategorySelected("Banking") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        CategoryGridCard(
-                            title = "Delivery",
-                            count = stats?.delivery?.count ?: 0,
-                            icon = Icons.Default.LocalShipping,
-                            iconColor = MarksyTheme.OrangeDelivery,
-                            bgColor = MarksyTheme.BadgeDeliveryBg,
-                            onClick = { onCategorySelected("Delivery") },
-                            modifier = Modifier.weight(1f)
-                        )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, Color(0xFF82B1FF), Color(0xFF0F1B2E), { onCategorySelected("Emails") }, Modifier.weight(1f))
+                        CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksyTheme.BlueFinance, MarksyTheme.BadgeFinanceBg, { onCategorySelected("Banking") }, Modifier.weight(1f))
+                        CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, { onCategorySelected("Payments") }, Modifier.weight(1f))
+                        CategoryGridCard("Delivery", stats?.delivery?.count ?: 0, Icons.Default.LocalShipping, MarksyTheme.OrangeDelivery, MarksyTheme.BadgeDeliveryBg, { onCategorySelected("Delivery") }, Modifier.weight(1f))
                     }
                 }
 
@@ -437,46 +385,52 @@ private fun CategoryGridCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        onClick = onClick,
-        modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
+    Box(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MarksyTheme.Surface)
+            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(bgColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(13.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text("$count", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(23.dp)
+                    .clip(CircleShape)
+                    .background(bgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(15.dp))
             }
+            Spacer(Modifier.width(6.dp))
+            Text("$count", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
 
 @Composable
 private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        onClick = onClick,
-        modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
+    Box(
+        modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MarksyTheme.Surface)
+            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

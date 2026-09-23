@@ -4,10 +4,11 @@ import com.marksy.os.data.local.NotificationEventEntity
 
 /** Presentation-ready grouping for Smart Inbox. All decisions remain deterministic and local. */
 object SmartInboxModel {
-    enum class Filter(val label: String, val category: String? = null) {
+    enum class Filter(val label: String, val category: String? = null, val sourceKeyword: String? = null) {
         ALL("All"), TRADING("Trading", "TRADING"), MESSAGES("Messages", "MESSAGES"),
         EMAIL("Emails", "EMAIL"), PAYMENTS("Payments", "PAYMENTS"), BANKING("Banking", "BANKING"),
-        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY");
+        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY"),
+        TEAMS("Teams", sourceKeyword = "teams");
 
         companion object {
             /** Maps a Home dashboard tile label to its inbox filter; unmatched labels fall back to ALL. */
@@ -46,6 +47,7 @@ object SmartInboxModel {
     /** Archived events never re-enter the active inbox. */
     fun filter(events: List<NotificationEventEntity>, filter: Filter): List<NotificationEventEntity> {
         val active = events.filterNot { it.archived }
+        filter.sourceKeyword?.let { keyword -> return active.filter { isFromSource(it, keyword) } }
         return filter.category?.let { category -> active.filter { it.category == category } } ?: active
     }
 
@@ -75,6 +77,9 @@ object SmartInboxModel {
         val quiet = threads.filter { it !in needs && it !in recent }
         return Sectioned(needs, recent, quiet)
     }
+
+    fun isFromSource(event: NotificationEventEntity, keyword: String): Boolean =
+        event.sourcePackage.contains(keyword, ignoreCase = true) || event.sourceName.contains(keyword, ignoreCase = true)
 
     private const val ATTENTION_THRESHOLD = 70
     private const val RECENT_WINDOW_MS = 2 * 60 * 60 * 1000L

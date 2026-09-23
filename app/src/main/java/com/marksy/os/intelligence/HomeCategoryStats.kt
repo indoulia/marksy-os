@@ -29,7 +29,9 @@ data class HomeCategoryStats(
     val messages: Stat,
     val emails: Stat,
     val banking: Stat,
-    val delivery: Stat
+    val delivery: Stat,
+    val teams: Stat,
+    val payments: Stat
 ) {
     data class Stat(val count: Int, val subtitle: String)
 
@@ -77,7 +79,9 @@ data class HomeCategoryStats(
                 messages = stat { it.category.equals("MESSAGES", ignoreCase = true) },
                 emails = stat { it.category.equals("EMAIL", ignoreCase = true) },
                 banking = stat { it.category.equals("BANKING", ignoreCase = true) },
-                delivery = stat { it.category.equals("DELIVERY", ignoreCase = true) }
+                delivery = stat { it.category.equals("DELIVERY", ignoreCase = true) },
+                teams = stat { SmartInboxModel.isFromSource(it, "teams") },
+                payments = stat { it.category.equals("PAYMENTS", ignoreCase = true) }
             )
         }
     }

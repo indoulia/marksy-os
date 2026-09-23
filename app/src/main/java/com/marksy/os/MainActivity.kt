@@ -497,15 +497,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black) } } }
-        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black) } } }
-        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black) } } }
-        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black) } } }
-        item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black) } } }
-        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black) } } }
-        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black) } } }
-        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black) } } }
-        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White) } } }
+        item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
     }
     if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll(); gatewayConfigured = store.getIntegrationKey() != null } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }, containerColor = MarksyTheme.SurfaceRaised)
 }
@@ -516,14 +516,14 @@ class MainActivity : ComponentActivity() {
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
-        Column(Modifier.padding(15.dp)) {
+        Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
                 Text(status, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-            action?.let { Spacer(Modifier.height(10.dp)); it() }
+            action?.let { Spacer(Modifier.height(8.dp)); it() }
         }
     }
 }

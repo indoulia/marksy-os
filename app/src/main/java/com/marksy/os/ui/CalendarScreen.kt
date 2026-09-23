@@ -3,6 +3,7 @@ package com.marksy.os.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -30,6 +31,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,6 +71,8 @@ fun CalendarScreen(
     val dayCounts = monthEvents.groupingBy { Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth }.eachCount()
     val maxCount = dayCounts.values.maxOrNull() ?: 0
     val firstDay = month.atDay(1).dayOfWeek.value % 7
+    fun shiftMonth(by: Int) { monthOffset += by; selectedDay = if (monthOffset == 0) today.dayOfMonth else -1 }
+    val swipePx = with(LocalDensity.current) { 56.dp.toPx() }
     val selectedEvents = if (selectedDay > 0) monthEvents.filter {
         Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth == selectedDay
     }.sortedByDescending { it.postedAt } else emptyList()
@@ -76,12 +81,19 @@ fun CalendarScreen(
         Modifier.padding(padding).padding(horizontal = 18.dp, vertical = 4.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
+        Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+            // Swipe left = next month, right = previous.
+            var dragged = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { dragged = 0f },
+                onDragEnd = { if (dragged <= -swipePx) shiftMonth(1) else if (dragged >= swipePx) shiftMonth(-1) }
+            ) { _, delta -> dragged += delta }
+        }) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { monthOffset--; selectedDay = if (monthOffset == 0) today.dayOfMonth else -1 }) { Text("‹", fontSize = 20.sp, color = Primary) }
+                    TextButton(onClick = { shiftMonth(-1) }) { Text("‹", fontSize = 20.sp, color = Primary) }
                     Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())), color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { monthOffset++; selectedDay = if (monthOffset == 0) today.dayOfMonth else -1 }) { Text("›", fontSize = 20.sp, color = Primary) }
+                    TextButton(onClick = { shiftMonth(1) }) { Text("›", fontSize = 20.sp, color = Primary) }
                 }
                 Row(Modifier.fillMaxWidth()) {
                     listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = 2.dp)) }
