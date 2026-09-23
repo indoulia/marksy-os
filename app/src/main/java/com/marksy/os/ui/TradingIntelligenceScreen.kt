@@ -38,12 +38,14 @@ fun TradingIntelligenceScreen(
     var selectedFilter by remember { mutableStateOf(TAB_PICKS) }
     val snapshot = (market as? MarketState.Loaded)?.snapshot
 
-    Column(
-        modifier = Modifier
+    Box(
+        Modifier
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .consumeWindowInsets(padding)
     ) {
+    Column(Modifier.fillMaxSize()) {
         // Header
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(
@@ -74,37 +76,7 @@ fun TradingIntelligenceScreen(
                     }
                 }
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Filter Chips
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(TAB_PICKS, TAB_MOVERS, TAB_INDICES, TAB_CAPTURED).forEach { filter ->
-                    val isSelected = filter == selectedFilter
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                            .border(
-                                1.dp,
-                                if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedFilter = filter }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
-                    ) {
-                        Text(
-                            filter,
-                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
+            Text(selectedFilter, color = MarksyTheme.TextMuted, fontSize = 12.sp)
         }
 
         LazyColumn(
@@ -112,7 +84,7 @@ fun TradingIntelligenceScreen(
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
             when (selectedFilter) {
                 TAB_PICKS -> {
@@ -168,6 +140,12 @@ fun TradingIntelligenceScreen(
                 }
             }
         }
+    }
+    OneHandControls(
+        filters = listOf(TAB_PICKS, TAB_MOVERS, TAB_INDICES, TAB_CAPTURED).map { it to it },
+        selectedFilter = selectedFilter,
+        onFilterSelected = { selectedFilter = it }
+    )
     }
 }
 

@@ -58,13 +58,15 @@ fun SmartInboxScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
+    Box(
+        Modifier
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .consumeWindowInsets(padding)
     ) {
-        // Header & Search Bar
+    Column(Modifier.fillMaxSize()) {
+        // Header
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -77,58 +79,9 @@ fun SmartInboxScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("${filtered.size} shown", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                Text(if (filter == SmartInboxModel.Filter.ALL) "${filtered.size} shown" else "${filter.label} · ${filtered.size}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            // Search Bar Input
-            CompactTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = "Search notifications...",
-                leadingIcon = Icons.Default.Search,
-                cornerRadius = 20.dp,
-                trailing = if (searchQuery.isNotEmpty()) {
-                    {
-                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                } else null
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // Filter Chips Row
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmartInboxModel.Filter.entries.forEach { item ->
-                    val isSelected = filter == item
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                            .border(
-                                1.dp,
-                                if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { onFilterSelected(item.name) }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
-                    ) {
-                        Text(
-                            item.label,
-                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
-            }
         }
 
         LazyColumn(
@@ -136,7 +89,7 @@ fun SmartInboxScreen(
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 20.dp)
+            contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
             if (filtered.isEmpty()) {
                 item {
@@ -153,6 +106,15 @@ fun SmartInboxScreen(
                 }
             }
         }
+    }
+    OneHandControls(
+        filters = SmartInboxModel.Filter.entries.map { it.name to it.label },
+        selectedFilter = filter.name,
+        onFilterSelected = onFilterSelected,
+        searchQuery = searchQuery,
+        onSearchChange = { searchQuery = it },
+        searchPlaceholder = "Search notifications..."
+    )
     }
 }
 
