@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,8 +32,11 @@ import kotlinx.coroutines.launch
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.GatewayQrParser
 import com.marksy.os.gateway.SecureCredentialStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.SmartInboxModel
@@ -215,14 +219,54 @@ class MainActivity : ComponentActivity() {
 @Composable private fun GatewaySettingsHost(padding: PaddingValues, onBack: () -> Unit) {
     val store = remember { SecureCredentialStore(AppContext.get()) }
     var key by rememberSaveable { mutableStateOf("") }
+    var baseUrl by rememberSaveable { mutableStateOf(store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL) }
     var configured by remember { mutableStateOf(store.getIntegrationKey() != null) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var revealKey by rememberSaveable { mutableStateOf(false) }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val contents = result.contents
+        if (contents == null) {
+            message = "Scan cancelled."
+        } else {
+            val parsed = GatewayQrParser.parse(contents)
+            parsed.integrationKey?.let { key = it }
+            parsed.baseUrl?.let { baseUrl = it }
+            revealKey = true
+            message = if (parsed.hasAny) "Scanned. Review the fields and Save." else "QR code not recognized."
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
         ScreenHeader("Marksy Gateway", onBack)
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (configured) "Gateway configured" else "Gateway not configured", color = if (configured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold)
-            Text("The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+            Text("Scan the QR code from the Marksy admin, or enter the values manually. The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+
+            OutlinedButton(
+                onClick = {
+                    scanLauncher.launch(ScanOptions().apply {
+                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        setPrompt("Scan the Marksy gateway QR")
+                        setBeepEnabled(false)
+                        setOrientationLocked(false)
+                    })
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MarksyTheme.PrimaryEmerald)
+                Spacer(Modifier.width(8.dp))
+                Text("Scan QR code", color = MarksyTheme.PrimaryEmerald)
+            }
+
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Base URL") },
+                singleLine = true,
+                colors = gatewayFieldColors()
+            )
             OutlinedTextField(
                 value = key,
                 onValueChange = { key = it },
@@ -232,11 +276,20 @@ class MainActivity : ComponentActivity() {
                 visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     TextButton(onClick = { revealKey = !revealKey }) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald) }
-                }
+                },
+                colors = gatewayFieldColors()
             )
             Button(
                 onClick = {
-                    runCatching { store.setIntegrationKey(key.trim()) }.onSuccess {
+                    val url = baseUrl.trim()
+                    if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
+                        message = "Base URL must start with https://"
+                        return@Button
+                    }
+                    runCatching {
+                        store.setBaseUrl(url)
+                        store.setIntegrationKey(key.trim())
+                    }.onSuccess {
                         key = ""
                         revealKey = false
                         configured = true
@@ -250,15 +303,31 @@ class MainActivity : ComponentActivity() {
             ) { Text("Save Securely", color = Color.Black) }
             OutlinedButton(onClick = {
                 store.clearIntegrationKey()
+                store.clearBaseUrl()
                 key = ""
                 revealKey = false
                 configured = false
+                baseUrl = BuildConfig.MARKSY_API_BASE_URL
                 message = "Credential removed. Trading delivery is disabled until configured."
             }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
             message?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
         }
     }
 }
+
+// Visible input colors: without these the field text renders in the default
+// on-surface color against the dark background and is effectively invisible.
+@Composable private fun gatewayFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = MarksyTheme.TextPrimary,
+    unfocusedTextColor = MarksyTheme.TextPrimary,
+    cursorColor = MarksyTheme.PrimaryEmerald,
+    focusedBorderColor = MarksyTheme.PrimaryEmerald,
+    unfocusedBorderColor = MarksyTheme.BorderGlow,
+    focusedLabelColor = MarksyTheme.PrimaryEmerald,
+    unfocusedLabelColor = MarksyTheme.TextSecondary,
+    focusedContainerColor = MarksyTheme.Surface,
+    unfocusedContainerColor = MarksyTheme.Surface
+)
 
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
