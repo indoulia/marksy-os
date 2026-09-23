@@ -565,31 +565,30 @@ private fun AttentionCard(
         .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
     onClick = onClick
 ) {
-    Column(Modifier.padding(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                event.sourceName.ifBlank { "Unknown source" },
-                color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) MarksyTheme.BadgeUrgentBg else MarksyTheme.BadgeTradingBg
-                    )
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
+    Column(Modifier.padding(horizontal = 14.dp, vertical = 9.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Icon(
+                    attentionIcon(result),
+                    contentDescription = attentionLabel(result),
+                    tint = if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    attentionLabel(result),
-                    color = if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    event.sourceName.ifBlank { "Unknown source" },
+                    color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
+            Text(
+                "${result.attentionScore}/100 • ${dashboardAgeLabel(event.postedAt, nowMillis)}",
+                color = MarksyTheme.TextMuted,
+                fontSize = 10.sp
+            )
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -608,12 +607,6 @@ private fun AttentionCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            "${result.attentionScore}/100 • ${dashboardAgeLabel(event.postedAt, nowMillis)}",
-            color = MarksyTheme.TextMuted,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
     }
 }
 
@@ -622,6 +615,13 @@ private fun attentionLabel(result: EventIntelligence.Result): String = when (res
     EventIntelligence.AttentionLevel.HIGH -> "HIGH ATTENTION"
     EventIntelligence.AttentionLevel.NORMAL -> "NORMAL"
     EventIntelligence.AttentionLevel.LOW -> "LOW"
+}
+
+private fun attentionIcon(result: EventIntelligence.Result): ImageVector = when (result.attentionLevel) {
+    EventIntelligence.AttentionLevel.CRITICAL -> Icons.Default.ReportProblem
+    EventIntelligence.AttentionLevel.HIGH -> Icons.Default.PriorityHigh
+    EventIntelligence.AttentionLevel.NORMAL -> Icons.Default.NotificationsActive
+    EventIntelligence.AttentionLevel.LOW -> Icons.Default.LowPriority
 }
 
 @Composable
@@ -638,7 +638,7 @@ private fun CompactEventCard(
         .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
     onClick = onClick
 ) {
-    Column(Modifier.padding(13.dp)) {
+    Column(Modifier.padding(horizontal = 13.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 event.sourceName.ifBlank { "Unknown source" },
@@ -648,12 +648,20 @@ private fun CompactEventCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            if (event.isTrading) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (event.isTrading) {
+                    Text(
+                        deliveryLabel(event.deliveryState),
+                        color = MarksyTheme.PrimaryEmerald,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
                 Text(
-                    deliveryLabel(event.deliveryState),
-                    color = MarksyTheme.PrimaryEmerald,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
+                    dashboardAgeLabel(event.postedAt, nowMillis),
+                    color = MarksyTheme.TextMuted,
+                    fontSize = 10.sp
                 )
             }
         }
@@ -663,12 +671,6 @@ private fun CompactEventCard(
             fontSize = 13.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Text(
-            dashboardAgeLabel(event.postedAt, nowMillis),
-            color = MarksyTheme.TextMuted,
-            fontSize = 10.sp,
             modifier = Modifier.padding(top = 4.dp)
         )
     }

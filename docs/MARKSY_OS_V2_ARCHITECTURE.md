@@ -208,11 +208,18 @@ The existing V1 packages remain valid during migration. New V2 behavior must res
 
 ## Current V2 status
 
-The first V2 foundation slice is implemented:
+Verified against source on 2026-09-24 — Phases 0–10 are implemented:
 
-- repository exposes `importantEvents` and `attentionEvents`
-- local DAO exposes priority-aware streams
-- Home consumes the important-event stream
-- Home now has an `AI attention` surface instead of treating every retained event equally
+- **Phase 0 (V1 hardening):** dedup, retention (`RetentionPolicy`), listener rebind on kill (`ListenerRebindReceiver`), atomic trading-delivery claims + stale-in-flight recovery (`TradingDeliveryWorker`), HTTPS-enforced/timeout-bounded transport (`MarksyTipsApiClient`), scoped WhatsApp accessibility connector. CLS-01 (real-broker → TRADING) stays blocked on a live broker notification + configured Marksy gateway — can't be exercised via shell-posted notifications; covered by unit tests instead.
+- **Phase 1 (Core architecture):** repository/DAO priority streams, feature ViewModel boundaries.
+- **Phase 2 (Event intelligence):** deterministic attention scoring, thread grouping/correlation (`EventIntelligence`).
+- **Phase 3 (Home Dashboard):** live `DashboardSnapshot`-driven overview and AI summary (no more hardcoded demo data).
+- **Phase 4 (Smart Inbox):** AI sorting/grouping/priority filters (`SmartInboxModel`).
+- **Phase 5 (Trading Intelligence):** Marksy signals/comparison/verdict via the gateway, no brokerage execution.
+- **Phase 6 (Timeline):** `TimelineScreen`.
+- **Phase 7 (Insight Center):** `InsightsModel`/`InsightsScreen`.
+- **Phase 8 (Ask Marksy):** `AskMarksyEngine`/`AskMarksyScreen`.
+- **Phase 9 (Rules & Automation):** `RuleEngine`/`RuleStore`/`RulesScreen`.
+- **Phase 10 (Daily Digest):** `DigestModel`/`DailyDigestScreen`.
 
-This is intentionally a small first step. The scoring model, grouping engine and remote conversational intelligence will be added as separate capabilities rather than embedded into the UI.
+**Pending:** Phase 11 (Floating Assistant), Phase 12 (Lock Screen / Pulse), Phase 13 (Cross-app intelligence) have no implementation yet.

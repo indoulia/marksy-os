@@ -123,7 +123,7 @@ private fun InboxNotificationCard(
     event: NotificationEventEntity,
     onClick: () -> Unit
 ) {
-    val (appIcon, iconBg, pillLabel, pillText, pillBg) = resolveSourceStyle(event)
+    val (appIcon, iconBg, pillLabel, pillText, pillIcon) = resolveSourceStyle(event)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
@@ -175,6 +175,8 @@ private fun InboxNotificationCard(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(pillIcon, contentDescription = pillLabel, tint = pillText, modifier = Modifier.size(13.dp))
                         if (event.kept) {
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.Default.Star, contentDescription = "Kept", tint = MarksyTheme.YellowImportant, modifier = Modifier.size(13.dp))
@@ -214,23 +216,6 @@ private fun InboxNotificationCard(
                     )
                 }
             }
-
-            Spacer(Modifier.width(8.dp))
-
-            // Pill Badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(pillBg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    pillLabel,
-                    color = pillText,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
     }
 }
@@ -240,7 +225,7 @@ private data class SourceStyle(
     val iconBg: Color,
     val pillLabel: String,
     val pillText: Color,
-    val pillBg: Color
+    val pillIcon: ImageVector
 )
 
 private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
@@ -249,48 +234,54 @@ private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
     val category = event.category.uppercase()
 
     return when {
-        event.isTrading || src.contains("zerodha") || src.contains("groww") || src.contains("upstox") -> SourceStyle(
-            icon = Icons.Default.ShowChart,
-            iconBg = Color(0xFFC62828),
-            pillLabel = if (title.contains("breakout") || event.priority >= 80) "Urgent" else "Trading",
-            pillText = if (title.contains("breakout") || event.priority >= 80) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
-            pillBg = if (title.contains("breakout") || event.priority >= 80) MarksyTheme.BadgeUrgentBg else MarksyTheme.BadgeTradingBg
-        )
+        event.isTrading || src.contains("zerodha") || src.contains("groww") || src.contains("upstox") -> {
+            val urgent = title.contains("breakout") || event.priority >= 80
+            SourceStyle(
+                icon = Icons.Default.ShowChart,
+                iconBg = Color(0xFFC62828),
+                pillLabel = if (urgent) "Urgent" else "Trading",
+                pillText = if (urgent) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
+                pillIcon = if (urgent) Icons.Default.PriorityHigh else Icons.Default.TrendingUp
+            )
+        }
         src.contains("whatsapp") -> SourceStyle(
             icon = Icons.Default.Chat,
             iconBg = Color(0xFF2E7D32),
             pillLabel = "Grouped",
             pillText = MarksyTheme.PrimaryEmerald,
-            pillBg = MarksyTheme.BadgeTradingBg
+            pillIcon = Icons.Default.Forum
         )
         src.contains("gmail") || src.contains("mail") || category == "WORK" -> SourceStyle(
             icon = Icons.Default.Email,
             iconBg = Color(0xFF1565C0),
             pillLabel = "Important",
             pillText = MarksyTheme.YellowImportant,
-            pillBg = MarksyTheme.BadgeImportantBg
+            pillIcon = Icons.Default.Star
         )
         src.contains("icici") || src.contains("bank") || src.contains("upi") || category == "PAYMENTS" || category == "BANKING" -> SourceStyle(
             icon = Icons.Default.AccountBalance,
             iconBg = Color(0xFF0288D1),
             pillLabel = "Finance",
             pillText = MarksyTheme.BlueFinance,
-            pillBg = MarksyTheme.BadgeFinanceBg
+            pillIcon = Icons.Default.AccountBalanceWallet
         )
         src.contains("swiggy") || src.contains("zomato") || category == "DELIVERY" -> SourceStyle(
             icon = Icons.Default.LocalShipping,
             iconBg = Color(0xFFE65100),
             pillLabel = "Delivery",
             pillText = MarksyTheme.OrangeDelivery,
-            pillBg = MarksyTheme.BadgeDeliveryBg
+            pillIcon = Icons.Default.LocalShipping
         )
-        else -> SourceStyle(
-            icon = Icons.Default.Notifications,
-            iconBg = Color(0xFF37474F),
-            pillLabel = if (event.priority >= 70) "Priority" else "Notice",
-            pillText = if (event.priority >= 70) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-            pillBg = MarksyTheme.SurfaceRaised
-        )
+        else -> {
+            val priority = event.priority >= 70
+            SourceStyle(
+                icon = Icons.Default.Notifications,
+                iconBg = Color(0xFF37474F),
+                pillLabel = if (priority) "Priority" else "Notice",
+                pillText = if (priority) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+                pillIcon = if (priority) Icons.Default.ArrowUpward else Icons.Default.Info
+            )
+        }
     }
 }
 
