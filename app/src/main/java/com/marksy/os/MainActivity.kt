@@ -198,6 +198,7 @@ class MainActivity : ComponentActivity() {
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
                     onFilterSelected = { inboxFilterName = it },
+                    learningProfile = learningProfile,
                     actions = remember(vm) {
                         InboxActions(
                             markSeen = vm::markThreadSeen,

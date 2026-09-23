@@ -43,7 +43,8 @@ fun SmartInboxScreen(
     onEventSelected: (NotificationEventEntity) -> Unit,
     selectedFilterName: String,
     onFilterSelected: (String) -> Unit,
-    actions: InboxActions = InboxActions()
+    actions: InboxActions = InboxActions(),
+    learningProfile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var actionThreadKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -58,8 +59,8 @@ fun SmartInboxScreen(
             value = System.currentTimeMillis()
         }
     }
-    val inbox = remember(events, filter, searchQuery, now) {
-        SmartInboxModel.inbox(events, filter, searchQuery, now)
+    val inbox = remember(events, filter, searchQuery, now, learningProfile) {
+        SmartInboxModel.inbox(events, filter, searchQuery, now, learningProfile)
     }
 
     Column(

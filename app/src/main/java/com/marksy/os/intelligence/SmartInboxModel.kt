@@ -93,7 +93,8 @@ object SmartInboxModel {
         val duplicates: List<NotificationEventEntity>,
         val bucket: Bucket,
         val attentionScore: Int,
-        val why: List<String>
+        val why: List<String>,
+        val prediction: AdaptiveRanker.Prediction = AdaptiveRanker.Prediction.UNCERTAIN
     ) {
         val latest: NotificationEventEntity get() = events.first()
         val count: Int get() = events.size
@@ -111,7 +112,9 @@ object SmartInboxModel {
         events: List<NotificationEventEntity>,
         filter: Filter = Filter.ALL,
         query: String = "",
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        profile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY,
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
     ): Inbox {
         val active = filter(events, filter)
         val (snoozed, visible) = active.partition { (it.snoozedUntil ?: 0L) > nowMillis }
@@ -121,10 +124,12 @@ object SmartInboxModel {
         // A duplicate is only folded when its canonical is on screen; otherwise it stands in for it.
         val (dupes, canonical) = matched.partition { d -> d.duplicateOfId != null && d.duplicateOfId in ids }
         val dupesByCanonical = dupes.groupBy { it.duplicateOfId!! }
+        // Context from the whole unfiltered feed: fatigue is about how much a source sends, not what matches a filter.
+        val ctx = AdaptiveRanker.Context.from(events.filterNot { it.archived }, nowMillis, profile, zone)
 
         val threads = canonical
             .groupBy { EventIntelligence.threadKey(it) }
-            .map { (key, group) -> buildThread(key, group.sortedByDescending { it.postedAt }, dupesByCanonical, nowMillis) }
+            .map { (key, group) -> buildThread(key, group.sortedByDescending { it.postedAt }, dupesByCanonical, ctx) }
             .sortedWith(compareByDescending<InboxThread> { it.attentionScore }.thenByDescending { it.latest.postedAt })
 
         val sections = Bucket.entries.associateWith { b -> threads.filter { it.bucket == b } }
@@ -136,13 +141,13 @@ object SmartInboxModel {
         key: String,
         events: List<NotificationEventEntity>,
         dupesByCanonical: Map<Long, List<NotificationEventEntity>>,
-        nowMillis: Long
+        ctx: AdaptiveRanker.Context
     ): InboxThread {
-        val analyses = events.map { EventIntelligence.analyze(it, nowMillis) }
-        val top = analyses.maxBy { it.attentionScore }
+        val ranked = events.map { AdaptiveRanker.rank(it, ctx) }
+        val top = ranked.maxBy { it.score }
         val topEvent = events.first { it.id == top.eventId }
         val duplicates = events.flatMap { dupesByCanonical[it.id].orEmpty() }
-        val (bucket, bucketReason) = bucketFor(events, top.attentionScore, nowMillis)
+        val (bucket, bucketReason) = bucketFor(events, top.score, ctx.nowMillis)
 
         val why = buildList {
             add(bucketReason)
@@ -152,7 +157,7 @@ object SmartInboxModel {
             if (duplicates.isNotEmpty()) add("Same item also reported by ${duplicates.map { it.sourceName }.distinct().joinToString()}")
             topEvent.lifecycleReason?.let(::add)
         }.distinct()
-        return InboxThread(key, events, duplicates, bucket, top.attentionScore, why)
+        return InboxThread(key, events, duplicates, bucket, top.score, why, top.prediction)
     }
 
     /** Deterministic bucket; the returned string is shown verbatim in "Why am I seeing this?". */
