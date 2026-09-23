@@ -117,4 +117,25 @@ class NotificationTextExtractorTest {
         assertTrue(result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT - 1}"))
         assertTrue(!result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT}"))
     }
+
+    // Expanded content: chat history (MessagingStyle) is hidden behind the one-line summary.
+    @Test
+    fun includesMessagingStyleHistoryWithSenders() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "Family Group")
+            putCharSequence("android.text", "See you at 8")
+            putParcelableArray("android.messages", arrayOf(
+                Bundle().apply { putCharSequence("sender", "Mom"); putCharSequence("text", "Dinner tonight?") },
+                Bundle().apply { putCharSequence("sender", "Dad"); putCharSequence("text", "See you at 8") }
+            ))
+        }
+
+        assertEquals("Mom: Dinner tonight?\nDad: See you at 8", NotificationTextExtractor.extract(extras))
+    }
+
+    @Test
+    fun mergeKeepsEarlierLinesAndAppendsOnlyNewOnes() {
+        assertEquals("A\nB\nC", NotificationTextExtractor.merge("A\nB", "B\nC"))
+        assertEquals("A\nB", NotificationTextExtractor.merge("A\nB", "A"))
+    }
 }

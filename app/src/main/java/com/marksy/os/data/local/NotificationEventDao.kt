@@ -42,6 +42,12 @@ interface NotificationEventDao {
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?
 
+    @Query("SELECT * FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
+    suspend fun findBySourceKey(sourcePackage: String, sourceKey: String): NotificationEventEntity?
+
+    @Query("UPDATE notification_events SET title = :title, body = :body, postedAt = :postedAt WHERE id = :eventId")
+    suspend fun updateContent(eventId: Long, title: String, body: String, postedAt: Long): Int
+
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND eventFingerprint = :eventFingerprint LIMIT 1")
     suspend fun findIdByFingerprint(sourcePackage: String, eventFingerprint: String): Long?
 

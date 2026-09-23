@@ -8,6 +8,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Package visibility for "Open in <app>": launcher apps only, not QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MarksyOsApplication"
         android:allowBackup="false"
@@ -29,6 +37,14 @@
             android:name=".notification.WhatsAppSettingsActivity"
             android:exported="true"
             android:label="WhatsApp Connector Settings" />
+
+        <receiver
+            android:name=".notification.ListenerRebindReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".notification.MarksyNotificationListenerService"

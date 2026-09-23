@@ -47,6 +47,7 @@ import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.delay
 import com.marksy.os.intelligence.SmartInboxModel
+import com.marksy.os.notification.MarksyNotificationListenerService
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
@@ -83,6 +84,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
+        // Reinstalls/updates can leave access granted but the listener unbound.
+        if (notificationAccessEnabled) MarksyNotificationListenerService.requestRebind(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
     }
 
