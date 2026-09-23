@@ -35,14 +35,15 @@ fun TimelineScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Column {
-                Text("Today's Timeline", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Wed, 11 Sep", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-            }
+            Text(
+                "Today · " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", java.util.Locale.getDefault())),
+                color = MarksyTheme.TextSecondary,
+                fontSize = 13.sp
+            )
         }
 
         // Demo timeline items matching the design mockups if events are few

@@ -33,7 +33,7 @@ fun DailyDigestScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -42,10 +42,11 @@ fun DailyDigestScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("Daily Digest", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Text("Today • 11 Sep", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                }
+                Text(
+                    "Today • " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault())),
+                    color = MarksyTheme.TextSecondary,
+                    fontSize = 13.sp
+                )
                 Box(
                     modifier = Modifier
                         .size(36.dp)

@@ -38,9 +38,11 @@ fun DashboardScreen(
     onCategorySelected: (String) -> Unit = {},
     onOpenTimeline: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
+    onOpenInsights: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
+    val greeting = remember { greetingFor(java.time.LocalTime.now().hour) }
 
     LazyColumn(
         modifier = modifier.background(MarksyTheme.Background),
@@ -173,18 +175,18 @@ fun DashboardScreen(
                                     .background(Color(0xFF2B2200)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("☀️", fontSize = 14.sp)
+                                Text(greeting.emoji, fontSize = 14.sp)
                             }
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    "Good Morning",
+                                    greeting.title,
                                     color = MarksyTheme.TextPrimary,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Let's make it a productive day!",
+                                    greeting.subtitle,
                                     color = MarksyTheme.TextSecondary,
                                     fontSize = 12.sp
                                 )
@@ -250,6 +252,7 @@ fun DashboardScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
                     QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
+                    QuickAccessButton("Insights", Icons.Default.Insights, onOpenInsights, Modifier.weight(1f))
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -374,6 +377,14 @@ fun DashboardScreen(
     }
 }
 
+private data class Greeting(val title: String, val subtitle: String, val emoji: String)
+
+private fun greetingFor(hour: Int): Greeting = when (hour) {
+    in 5..11 -> Greeting("Good Morning", "Let's make it a productive day!", "☀️")
+    in 12..16 -> Greeting("Good Afternoon", "Keep the momentum going.", "🌤️")
+    else -> Greeting("Good Evening", "Here's how your day went.", "🌙")
+}
+
 @Composable
 private fun CategoryGridCard(
     title: String,
@@ -399,16 +410,16 @@ private fun CategoryGridCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(22.dp)
                         .clip(CircleShape)
                         .background(bgColor),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(16.dp))
+                    Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(13.dp))
                 }
-                Text("$count", color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("$count", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Text(title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -424,13 +435,13 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
         modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(label, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

@@ -41,13 +41,11 @@ fun RulesScreen(padding: PaddingValues) {
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Column {
-                Text("Rules & Automation", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
                 Text("Create custom rules to filter, group and route notifications. Let Marksy work for you.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
             }
         }

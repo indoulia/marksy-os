@@ -133,37 +133,40 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             containerColor = MarksyTheme.Background,
             bottomBar = {
-                if (!showTimeline && !showCalendar && !showInsights && !showRules && !showDigest && !showGatewaySettings) {
-                    NavigationBar(
-                        containerColor = MarksyTheme.Surface,
-                        contentColor = MarksyTheme.TextSecondary
-                    ) {
-                        tabs.forEachIndexed { index, (label, icon) ->
-                            NavigationBarItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { Icon(icon, contentDescription = label) },
-                                label = { Text(label, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color.Black,
-                                    selectedTextColor = MarksyTheme.PrimaryEmerald,
-                                    indicatorColor = MarksyTheme.PrimaryEmerald,
-                                    unselectedIconColor = MarksyTheme.TextMuted,
-                                    unselectedTextColor = MarksyTheme.TextMuted
-                                )
+                NavigationBar(
+                    containerColor = MarksyTheme.Surface,
+                    contentColor = MarksyTheme.TextSecondary
+                ) {
+                    tabs.forEachIndexed { index, (label, icon) ->
+                        NavigationBarItem(
+                            selected = selectedTab == index,
+                            onClick = {
+                                // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
+                                showTimeline = false; showCalendar = false; showInsights = false
+                                showRules = false; showDigest = false; showGatewaySettings = false
+                                selectedTab = index
+                            },
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color.Black,
+                                selectedTextColor = MarksyTheme.PrimaryEmerald,
+                                indicatorColor = MarksyTheme.PrimaryEmerald,
+                                unselectedIconColor = MarksyTheme.TextMuted,
+                                unselectedTextColor = MarksyTheme.TextMuted
                             )
-                        }
+                        )
                     }
                 }
             }
         ) { padding ->
             when {
-                showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }
-                showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
-                showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
-                showRules -> RulesHost(padding) { showRules = false }
-                showDigest -> DigestHost(events, padding) { showDigest = false }
-                showGatewaySettings -> GatewaySettingsHost(padding) { showGatewaySettings = false }
+                showTimeline -> TimelineHost(timelineEvents, padding, openEvent)
+                showCalendar -> CalendarHost(historyEvents, padding, openEvent)
+                showInsights -> InsightsHost(historyEvents, padding)
+                showRules -> RulesHost(padding)
+                showDigest -> DigestHost(events, padding)
+                showGatewaySettings -> GatewaySettingsHost(padding)
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = snapshot,
                     events = events,
@@ -171,6 +174,7 @@ class MainActivity : ComponentActivity() {
                     onCategorySelected = openCategory,
                     onOpenTimeline = { showTimeline = true },
                     onOpenCalendar = { showCalendar = true },
+                    onOpenInsights = { showInsights = true },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
@@ -218,7 +222,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun GatewaySettingsHost(padding: PaddingValues, onBack: () -> Unit) {
+@Composable private fun GatewaySettingsHost(padding: PaddingValues) {
     val store = remember { SecureCredentialStore(AppContext.get()) }
     var key by rememberSaveable { mutableStateOf("") }
     var baseUrl by rememberSaveable { mutableStateOf(store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL) }
@@ -240,7 +244,7 @@ class MainActivity : ComponentActivity() {
     }
 
     Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
-        ScreenHeader("Marksy Gateway", onBack)
+        ScreenHeader("Marksy Gateway")
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (configured) "Gateway configured" else "Gateway not configured", color = if (configured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold)
             Text("Scan the QR code from the Marksy admin, or enter the values manually. The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
@@ -331,17 +335,15 @@ class MainActivity : ComponentActivity() {
     unfocusedContainerColor = MarksyTheme.Surface
 )
 
-@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) } }
-@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
-@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights", onBack); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun RulesHost(padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest", onBack); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline"); TimelineScreen(events, PaddingValues(), onEventSelected) } }
+@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
+@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights"); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun RulesHost(padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation"); RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest"); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
 
-@Composable private fun ScreenHeader(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = MarksyTheme.TextPrimary) }
-        Text(title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    }
+@Composable private fun ScreenHeader(title: String) {
+    // Same title style as the tab screens (Inbox, Trading); navigation is via the bottom bar and system back.
+    Text(title, color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp))
 }
 
 @Composable private fun MoreScreen(
@@ -370,7 +372,7 @@ class MainActivity : ComponentActivity() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("More & Settings", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("More & Settings", color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
         }

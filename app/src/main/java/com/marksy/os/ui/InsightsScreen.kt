@@ -32,12 +32,10 @@ fun InsightsScreen(events: List<NotificationEventEntity>, padding: PaddingValues
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Insights", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Today", "This Week", "This Month").forEach { period ->
                     val isSelected = period == selectedPeriod
