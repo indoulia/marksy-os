@@ -9,6 +9,7 @@ import kotlin.math.roundToInt
 data class NotificationTrend(
     val today: Int,
     val yesterdaySoFar: Int,
+    val yesterdayTotal: Int,
     /** Oldest → today. */
     val lastSevenDays: List<Int>,
     val total: Int
@@ -28,6 +29,7 @@ data class NotificationTrend(
             return NotificationTrend(
                 today = byDay[todayDate] ?: 0,
                 yesterdaySoFar = postedAt.count { it in yesterdayStart..yesterdayCutoff },
+                yesterdayTotal = byDay[todayDate.minusDays(1)] ?: 0,
                 lastSevenDays = (6 downTo 0).map { byDay[todayDate.minusDays(it.toLong())] ?: 0 },
                 total = postedAt.size
             )

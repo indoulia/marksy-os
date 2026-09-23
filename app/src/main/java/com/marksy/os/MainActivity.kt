@@ -42,6 +42,9 @@ import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.NotificationTrend
+import com.marksy.os.ui.SecondZonePickerDialog
+import com.marksy.os.ui.WorldClock
+import com.marksy.os.ui.WorldClockSettings
 import com.marksy.os.weather.Weather
 import com.marksy.os.weather.WeatherRepository
 import android.Manifest
@@ -116,7 +119,7 @@ class MainActivity : ComponentActivity() {
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
-        val trend by vm.notificationTrend.collectAsStateWithLifecycle(initialValue = NotificationTrend(0, 0, List(7) { 0 }, 0))
+        val trend by vm.notificationTrend.collectAsStateWithLifecycle(initialValue = NotificationTrend(0, 0, 0, List(7) { 0 }, 0))
         val categoryStats by vm.homeCategoryStats.collectAsStateWithLifecycle(initialValue = emptyMap())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -453,6 +456,7 @@ class MainActivity : ComponentActivity() {
     padding: PaddingValues
 ) {
     var showClear by remember { mutableStateOf(false) }
+    var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val store = remember { SecureCredentialStore(AppContext.get()) }
@@ -503,11 +507,18 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black, fontSize = 12.sp) } } }
+        item {
+            val zone by WorldClockSettings.secondZone
+            SettingsCard("World clock", WorldClock.abbreviation(java.time.ZonedDateTime.now(zone)), "Home shows IST and ${WorldClock.cityName(zone)}. Tap the clocks to convert meeting times.") {
+                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showZonePicker = true }, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Change Second Clock", color = Color.Black, fontSize = 12.sp) }
+            }
+        }
         item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
     }
+    if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
     if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll(); gatewayConfigured = store.getIntegrationKey() != null } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }, containerColor = MarksyTheme.SurfaceRaised)
 }
 

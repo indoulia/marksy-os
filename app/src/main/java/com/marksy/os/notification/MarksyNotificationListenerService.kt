@@ -102,10 +102,12 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
 
-                try {
-                    cancelNotification(sbn.key)
-                } catch (_: SecurityException) {
-                    Log.w(TAG, "Unable to cancel notification")
+                if (DISMISS_AFTER_CAPTURE) {
+                    try {
+                        cancelNotification(sbn.key)
+                    } catch (_: SecurityException) {
+                        Log.w(TAG, "Unable to cancel notification")
+                    }
                 }
             } catch (_: Exception) {
                 Log.e(TAG, "Failed to persist notification event")
@@ -129,6 +131,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "MarksyNotificationListener"
+        // Off for now: captured notifications stay in the system shade (user request 2026-09-24).
+        private const val DISMISS_AFTER_CAPTURE = false
 
         /** Safe to call any time; the system ignores it when access is off or already bound. */
         fun requestRebind(context: Context) {

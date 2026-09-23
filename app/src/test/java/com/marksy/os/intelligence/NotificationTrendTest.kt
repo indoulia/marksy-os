@@ -35,6 +35,14 @@ class NotificationTrendTest {
     }
 
     @Test
+    fun justAfterMidnightStillKnowsYesterdaysFullTotal() {
+        val earlyMorning = LocalDateTime.of(2026, 9, 23, 0, 25).toInstant(zone).toEpochMilli()
+        val trend = NotificationTrend.from(listOf(event(at(22, 9)), event(at(22, 20)), event(at(23, 0))), earlyMorning, zone)
+        assertNull(trend.changeVsYesterdayPercent)  // nothing yet in yesterday's first 25 minutes
+        assertEquals(2, trend.yesterdayTotal)
+    }
+
+    @Test
     fun noComparisonWhenYesterdayWasEmpty() {
         val trend = NotificationTrend.from(listOf(event(at(23, 9))), now, zone)
         assertNull(trend.changeVsYesterdayPercent)

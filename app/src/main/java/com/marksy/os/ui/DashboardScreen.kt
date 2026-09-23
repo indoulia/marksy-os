@@ -45,7 +45,7 @@ fun DashboardScreen(
     onOpenTimeline: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
-    trend: NotificationTrend = NotificationTrend(0, 0, List(7) { 0 }, 0),
+    trend: NotificationTrend = NotificationTrend(0, 0, 0, List(7) { 0 }, 0),
     categoryStats: Map<HomePeriod, HomeCategoryStats> = emptyMap(),
     weather: Weather? = null,
     weatherAvailable: Boolean = false,
@@ -215,6 +215,8 @@ fun DashboardScreen(
                                     when {
                                         selectedTimeFilter == "This Week" -> "Last 7 days"
                                         !today -> "All retained history"
+                                        // Just after midnight the same-time window is empty; show yesterday's full count instead.
+                                        change == null && trend.yesterdayTotal > 0 -> "${trend.yesterdayTotal} yesterday"
                                         change == null -> "No data from yesterday yet"
                                         change > 0 -> "↗ +$change% vs yesterday"
                                         change < 0 -> "↘ $change% vs yesterday"
@@ -231,26 +233,7 @@ fun DashboardScreen(
                                 )
                             }
 
-                            // Mini Bar Sparkline
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.Bottom,
-                                modifier = Modifier.height(24.dp)
-                            ) {
-                                // Last 7 days, oldest → today; today's bar is highlighted.
-                                val peak = (trend.lastSevenDays.maxOrNull() ?: 0).coerceAtLeast(1)
-                                trend.lastSevenDays.forEachIndexed { index, count ->
-                                    Box(
-                                        modifier = Modifier
-                                            .width(5.dp)
-                                            .height((4 + 20f * count / peak).dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(
-                                                if (index == trend.lastSevenDays.lastIndex) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow
-                                            )
-                                    )
-                                }
-                            }
+                            WorldClockPair()
                         }
                     }
                 }

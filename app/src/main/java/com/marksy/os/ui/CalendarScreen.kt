@@ -7,6 +7,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
@@ -129,7 +131,18 @@ fun CalendarScreen(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text(if (selectedDay > 0) "$selectedDay ${month.month.name.lowercase().replaceFirstChar { it.uppercase() }}" else "Select a day", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (selectedDay > 0) "$selectedDay ${month.month.name.lowercase().replaceFirstChar { it.uppercase() }}" else "Select a day", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            if (selectedDay > 0) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "${selectedEvents.size} ${if (selectedEvents.size == 1) "message" else "messages"}",
+                    color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Raised)
+                        .border(1.dp, Primary, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         if (selectedDay <= 0) {
             Text("Tap any marked day to inspect its notifications.", color = TextSecondary, fontSize = 13.sp)
