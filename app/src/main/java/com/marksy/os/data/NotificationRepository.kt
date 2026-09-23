@@ -2,6 +2,7 @@ package com.marksy.os.data
 
 import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.EventLifecycle
 import kotlinx.coroutines.flow.Flow
 
 class NotificationRepository(private val dao: NotificationEventDao) {
@@ -27,6 +28,10 @@ class NotificationRepository(private val dao: NotificationEventDao) {
     suspend fun archive(eventId: Long): Boolean = dao.setArchived(eventId, true) > 0
 
     suspend fun unarchive(eventId: Long): Boolean = dao.setArchived(eventId, false) > 0
+
+    /** NEW -> ACTIVE once the user has opened the event; no-op for any other state. */
+    suspend fun markSeen(eventId: Long, nowMillis: Long = System.currentTimeMillis()): Boolean =
+        dao.transitionLifecycle(eventId, EventLifecycle.State.NEW.name, EventLifecycle.State.ACTIVE.name, null, nowMillis) > 0
 
     suspend fun clearAll() = dao.deleteAll()
 }

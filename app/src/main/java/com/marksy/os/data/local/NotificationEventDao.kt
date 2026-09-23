@@ -65,11 +65,52 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE deliveryState = 'IN_FLIGHT' AND lastDeliveryAttemptAt < :cutoff")
     suspend fun recoverStaleInFlight(cutoff: Long): Int
 
-    @Query("UPDATE notification_events SET archived = :archived WHERE id = :eventId")
-    suspend fun setArchived(eventId: Long, archived: Boolean): Int
+    // Lifecycle mirrors the legacy archived flag so both stay consistent (EPIC-010).
+    @Query("UPDATE notification_events SET archived = :archived, lifecycleState = CASE WHEN :archived THEN 'ARCHIVED' ELSE 'ACTIVE' END, lifecycleUpdatedAt = :atMillis, lifecycleReason = NULL WHERE id = :eventId")
+    suspend fun setArchived(eventId: Long, archived: Boolean, atMillis: Long = System.currentTimeMillis()): Int
 
-    @Query("UPDATE notification_events SET archived = :archived WHERE isTrading = :isTrading AND postedAt < :beforeMillis AND deliveryState != 'IN_FLIGHT'")
+    @Query("UPDATE notification_events SET archived = :archived, lifecycleState = CASE WHEN :archived THEN 'ARCHIVED' ELSE 'ACTIVE' END WHERE isTrading = :isTrading AND postedAt < :beforeMillis AND deliveryState != 'IN_FLIGHT'")
     suspend fun setArchivedForType(isTrading: Boolean, beforeMillis: Long, archived: Boolean): Int
+
+    // ---- EPIC-010 event intelligence ----
+
+    @Query("SELECT * FROM notification_events WHERE id = :eventId")
+    suspend fun getById(eventId: Long): NotificationEventEntity?
+
+    /** Rows whose derived intelligence is missing or from an older pipeline version, oldest first. */
+    @Query("SELECT * FROM notification_events WHERE intelligenceVersion < :version ORDER BY postedAt ASC, id ASC LIMIT :limit")
+    suspend fun findNeedingIntelligence(version: Int, limit: Int): List<NotificationEventEntity>
+
+    /** Earliest canonical (non-duplicate) event sharing a correlation key inside the window. */
+    @Query("SELECT id FROM notification_events WHERE correlationKey = :correlationKey AND id != :excludeId AND duplicateOfId IS NULL AND isTrading = 0 AND postedAt BETWEEN :fromMillis AND :toMillis AND (:otherSourceOnly = 0 OR sourcePackage != :sourcePackage) ORDER BY postedAt ASC, id ASC LIMIT 1")
+    suspend fun findCorrelatedCanonical(
+        correlationKey: String,
+        excludeId: Long,
+        fromMillis: Long,
+        toMillis: Long,
+        sourcePackage: String,
+        otherSourceOnly: Boolean
+    ): Long?
+
+    @Query("UPDATE notification_events SET importanceScore = :importance, intelligenceConfidence = :confidence, threadKey = :threadKey, correlationKey = :correlationKey, duplicateOfId = :duplicateOfId, intelligenceJson = :json, intelligenceVersion = :version WHERE id = :eventId")
+    suspend fun updateIntelligence(
+        eventId: Long,
+        importance: Int,
+        confidence: Float,
+        threadKey: String,
+        correlationKey: String?,
+        duplicateOfId: Long?,
+        json: String,
+        version: Int
+    ): Int
+
+    /** Auto-resolves still-open earlier events of a thread once a later event says the item is done. */
+    @Query("UPDATE notification_events SET lifecycleState = 'RESOLVED', lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason WHERE threadKey = :threadKey AND id != :excludeId AND postedAt <= :upToMillis AND lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0")
+    suspend fun resolveOpenInThread(threadKey: String, excludeId: Long, upToMillis: Long, reason: String, atMillis: Long): Int
+
+    /** Conditional so a stale caller can never move an event backwards (e.g. ARCHIVED -> ACTIVE). */
+    @Query("UPDATE notification_events SET lifecycleState = :to, lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason WHERE id = :eventId AND lifecycleState = :from AND archived = 0")
+    suspend fun transitionLifecycle(eventId: Long, from: String, to: String, reason: String?, atMillis: Long): Int
 
     @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
     suspend fun deleteOldNonTrading(cutoff: Long): Int

@@ -43,6 +43,7 @@ import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
+import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InsightsScreen
 import com.marksy.os.ui.MarksyTheme
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
+        EventIntelligenceWorker.schedule(applicationContext)
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { MarksyApp() }
@@ -198,6 +200,7 @@ class MainActivity : ComponentActivity() {
         }
 
         selectedEvent?.let { event ->
+            LaunchedEffect(event.id) { vm.markSeen(event.id) }
             EventDetailDialog(
                 event = event,
                 onArchive = { vm.archive(event.id); selectedEvent = null },

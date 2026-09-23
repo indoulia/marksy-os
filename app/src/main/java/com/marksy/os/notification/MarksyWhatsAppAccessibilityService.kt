@@ -6,6 +6,8 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.marksy.os.intelligence.EventIntelligencePipeline
+import com.marksy.os.intelligence.EventIntelligenceWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -82,7 +84,7 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
                 // those callbacks one stable source key; check it before insert.
                 if (dao.findIdBySourceKey(sourcePackage, sourceKey) != null) return@runCatching
 
-                dao.insert(
+                val insertedId = dao.insert(
                     NotificationEventEntity(
                         sourcePackage = sourcePackage,
                         sourceName = SourceRegistry.displayName(applicationContext, sourcePackage),
@@ -99,6 +101,10 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
                         else DeliveryState.NOT_APPLICABLE.name
                     )
                 )
+                if (insertedId != -1L) {
+                    runCatching { EventIntelligencePipeline(dao).process(insertedId) }
+                        .onFailure { EventIntelligenceWorker.schedule(applicationContext) }
+                }
                 if (isTrading && isActive) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }

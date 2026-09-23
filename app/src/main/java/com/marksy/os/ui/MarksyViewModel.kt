@@ -41,6 +41,10 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
         viewModelScope.launch { repository.archive(eventId) }
     }
 
+    fun markSeen(eventId: Long) {
+        viewModelScope.launch { repository.markSeen(eventId) }
+    }
+
     fun unarchive(eventId: Long) {
         viewModelScope.launch { repository.unarchive(eventId) }
     }

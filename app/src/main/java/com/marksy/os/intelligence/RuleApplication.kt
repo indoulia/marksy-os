@@ -17,6 +17,7 @@ object RuleApplication {
             event = event.copy(
                 priority = evaluation.priority,
                 archived = archived,
+                lifecycleState = if (archived) EventLifecycle.State.ARCHIVED.name else event.lifecycleState,
             ),
             evaluation = evaluation,
             archived = archived,

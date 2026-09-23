@@ -8,6 +8,8 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.marksy.os.intelligence.EventIntelligencePipeline
+import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.RuleApplication
 import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.CoroutineScope
@@ -20,11 +22,13 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
     private val ruleStore by lazy { RuleStore(applicationContext) }
+    private val pipeline by lazy { EventIntelligencePipeline(dao) }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
+        EventIntelligenceWorker.schedule(applicationContext)
         Log.i(TAG, "Notification listener connected; background work scheduled")
     }
 
@@ -82,6 +86,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                 if (insertedId != -1L && isTrading && !applied.archived) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
+                if (insertedId != -1L) processIntelligence(insertedId)
 
                 try {
                     cancelNotification(sbn.key)
@@ -91,6 +96,17 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             } catch (_: Exception) {
                 Log.e(TAG, "Failed to persist notification event")
             }
+        }
+    }
+
+    // Inline so surfaces update immediately; on failure the row stays at version 0 for the backfill worker.
+    private suspend fun processIntelligence(eventId: Long) {
+        try {
+            pipeline.process(eventId)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w(TAG, "Event intelligence deferred to backfill")
+            EventIntelligenceWorker.schedule(applicationContext)
         }
     }
 

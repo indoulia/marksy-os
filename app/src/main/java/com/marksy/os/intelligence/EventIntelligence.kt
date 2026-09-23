@@ -19,7 +19,16 @@ object EventIntelligence {
         val reasons: List<String>
     )
 
-    fun analyze(event: NotificationEventEntity, nowMillis: Long = System.currentTimeMillis()): Result {
+    fun analyze(event: NotificationEventEntity, nowMillis: Long = System.currentTimeMillis()): Result =
+        score(event, nowMillis)
+
+    /**
+     * Time-independent importance persisted by the EPIC-010 pipeline. Identical to [analyze]
+     * minus the age-based adjustments, so a stored score never silently decays or inflates.
+     */
+    fun importance(event: NotificationEventEntity): Result = score(event, nowMillis = null)
+
+    private fun score(event: NotificationEventEntity, nowMillis: Long?): Result {
         var score = event.priority.coerceIn(0, 100)
         val reasons = mutableListOf<String>()
 
@@ -45,8 +54,8 @@ object EventIntelligence {
             }
         }
 
-        val age = (nowMillis - event.postedAt).coerceAtLeast(0L)
-        when {
+        val age = nowMillis?.let { (it - event.postedAt).coerceAtLeast(0L) }
+        if (age != null) when {
             age <= FRESH_WINDOW_MS -> {
                 score += 5
                 reasons += "Recent"
@@ -84,7 +93,11 @@ object EventIntelligence {
         else -> AttentionLevel.LOW
     }
 
-    private fun threadKey(event: NotificationEventEntity): String {
+    /** Prefers the pipeline's persisted (possibly cross-source) key; falls back to the V2 derivation. */
+    fun threadKey(event: NotificationEventEntity): String =
+        event.threadKey?.takeIf { it.isNotBlank() } ?: legacyThreadKey(event)
+
+    internal fun legacyThreadKey(event: NotificationEventEntity): String {
         val symbol = SYMBOL_PATTERN.findAll("${event.title} ${event.body}".uppercase(Locale.ROOT))
             .map { it.value }
             .firstOrNull { it !in NOISE_SYMBOLS }

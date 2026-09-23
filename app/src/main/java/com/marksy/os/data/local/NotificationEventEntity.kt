@@ -12,7 +12,11 @@ import androidx.room.PrimaryKey
         Index(value = ["category"]),
         Index(value = ["postedAt"]),
         Index(value = ["deliveryState"]),
-        Index(value = ["archived"])
+        Index(value = ["archived"]),
+        Index(value = ["threadKey"]),
+        Index(value = ["correlationKey"]),
+        Index(value = ["lifecycleState"]),
+        Index(value = ["intelligenceVersion"])
     ]
 )
 data class NotificationEventEntity(
@@ -40,7 +44,23 @@ data class NotificationEventEntity(
     val marksyResponseJson: String? = null,
     /** True when the user has archived the event from active surfaces. */
     val archived: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    // EPIC-010 derived intelligence. Written only by EventIntelligencePipeline; raw capture fields above stay authoritative.
+    /** EventLifecycle.State name. Rows from before v3 migrate to ACTIVE/ARCHIVED. */
+    val lifecycleState: String = "NEW",
+    val lifecycleUpdatedAt: Long? = null,
+    /** Why the lifecycle last changed automatically (e.g. resolved by a later event), for explainability. */
+    val lifecycleReason: String? = null,
+    val importanceScore: Int = 0,
+    val intelligenceConfidence: Float = 0f,
+    val threadKey: String? = null,
+    val correlationKey: String? = null,
+    /** Canonical event this one duplicates (cross-source); the row is kept, only collapsed on surfaces. */
+    val duplicateOfId: Long? = null,
+    /** Bounded JSON: extracted entities/amounts/references/times and explanation reasons. */
+    val intelligenceJson: String? = null,
+    /** 0 = not yet processed; bumping EventIntelligencePipeline.VERSION triggers a background re-derive. */
+    val intelligenceVersion: Int = 0
 )
 
 enum class DeliveryState {
