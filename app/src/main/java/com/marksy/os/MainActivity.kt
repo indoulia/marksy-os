@@ -33,6 +33,8 @@ import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.GatewayQrParser
+import com.marksy.os.gateway.MarketRepository
+import com.marksy.os.gateway.MarketState
 import com.marksy.os.gateway.SecureCredentialStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.journeyapps.barcodescanner.ScanContract
@@ -54,6 +56,7 @@ import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.CompactTextField
+import com.marksy.os.ui.DailyDigestModel
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.ui.EventDetailDialog
@@ -114,6 +117,15 @@ class MainActivity : ComponentActivity() {
                 delay(30 * 60 * 1000L)
             }
         }
+
+        // Marksy snapshot refreshes while the app is open; screens show honest states when it is missing.
+        val market by produceState<MarketState>(MarketState.Loading) {
+            while (true) {
+                value = MarketRepository.fetch().let { fresh -> if (fresh is MarketState.Unavailable && value is MarketState.Loaded) value else fresh }
+                delay(5 * 60 * 1000L)
+            }
+        }
+        val todayDigest = remember(inboxEvents) { DailyDigestModel.build(inboxEvents) }
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
@@ -208,6 +220,9 @@ class MainActivity : ComponentActivity() {
                     weather = weather,
                     weatherAvailable = locationGranted,
                     onRequestWeather = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                    market = market,
+                    todayDigest = todayDigest,
+                    onOpenTrading = { selectedTab = 3 },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(

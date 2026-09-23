@@ -31,6 +31,10 @@ class MarksyTipsApiClient(
         }
     }
 
+    /** Blocking; call off the main thread. */
+    fun marketSnapshot(): MarketSnapshot =
+        MarketSnapshot.parse(execute("GET", "$apiBaseUrl/dashboard/snapshot?limit=10").getJSONObject("data"))
+
     private fun postTip(payload: MarksyTipPayload): CreatedTip {
         val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
         val tipId = data.optString("tipId").trim()

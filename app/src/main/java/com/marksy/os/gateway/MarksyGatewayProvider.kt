@@ -13,4 +13,7 @@ object MarksyGatewayProvider {
         return runCatching { MarksyTipsApiClient(key, baseUrl) as MarksyGatewayClient }
             .getOrElse { UnconfiguredMarksyGatewayClient() }
     }
+
+    /** Null until the gateway is provisioned; market data is read-only and optional. */
+    fun marketClient(): MarksyTipsApiClient? = client() as? MarksyTipsApiClient
 }

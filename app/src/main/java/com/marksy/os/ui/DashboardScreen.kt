@@ -1,5 +1,7 @@
 package com.marksy.os.ui
 
+import com.marksy.os.gateway.MarketState
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +50,9 @@ fun DashboardScreen(
     weather: Weather? = null,
     weatherAvailable: Boolean = false,
     onRequestWeather: () -> Unit = {},
+    market: MarketState = MarketState.Loading,
+    todayDigest: DailyDigest? = null,
+    onOpenTrading: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
@@ -361,12 +366,12 @@ fun DashboardScreen(
                 Spacer(Modifier.height(14.dp))
 
                 // Market Pulse Card
-                MarketPulseCard()
+                MarketPulseCard(market, todayDigest, onOpenTrading)
 
                 Spacer(Modifier.height(14.dp))
 
                 // AI Summary Card
-                AiSummaryBanner()
+                todayDigest?.let { AiSummaryBanner(HomeSummary.text(it, (market as? MarketState.Loaded)?.snapshot)) }
             }
         }
 
@@ -515,123 +520,122 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
 }
 
 @Composable
-private fun MarketPulseCard() {
+private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTrading: () -> Unit) {
+    val snapshot = (market as? MarketState.Loaded)?.snapshot
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onOpenTrading)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.TrendingUp,
-                        contentDescription = null,
-                        tint = MarksyTheme.PrimaryEmerald,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Market Pulse", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MarksyTheme.BadgeTradingBg)
-                        .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(MarksyTheme.PrimaryEmerald)
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text("LIVE", color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("NIFTY 50", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("25,143", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(6.dp))
-                        Text("+0.8%", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Column {
-                    Text("SENSEX", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("82,391", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(6.dp))
-                        Text("+0.7%", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+                snapshot?.marketStatus?.let { MarketStatusBadge(it) }
             }
 
             Spacer(Modifier.height(10.dp))
-            Divider(color = MarksyTheme.BorderGlow)
-            Spacer(Modifier.height(10.dp))
 
-            Text("3 new trading alerts • 12 other notifications", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            when {
+                snapshot != null && snapshot.indices.isNotEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    snapshot.indices.take(2).forEach { index ->
+                        Column {
+                            Text(index.name, color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(formatIndex(index.value), color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    formatChange(index.changePct),
+                                    color = if (index.changePct < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+                else -> Text(
+                    when (market) {
+                        MarketState.Loading -> "Loading market data…"
+                        MarketState.NotConfigured -> "Connect the Marksy gateway in Settings to see live indices."
+                        is MarketState.Unavailable -> "Market data unavailable right now."
+                        is MarketState.Loaded -> "No index data in the latest Marksy snapshot."
+                    },
+                    color = MarksyTheme.TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+
+            if (digest != null) {
+                Spacer(Modifier.height(10.dp))
+                HorizontalDivider(color = MarksyTheme.BorderGlow)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "${digest.tradingEvents.size} trading alerts • ${digest.totalNotifications - digest.tradingEvents.size} other notifications today",
+                    color = MarksyTheme.TextMuted,
+                    fontSize = 11.sp
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun AiSummaryBanner() {
+private fun MarketStatusBadge(status: String) {
+    val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true)
+    val tint = if (open) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (open) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
+            .border(1.dp, tint, RoundedCornerShape(12.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
+        Spacer(Modifier.width(5.dp))
+        Text(if (open) "LIVE" else status.uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun formatIndex(value: Double): String = String.format(java.util.Locale.getDefault(), "%,.0f", value)
+
+private fun formatChange(pct: Double): String = String.format(java.util.Locale.US, "%+.2f%%", pct)
+
+@Composable
+private fun AiSummaryBanner(summary: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        Color(0xFF0F261C),
-                        Color(0xFF0C1B13)
-                    )
-                )
-            )
+            .background(Brush.linearGradient(listOf(Color(0xFF0F261C), Color(0xFF0C1B13))))
             .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(MarksyTheme.BadgeTradingBg),
+                    modifier = Modifier.size(26.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MarksyTheme.PrimaryEmerald,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(15.dp))
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("AI Summary", color = MarksyTheme.PrimaryEmerald, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Reliance and ICICI Bank showed strong activity this morning. You have 2 important emails and 1 delivery arriving tomorrow.",
-                color = MarksyTheme.TextPrimary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
+            Spacer(Modifier.height(6.dp))
+            Text(summary, color = MarksyTheme.TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
         }
     }
 }
