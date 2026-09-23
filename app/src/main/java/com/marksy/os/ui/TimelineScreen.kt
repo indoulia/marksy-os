@@ -1,5 +1,7 @@
 package com.marksy.os.ui
 
+import com.marksy.os.EmptyState
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -46,78 +48,9 @@ fun TimelineScreen(
             )
         }
 
-        // Demo timeline items matching the design mockups if events are few
-        item {
-            TimelineNodeRow(
-                time = "09:15 AM",
-                title = "NIFTY Gap-Up Alert",
-                source = "Trading Agent",
-                icon = Icons.Default.ShowChart,
-                iconBg = Color(0xFFC62828),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "09:22 AM",
-                title = "16 WhatsApp messages",
-                source = "Family Group",
-                icon = Icons.Default.Chat,
-                iconBg = Color(0xFF2E7D32),
-                badge = "16"
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "10:01 AM",
-                title = "₹12,500 credited",
-                source = "ICICI Bank",
-                icon = Icons.Default.AccountBalance,
-                iconBg = Color(0xFF0288D1),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "10:15 AM",
-                title = "Reliance breakout",
-                source = "Trading Agent",
-                icon = Icons.Default.TrendingUp,
-                iconBg = Color(0xFFC62828),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "11:45 AM",
-                title = "AGM Mail Approved",
-                source = "Gmail",
-                icon = Icons.Default.Email,
-                iconBg = Color(0xFF1565C0),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "01:20 PM",
-                title = "Your order is out for delivery",
-                source = "Swiggy",
-                icon = Icons.Default.LocalShipping,
-                iconBg = Color(0xFFE65100),
-                badge = null
-            )
-        }
-
-        if (events.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(10.dp))
-                Text("Captured Events", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+        if (events.isEmpty()) {
+            item { EmptyState("Nothing here yet.", "Captured notifications will appear here, newest first.") }
+        } else {
             items(events, key = { it.id }) { event ->
                 TimelineNodeRow(
                     time = formatTimestamp(event.postedAt),

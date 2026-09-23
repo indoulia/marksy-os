@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val inboxEvents by vm.activeEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -204,7 +205,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
-                    events = events,
+                    events = inboxEvents,
                     padding = padding,
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
