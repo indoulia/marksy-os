@@ -228,18 +228,17 @@ private fun RuleEditorDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
+                CompactTextField(
                     value = name,
                     onValueChange = { name = it.take(60) },
-                    label = { Text("Rule name") },
-                    singleLine = true,
+                    label = "Rule name",
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
+                CompactTextField(
                     value = containsText,
                     onValueChange = { containsText = it.take(120) },
-                    label = { Text("Contains text (e.g. BUY, OTP)") },
-                    singleLine = true,
+                    label = "Contains text",
+                    placeholder = "e.g. BUY, OTP",
                     modifier = Modifier.fillMaxWidth()
                 )
             }

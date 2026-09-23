@@ -2,6 +2,7 @@ package com.marksy.os.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -28,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -104,12 +106,16 @@ fun EventDetailDialog(
                     Spacer(Modifier.width(6.dp))
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(32.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised)
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(20.dp))
                     }
                 }
-                Spacer(Modifier.height(8.dp))
+                SectionDivider()
                 Column(Modifier.weight(1f, fill = false).padding(end = 6.dp).verticalScroll(scrollState)) {
                     Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = DetailSecondary, fontSize = 13.sp)
                     if (actions.isNotEmpty()) {
@@ -128,7 +134,9 @@ fun EventDetailDialog(
                             }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                }
+                SectionDivider()
+                Column(Modifier.padding(end = 6.dp)) {
                     details.chunked(3).forEach { row ->
                         Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             row.forEach { (label, value) -> DetailCell(label, value, Modifier.weight(1f)) }
@@ -191,6 +199,11 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
         last = match.range.first + url.length
     }
     append(text.substring(last))
+}
+
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(Modifier.padding(end = 6.dp, top = 8.dp, bottom = 8.dp), thickness = 1.dp, color = MarksyTheme.BorderGlow)
 }
 
 @Composable

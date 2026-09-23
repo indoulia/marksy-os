@@ -94,31 +94,20 @@ fun SmartInboxScreen(
             Spacer(Modifier.height(12.dp))
 
             // Search Bar Input
-            OutlinedTextField(
+            CompactTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                placeholder = { Text("Search notifications...", color = MarksyTheme.TextMuted, fontSize = 13.sp) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MarksyTheme.TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(25.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MarksyTheme.Surface,
-                    unfocusedContainerColor = MarksyTheme.Surface,
-                    focusedBorderColor = MarksyTheme.PrimaryEmerald,
-                    unfocusedBorderColor = MarksyTheme.BorderGlow,
-                    focusedTextColor = MarksyTheme.TextPrimary,
-                    unfocusedTextColor = MarksyTheme.TextPrimary
-                )
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = "Search notifications...",
+                leadingIcon = Icons.Default.Search,
+                cornerRadius = 20.dp,
+                trailing = if (searchQuery.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                } else null
             )
 
             Spacer(Modifier.height(12.dp))

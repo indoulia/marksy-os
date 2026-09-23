@@ -53,6 +53,7 @@ import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
+import com.marksy.os.ui.CompactTextField
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.ui.EventDetailDialog
@@ -297,25 +298,21 @@ class MainActivity : ComponentActivity() {
                 Text("Scan QR code", color = MarksyTheme.PrimaryEmerald)
             }
 
-            OutlinedTextField(
+            CompactTextField(
                 value = baseUrl,
                 onValueChange = { baseUrl = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Base URL") },
-                singleLine = true,
-                colors = gatewayFieldColors()
+                label = "Base URL"
             )
-            OutlinedTextField(
+            CompactTextField(
                 value = key,
                 onValueChange = { key = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Integration key") },
-                singleLine = true,
+                label = "Integration key",
                 visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    TextButton(onClick = { revealKey = !revealKey }) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald) }
-                },
-                colors = gatewayFieldColors()
+                trailing = {
+                    TextButton(onClick = { revealKey = !revealKey }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+                }
             )
             Button(
                 onClick = {
@@ -352,20 +349,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-// Visible input colors: without these the field text renders in the default
-// on-surface color against the dark background and is effectively invisible.
-@Composable private fun gatewayFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = MarksyTheme.TextPrimary,
-    unfocusedTextColor = MarksyTheme.TextPrimary,
-    cursorColor = MarksyTheme.PrimaryEmerald,
-    focusedBorderColor = MarksyTheme.PrimaryEmerald,
-    unfocusedBorderColor = MarksyTheme.BorderGlow,
-    focusedLabelColor = MarksyTheme.PrimaryEmerald,
-    unfocusedLabelColor = MarksyTheme.TextSecondary,
-    focusedContainerColor = MarksyTheme.Surface,
-    unfocusedContainerColor = MarksyTheme.Surface
-)
 
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline"); TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
