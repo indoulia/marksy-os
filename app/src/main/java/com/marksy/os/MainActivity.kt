@@ -39,6 +39,13 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
+import com.marksy.os.intelligence.NotificationTrend
+import com.marksy.os.weather.Weather
+import com.marksy.os.weather.WeatherRepository
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.delay
 import com.marksy.os.intelligence.SmartInboxModel
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
@@ -90,7 +97,18 @@ class MainActivity : ComponentActivity() {
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val activePostedAt by vm.activePostedAt.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
+
+        val trend = remember(activePostedAt) { NotificationTrend.fromTimestamps(activePostedAt, System.currentTimeMillis()) }
+        var locationGranted by remember { mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
+        val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationGranted = it }
+        val weather by produceState<Weather?>(null, locationGranted) {
+            while (locationGranted) {
+                value = WeatherRepository.current(applicationContext) ?: value
+                delay(30 * 60 * 1000L)
+            }
+        }
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
@@ -175,6 +193,10 @@ class MainActivity : ComponentActivity() {
                     onOpenTimeline = { showTimeline = true },
                     onOpenCalendar = { showCalendar = true },
                     onOpenInsights = { showInsights = true },
+                    trend = trend,
+                    weather = weather,
+                    weatherAvailable = locationGranted,
+                    onRequestWeather = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(

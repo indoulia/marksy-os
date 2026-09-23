@@ -28,6 +28,8 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
+import com.marksy.os.intelligence.NotificationTrend
+import com.marksy.os.weather.Weather
 import com.marksy.os.intelligence.dashboardAgeLabel
 
 @Composable
@@ -39,6 +41,10 @@ fun DashboardScreen(
     onOpenTimeline: () -> Unit = {},
     onOpenCalendar: () -> Unit = {},
     onOpenInsights: () -> Unit = {},
+    trend: NotificationTrend = NotificationTrend(0, 0, List(7) { 0 }, 0),
+    weather: Weather? = null,
+    weatherAvailable: Boolean = false,
+    onRequestWeather: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
@@ -167,7 +173,7 @@ fun DashboardScreen(
                         .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
@@ -178,7 +184,7 @@ fun DashboardScreen(
                                 Text(greeting.emoji, fontSize = 14.sp)
                             }
                             Spacer(Modifier.width(10.dp))
-                            Column {
+                            Column(Modifier.weight(1f)) {
                                 Text(
                                     greeting.title,
                                     color = MarksyTheme.TextPrimary,
@@ -191,6 +197,7 @@ fun DashboardScreen(
                                     fontSize = 12.sp
                                 )
                             }
+                            WeatherBadge(weather, weatherAvailable, onRequestWeather)
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -203,7 +210,7 @@ fun DashboardScreen(
                             Column {
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
-                                        "${snapshot.totalEvents}",
+                                        "${when (selectedTimeFilter) { "Today" -> trend.today; "This Week" -> trend.lastSevenDays.sum(); else -> trend.total }}",
                                         color = MarksyTheme.TextPrimary,
                                         fontSize = 36.sp,
                                         fontWeight = FontWeight.Bold
@@ -217,9 +224,23 @@ fun DashboardScreen(
                                         modifier = Modifier.padding(bottom = 6.dp)
                                     )
                                 }
+                                val change = trend.changeVsYesterdayPercent
+                                val today = selectedTimeFilter == "Today"
                                 Text(
-                                    "↘ -42% vs yesterday",
-                                    color = MarksyTheme.PrimaryEmerald,
+                                    when {
+                                        selectedTimeFilter == "This Week" -> "Last 7 days"
+                                        !today -> "All retained history"
+                                        change == null -> "No data from yesterday yet"
+                                        change > 0 -> "↗ +$change% vs yesterday"
+                                        change < 0 -> "↘ $change% vs yesterday"
+                                        else -> "Same as yesterday"
+                                    },
+                                    // Fewer notifications than yesterday reads as good news.
+                                    color = when {
+                                        !today || change == null || change == 0 -> MarksyTheme.TextMuted
+                                        change < 0 -> MarksyTheme.PrimaryEmerald
+                                        else -> MarksyTheme.YellowImportant
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -231,14 +252,16 @@ fun DashboardScreen(
                                 verticalAlignment = Alignment.Bottom,
                                 modifier = Modifier.height(36.dp)
                             ) {
-                                listOf(18, 28, 14, 32, 24, 42, 20).forEach { height ->
+                                // Last 7 days, oldest → today; today's bar is highlighted.
+                                val peak = (trend.lastSevenDays.maxOrNull() ?: 0).coerceAtLeast(1)
+                                trend.lastSevenDays.forEachIndexed { index, count ->
                                     Box(
                                         modifier = Modifier
                                             .width(5.dp)
-                                            .height(height.dp)
+                                            .height((4 + 32f * count / peak).dp)
                                             .clip(RoundedCornerShape(3.dp))
                                             .background(
-                                                if (height > 30) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow
+                                                if (index == trend.lastSevenDays.lastIndex) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow
                                             )
                                     )
                                 }
@@ -377,6 +400,50 @@ fun DashboardScreen(
     }
 }
 
+@Composable
+private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(MarksyTheme.SurfaceRaised)
+            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
+            .then(if (available) Modifier else Modifier.clickable(onClick = onRequest)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn,
+                contentDescription = weather?.condition?.name ?: "Enable weather",
+                tint = weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
+                color = MarksyTheme.TextPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+private fun weatherIcon(condition: Weather.Condition): ImageVector = when (condition) {
+    Weather.Condition.CLEAR -> Icons.Default.WbSunny
+    Weather.Condition.CLEAR_NIGHT -> Icons.Default.NightsStay
+    Weather.Condition.PARTLY_CLOUDY -> Icons.Default.WbCloudy
+    Weather.Condition.CLOUDY -> Icons.Default.Cloud
+    Weather.Condition.RAIN -> Icons.Default.Umbrella
+    Weather.Condition.SNOW -> Icons.Default.AcUnit
+    Weather.Condition.THUNDER -> Icons.Default.Thunderstorm
+}
+
+private fun weatherTint(condition: Weather.Condition): Color = when (condition) {
+    Weather.Condition.CLEAR -> MarksyTheme.YellowImportant
+    Weather.Condition.RAIN, Weather.Condition.THUNDER -> MarksyTheme.SecondaryCyan
+    else -> MarksyTheme.TextSecondary
+}
+
 private data class Greeting(val title: String, val subtitle: String, val emoji: String)
 
 private fun greetingFor(hour: Int): Greeting = when (hour) {
@@ -403,11 +470,7 @@ private fun CategoryGridCard(
         modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
         Column(Modifier.padding(12.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
                         .size(22.dp)
@@ -417,6 +480,7 @@ private fun CategoryGridCard(
                 ) {
                     Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(13.dp))
                 }
+                Spacer(Modifier.width(8.dp))
                 Text("$count", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))

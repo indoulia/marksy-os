@@ -25,6 +25,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
+    @Query("SELECT postedAt FROM notification_events WHERE archived = 0")
+    fun observeActivePostedAt(): Flow<List<Long>>
+
     /** High-value active events for the Home/Smart Inbox attention surfaces. */
     @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 ORDER BY priority DESC, postedAt DESC LIMIT :limit")
     fun observeByMinimumPriority(minimumPriority: Int, limit: Int): Flow<List<NotificationEventEntity>>

@@ -18,6 +18,7 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
     val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
+    val activePostedAt: Flow<List<Long>> = repository.observeActivePostedAt()
 
     val intelligentEvents: Flow<List<EventIntelligence.Result>> = recentEvents.map { events ->
         events.map { EventIntelligence.analyze(it) }
