@@ -39,8 +39,10 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val ActionWidth = 52.dp
-// A slight drag commits: opens the tray fully, or closes it when dragged back.
+// Opening needs a deliberate swipe (distance or fling) so accidental nudges don't reveal actions; closing needs only a nudge.
 private val NudgeThreshold = 8.dp
+private val OpenThreshold = 64.dp
+private val OpenFlingVelocity = 1200.dp
 
 /**
  * Swipe either way to reveal Delete / Archive / Hide. Delete is permanent, Archive moves it out of active
@@ -55,7 +57,10 @@ fun SwipeActionsRow(
     content: @Composable () -> Unit
 ) {
     val trayPx = with(LocalDensity.current) { (ActionWidth * 3).toPx() }
-    val nudgePx = with(LocalDensity.current) { NudgeThreshold.toPx() }
+    val density = LocalDensity.current
+    val nudgePx = with(density) { NudgeThreshold.toPx() }
+    val openPx = with(density) { OpenThreshold.toPx() }
+    val flingPx = with(density) { OpenFlingVelocity.toPx() }
     val offset = remember { Animatable(0f) }
     var anchor by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
@@ -86,13 +91,13 @@ fun SwipeActionsRow(
                     state = rememberDraggableState { delta ->
                         scope.launch { offset.snapTo((offset.value + delta).coerceIn(-trayPx, trayPx)) }
                     },
-                    onDragStopped = {
+                    onDragStopped = { velocity ->
                         val moved = offset.value - anchor
                         settle(
                             when {
                                 anchor != 0f -> if (moved * anchor < 0 && abs(moved) > nudgePx) 0f else anchor
-                                moved > nudgePx -> trayPx
-                                moved < -nudgePx -> -trayPx
+                                moved > openPx || (moved > nudgePx * 3 && velocity > flingPx) -> trayPx
+                                moved < -openPx || (moved < -nudgePx * 3 && velocity < -flingPx) -> -trayPx
                                 else -> 0f
                             }
                         )
