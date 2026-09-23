@@ -13,6 +13,16 @@ object MarksyContainer {
         return LearningRepository(db.learningDao(), db.notificationEventDao(), isEnabled = { settings.enabled })
     }
 
+    fun actions(context: Context): ActionRepository {
+        val db = database(context)
+        val learning = learning(context)
+        return ActionRepository(
+            db.eventActionDao(), db.notificationEventDao(),
+            NotificationRepository(db.notificationEventDao(), learning), learning,
+            com.marksy.os.notification.AndroidActionPlatform(context.applicationContext)
+        )
+    }
+
     fun repository(context: Context): NotificationRepository =
         NotificationRepository(database(context).notificationEventDao(), learning(context))
 }

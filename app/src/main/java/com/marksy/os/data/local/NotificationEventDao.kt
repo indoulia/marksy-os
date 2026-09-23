@@ -152,6 +152,10 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE lifecycleState = 'NEW' AND archived = 0 AND postedAt < :beforeMillis ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findStaleNew(beforeMillis: Long, limit: Int): List<NotificationEventEntity>
 
+    /** EPIC-014 REPORT: the user's corrected category replaces the classifier's (the original is kept in the audit row). */
+    @Query("UPDATE notification_events SET category = :category WHERE id = :eventId")
+    suspend fun updateCategory(eventId: Long, category: String): Int
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

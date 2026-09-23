@@ -3,6 +3,16 @@
     package="com.marksy.os">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- EPIC-014 local reminders (runtime-requested on API 33+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- EPIC-014 "open in app": only launcher-visible apps, not QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:name=".MarksyOsApplication"

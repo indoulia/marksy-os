@@ -4,7 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -70,6 +73,7 @@ class MainActivity : ComponentActivity() {
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
+        lifecycleScope.launch { runCatching { MarksyContainer.actions(applicationContext).recover() } }
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { MarksyApp() }
@@ -89,7 +93,10 @@ class MainActivity : ComponentActivity() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
         val learning = remember { MarksyContainer.learning(applicationContext) }
         val learningSettings = remember { LearningSettings(applicationContext) }
-        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository, learning, learningSettings))
+        val actionRepository = remember { MarksyContainer.actions(applicationContext) }
+        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository, learning, learningSettings, actionRepository))
+        val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
+        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
         val learningEnabled by vm.learningEnabled.collectAsStateWithLifecycle()
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -234,9 +241,17 @@ class MainActivity : ComponentActivity() {
         }
 
         selectedEvent?.let { event ->
-            LaunchedEffect(event.id) { vm.markSeen(event.id) }
+            LaunchedEffect(event.id) { vm.markSeen(event.id); vm.clearActionMessage() }
+            // Re-discovered after each action so the list reflects the new state (e.g. resolved).
+            val available = remember(event.id, actionMessage) { vm.availableActions(event) }
             EventDetailDialog(
                 event = event,
+                actions = available,
+                actionMessage = actionMessage,
+                onAction = { type, at, detail -> vm.runAction(event.id, type, at, detail) },
+                onRequestNotificationPermission = {
+                    if (android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                },
                 onArchive = { vm.archive(event.id); selectedEvent = null },
                 onUnarchive = { vm.unarchive(event.id); selectedEvent = null },
                 onDismiss = { selectedEvent = null }

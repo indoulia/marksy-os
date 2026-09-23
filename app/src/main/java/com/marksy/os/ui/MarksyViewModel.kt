@@ -3,7 +3,9 @@ package com.marksy.os.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.marksy.os.data.ActionRepository
 import com.marksy.os.data.LearningRepository
+import com.marksy.os.intelligence.ActionEngine
 import com.marksy.os.data.LearningSettings
 import com.marksy.os.data.NotificationRepository
 import com.marksy.os.intelligence.PersonalLearning
@@ -21,8 +23,23 @@ import kotlinx.coroutines.launch
 class MarksyViewModel(
     private val repository: NotificationRepository,
     private val learning: LearningRepository? = null,
-    private val learningSettings: LearningSettings? = null
+    private val learningSettings: LearningSettings? = null,
+    private val actions: ActionRepository? = null
 ) : ViewModel() {
+    private val actionMessageState = MutableStateFlow<String?>(null)
+    val actionMessage: StateFlow<String?> = actionMessageState
+
+    fun availableActions(event: NotificationEventEntity): List<ActionEngine.Available> =
+        actions?.discover(event).orEmpty()
+
+    fun runAction(eventId: Long, type: ActionEngine.Type, scheduledFor: Long?, detail: String?) {
+        viewModelScope.launch {
+            actionMessageState.value = actions?.execute(eventId, type, scheduledFor, detail)?.message
+        }
+    }
+
+    fun clearActionMessage() { actionMessageState.value = null }
+
     private val learningEnabledState = MutableStateFlow(learningSettings?.enabled ?: false)
     val learningEnabled: StateFlow<Boolean> = learningEnabledState
 
@@ -91,12 +108,13 @@ class MarksyViewModel(
 class MarksyViewModelFactory(
     private val repository: NotificationRepository,
     private val learning: LearningRepository? = null,
-    private val learningSettings: LearningSettings? = null
+    private val learningSettings: LearningSettings? = null,
+    private val actions: ActionRepository? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MarksyViewModel::class.java)) {
-            return MarksyViewModel(repository, learning, learningSettings) as T
+            return MarksyViewModel(repository, learning, learningSettings, actions) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }

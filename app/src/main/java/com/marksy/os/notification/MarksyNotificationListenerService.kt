@@ -29,6 +29,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
+        serviceScope.launch { runCatching { com.marksy.os.data.MarksyContainer.actions(applicationContext).recover() } }
         Log.i(TAG, "Notification listener connected; background work scheduled")
     }
 

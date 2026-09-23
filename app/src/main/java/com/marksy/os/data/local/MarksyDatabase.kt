@@ -8,13 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class],
     version = 3,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
     abstract fun notificationEventDao(): NotificationEventDao
     abstract fun learningDao(): LearningDao
+    abstract fun eventActionDao(): EventActionDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -49,6 +50,11 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-014 action history / audit trail.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `event_actions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `eventId` INTEGER NOT NULL, `type` TEXT NOT NULL, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `scheduledFor` INTEGER, `detail` TEXT, `error` TEXT, `attempts` INTEGER NOT NULL)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_event_actions_eventId` ON `event_actions` (`eventId`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_event_actions_state` ON `event_actions` (`state`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_event_actions_type` ON `event_actions` (`type`)")
                 database.execSQL("CREATE TABLE IF NOT EXISTS `learning_overrides` (`subjectType` TEXT NOT NULL, `subjectKey` TEXT NOT NULL, `preference` TEXT NOT NULL, `label` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`subjectType`, `subjectKey`))")
             }
         }
