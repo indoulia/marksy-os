@@ -53,7 +53,7 @@ fun DailyDigestScreen(
             .background(MarksyTheme.Background)
             .padding(padding),
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             Text(
@@ -70,8 +70,8 @@ fun DailyDigestScreen(
 
         item {
             DigestCard(borderColor = MarksyTheme.PrimaryEmerald) {
-                Text(digest.title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(10.dp))
+                Text(digest.title, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
 
                 DigestItemRow(
                     icon = Icons.Default.Notifications,
@@ -112,7 +112,7 @@ fun DailyDigestScreen(
                     ) { onOpenInbox((filter ?: SmartInboxModel.Filter.ALL).name) }
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
 
                 Button(
                     onClick = {
@@ -121,9 +121,10 @@ fun DailyDigestScreen(
                             .putExtra(Intent.EXTRA_TEXT, digest.shareText())
                         context.startActivity(Intent.createChooser(send, "Share digest"))
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald),
-                    shape = RoundedCornerShape(25.dp)
+                    shape = RoundedCornerShape(25.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
@@ -135,8 +136,8 @@ fun DailyDigestScreen(
         if (digest.attentionEvents.isNotEmpty()) {
             item {
                 DigestCard {
-                    Text("Needs attention", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
+                    Text("Needs attention", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
                     digest.attentionEvents.take(MAX_ATTENTION_ROWS).forEach { event ->
                         AttentionRow(event) { onEventSelected(event) }
                     }
@@ -147,10 +148,10 @@ fun DailyDigestScreen(
         if (digest.topSources.isNotEmpty()) {
             item {
                 DigestCard {
-                    Text("Top sources", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
+                    Text("Top sources", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
                     digest.topSources.forEach { (name, count) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(name, color = MarksyTheme.TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             Text("$count", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
@@ -173,7 +174,7 @@ private fun DigestCard(borderColor: Color = MarksyTheme.BorderGlow, content: @Co
             .fillMaxWidth()
             .border(1.dp, borderColor, RoundedCornerShape(16.dp))
     ) {
-        Column(Modifier.padding(18.dp), content = content)
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), content = content)
     }
 }
 
@@ -190,17 +191,17 @@ private fun DigestItemRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 7.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(24.dp)
                 .clip(CircleShape)
                 .background(bgColor),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(14.dp))
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(13.dp))
         }
         Spacer(Modifier.width(10.dp))
         Text(text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
@@ -215,7 +216,7 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 7.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
