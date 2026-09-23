@@ -233,7 +233,7 @@ class MainActivity : ComponentActivity() {
                     onFilterSelected = { inboxFilterName = it }
                 )
                 selectedTab == 2 -> AskMarksyScreen(padding)
-                selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding) { selectedTradingInsight = it }
+                selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,
