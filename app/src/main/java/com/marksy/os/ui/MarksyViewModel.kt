@@ -3,7 +3,14 @@ package com.marksy.os.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.marksy.os.data.LearningRepository
+import com.marksy.os.data.LearningSettings
 import com.marksy.os.data.NotificationRepository
+import com.marksy.os.intelligence.PersonalLearning
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
@@ -11,7 +18,31 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class MarksyViewModel(private val repository: NotificationRepository) : ViewModel() {
+class MarksyViewModel(
+    private val repository: NotificationRepository,
+    private val learning: LearningRepository? = null,
+    private val learningSettings: LearningSettings? = null
+) : ViewModel() {
+    private val learningEnabledState = MutableStateFlow(learningSettings?.enabled ?: false)
+    val learningEnabled: StateFlow<Boolean> = learningEnabledState
+
+    /** Learned adjustments only apply while learning is on; explicit corrections always apply. */
+    val learningProfile: Flow<PersonalLearning.Profile> =
+        (learning?.observeProfile() ?: flowOf(PersonalLearning.Profile.EMPTY))
+            .combine(learningEnabledState) { profile, enabled -> if (enabled) profile else profile.correctionsOnly() }
+
+    fun setLearningEnabled(enabled: Boolean) {
+        learningSettings?.enabled = enabled
+        learningEnabledState.value = enabled
+    }
+
+    fun setPreference(subject: PersonalLearning.Subject, preference: PersonalLearning.Preference?) {
+        viewModelScope.launch { learning?.setPreference(subject, preference) }
+    }
+
+    fun resetLearning() { viewModelScope.launch { learning?.resetLearning() } }
+    fun clearCorrections() { viewModelScope.launch { learning?.clearCorrections() } }
+
     val recentEvents: Flow<List<NotificationEventEntity>> = repository.observeRecent()
     val importantEvents: Flow<List<NotificationEventEntity>> = repository.observeImportant()
     val attentionEvents: Flow<List<NotificationEventEntity>> = repository.observeAttention()
@@ -57,11 +88,15 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     }
 }
 
-class MarksyViewModelFactory(private val repository: NotificationRepository) : ViewModelProvider.Factory {
+class MarksyViewModelFactory(
+    private val repository: NotificationRepository,
+    private val learning: LearningRepository? = null,
+    private val learningSettings: LearningSettings? = null
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MarksyViewModel::class.java)) {
-            return MarksyViewModel(repository) as T
+            return MarksyViewModel(repository, learning, learningSettings) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }

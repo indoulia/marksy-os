@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.intelligence.SmartInboxModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -221,7 +223,8 @@ data class InboxActions(
     val resolve: (List<Long>) -> Unit = {},
     val reopen: (List<Long>) -> Unit = {},
     val snooze: (List<Long>, Long) -> Unit = { _, _ -> },
-    val archive: (List<Long>) -> Unit = {}
+    val archive: (List<Long>) -> Unit = {},
+    val prefer: (PersonalLearning.Subject, PersonalLearning.Preference?) -> Unit = { _, _ -> }
 )
 
 @Composable
@@ -237,7 +240,7 @@ private fun ThreadActionsDialog(
         containerColor = MarksyTheme.Surface,
         title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, color = MarksyTheme.TextPrimary, fontSize = 16.sp, maxLines = 2) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 thread.why.take(8).forEach { Text("• $it", color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
                 Spacer(Modifier.height(8.dp))
@@ -250,6 +253,13 @@ private fun ThreadActionsDialog(
                 TextButton(onClick = { run { actions.snooze(ids, System.currentTimeMillis() + 60 * 60 * 1000L) } }) { Text("Snooze 1 hour") }
                 TextButton(onClick = { run { actions.snooze(ids, nextMorningMillis()) } }) { Text("Snooze until tomorrow 9:00") }
                 TextButton(onClick = { run { actions.archive(ids) } }) { Text("Archive") }
+                // Explicit corrections (EPIC-012) outrank anything learned.
+                PersonalLearning.subjectsOf(thread.latest)
+                    .filter { it.type != PersonalLearning.SubjectType.CATEGORY }
+                    .forEach { subject ->
+                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }) { Text("Always important: ${subject.label}") }
+                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.LESS_IMPORTANT) } }) { Text("Less from ${subject.label}") }
+                    }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }

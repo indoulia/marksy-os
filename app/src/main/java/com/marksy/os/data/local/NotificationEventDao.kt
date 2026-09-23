@@ -145,6 +145,13 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET archived = 1, lifecycleState = 'ARCHIVED', lifecycleUpdatedAt = :atMillis, lifecycleReason = NULL WHERE id IN (:ids)")
     suspend fun archiveAll(ids: List<Long>, atMillis: Long): Int
 
+    @Query("SELECT * FROM notification_events WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<NotificationEventEntity>
+
+    /** EPIC-012: still-unseen events older than the cutoff count as ignored. */
+    @Query("SELECT * FROM notification_events WHERE lifecycleState = 'NEW' AND archived = 0 AND postedAt < :beforeMillis ORDER BY postedAt ASC LIMIT :limit")
+    suspend fun findStaleNew(beforeMillis: Long, limit: Int): List<NotificationEventEntity>
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

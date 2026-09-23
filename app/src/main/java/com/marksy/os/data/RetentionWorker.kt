@@ -17,7 +17,13 @@ class RetentionWorker(
     override suspend fun doWork(): Result {
         return try {
             val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
-            dao.pruneExpired(System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            // Learning sweep runs before pruning so events about to expire still count as ignored.
+            MarksyContainer.learning(applicationContext).run {
+                sweepIgnored(now)
+                pruneExpired(now)
+            }
+            dao.pruneExpired(now)
             Result.success()
         } catch (e: Exception) {
             // Retention is local housekeeping. A transient database failure should

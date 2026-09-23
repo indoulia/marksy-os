@@ -8,12 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class],
     version = 3,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
     abstract fun notificationEventDao(): NotificationEventDao
+    abstract fun learningDao(): LearningDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -43,6 +44,12 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_correlationKey ON notification_events(correlationKey)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_lifecycleState ON notification_events(lifecycleState)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_intelligenceVersion ON notification_events(intelligenceVersion)")
+                // EPIC-012 learning history + explicit corrections.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `learning_signals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `eventId` INTEGER NOT NULL, `subjectType` TEXT NOT NULL, `subjectKey` TEXT NOT NULL, `label` TEXT NOT NULL, `signal` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)")
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `learning_overrides` (`subjectType` TEXT NOT NULL, `subjectKey` TEXT NOT NULL, `preference` TEXT NOT NULL, `label` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`subjectType`, `subjectKey`))")
             }
         }
 
