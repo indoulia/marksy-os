@@ -169,6 +169,8 @@ class MainActivity : ComponentActivity() {
                     events = events,
                     onEventSelected = openEvent,
                     onCategorySelected = openCategory,
+                    onOpenTimeline = { showTimeline = true },
+                    onOpenCalendar = { showCalendar = true },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(

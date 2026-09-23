@@ -36,6 +36,8 @@ fun DashboardScreen(
     events: List<NotificationEventEntity>,
     onEventSelected: (NotificationEventEntity) -> Unit,
     onCategorySelected: (String) -> Unit = {},
+    onOpenTimeline: () -> Unit = {},
+    onOpenCalendar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
@@ -243,6 +245,13 @@ fun DashboardScreen(
                     }
                 }
 
+                Spacer(Modifier.height(10.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
+                    QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
+                }
+
                 Spacer(Modifier.height(14.dp))
 
                 // Category Quick Cards Grid
@@ -341,7 +350,8 @@ fun DashboardScreen(
                 )
             }
         } else {
-            items(snapshot.topAttention, key = { it.eventId }) { result ->
+            // Keys are namespaced per section: the same event can be in both Attention and Latest Activity.
+            items(snapshot.topAttention, key = { "attention-${it.eventId}" }) { result ->
                 events.firstOrNull { it.id == result.eventId }?.let { event ->
                     AttentionCard(result, event, snapshot.generatedAt) { onEventSelected(event) }
                 }
@@ -357,7 +367,7 @@ fun DashboardScreen(
                 )
             }
         } else {
-            items(events.take(5), key = { it.id }) { event ->
+            items(events.take(5), key = { "latest-${it.id}" }) { event ->
                 CompactEventCard(event, snapshot.generatedAt) { onEventSelected(event) }
             }
         }
@@ -401,6 +411,26 @@ private fun CategoryGridCard(
             Spacer(Modifier.height(8.dp))
             Text(title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        shape = RoundedCornerShape(14.dp),
+        onClick = onClick,
+        modifier = modifier.border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
         }
     }
 }
