@@ -124,6 +124,27 @@ interface NotificationEventDao {
         deleteOldTrading(RetentionPolicy.tradingCutoff(nowMillis))
     }
 
+    // ---- EPIC-011 Smart Inbox (thread-level actions take the thread's event ids) ----
+
+    /** Non-archived events incl. resolved ones; bounded by retention and the limit. */
+    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
+    fun observeInbox(limit: Int): Flow<List<NotificationEventEntity>>
+
+    @Query("UPDATE notification_events SET lifecycleState = 'ACTIVE', lifecycleUpdatedAt = :atMillis WHERE id IN (:ids) AND lifecycleState = 'NEW' AND archived = 0")
+    suspend fun markSeen(ids: List<Long>, atMillis: Long): Int
+
+    @Query("UPDATE notification_events SET lifecycleState = 'RESOLVED', lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason, snoozedUntil = NULL WHERE id IN (:ids) AND lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0")
+    suspend fun resolve(ids: List<Long>, reason: String, atMillis: Long): Int
+
+    @Query("UPDATE notification_events SET lifecycleState = 'ACTIVE', lifecycleUpdatedAt = :atMillis, lifecycleReason = NULL WHERE id IN (:ids) AND lifecycleState = 'RESOLVED' AND archived = 0")
+    suspend fun reopen(ids: List<Long>, atMillis: Long): Int
+
+    @Query("UPDATE notification_events SET snoozedUntil = :untilMillis WHERE id IN (:ids) AND archived = 0")
+    suspend fun setSnoozedUntil(ids: List<Long>, untilMillis: Long?): Int
+
+    @Query("UPDATE notification_events SET archived = 1, lifecycleState = 'ARCHIVED', lifecycleUpdatedAt = :atMillis, lifecycleReason = NULL WHERE id IN (:ids)")
+    suspend fun archiveAll(ids: List<Long>, atMillis: Long): Int
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

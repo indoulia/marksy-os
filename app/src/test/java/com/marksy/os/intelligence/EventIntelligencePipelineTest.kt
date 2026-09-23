@@ -141,6 +141,20 @@ class EventIntelligencePipelineTest {
     }
 
     @Test
+    fun threadActionsPersistResolveReopenSnoozeAndArchive() = runBlocking {
+        val repo = NotificationRepository(dao)
+        val ids = listOf(insert("com.a", "t", "b", "OTHER"), insert("com.b", "t", "b", "OTHER"))
+        assertEquals(2, repo.resolveThread(ids, t0))
+        assertTrue(ids.all { get(it).lifecycleState == "RESOLVED" && get(it).lifecycleReason == "Resolved by you" })
+        assertEquals(2, repo.reopenThread(ids, t0))
+        repo.snoozeThread(ids, t0 + 5_000)
+        assertTrue(ids.all { get(it).snoozedUntil == t0 + 5_000 })
+        repo.archiveThread(ids, t0)
+        assertTrue(ids.all { get(it).archived && get(it).lifecycleState == "ARCHIVED" })
+        assertEquals(0, repo.resolveThread(ids, t0))
+    }
+
+    @Test
     fun migrationFromV2PreservesRowsAndMapsArchivedToLifecycle() {
         val context = RuntimeEnvironment.getApplication()
         val name = "migration-test.db"

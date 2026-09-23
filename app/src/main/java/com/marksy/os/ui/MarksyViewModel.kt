@@ -18,6 +18,7 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
     val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
+    val inboxEvents: Flow<List<NotificationEventEntity>> = repository.observeInbox()
 
     val intelligentEvents: Flow<List<EventIntelligence.Result>> = recentEvents.map { events ->
         events.map { EventIntelligence.analyze(it) }
@@ -44,6 +45,12 @@ class MarksyViewModel(private val repository: NotificationRepository) : ViewMode
     fun markSeen(eventId: Long) {
         viewModelScope.launch { repository.markSeen(eventId) }
     }
+
+    fun markThreadSeen(ids: List<Long>) { viewModelScope.launch { repository.markThreadSeen(ids) } }
+    fun resolveThread(ids: List<Long>) { viewModelScope.launch { repository.resolveThread(ids) } }
+    fun reopenThread(ids: List<Long>) { viewModelScope.launch { repository.reopenThread(ids) } }
+    fun snoozeThread(ids: List<Long>, untilMillis: Long) { viewModelScope.launch { repository.snoozeThread(ids, untilMillis) } }
+    fun archiveThread(ids: List<Long>) { viewModelScope.launch { repository.archiveThread(ids) } }
 
     fun unarchive(eventId: Long) {
         viewModelScope.launch { repository.unarchive(eventId) }

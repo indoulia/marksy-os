@@ -60,7 +60,9 @@ data class NotificationEventEntity(
     /** Bounded JSON: extracted entities/amounts/references/times and explanation reasons. */
     val intelligenceJson: String? = null,
     /** 0 = not yet processed; bumping EventIntelligencePipeline.VERSION triggers a background re-derive. */
-    val intelligenceVersion: Int = 0
+    val intelligenceVersion: Int = 0,
+    /** EPIC-011: hidden from the inbox until this time; persisted so snoozes survive restarts. */
+    val snoozedUntil: Long? = null
 )
 
 enum class DeliveryState {

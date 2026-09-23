@@ -45,6 +45,7 @@ import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.ui.EventDetailDialog
+import com.marksy.os.ui.InboxActions
 import com.marksy.os.ui.InsightsScreen
 import com.marksy.os.ui.MarksyTheme
 import com.marksy.os.ui.MarksyViewModel
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val inboxEvents by vm.inboxEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -170,11 +172,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
-                    events = events,
+                    events = inboxEvents,
                     padding = padding,
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
-                    onFilterSelected = { inboxFilterName = it }
+                    onFilterSelected = { inboxFilterName = it },
+                    actions = remember(vm) {
+                        InboxActions(
+                            markSeen = vm::markThreadSeen,
+                            resolve = vm::resolveThread,
+                            reopen = vm::reopenThread,
+                            snooze = vm::snoozeThread,
+                            archive = vm::archiveThread
+                        )
+                    }
                 )
                 selectedTab == 2 -> AskMarksyScreen(padding)
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding) { selectedTradingInsight = it }

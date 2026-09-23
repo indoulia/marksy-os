@@ -37,6 +37,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE notification_events ADD COLUMN duplicateOfId INTEGER")
                 database.execSQL("ALTER TABLE notification_events ADD COLUMN intelligenceJson TEXT")
                 database.execSQL("ALTER TABLE notification_events ADD COLUMN intelligenceVersion INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE notification_events ADD COLUMN snoozedUntil INTEGER")
                 database.execSQL("UPDATE notification_events SET lifecycleState = 'ARCHIVED' WHERE archived = 1")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_threadKey ON notification_events(threadKey)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_notification_events_correlationKey ON notification_events(correlationKey)")
