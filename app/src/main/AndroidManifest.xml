@@ -6,13 +6,20 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Coarse only: city-level weather on the Home greeting card. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Ask Marksy voice questions, recognised in-app via SpeechRecognizer. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Package visibility for "Open in <app>": launcher apps only, not QUERY_ALL_PACKAGES. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Android 11+ hides recognition services unless declared; SpeechRecognizer needs to bind one. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

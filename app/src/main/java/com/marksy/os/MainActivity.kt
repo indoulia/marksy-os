@@ -53,6 +53,7 @@ import com.marksy.os.notification.MarksyNotificationListenerService
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
+import com.marksy.os.ui.AskExchange
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.CompactTextField
@@ -126,6 +127,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         val todayDigest = remember(inboxEvents) { DailyDigestModel.build(inboxEvents) }
+        val askConversation = remember { mutableStateListOf<AskExchange>() }
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
@@ -233,7 +235,7 @@ class MainActivity : ComponentActivity() {
                     selectedFilterName = inboxFilterName,
                     onFilterSelected = { inboxFilterName = it }
                 )
-                selectedTab == 2 -> AskMarksyScreen(padding, inboxEvents, market, openEvent)
+                selectedTab == 2 -> AskMarksyScreen(padding, inboxEvents, market, openEvent, askConversation)
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,

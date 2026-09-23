@@ -1,10 +1,10 @@
 package com.marksy.os.ui
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.speech.RecognizerIntent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -50,24 +50,25 @@ private val promptOptions = listOf(
     "🔍 What did I miss?"
 )
 
-private data class Exchange(val question: String, val answer: AskMarksyEngine.Answer)
+data class AskExchange(val question: String, val answer: AskMarksyEngine.Answer)
 
 @Composable
 fun AskMarksyScreen(
     padding: PaddingValues,
     events: List<NotificationEventEntity> = emptyList(),
     market: MarketState = MarketState.Loading,
-    onEventSelected: (NotificationEventEntity) -> Unit = {}
+    onEventSelected: (NotificationEventEntity) -> Unit = {},
+    // Hoisted so the conversation survives switching tabs.
+    conversation: SnapshotStateList<AskExchange> = remember { mutableStateListOf() }
 ) {
     val context = LocalContext.current
-    val conversation = remember { mutableStateListOf<Exchange>() }
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     fun ask(question: String) {
         val clean = question.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim()
         if (clean.isEmpty()) return
-        conversation += Exchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
+        conversation += AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
         input = ""
     }
 
@@ -75,9 +76,21 @@ fun AskMarksyScreen(
         if (conversation.isNotEmpty()) listState.animateScrollToItem(conversation.size)
     }
 
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let(::ask)
+    val voice = rememberVoiceInput(
+        onPartial = { input = it },
+        onFinal = { ask(it) },
+        onError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    )
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) voice.start()
+        else Toast.makeText(context, "Microphone permission is needed for voice questions.", Toast.LENGTH_SHORT).show()
+    }
+    val onMic = {
+        when {
+            voice.listening -> voice.stop()
+            !voice.available -> Toast.makeText(context, "Voice recognition isn't available on this device.", Toast.LENGTH_SHORT).show()
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> voice.start()
+            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -154,7 +167,7 @@ fun AskMarksyScreen(
                 value = input,
                 onValueChange = { input = it.take(200) },
                 modifier = Modifier.weight(1f),
-                placeholder = "Ask about your notifications…",
+                placeholder = if (voice.listening) "Listening…" else "Ask about your notifications…",
                 cornerRadius = 20.dp,
                 trailing = if (input.isNotBlank()) {
                     {
@@ -165,24 +178,25 @@ fun AskMarksyScreen(
                 } else null
             )
             Spacer(Modifier.width(10.dp))
+            val micScale = if (voice.listening) 1f + voice.level * 0.25f else 1f
             Box(
                 modifier = Modifier
                     .size(44.dp)
+                    .scale(micScale)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.AccentGreen)))
-                    .clickable {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Marksy")
-                        try {
-                            speech.launch(intent)
-                        } catch (_: ActivityNotFoundException) {
-                            Toast.makeText(context, "Voice input isn't available on this device", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    .background(
+                        if (voice.listening) Brush.linearGradient(listOf(MarksyTheme.RedUrgent, Color(0xFFFF7043)))
+                        else Brush.linearGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.AccentGreen))
+                    )
+                    .clickable(onClick = onMic),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Mic, contentDescription = "Speak a question", tint = Color.Black, modifier = Modifier.size(22.dp))
+                Icon(
+                    if (voice.listening) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = if (voice.listening) "Stop listening" else "Speak a question",
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }
@@ -225,7 +239,7 @@ private fun Greeting(compact: Boolean) {
 }
 
 @Composable
-private fun ExchangeView(exchange: Exchange, onEventSelected: (NotificationEventEntity) -> Unit) {
+private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             exchange.question,
