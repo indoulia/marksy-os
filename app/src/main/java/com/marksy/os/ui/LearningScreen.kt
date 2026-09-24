@@ -7,7 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.marksy.os.data.MarksyContainer
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -58,15 +61,7 @@ fun LearningScreen(
         }
         item {
             // EPIC-019 privacy visibility: exactly which models exist and whether data can leave the device.
-            Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
-                Text("On-device AI", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                if (aiStatus.isEmpty()) {
-                    Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                } else aiStatus.forEach { (info, state) ->
-                    Text("${info.id} v${info.version} · ${if (info.onDevice) "on-device" else "external"} · ${state.name.lowercase()}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                }
-                Text("External AI: off. Notification content never leaves this device.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-            }
+            AiStatusCard(aiStatus)
         }
         if (subjects.isEmpty()) {
             item { Text("Nothing learned yet.", color = MarksyTheme.TextMuted, fontSize = 12.sp) }
@@ -96,4 +91,58 @@ fun LearningScreen(
             }
         }
     }
+}
+
+/** EPIC-019 privacy visibility: which models exist, whether they run locally, and live runtime health. */
+@Composable
+private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
+    val context = LocalContext.current
+    val service = remember(context) { MarksyContainer.intelligence(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf(initial) }
+    var diagnostics by remember { mutableStateOf(service.diagnostics().toMap()) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(service) {
+        status = service.refresh()
+        diagnostics = service.diagnostics().toMap()
+    }
+    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
+        Text("On-device AI", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        if (status.isEmpty()) {
+            Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+        }
+        status.forEach { (info, state) ->
+            Text("${info.id} · ${if (info.onDevice) "on-device" else "external"} · ${aiStateLabel(state)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+            diagnostics[info]?.let { d ->
+                val parts = listOfNotNull(
+                    d.modelVersion?.let { "model $it" }, d.runtimeVersion,
+                    d.initMs?.let { "warm-up $it ms" }, d.lastLatencyMs?.let { "last call $it ms" },
+                    "${d.calls} call${if (d.calls == 1) "" else "s"}, ${d.failures} failed", d.lastError?.let { "last error $it" }
+                )
+                Text(parts.joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 10.sp)
+            }
+            if (state == ModelState.NOT_INSTALLED || state == ModelState.READY || state == ModelState.FAILED) {
+                TextButton(enabled = !busy, onClick = {
+                    busy = true
+                    scope.launch {
+                        service.prepare(info.id)
+                        status = service.refresh()
+                        diagnostics = service.diagnostics().toMap()
+                        busy = false
+                    }
+                }) { Text(if (state == ModelState.NOT_INSTALLED) "Download model (via Android AICore)" else if (state == ModelState.FAILED) "Retry" else "Warm up", fontSize = 11.sp) }
+            }
+        }
+        Text("AI only interprets your question; answers always come from your Marksy data. External AI: off. Notification content never leaves this device.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+    }
+}
+
+internal fun aiStateLabel(state: ModelState) = when (state) {
+    ModelState.UNKNOWN -> "checking"
+    ModelState.NOT_AVAILABLE -> "not supported on this device"
+    ModelState.NOT_INSTALLED -> "available to download"
+    ModelState.DOWNLOADING -> "downloading"
+    ModelState.READY -> "ready"
+    ModelState.FAILED -> "error"
+    ModelState.DISABLED -> "disabled"
 }

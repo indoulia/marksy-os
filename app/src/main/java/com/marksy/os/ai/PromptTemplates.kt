@@ -41,7 +41,10 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
     override val name = "on-device-model"
 
     override suspend fun interpret(text: String, previous: AskMarksy.Query?, nowMillis: Long, zone: ZoneId): AskMarksy.Query? {
-        if (service.available(AiTask.INTERPRET_QUERY) == null) return null
+        if (service.available(AiTask.INTERPRET_QUERY) == null) {
+            service.refresh()
+            if (service.available(AiTask.INTERPRET_QUERY) == null) return null
+        }
         val outcome = service.run(
             PromptTemplates.ASK_INTERPRET,
             mapOf("question" to text, "previous" to (previous?.intent?.name ?: "none")),
