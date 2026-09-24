@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,9 @@ fun StockDetailScreen(state: MarketDataState<InstrumentLifecycleDto>, padding: P
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        item {
+            TextButton(onClick = onBack) { Text("Back to search", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp) }
+        }
         when (state) {
             is MarketDataState.Loading -> item { Text("Checking instrument...", color = MarksyTheme.TextMuted, fontSize = 13.sp) }
             is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
@@ -58,8 +62,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.instrumentContent(ins
         Text("${instrument.symbol} · ${instrument.exchange}", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
     }
     item {
-        val price = instrument.market.lastClosePrice
-        Text(if (price != null) "Last close: $price" else "Last close: unavailable", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+        val market = instrument.market
+        val priceLine = if (market.lastClosePrice != null) "Last close: ${market.lastClosePrice}" else "Last close: unavailable"
+        val freshnessDetails = listOfNotNull(market.asOfSessionDate, market.freshnessState)
+        val line = if (freshnessDetails.isNotEmpty()) "$priceLine (${freshnessDetails.joinToString(", ")})" else priceLine
+        Text(line, color = MarksyTheme.TextSecondary, fontSize = 13.sp)
     }
     if (instrument.predictions.isEmpty()) {
         item { EmptyState("No predictions yet", "Marksy has not published a prediction for this instrument.") }

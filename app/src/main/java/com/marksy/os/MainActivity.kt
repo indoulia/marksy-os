@@ -13,8 +13,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -468,7 +470,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
+    Column(
+        Modifier.fillMaxSize().background(MarksyTheme.Background)
+            .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
+            .verticalScroll(rememberScrollState())
+    ) {
         ScreenHeader("Marksy Gateway")
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (configured) "Gateway configured" else "Gateway not configured", color = if (configured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold)
@@ -527,7 +533,15 @@ class MainActivity : ComponentActivity() {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        runCatching { store.setMarketApiKey(marketKey.trim()) }
+                        val url = baseUrl.trim()
+                        if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
+                            message = "Base URL must start with https://"
+                            return@Button
+                        }
+                        runCatching {
+                            store.setBaseUrl(url)
+                            store.setMarketApiKey(marketKey.trim())
+                        }
                             .onSuccess { marketKey = ""; revealMarketKey = false; marketKeyConfigured = true; message = "Market key saved securely on this device." }
                             .onFailure { message = "Could not save the market key. Try again." }
                     },
@@ -572,7 +586,7 @@ class MainActivity : ComponentActivity() {
                 revealKey = false
                 configured = false
                 baseUrl = BuildConfig.MARKSY_API_BASE_URL
-                message = "Credential removed. Trading delivery is disabled until configured."
+                message = "Credential removed. Trading delivery and Market Intelligence are disabled until reconfigured."
             }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
             message?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
         }

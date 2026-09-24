@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +19,8 @@ private enum class MarketTab(val label: String) { OVERVIEW("Overview"), STOCKS("
 fun MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) {
     var tab by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW) }
     var selectedSymbol by rememberSaveable { mutableStateOf<String?>(null) }
+
+    BackHandler(enabled = selectedSymbol != null) { selectedSymbol = null }
 
     Column(modifier = Modifier.fillMaxSize().background(MarksyTheme.Background)) {
         TabRow(selectedTabIndex = tab.ordinal, containerColor = MarksyTheme.Surface) {
