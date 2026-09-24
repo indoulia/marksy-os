@@ -251,8 +251,8 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
-            "More" to Icons.Default.MoreHoriz,
-            "Market" to Icons.Default.QueryStats
+            "Market" to Icons.Default.QueryStats,
+            "More" to Icons.Default.MoreHoriz
         )
 
         Scaffold(
@@ -348,7 +348,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
-                    onOpenProfile = { selectedTab = 4 },
+                    onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
                     onDelete = deleteNow,
                     onHide = { homeHidden = homeHidden + it.id },
@@ -381,7 +381,7 @@ class MainActivity : ComponentActivity() {
                     loadEvent = { id -> repository.event(id) }
                 )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
-                selectedTab == 5 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
+                selectedTab == 4 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,
@@ -512,6 +512,38 @@ class MainActivity : ComponentActivity() {
                     TextButton(onClick = { revealKey = !revealKey }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
                 }
             )
+            Button(
+                onClick = {
+                    val url = baseUrl.trim()
+                    if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
+                        message = "Base URL must start with https://"
+                        return@Button
+                    }
+                    runCatching {
+                        store.setBaseUrl(url)
+                        store.setIntegrationKey(key.trim())
+                    }.onSuccess {
+                        key = ""
+                        revealKey = false
+                        configured = true
+                        message = "Saved securely on this device."
+                    }.onFailure {
+                        message = "Could not save the credential. Try again."
+                    }
+                },
+                enabled = key.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
+            ) { Text("Save Securely", color = Color.Black) }
+            OutlinedButton(onClick = {
+                store.clearIntegrationKey()
+                store.clearBaseUrl()
+                key = ""
+                revealKey = false
+                configured = false
+                baseUrl = BuildConfig.MARKSY_API_BASE_URL
+                message = "Credential removed. Trading delivery and Market Intelligence are disabled until reconfigured."
+            }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
+
             Text("Market intelligence key", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             Text(
                 "A separate, scoped API key for market data, predictions and IPOs — minted by a Marksy admin, independent of the integration key above.",
@@ -557,37 +589,7 @@ class MainActivity : ComponentActivity() {
                 }) { Text("Remove", color = MarksyTheme.RedUrgent) }
             }
             Text(if (marketKeyConfigured) "Market key configured" else "Market key not configured", color = if (marketKeyConfigured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontSize = 12.sp)
-            Button(
-                onClick = {
-                    val url = baseUrl.trim()
-                    if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
-                        message = "Base URL must start with https://"
-                        return@Button
-                    }
-                    runCatching {
-                        store.setBaseUrl(url)
-                        store.setIntegrationKey(key.trim())
-                    }.onSuccess {
-                        key = ""
-                        revealKey = false
-                        configured = true
-                        message = "Saved securely on this device."
-                    }.onFailure {
-                        message = "Could not save the credential. Try again."
-                    }
-                },
-                enabled = key.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
-            ) { Text("Save Securely", color = Color.Black) }
-            OutlinedButton(onClick = {
-                store.clearIntegrationKey()
-                store.clearBaseUrl()
-                key = ""
-                revealKey = false
-                configured = false
-                baseUrl = BuildConfig.MARKSY_API_BASE_URL
-                message = "Credential removed. Trading delivery and Market Intelligence are disabled until reconfigured."
-            }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
+
             message?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
         }
     }

@@ -22,7 +22,7 @@ fun MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValue
 
     BackHandler(enabled = selectedSymbol != null) { selectedSymbol = null }
 
-    Column(modifier = Modifier.fillMaxSize().background(MarksyTheme.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
         TabRow(selectedTabIndex = tab.ordinal, containerColor = MarksyTheme.Surface) {
             MarketTab.entries.forEach { candidate ->
                 Tab(selected = tab == candidate, onClick = { tab = candidate; if (candidate != MarketTab.STOCKS) selectedSymbol = null }, text = { Text(candidate.label) })
