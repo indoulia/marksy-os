@@ -12,6 +12,26 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class NotificationTextExtractorTest {
     @Test
+    fun stripsHtmlMarkupSomeAppsPostAsLiteralText() {
+        assertEquals(
+            "Material EOD update — 23 Sep 2026 - P-001 HDFCBANK\nline two & more",
+            NotificationTextExtractor.stripMarkup("<b>Material EOD update — 23 Sep 2026</b> - <b>P-001 HDFCBANK</b><br>line two &amp; more")
+        )
+        // Comparison operators and unknown angle-bracket text are left alone.
+        assertEquals("price < 500 and > 400, <not a tag>", NotificationTextExtractor.stripMarkup("price < 500 and > 400, <not a tag>"))
+    }
+
+    @Test
+    fun extractedTitleAndBodyAreFreeOfMarkup() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "<i>Update</i>")
+            putCharSequence("android.text", "<b>HDFCBANK</b> &gt; target")
+        }
+        assertEquals("Update", NotificationTextExtractor.extractTitle(extras))
+        assertEquals("HDFCBANK > target", NotificationTextExtractor.extract(extras).lines().last())
+    }
+
+    @Test
     fun extractsAndTrimsNotificationTitle() {
         val extras = Bundle().apply {
             putCharSequence("android.title", "  Order executed  ")
@@ -116,5 +136,26 @@ class NotificationTextExtractorTest {
         val result = NotificationTextExtractor.extract(extras)
         assertTrue(result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT - 1}"))
         assertTrue(!result.contains("line${NotificationTextExtractor.MAX_LINE_COUNT}"))
+    }
+
+    // Expanded content: chat history (MessagingStyle) is hidden behind the one-line summary.
+    @Test
+    fun includesMessagingStyleHistoryWithSenders() {
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "Family Group")
+            putCharSequence("android.text", "See you at 8")
+            putParcelableArray("android.messages", arrayOf(
+                Bundle().apply { putCharSequence("sender", "Mom"); putCharSequence("text", "Dinner tonight?") },
+                Bundle().apply { putCharSequence("sender", "Dad"); putCharSequence("text", "See you at 8") }
+            ))
+        }
+
+        assertEquals("Mom: Dinner tonight?\nDad: See you at 8", NotificationTextExtractor.extract(extras))
+    }
+
+    @Test
+    fun mergeKeepsEarlierLinesAndAppendsOnlyNewOnes() {
+        assertEquals("A\nB\nC", NotificationTextExtractor.merge("A\nB", "B\nC"))
+        assertEquals("A\nB", NotificationTextExtractor.merge("A\nB", "A"))
     }
 }

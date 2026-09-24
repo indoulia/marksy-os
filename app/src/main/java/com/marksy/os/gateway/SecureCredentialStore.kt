@@ -50,6 +50,21 @@ class SecureCredentialStore(context: Context) {
         preferences.edit().remove(KEY_CIPHERTEXT).remove(KEY_IV).apply()
     }
 
+    // The base URL is endpoint configuration, not a secret, so it is stored as
+    // plaintext. A blank value clears it, falling delivery back to the build default.
+    fun getBaseUrl(): String? =
+        preferences.getString(KEY_BASE_URL, null)?.trim()?.takeIf { it.isNotBlank() }
+
+    fun setBaseUrl(value: String) {
+        val url = value.trim()
+        if (url.isBlank()) clearBaseUrl()
+        else preferences.edit().putString(KEY_BASE_URL, url).apply()
+    }
+
+    fun clearBaseUrl() {
+        preferences.edit().remove(KEY_BASE_URL).apply()
+    }
+
     private fun secretKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -77,6 +92,7 @@ class SecureCredentialStore(context: Context) {
         const val PREFERENCES = "secure_credentials"
         const val KEY_CIPHERTEXT = "marksy_integration_key"
         const val KEY_IV = "marksy_integration_key_iv"
+        const val KEY_BASE_URL = "marksy_base_url"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
     }

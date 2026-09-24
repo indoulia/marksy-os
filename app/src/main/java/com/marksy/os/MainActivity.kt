@@ -34,16 +34,36 @@ import kotlinx.coroutines.launch
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.GatewayQrParser
+import com.marksy.os.gateway.MarketRepository
+import com.marksy.os.gateway.MarketState
 import com.marksy.os.gateway.SecureCredentialStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
+import com.marksy.os.intelligence.NotificationTrend
+import com.marksy.os.ui.SecondZonePickerDialog
+import com.marksy.os.ui.WorldClock
+import com.marksy.os.ui.WorldClockSettings
+import com.marksy.os.weather.Weather
+import com.marksy.os.weather.WeatherRepository
+import android.Manifest
+import android.content.pm.PackageManager
+import kotlinx.coroutines.delay
 import com.marksy.os.intelligence.SmartInboxModel
+import com.marksy.os.notification.MarksyNotificationListenerService
+import com.marksy.os.notification.ReminderScheduler
 import com.marksy.os.notification.NotificationListenerStatus
 import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
+import com.marksy.os.ui.AskExchange
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
+import com.marksy.os.ui.CompactTextField
+import com.marksy.os.ui.DailyDigestModel
+import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.ContextGraph
@@ -71,9 +91,12 @@ import com.marksy.os.ui.toTradingInsight
 class MainActivity : ComponentActivity() {
     private var notificationAccessEnabled by mutableStateOf(false)
     private var whatsappConnectorEnabled by mutableStateOf(false)
+    /** Set when a reminder notification is tapped; the event dialog opens for it. */
+    private var pendingEventId by mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingEventId = intent?.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L)?.takeIf { it >= 0 }
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
@@ -83,9 +106,16 @@ class MainActivity : ComponentActivity() {
         setContent { MarksyApp() }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L).takeIf { it >= 0 }?.let { pendingEventId = it }
+    }
+
     override fun onResume() {
         super.onResume()
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
+        // Reinstalls/updates can leave access granted but the listener unbound.
+        if (notificationAccessEnabled) MarksyNotificationListenerService.requestRebind(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
     }
 
@@ -104,16 +134,37 @@ class MainActivity : ComponentActivity() {
             repository, learning, learningSettings, actionRepository,
             ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
         ))
+        LaunchedEffect(Unit) { repository.stripStoredMarkup() }
         val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
-        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
         val learningEnabled by vm.learningEnabled.collectAsStateWithLifecycle()
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val inboxEvents by vm.activeEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
-        val inboxEvents by vm.inboxEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val trend by vm.notificationTrend.collectAsStateWithLifecycle(initialValue = NotificationTrend(0, 0, 0, List(7) { 0 }, 0))
+        val categoryStats by vm.homeCategoryStats.collectAsStateWithLifecycle(initialValue = emptyMap())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
+
+        var locationGranted by remember { mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
+        val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationGranted = it }
+        val weather by produceState<Weather?>(null, locationGranted) {
+            while (locationGranted) {
+                value = WeatherRepository.current(applicationContext) ?: value
+                delay(30 * 60 * 1000L)
+            }
+        }
+
+        // Marksy snapshot refreshes while the app is open; screens show honest states when it is missing.
+        val market by produceState<MarketState>(MarketState.Loading) {
+            while (true) {
+                value = MarketRepository.fetch().let { fresh -> if (fresh is MarketState.Unavailable && value is MarketState.Loaded) value else fresh }
+                delay(5 * 60 * 1000L)
+            }
+        }
+        val todayDigest = remember(inboxEvents) { DailyDigestModel.build(inboxEvents) }
+        val askConversation = remember { mutableStateListOf<AskExchange>() }
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
@@ -129,20 +180,56 @@ class MainActivity : ComponentActivity() {
         val healthRepository = remember { com.marksy.os.data.HealthRepository(applicationContext) }
         val memoryRepository = remember { MarksyContainer.memory(applicationContext) }
         var showDigest by rememberSaveable { mutableStateOf(false) }
+        var showBriefing by rememberSaveable { mutableStateOf(false) }
         var showGatewaySettings by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
         var selectedTradingInsight by remember { mutableStateOf<TradingInsight?>(null) }
 
-        val openEvent: (NotificationEventEntity) -> Unit = { selectedEvent = it }
+        val openEvent: (NotificationEventEntity) -> Unit = { event ->
+            selectedEvent = event
+            if (!event.isRead) vm.setRead(event.id, true)
+        }
+        val snackbar = remember { SnackbarHostState() }
+        val scope = rememberCoroutineScope()
+        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        LaunchedEffect(pendingEventId, inboxEvents) {
+            val id = pendingEventId ?: return@LaunchedEffect
+            inboxEvents.firstOrNull { it.id == id }?.let { openEvent(it); pendingEventId = null }
+        }
+        val archiveWithUndo: (NotificationEventEntity) -> Unit = { event ->
+            vm.archive(event.id)
+            scope.launch {
+                if (snackbar.showSnackbar("Archived", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.unarchive(event.id)
+            }
+        }
+        // Delete is permanent and immediate by request; Archive keeps its undo.
+        val deleteNow: (NotificationEventEntity) -> Unit = { event ->
+            vm.delete(event.id)
+            ReminderScheduler.cancel(applicationContext, event.id)
+            if (selectedEvent?.id == event.id) selectedEvent = null
+        }
+        // Inbox swipes act on a whole thread; one undo restores every row of it.
+        val archiveThreadWithUndo: (List<NotificationEventEntity>) -> Unit = { rows ->
+            vm.archiveThread(rows.map { it.id })
+            scope.launch {
+                if (snackbar.showSnackbar("Archived", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) rows.forEach { vm.unarchive(it.id) }
+            }
+        }
+        // "Hide" drops a row from one page only; nothing changes in storage.
+        var inboxHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
+        var homeHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
+        val homeEvents = remember(events, homeHidden) { events.filterNot { it.id in homeHidden } }
+        val homeSnapshot = remember(homeEvents) { DashboardSnapshot.from(homeEvents) }
         val openCategory: (String) -> Unit = { label ->
             inboxFilterName = SmartInboxModel.Filter.forCategoryLabel(label).name
             selectedTab = 1
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
+                showBriefing -> showBriefing = false
                 showValidation -> showValidation = false
                 showHealth -> showHealth = false
                 showMemory -> showMemory = false
@@ -166,46 +253,51 @@ class MainActivity : ComponentActivity() {
 
         Scaffold(
             containerColor = MarksyTheme.Background,
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (!hostOpen) {
-                    NavigationBar(
-                        containerColor = MarksyTheme.Surface,
-                        contentColor = MarksyTheme.TextSecondary
-                    ) {
-                        tabs.forEachIndexed { index, (label, icon) ->
-                            NavigationBarItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { Icon(icon, contentDescription = label) },
-                                label = { Text(label, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color.Black,
-                                    selectedTextColor = MarksyTheme.PrimaryEmerald,
-                                    indicatorColor = MarksyTheme.PrimaryEmerald,
-                                    unselectedIconColor = MarksyTheme.TextMuted,
-                                    unselectedTextColor = MarksyTheme.TextMuted
-                                )
+                NavigationBar(
+                    containerColor = MarksyTheme.Surface,
+                    contentColor = MarksyTheme.TextSecondary
+                ) {
+                    tabs.forEachIndexed { index, (label, icon) ->
+                        NavigationBarItem(
+                            selected = selectedTab == index,
+                            onClick = {
+                                // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
+                                showTimeline = false; showCalendar = false; showInsights = false
+                                showRules = false; showDigest = false; showGatewaySettings = false
+                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false
+                                selectedTab = index
+                            },
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color.Black,
+                                selectedTextColor = MarksyTheme.PrimaryEmerald,
+                                indicatorColor = MarksyTheme.PrimaryEmerald,
+                                unselectedIconColor = MarksyTheme.TextMuted,
+                                unselectedTextColor = MarksyTheme.TextMuted
                             )
-                        }
+                        )
                     }
                 }
             }
         ) { padding ->
             when {
                 showValidation -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("30-day validation") { showValidation = false }
+                    ScreenHeader("30-day validation")
                     ValidationScreen(validationRepository, padding)
                 }
                 showHealth -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("Marksy Health") { showHealth = false }
+                    ScreenHeader("Marksy Health")
                     HealthScreen(padding) { healthRepository.report() }
                 }
                 showMemory -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("What Marksy remembers") { showMemory = false }
+                    ScreenHeader("What Marksy remembers")
                     MemoryScreen(memoryRepository, padding)
                 }
                 showLearning -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("What Marksy learned") { showLearning = false }
+                    ScreenHeader("What Marksy learned")
                     LearningScreen(
                         profile = learningProfile,
                         enabled = learningEnabled,
@@ -217,32 +309,56 @@ class MainActivity : ComponentActivity() {
                         aiStatus = remember { MarksyContainer.intelligence(applicationContext).status() }
                     )
                 }
-                showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }
-                showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
-                showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
-                showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }, onOpenMemory = { showMemory = true }) { showRules = false }
-                showDigest -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("Daily Briefing") { showDigest = false }
+                showBriefing -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("Daily Briefing")
                     BriefingScreen(
                         padding = padding,
                         load = { kind -> briefingRepository.briefing(kind) },
-                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let(openEvent) } }
                     )
                 }
-                showGatewaySettings -> GatewaySettingsHost(padding) { showGatewaySettings = false }
+                showTimeline -> TimelineHost(timelineEvents, padding, openEvent)
+                showCalendar -> CalendarHost(historyEvents, padding, openEvent)
+                showInsights -> InsightsHost(inboxEvents, padding, market) { showInsights = false; openCategory(it) }
+                showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }, onOpenMemory = { showMemory = true })
+                showDigest -> DigestHost(
+                    inboxEvents, padding,
+                    onOpenInbox = { showDigest = false; inboxFilterName = it; selectedTab = 1 },
+                    onOpenTrading = { showDigest = false; selectedTab = 3 },
+                    onEventSelected = openEvent
+                )
+                showGatewaySettings -> GatewaySettingsHost(padding)
                 selectedTab == 0 -> DashboardScreen(
-                    snapshot = snapshot,
-                    events = events,
+                    snapshot = homeSnapshot,
+                    events = homeEvents,
                     onEventSelected = openEvent,
                     onCategorySelected = openCategory,
+                    onOpenTimeline = { showTimeline = true },
+                    onOpenCalendar = { showCalendar = true },
+                    onOpenInsights = { showInsights = true },
+                    trend = trend,
+                    categoryStats = categoryStats,
+                    weather = weather,
+                    weatherAvailable = locationGranted,
+                    onRequestWeather = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                    market = market,
+                    todayDigest = todayDigest,
+                    onOpenTrading = { selectedTab = 3 },
+                    onOpenProfile = { selectedTab = 4 },
+                    onArchive = archiveWithUndo,
+                    onDelete = deleteNow,
+                    onHide = { homeHidden = homeHidden + it.id },
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
-                    events = inboxEvents,
+                    events = inboxEvents.filterNot { it.id in inboxHidden },
                     padding = padding,
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
                     onFilterSelected = { inboxFilterName = it },
+                    onArchive = archiveThreadWithUndo,
+                    onDelete = { rows -> rows.forEach(deleteNow) },
+                    onHide = { rows -> inboxHidden = inboxHidden + rows.map { it.id } },
                     learningProfile = learningProfile,
                     actions = remember(vm) {
                         InboxActions(
@@ -256,11 +372,11 @@ class MainActivity : ComponentActivity() {
                     }
                 )
                 selectedTab == 2 -> AskMarksyScreen(
-                    padding = padding,
-                    ask = { q, prev -> askRepository.ask(q, prev) },
-                    onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                    padding, inboxEvents, market, openEvent, askConversation,
+                    askGrounded = { q, prev -> askRepository.ask(q, prev) },
+                    loadEvent = { id -> repository.event(id) }
                 )
-                selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding) { selectedTradingInsight = it }
+                selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,
@@ -279,30 +395,43 @@ class MainActivity : ComponentActivity() {
                     openInsights = { showInsights = true },
                     openRules = { showRules = true },
                     openDigest = { showDigest = true },
+                    openBriefing = { showBriefing = true },
                     padding = padding
                 )
             }
         }
 
-        selectedEvent?.let { event ->
-            LaunchedEffect(event.id) { vm.markSeen(event.id); vm.clearActionMessage() }
+        selectedEvent?.let { opened ->
+            // Follow the live row so Keep/Remind changes show immediately.
+            val event = inboxEvents.firstOrNull { it.id == opened.id } ?: opened
+            LaunchedEffect(event.id) { vm.clearActionMessage() }
             // Re-discovered after each action so the list reflects the new state (e.g. resolved).
-            val available = remember(event.id, actionMessage) { vm.availableActions(event) }
+            val available = remember(event, actionMessage) { vm.availableActions(event) }
             var relatedVersion by remember(event.id) { mutableIntStateOf(0) }
             val related by produceState(emptyList<com.marksy.os.data.local.ContextEntity>(), event.id, relatedVersion) { value = vm.relatedEntities(event.id) }
             EventDetailDialog(
                 event = event,
-                actions = available,
+                engineActions = available,
                 related = related,
                 onUnlinkEntity = { entityId -> vm.unlinkEntity(entityId, event.id); relatedVersion++ },
                 actionMessage = actionMessage,
                 onAction = { type, at, detail -> vm.runAction(event.id, type, at, detail) },
-                onRequestNotificationPermission = {
-                    if (android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                },
                 onArchive = { vm.archive(event.id); selectedEvent = null },
                 onUnarchive = { vm.unarchive(event.id); selectedEvent = null },
-                onDismiss = { selectedEvent = null }
+                onDismiss = { selectedEvent = null },
+                onToggleKeep = { vm.setKept(event.id, !event.kept) },
+                onSetReminder = { at ->
+                    vm.setReminder(event.id, at)
+                    if (at == null) {
+                        ReminderScheduler.cancel(applicationContext, event.id)
+                    } else {
+                        ReminderScheduler.schedule(applicationContext, event.id, at)
+                        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+                onMarkUnread = { vm.setRead(event.id, false) }
             )
         }
 
@@ -312,31 +441,76 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun GatewaySettingsHost(padding: PaddingValues, onBack: () -> Unit) {
+@Composable private fun GatewaySettingsHost(padding: PaddingValues) {
     val store = remember { SecureCredentialStore(AppContext.get()) }
     var key by rememberSaveable { mutableStateOf("") }
+    var baseUrl by rememberSaveable { mutableStateOf(store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL) }
     var configured by remember { mutableStateOf(store.getIntegrationKey() != null) }
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var revealKey by rememberSaveable { mutableStateOf(false) }
+
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val contents = result.contents
+        if (contents == null) {
+            message = "Scan cancelled."
+        } else {
+            val parsed = GatewayQrParser.parse(contents)
+            parsed.integrationKey?.let { key = it }
+            parsed.baseUrl?.let { baseUrl = it }
+            revealKey = true
+            message = if (parsed.hasAny) "Scanned. Review the fields and Save." else "QR code not recognized."
+        }
+    }
+
     Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
-        ScreenHeader("Marksy Gateway", onBack)
+        ScreenHeader("Marksy Gateway")
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (configured) "Gateway configured" else "Gateway not configured", color = if (configured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold)
-            Text("The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
-            OutlinedTextField(
+            Text("Scan the QR code from the Marksy admin, or enter the values manually. The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+
+            OutlinedButton(
+                onClick = {
+                    scanLauncher.launch(ScanOptions().apply {
+                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        setPrompt("Scan the Marksy gateway QR")
+                        setBeepEnabled(false)
+                        setOrientationLocked(false)
+                    })
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MarksyTheme.PrimaryEmerald)
+                Spacer(Modifier.width(8.dp))
+                Text("Scan QR code", color = MarksyTheme.PrimaryEmerald)
+            }
+
+            CompactTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = "Base URL"
+            )
+            CompactTextField(
                 value = key,
                 onValueChange = { key = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Integration key") },
-                singleLine = true,
+                label = "Integration key",
                 visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    TextButton(onClick = { revealKey = !revealKey }) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald) }
+                trailing = {
+                    TextButton(onClick = { revealKey = !revealKey }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
                 }
             )
             Button(
                 onClick = {
-                    runCatching { store.setIntegrationKey(key.trim()) }.onSuccess {
+                    val url = baseUrl.trim()
+                    if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
+                        message = "Base URL must start with https://"
+                        return@Button
+                    }
+                    runCatching {
+                        store.setBaseUrl(url)
+                        store.setIntegrationKey(key.trim())
+                    }.onSuccess {
                         key = ""
                         revealKey = false
                         configured = true
@@ -350,9 +524,11 @@ class MainActivity : ComponentActivity() {
             ) { Text("Save Securely", color = Color.Black) }
             OutlinedButton(onClick = {
                 store.clearIntegrationKey()
+                store.clearBaseUrl()
                 key = ""
                 revealKey = false
                 configured = false
+                baseUrl = BuildConfig.MARKSY_API_BASE_URL
                 message = "Credential removed. Trading delivery is disabled until configured."
             }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
             message?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
@@ -360,16 +536,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) } }
-@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
-@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights", onBack); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); Row(Modifier.padding(horizontal = 10.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned") }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers") } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline"); TimelineScreen(events, PaddingValues(), onEventSelected) } }
+@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
+@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights"); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation"); Row(Modifier.padding(horizontal = 10.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned", fontSize = 12.sp) }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers", fontSize = 12.sp) } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest"); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
 
-@Composable private fun ScreenHeader(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = MarksyTheme.TextPrimary) }
-        Text(title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    }
+@Composable private fun ScreenHeader(title: String) {
+    // Same title style as the tab screens (Inbox, Trading); navigation is via the bottom bar and system back.
+    Text(title, color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp))
 }
 
 @Composable private fun MoreScreen(
@@ -386,9 +561,11 @@ class MainActivity : ComponentActivity() {
     openInsights: () -> Unit,
     openRules: () -> Unit,
     openDigest: () -> Unit,
+    openBriefing: () -> Unit,
     padding: PaddingValues
 ) {
     var showClear by remember { mutableStateOf(false) }
+    var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val store = remember { SecureCredentialStore(AppContext.get()) }
@@ -400,7 +577,7 @@ class MainActivity : ComponentActivity() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("More & Settings", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("More & Settings", color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
         }
@@ -434,18 +611,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black) } } }
-        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black) } } }
-        item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black) } } }
-        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black) } } }
-        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black) } } }
-        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black) } } }
-        item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black) } } }
-        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black) } } }
-        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black) } } }
-        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black) } } }
-        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White) } } }
+        item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openBriefing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Briefing", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black, fontSize = 12.sp) } } }
+        item {
+            val zone by WorldClockSettings.secondZone
+            SettingsCard("World clock", WorldClock.abbreviation(java.time.ZonedDateTime.now(zone)), "Home shows IST and ${WorldClock.cityName(zone)}. Tap the clocks to convert meeting times.") {
+                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showZonePicker = true }, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Change Second Clock", color = Color.Black, fontSize = 12.sp) }
+            }
+        }
+        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
     }
+    if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
     if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll(); gatewayConfigured = store.getIntegrationKey() != null } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }, containerColor = MarksyTheme.SurfaceRaised)
 }
 
@@ -455,14 +640,14 @@ class MainActivity : ComponentActivity() {
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
-        Column(Modifier.padding(15.dp)) {
+        Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
                 Text(status, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-            action?.let { Spacer(Modifier.height(10.dp)); it() }
+            action?.let { Spacer(Modifier.height(8.dp)); it() }
         }
     }
 }

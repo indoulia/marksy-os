@@ -45,6 +45,12 @@ data class NotificationEventEntity(
     /** True when the user has archived the event from active surfaces. */
     val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Opened by the user; unread rows render bold. New content for the same source key resets it. */
+    val isRead: Boolean = false,
+    /** Kept forever: retention pruning never deletes it. */
+    val kept: Boolean = false,
+    /** Pending reminder time; retention skips the row until the reminder fires. */
+    val remindAt: Long? = null,
     // EPIC-010 derived intelligence. Written only by EventIntelligencePipeline; raw capture fields above stay authoritative.
     /** EventLifecycle.State name. Rows from before v3 migrate to ACTIVE/ARCHIVED. */
     val lifecycleState: String = "NEW",

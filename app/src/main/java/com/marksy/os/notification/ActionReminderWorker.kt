@@ -40,15 +40,15 @@ class AndroidActionPlatform(private val context: Context) : ActionPlatform {
     // Unique per action + KEEP makes recovery rescheduling idempotent.
     override fun scheduleReminder(actionId: Long, atMillis: Long) {
         val delay = (atMillis - System.currentTimeMillis()).coerceAtLeast(0L)
-        val request = OneTimeWorkRequestBuilder<ReminderWorker>()
+        val request = OneTimeWorkRequestBuilder<ActionReminderWorker>()
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf(ReminderWorker.KEY_ACTION_ID to actionId))
+            .setInputData(workDataOf(ActionReminderWorker.KEY_ACTION_ID to actionId))
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork("marksy-reminder-$actionId", ExistingWorkPolicy.KEEP, request)
     }
 }
 
-class ReminderWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
+class ActionReminderWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val actionId = inputData.getLong(KEY_ACTION_ID, -1L).takeIf { it > 0 } ?: return Result.failure()
         val state = MarksyContainer.actions(applicationContext).completeReminder(actionId) { _, event ->

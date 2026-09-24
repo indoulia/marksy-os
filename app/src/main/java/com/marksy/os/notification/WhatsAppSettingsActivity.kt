@@ -22,7 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.marksy.os.ui.CompactTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -120,13 +120,11 @@ private fun WhatsAppSettingsScreen(
 
         Text("Watched senders (${watchedSenders.size}/25)", color = WhatsAppText, fontSize = 18.sp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
+            CompactTextField(
                 value = sender,
                 onValueChange = { sender = it.take(120) },
                 modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("Sender name") },
-                placeholder = { Text("e.g. Trading Desk") }
+                placeholder = "Sender name, e.g. Trading Desk"
             )
             Spacer(Modifier.width(8.dp))
             Button(

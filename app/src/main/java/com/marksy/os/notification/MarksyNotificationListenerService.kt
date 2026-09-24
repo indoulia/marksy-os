@@ -1,5 +1,7 @@
 package com.marksy.os.notification
 
+import android.content.ComponentName
+import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -32,16 +34,31 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             runCatching { ingestion.connected(ConnectorRegistry.NOTIFICATIONS) }
             runCatching { MarksyContainer.actions(applicationContext).recover() }
         }
-        Log.i(TAG, "Notification listener connected; background work scheduled")
+        // Anything posted while the listener was unbound (app update, OS kill) is still in the shade.
+        val backlog = runCatching { activeNotifications.orEmpty().toList() }.getOrDefault(emptyList())
+        backlog.forEach(::capture)
+        Log.i(TAG, "Notification listener connected; backfilled ${backlog.size} active notifications")
     }
 
     override fun onListenerDisconnected() {
-        Log.w(TAG, "Notification listener disconnected")
+        Log.w(TAG, "Notification listener disconnected; requesting rebind")
         serviceScope.launch { runCatching { ingestion.disconnected(ConnectorRegistry.NOTIFICATIONS) } }
         super.onListenerDisconnected()
+        requestRebind(applicationContext)
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
+    override fun onNotificationPosted(sbn: StatusBarNotification) = capture(sbn)
+
+    private fun capture(sbn: StatusBarNotification) {
+        // A malformed notification from any app must never take the listener down.
+        try {
+            captureUnsafe(sbn)
+        } catch (e: Exception) {
+            Log.e(TAG, "Skipped notification from ${sbn.packageName}", e)
+        }
+    }
+
+    private fun captureUnsafe(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
         if (!NotificationLifecyclePolicy.shouldCapture(
                 notificationFlags = sbn.notification.flags,
@@ -51,10 +68,11 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             )
         ) return
 
-        val extras = sbn.notification.extras
+        val extras = sbn.notification.extras ?: return
         val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
+        OriginalAppLauncher.remember(sbn)
 
         val raw = RawCapture(
             connectorId = ConnectorRegistry.NOTIFICATIONS,
@@ -69,15 +87,16 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         serviceScope.launch {
             val result = ingestion.ingest(raw)
             if (result is IngestionPipeline.Result.Failed) {
-                // Not stored, so leave it in the shade rather than lose it.
+                // Not stored, so never dismiss it.
                 Log.e(TAG, "Failed to persist notification event (${result.reason})")
                 return@launch
             }
-            // Preserves V1 behaviour: the captured notification is removed from the shade.
-            try {
-                cancelNotification(sbn.key)
-            } catch (_: SecurityException) {
-                Log.w(TAG, "Unable to cancel notification")
+            if (DISMISS_AFTER_CAPTURE) {
+                try {
+                    cancelNotification(sbn.key)
+                } catch (_: SecurityException) {
+                    Log.w(TAG, "Unable to cancel notification")
+                }
             }
         }
     }
@@ -89,5 +108,14 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "MarksyNotificationListener"
+        // Off for now: captured notifications stay in the system shade (user request 2026-09-24).
+        private const val DISMISS_AFTER_CAPTURE = false
+
+        /** Safe to call any time; the system ignores it when access is off or already bound. */
+        fun requestRebind(context: Context) {
+            runCatching {
+                NotificationListenerService.requestRebind(ComponentName(context, MarksyNotificationListenerService::class.java))
+            }.onFailure { Log.w(TAG, "Rebind request failed", it) }
+        }
     }
 }

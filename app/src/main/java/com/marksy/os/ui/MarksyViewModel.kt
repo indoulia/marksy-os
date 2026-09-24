@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.flowOf
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
+import com.marksy.os.intelligence.HomeCategoryStats
+import com.marksy.os.intelligence.HomePeriod
+import com.marksy.os.intelligence.NotificationTrend
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -74,6 +79,19 @@ class MarksyViewModel(
     val tradingEvents: Flow<List<NotificationEventEntity>> = repository.observeTrading()
     val timelineEvents: Flow<List<NotificationEventEntity>> = repository.observeTimeline()
     val historyEvents: Flow<List<NotificationEventEntity>> = repository.observeHistory()
+    val activeEvents: Flow<List<NotificationEventEntity>> = repository.observeActive()
+
+    val notificationTrend: Flow<NotificationTrend> = activeEvents
+        .map { NotificationTrend.from(it, System.currentTimeMillis()) }
+        .flowOn(Dispatchers.Default)
+
+    val homeCategoryStats: Flow<Map<HomePeriod, HomeCategoryStats>> = activeEvents
+        .map { events ->
+            val now = System.currentTimeMillis()
+            HomePeriod.entries.associateWith { HomeCategoryStats.from(events, now, it) }
+        }
+        .flowOn(Dispatchers.Default)
+
     val inboxEvents: Flow<List<NotificationEventEntity>> = repository.observeInbox()
 
     val intelligentEvents: Flow<List<EventIntelligence.Result>> = recentEvents.map { events ->
@@ -96,6 +114,26 @@ class MarksyViewModel(
 
     fun archive(eventId: Long) {
         viewModelScope.launch { repository.archive(eventId) }
+    }
+
+    fun delete(eventId: Long) {
+        viewModelScope.launch { repository.delete(eventId) }
+    }
+
+    fun restore(event: NotificationEventEntity) {
+        viewModelScope.launch { repository.restore(event) }
+    }
+
+    fun setRead(eventId: Long, read: Boolean) {
+        viewModelScope.launch { repository.setRead(eventId, read) }
+    }
+
+    fun setKept(eventId: Long, kept: Boolean) {
+        viewModelScope.launch { repository.setKept(eventId, kept) }
+    }
+
+    fun setReminder(eventId: Long, remindAt: Long?) {
+        viewModelScope.launch { repository.setReminder(eventId, remindAt) }
     }
 
     fun markSeen(eventId: Long) {

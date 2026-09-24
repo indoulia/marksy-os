@@ -27,7 +27,7 @@ Two trading reports of the same event from different brokers are never deduplica
 
 There is one additive migration, v2 -> v3 (`MarksyDatabase.MIGRATION_2_3`). It adds new columns to `notification_events` and these new tables: `learning_signals`, `learning_overrides`, `event_actions`, `context_entities`, `context_links`, `context_relations`, `rule_executions`, `ai_invocations`, `memory_entries`, `connector_events` and `metric_counters`. No existing data is deleted. The migration is tested in `EventIntelligencePipelineTest`, where Room validates every table.
 
-**Merge-order hazard:** `feat/gateway-qr-provisioning` also defines a v3 (`isRead`, `kept`, `remindAt`). Whichever branch merges second must renumber its migration to 3 -> 4. A device that is already on that branch's v3 cannot open this build until that is done.
+**Version 4 (gateway merge):** the gateway branch's read/keep/reminder columns (`isRead`, `kept`, `remindAt`) are now `MIGRATION_3_4`. The intelligence schema is applied idempotently: it checks columns with `PRAGMA table_info` and uses `CREATE ... IF NOT EXISTS`. Because of that, 3 -> 4 also repairs a phone that ran the pre-merge gateway build, whose v3 had only the read/keep/reminder columns. Both upgrade paths are covered by tests in `EventIntelligencePipelineTest`. `isRead` and lifecycle `NEW`/`ACTIVE` are kept in sync in the DAO.
 
 ## Retention vs. long-lived data
 

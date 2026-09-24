@@ -4,6 +4,7 @@ import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.EventLifecycle
 import com.marksy.os.intelligence.PersonalLearning
+import com.marksy.os.notification.NotificationTextExtractor
 import kotlinx.coroutines.flow.Flow
 
 class NotificationRepository(
@@ -36,6 +37,17 @@ class NotificationRepository(
         dao.observeTimeline(limit)
 
     fun observeHistory(): Flow<List<NotificationEventEntity>> = dao.observeHistory()
+
+    fun observeActive(): Flow<List<NotificationEventEntity>> = dao.observeActive()
+
+    /** One-off repair for rows captured before HTML stripping existed; leaves read state untouched. */
+    suspend fun stripStoredMarkup() {
+        dao.findWithPossibleMarkup().forEach { event ->
+            val title = NotificationTextExtractor.stripMarkup(event.title).trim()
+            val body = NotificationTextExtractor.stripMarkup(event.body).trim()
+            if (title != event.title || body != event.body) dao.updateText(event.id, title, body)
+        }
+    }
 
     suspend fun archive(eventId: Long): Boolean {
         learning?.recordAction(listOf(eventId), PersonalLearning.Signal.ARCHIVED_UNOPENED)
@@ -85,4 +97,25 @@ class NotificationRepository(
     suspend fun event(eventId: Long): NotificationEventEntity? = dao.getById(eventId)
 
     suspend fun clearAll() = dao.deleteAll()
+
+    suspend fun delete(eventId: Long): Boolean = dao.deleteById(eventId) > 0
+
+    /** Undo for delete: re-inserts the exact row, id included. */
+    suspend fun restore(event: NotificationEventEntity) { dao.insert(event) }
+
+    suspend fun setRead(eventId: Long, read: Boolean): Int {
+        if (read) learning?.recordAction(listOf(eventId), PersonalLearning.Signal.OPENED)
+        interaction()
+        return dao.setRead(eventId, read)
+    }
+
+    suspend fun setKept(eventId: Long, kept: Boolean): Int {
+        interaction()
+        return dao.setKept(eventId, kept)
+    }
+
+    suspend fun setReminder(eventId: Long, remindAt: Long?): Int {
+        interaction()
+        return dao.setReminder(eventId, remindAt)
+    }
 }

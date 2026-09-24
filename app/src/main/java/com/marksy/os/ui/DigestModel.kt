@@ -2,6 +2,7 @@ package com.marksy.os.ui
 
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.EventIntelligence
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -16,10 +17,18 @@ data class DailyDigest(
     val failedTrading: Int,
     val pendingTrading: Int,
     val categoryCounts: Map<String, Int>,
-    val topSources: List<Pair<String, Int>>,
-    val tomorrowEvents: List<NotificationEventEntity>
+    val topSources: List<Pair<String, Int>>
 ) {
     val title: String get() = "Today in 60 Seconds"
+
+    fun shareText(): String = buildString {
+        appendLine("Marksy Daily Digest · ${date.toLocalDate()}")
+        appendLine("$totalNotifications notifications received")
+        appendLine("${attentionEvents.size} required attention")
+        if (tradingEvents.isNotEmpty()) appendLine("${tradingEvents.size} trading events")
+        categoryCounts.forEach { (category, count) -> appendLine("${category.lowercase().replaceFirstChar { it.uppercase() }}: $count") }
+        if (topSources.isNotEmpty()) append("Top sources: " + topSources.joinToString { (name, count) -> "$name ($count)" })
+    }.trim()
 }
 
 object DailyDigestModel {
@@ -31,23 +40,19 @@ object DailyDigestModel {
         val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
         val start = now.toLocalDate().atStartOfDay(zone)
         val tomorrow = start.plusDays(1)
-        val dayAfter = start.plusDays(2)
 
         val today = events.filter { event ->
             val posted = Instant.ofEpochMilli(event.postedAt).atZone(zone)
             !posted.isBefore(start) && posted.isBefore(tomorrow)
         }
-        val tomorrowEvents = events.filter { event ->
-            val posted = Instant.ofEpochMilli(event.postedAt).atZone(zone)
-            !posted.isBefore(tomorrow) && posted.isBefore(dayAfter)
-        }.sortedByDescending { it.priority }
-
+        // Same threshold as Home's Important card so both screens agree.
         val attention = today
-            .filter { it.priority >= 65 }
-            .sortedWith(compareByDescending<NotificationEventEntity> { it.priority }.thenByDescending { it.postedAt })
-            .take(5)
+            .map { it to EventIntelligence.analyze(it, nowMillis).attentionScore }
+            .filter { it.second >= ATTENTION_SCORE }
+            .sortedWith(compareByDescending<Pair<NotificationEventEntity, Int>> { it.second }.thenByDescending { it.first.postedAt })
+            .map { it.first }
         val trading = today.filter { it.isTrading }.sortedByDescending { it.postedAt }
-        val categories = today.groupingBy { it.category.ifBlank { "other" } }.eachCount().toList()
+        val categories = today.groupingBy { it.category.ifBlank { "OTHER" }.uppercase() }.eachCount().toList()
             .sortedByDescending { it.second }.take(5).toMap()
         val sources = today.groupingBy { it.sourceName.ifBlank { "Unknown source" } }.eachCount()
             .toList().sortedByDescending { it.second }.take(5)
@@ -61,8 +66,9 @@ object DailyDigestModel {
             failedTrading = trading.count { it.deliveryState == DeliveryState.FAILED.name },
             pendingTrading = trading.count { it.deliveryState == DeliveryState.PENDING.name || it.deliveryState == DeliveryState.IN_FLIGHT.name },
             categoryCounts = categories,
-            topSources = sources,
-            tomorrowEvents = tomorrowEvents.take(5)
+            topSources = sources
         )
     }
+
+    private const val ATTENTION_SCORE = 70
 }

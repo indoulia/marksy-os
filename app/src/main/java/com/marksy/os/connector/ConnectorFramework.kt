@@ -13,6 +13,7 @@ import com.marksy.os.intelligence.RuleApplication
 import com.marksy.os.intelligence.RuleEngine
 import com.marksy.os.notification.EventFingerprint
 import com.marksy.os.notification.NotificationClassifier
+import com.marksy.os.notification.NotificationTextExtractor
 import java.util.Locale
 
 /**
@@ -119,6 +120,8 @@ class IngestionPipeline(
     sealed class Result {
         data class Stored(val eventId: Long) : Result()
         data object Duplicate : Result()
+        /** Same notification re-posted with new content; the stored row was updated. */
+        data class Updated(val eventId: Long) : Result()
         data object Empty : Result()
         data class Failed(val reason: String) : Result()
     }
@@ -134,7 +137,20 @@ class IngestionPipeline(
             val fingerprint = EventFingerprint.create(raw.sourcePackage, result.category.name, raw.title, raw.body, raw.postedAt)
             // Ingestion-level dedup: same source key, or same content within the fingerprint window.
             val scopes = arrayOf(MetricsRecorder.connector(input.connectorId), MetricsRecorder.source(raw.sourcePackage))
-            if (dao.findIdBySourceKey(raw.sourcePackage, raw.sourceKey) != null || dao.findIdByFingerprint(raw.sourcePackage, fingerprint) != null) {
+            // Apps re-post the same key with new messages: fold new lines into the stored event (and
+            // re-derive it) instead of dropping them as a duplicate.
+            dao.findBySourceKey(raw.sourcePackage, raw.sourceKey)?.let { existing ->
+                val body = NotificationTextExtractor.merge(existing.body, raw.body)
+                val title = raw.title.ifBlank { existing.title }
+                if (body == existing.body && title == existing.title) {
+                    metrics.count(Metric.DUPLICATE, *scopes)
+                    return Result.Duplicate
+                }
+                dao.updateContent(existing.id, title, body, maxOf(existing.postedAt, raw.postedAt))
+                runCatching { intelligence?.process(existing.id) }
+                return Result.Updated(existing.id)
+            }
+            if (dao.findIdByFingerprint(raw.sourcePackage, fingerprint) != null) {
                 metrics.count(Metric.DUPLICATE, *scopes)
                 return Result.Duplicate
             }

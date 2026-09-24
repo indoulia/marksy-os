@@ -4,10 +4,11 @@ import com.marksy.os.data.local.NotificationEventEntity
 
 /** Presentation-ready grouping for Smart Inbox. All decisions remain deterministic and local. */
 object SmartInboxModel {
-    enum class Filter(val label: String, val category: String? = null) {
+    enum class Filter(val label: String, val category: String? = null, val sourceKeyword: String? = null) {
         ALL("All"), TRADING("Trading", "TRADING"), MESSAGES("Messages", "MESSAGES"),
         EMAIL("Emails", "EMAIL"), PAYMENTS("Payments", "PAYMENTS"), BANKING("Banking", "BANKING"),
-        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY");
+        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY"),
+        TEAMS("Teams", sourceKeyword = "teams");
 
         companion object {
             /** Maps a Home dashboard tile label to its inbox filter; unmatched labels fall back to ALL. */
@@ -46,6 +47,7 @@ object SmartInboxModel {
     /** Archived events never re-enter the active inbox. */
     fun filter(events: List<NotificationEventEntity>, filter: Filter): List<NotificationEventEntity> {
         val active = events.filterNot { it.archived }
+        filter.sourceKeyword?.let { keyword -> return active.filter { isFromSource(it, keyword) } }
         return filter.category?.let { category -> active.filter { it.category == category } } ?: active
     }
 
@@ -76,6 +78,9 @@ object SmartInboxModel {
         return Sectioned(needs, recent, quiet)
     }
 
+    fun isFromSource(event: NotificationEventEntity, keyword: String): Boolean =
+        event.sourcePackage.contains(keyword, ignoreCase = true) || event.sourceName.contains(keyword, ignoreCase = true)
+
     // ---- EPIC-011 intelligence inbox -------------------------------------------------
 
     enum class Bucket(val label: String) {
@@ -98,7 +103,8 @@ object SmartInboxModel {
     ) {
         val latest: NotificationEventEntity get() = events.first()
         val count: Int get() = events.size
-        val unread: Boolean get() = events.any { it.lifecycleState == EventLifecycle.State.NEW.name }
+        // isRead (inbox UI) and lifecycle NEW (EPIC-010) are kept in step; either marks the thread unread.
+        val unread: Boolean get() = events.any { !it.isRead || it.lifecycleState == EventLifecycle.State.NEW.name }
         val sources: List<String> get() = (events + duplicates).map { it.sourceName }.distinct()
         /** Every row the thread represents, so an action on the thread also covers folded duplicates. */
         val allIds: List<Long> get() = (events + duplicates).map { it.id }

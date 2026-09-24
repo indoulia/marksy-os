@@ -1,6 +1,16 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,12 +33,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -48,35 +62,43 @@ fun CalendarScreen(
     onEventSelected: (NotificationEventEntity) -> Unit
 ) {
     var monthOffset by rememberSaveable { mutableIntStateOf(0) }
-    var selectedDay by rememberSaveable { mutableIntStateOf(-1) }
+    val today = remember { LocalDate.now() }
+    var selectedDay by rememberSaveable { mutableIntStateOf(today.dayOfMonth) }
     val month = remember(monthOffset) { YearMonth.now().plusMonths(monthOffset.toLong()) }
     val zone = remember { ZoneId.systemDefault() }
     val monthEvents = events.filter {
         val date = Instant.ofEpochMilli(it.postedAt).atZone(zone).toLocalDate()
         date.year == month.year && date.monthValue == month.monthValue
     }
+    val dayCounts = monthEvents.groupingBy { Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth }.eachCount()
+    val maxCount = dayCounts.values.maxOrNull() ?: 0
     val firstDay = month.atDay(1).dayOfWeek.value % 7
+    fun shiftMonth(by: Int) { monthOffset += by; selectedDay = if (monthOffset == 0) today.dayOfMonth else -1 }
+    val swipePx = with(LocalDensity.current) { 56.dp.toPx() }
     val selectedEvents = if (selectedDay > 0) monthEvents.filter {
         Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth == selectedDay
     }.sortedByDescending { it.postedAt } else emptyList()
 
     Column(
-        Modifier.padding(padding).padding(horizontal = 18.dp, vertical = 16.dp)
+        Modifier.padding(padding).padding(horizontal = 18.dp, vertical = 4.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Calendar", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp))
-        Text("Browse your notification history by day.", color = TextSecondary, fontSize = 13.sp)
-        Spacer(Modifier.height(14.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = Surface), modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+            // Swipe left = next month, right = previous.
+            var dragged = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { dragged = 0f },
+                onDragEnd = { if (dragged <= -swipePx) shiftMonth(1) else if (dragged >= swipePx) shiftMonth(-1) }
+            ) { _, delta -> dragged += delta }
+        }) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { monthOffset--; selectedDay = -1 }) { Text("‹") }
+                    TextButton(onClick = { shiftMonth(-1) }) { Text("‹", fontSize = 20.sp, color = Primary) }
                     Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())), color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { monthOffset++; selectedDay = -1 }) { Text("›") }
+                    TextButton(onClick = { shiftMonth(1) }) { Text("›", fontSize = 20.sp, color = Primary) }
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f).padding(vertical = 5.dp)) }
+                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = 2.dp)) }
                 }
                 val cellCount = ((firstDay + month.lengthOfMonth() + 6) / 7) * 7
                 (0 until cellCount).chunked(7).forEach { week ->
@@ -84,21 +106,43 @@ fun CalendarScreen(
                         week.forEach { cell ->
                             val day = cell - firstDay + 1
                             if (day in 1..month.lengthOfMonth()) {
-                                val hasEvents = monthEvents.any { Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth == day }
-                                TextButton(onClick = { selectedDay = day }, modifier = Modifier.weight(1f)) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(day.toString(), color = if (selectedDay == day) Primary else TextPrimary, fontWeight = if (selectedDay == day) FontWeight.Bold else FontWeight.Normal)
-                                        Text(if (hasEvents) "•" else " ", color = Primary, fontSize = 9.sp)
+                                val count = dayCounts[day] ?: 0
+                                val isToday = month == YearMonth.from(today) && day == today.dayOfMonth
+                                val isSelected = selectedDay == day
+                                Box(Modifier.weight(1f).height(38.dp).clickable { selectedDay = day }, contentAlignment = Alignment.Center) {
+                                    Box(
+                                        Modifier.size(32.dp).clip(CircleShape)
+                                            .background(if (isSelected) Primary else heatColor(count, maxCount))
+                                            .border(if (isToday && !isSelected) 1.5.dp else 0.dp, if (isToday) Primary else Color.Transparent, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(day.toString(), color = if (isSelected) Color.Black else if (isToday) Primary else TextPrimary, fontSize = 13.sp, fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal)
                                     }
                                 }
-                            } else Spacer(Modifier.weight(1f).height(48.dp))
+                            } else Spacer(Modifier.weight(1f).height(38.dp))
                         }
                     }
                 }
+                Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp, end = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Quiet", color = TextMuted, fontSize = 10.sp)
+                    listOf(1, 2, 3, 4).forEach { Box(Modifier.padding(horizontal = 2.dp).size(10.dp).clip(CircleShape).background(heatColor(it, 4))) }
+                    Text("Busy", color = TextMuted, fontSize = 10.sp)
+                }
             }
         }
-        Spacer(Modifier.height(18.dp))
-        Text(if (selectedDay > 0) "$selectedDay ${month.month.name.lowercase().replaceFirstChar { it.uppercase() }}" else "Select a day", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (selectedDay > 0) "$selectedDay ${month.month.name.lowercase().replaceFirstChar { it.uppercase() }}" else "Select a day", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            if (selectedDay > 0) {
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "${selectedEvents.size} ${if (selectedEvents.size == 1) "message" else "messages"}",
+                    color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Raised)
+                        .border(1.dp, Primary, RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         if (selectedDay <= 0) {
             Text("Tap any marked day to inspect its notifications.", color = TextSecondary, fontSize = 13.sp)
@@ -118,3 +162,8 @@ fun CalendarScreen(
         }
     }
 }
+
+// Busier days get a stronger bubble so heavy days stand out at a glance.
+private fun heatColor(count: Int, maxCount: Int): Color =
+    if (count <= 0 || maxCount <= 0) Color.Transparent
+    else Primary.copy(alpha = 0.12f + 0.48f * count / maxCount)

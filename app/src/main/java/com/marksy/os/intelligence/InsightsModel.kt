@@ -2,6 +2,7 @@ package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import java.time.ZoneId
 import java.util.Calendar
 import java.util.Locale
 
@@ -52,6 +53,42 @@ object InsightsModel {
         }
 
         return Snapshot(active.size, meaningful.size, trading.size, attention, delivered, failed, topCategory, topSource, busiestHour, attentionRate, deliveryRate, observations)
+    }
+
+    fun inPeriod(events: List<NotificationEventEntity>, period: HomePeriod, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): List<NotificationEventEntity> {
+        val since = period.startMillis(nowMillis, zone)
+        return events.filter { !it.archived && (since == null || it.postedAt >= since) }
+    }
+
+    /** Category counts for the period, largest first; the tail and OTHER fold into one "OTHER" slice. */
+    fun breakdown(
+        events: List<NotificationEventEntity>,
+        period: HomePeriod,
+        nowMillis: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        maxSlices: Int = 6
+    ): List<Pair<String, Int>> {
+        val counts = inPeriod(events, period, nowMillis, zone)
+            .groupingBy { it.category.ifBlank { "OTHER" }.uppercase() }.eachCount()
+        val ranked = counts.filterKeys { it != "OTHER" }.toList().sortedByDescending { it.second }
+        val head = ranked.take(maxSlices - 1)
+        val rest = ranked.drop(maxSlices - 1).sumOf { it.second } + (counts["OTHER"] ?: 0)
+        return if (rest > 0) head + ("OTHER" to rest) else head
+    }
+
+    fun categoryInsight(events: List<NotificationEventEntity>, category: String, singular: String, plural: String, nowMillis: Long): String? {
+        val matching = events.filter { it.category.equals(category, ignoreCase = true) }
+        if (matching.isEmpty()) return null
+        val important = matching.count { EventIntelligence.analyze(it, nowMillis).attentionScore >= 70 }
+        val sources = matching.groupingBy { it.sourceName.ifBlank { "Unknown source" } }.eachCount()
+            .toList().sortedByDescending { it.second }.take(3)
+        return buildString {
+            append("${matching.size} ${if (matching.size == 1) singular else plural}")
+            if (important > 0) append(", $important important")
+            append(". Mostly from ")
+            append(sources.joinToString { (name, count) -> "$name ($count)" })
+            append(".")
+        }
     }
 
     private fun hourOf(timestamp: Long): Int = Calendar.getInstance().apply { timeInMillis = timestamp }.get(Calendar.HOUR_OF_DAY)

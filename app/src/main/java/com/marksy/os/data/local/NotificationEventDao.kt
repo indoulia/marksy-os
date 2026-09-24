@@ -13,6 +13,12 @@ interface NotificationEventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(event: NotificationEventEntity): Long
 
+    @Query("SELECT * FROM notification_events WHERE title LIKE '%<%' OR title LIKE '%&%' OR body LIKE '%<%' OR body LIKE '%&%'")
+    suspend fun findWithPossibleMarkup(): List<NotificationEventEntity>
+
+    @Query("UPDATE notification_events SET title = :title, body = :body WHERE id = :eventId")
+    suspend fun updateText(eventId: Long, title: String, body: String): Int
+
     @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
 
@@ -24,6 +30,10 @@ interface NotificationEventDao {
 
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
+
+    /** Bounded by retention (7 days, 30 for trading), so safe to observe in full. */
+    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC")
+    fun observeActive(): Flow<List<NotificationEventEntity>>
 
     /** High-value active events for the Home/Smart Inbox attention surfaces. */
     @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 ORDER BY priority DESC, postedAt DESC LIMIT :limit")
@@ -38,6 +48,13 @@ interface NotificationEventDao {
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?
+
+    @Query("SELECT * FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
+    suspend fun findBySourceKey(sourcePackage: String, sourceKey: String): NotificationEventEntity?
+
+    // New content for the same notification: unread again and re-derived by the intelligence pipeline.
+    @Query("UPDATE notification_events SET title = :title, body = :body, postedAt = :postedAt, isRead = 0, lifecycleState = CASE WHEN lifecycleState = 'ACTIVE' THEN 'NEW' ELSE lifecycleState END, intelligenceVersion = 0 WHERE id = :eventId")
+    suspend fun updateContent(eventId: Long, title: String, body: String, postedAt: Long): Int
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND eventFingerprint = :eventFingerprint LIMIT 1")
     suspend fun findIdByFingerprint(sourcePackage: String, eventFingerprint: String): Long?
@@ -109,13 +126,13 @@ interface NotificationEventDao {
     suspend fun resolveOpenInThread(threadKey: String, excludeId: Long, upToMillis: Long, reason: String, atMillis: Long): Int
 
     /** Conditional so a stale caller can never move an event backwards (e.g. ARCHIVED -> ACTIVE). */
-    @Query("UPDATE notification_events SET lifecycleState = :to, lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason WHERE id = :eventId AND lifecycleState = :from AND archived = 0")
+    @Query("UPDATE notification_events SET lifecycleState = :to, lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason, isRead = CASE WHEN :to = 'NEW' THEN 0 ELSE 1 END WHERE id = :eventId AND lifecycleState = :from AND archived = 0")
     suspend fun transitionLifecycle(eventId: Long, from: String, to: String, reason: String?, atMillis: Long): Int
 
-    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0")
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 0 AND kept = 0 AND remindAt IS NULL")
     suspend fun deleteOldNonTrading(cutoff: Long): Int
 
-    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1")
+    @Query("DELETE FROM notification_events WHERE postedAt < :cutoff AND isTrading = 1 AND kept = 0 AND remindAt IS NULL")
     suspend fun deleteOldTrading(cutoff: Long): Int
 
     @Transaction
@@ -130,7 +147,7 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeInbox(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("UPDATE notification_events SET lifecycleState = 'ACTIVE', lifecycleUpdatedAt = :atMillis WHERE id IN (:ids) AND lifecycleState = 'NEW' AND archived = 0")
+    @Query("UPDATE notification_events SET isRead = 1, lifecycleState = CASE WHEN lifecycleState = 'NEW' THEN 'ACTIVE' ELSE lifecycleState END, lifecycleUpdatedAt = :atMillis WHERE id IN (:ids) AND archived = 0 AND (lifecycleState = 'NEW' OR isRead = 0)")
     suspend fun markSeen(ids: List<Long>, atMillis: Long): Int
 
     @Query("UPDATE notification_events SET lifecycleState = 'RESOLVED', lifecycleUpdatedAt = :atMillis, lifecycleReason = :reason, snoozedUntil = NULL WHERE id IN (:ids) AND lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0")
@@ -183,4 +200,20 @@ interface NotificationEventDao {
 
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
+
+    @Query("SELECT * FROM notification_events WHERE id = :eventId")
+    suspend fun findById(eventId: Long): NotificationEventEntity?
+
+    @Query("DELETE FROM notification_events WHERE id = :eventId")
+    suspend fun deleteById(eventId: Long): Int
+
+    // isRead (inbox bold state) and lifecycle NEW/ACTIVE (EPIC-010) describe the same thing; keep them in step.
+    @Query("UPDATE notification_events SET isRead = :read, lifecycleState = CASE WHEN :read AND lifecycleState = 'NEW' THEN 'ACTIVE' WHEN NOT :read AND lifecycleState = 'ACTIVE' THEN 'NEW' ELSE lifecycleState END WHERE id = :eventId")
+    suspend fun setRead(eventId: Long, read: Boolean): Int
+
+    @Query("UPDATE notification_events SET kept = :kept WHERE id = :eventId")
+    suspend fun setKept(eventId: Long, kept: Boolean): Int
+
+    @Query("UPDATE notification_events SET remindAt = :remindAt WHERE id = :eventId")
+    suspend fun setReminder(eventId: Long, remindAt: Long?): Int
 }

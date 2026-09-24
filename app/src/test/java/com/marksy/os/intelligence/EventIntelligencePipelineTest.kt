@@ -178,16 +178,63 @@ class EventIntelligencePipelineTest {
         }
 
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4)
             .allowMainThreadQueries().build()
         try {
             val rows = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }
             assertEquals(listOf("ACTIVE", "ARCHIVED"), rows.sortedBy { it.id }.map { it.lifecycleState })
             assertTrue(rows.all { it.intelligenceVersion == 0 && it.threadKey == null })
+            // 3->4: existing rows start read, nothing kept or reminded.
+            assertTrue(rows.all { it.isRead && !it.kept && it.remindAt == null })
         } finally {
             migrated.close()
             context.deleteDatabase(name)
         }
+    }
+
+    /**
+     * A phone that ran the pre-merge gateway branch is at "v3" with isRead/kept/remindAt but none of the
+     * EPIC-010..023 schema. 3->4 must repair it, keep its read state, and pass Room's schema validation.
+     */
+    @Test
+    fun migrationFromGatewayBranchV3RepairsIntelligenceSchemaAndKeepsReadState() {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "migration-gateway-v3.db"
+        context.deleteDatabase(name)
+        SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name).apply { parentFile?.mkdirs() }, null).use { raw ->
+            raw.execSQL(V2_SCHEMA)
+            V2_INDICES.forEach(raw::execSQL)
+            raw.execSQL("ALTER TABLE notification_events ADD COLUMN isRead INTEGER NOT NULL DEFAULT 0")
+            raw.execSQL("ALTER TABLE notification_events ADD COLUMN kept INTEGER NOT NULL DEFAULT 0")
+            raw.execSQL("ALTER TABLE notification_events ADD COLUMN remindAt INTEGER")
+            raw.execSQL("INSERT INTO notification_events (sourcePackage, sourceName, sourceKey, eventFingerprint, title, body, postedAt, category, priority, confidence, isTrading, deliveryState, deliveryAttempts, archived, createdAt, isRead, kept, remindAt) VALUES ('com.a','A','k1','f1','t','b',1,'OTHER',10,0.5,0,'NOT_APPLICABLE',0,0,1,0,1,99)")
+            raw.version = 3
+        }
+        val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4)
+            .allowMainThreadQueries().build()
+        try {
+            val row = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }.single()
+            assertTrue(!row.isRead && row.kept && row.remindAt == 99L)
+            assertEquals("ACTIVE", row.lifecycleState)
+            assertEquals(0, runBlocking { migrated.learningDao().counts(0) }.size)
+        } finally {
+            migrated.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test
+    fun readStateAndLifecycleStayInStep() = runBlocking {
+        val id = insert("com.chat", "Rahul", "hi", "MESSAGES")
+        dao.setRead(id, true)
+        assertEquals("ACTIVE", get(id).lifecycleState)
+        dao.setRead(id, false)
+        assertEquals("NEW", get(id).lifecycleState)
+        assertTrue(!get(id).isRead)
+        dao.markSeen(listOf(id), t0)
+        assertTrue(get(id).isRead)
+        assertEquals("ACTIVE", get(id).lifecycleState)
     }
 
     private companion object {

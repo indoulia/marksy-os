@@ -1,5 +1,8 @@
 package com.marksy.os.ui
 
+import com.marksy.os.gateway.MarketState
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,16 +32,20 @@ import com.marksy.os.EmptyState
 fun TradingIntelligenceScreen(
     insights: List<TradingInsight>,
     padding: PaddingValues,
+    market: MarketState = MarketState.Loading,
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
-    var selectedFilter by remember { mutableStateOf("Signals") }
+    var selectedFilter by remember { mutableStateOf(TAB_PICKS) }
+    val snapshot = (market as? MarketState.Loaded)?.snapshot
 
-    Column(
-        modifier = Modifier
+    Box(
+        Modifier
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .consumeWindowInsets(padding)
     ) {
+    Column(Modifier.fillMaxSize()) {
         // Header
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(
@@ -52,56 +59,24 @@ fun TradingIntelligenceScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MarksyTheme.BadgeTradingBg)
-                        .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(MarksyTheme.PrimaryEmerald)
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text("LIVE", color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Filter Chips
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("Signals", "Positions", "Watchlist", "News").forEach { filter ->
-                    val isSelected = filter == selectedFilter
-                    Box(
+                snapshot?.marketStatus?.let { status ->
+                    val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true)
+                    val tint = if (open) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                            .border(
-                                1.dp,
-                                if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedFilter = filter }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (open) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
+                            .border(1.dp, tint, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            filter,
-                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (open) "LIVE" else status.uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
+            Text(selectedFilter, color = MarksyTheme.TextMuted, fontSize = 12.sp)
         }
 
         LazyColumn(
@@ -109,70 +84,91 @@ fun TradingIntelligenceScreen(
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
-            // Featured Reliance Signal Card
-            item {
-                TradingSignalCard(
-                    symbol = "RELIANCE",
-                    price = "₹1,452.30",
-                    change = "+2.8%",
-                    signalType = "BUY",
-                    headline = "Breakout confirmed with high volume",
-                    entry = "₹1,450",
-                    target = "₹1,488",
-                    stopLoss = "₹1,435",
-                    confidence = "89%",
-                    alignment = "3 independent sources aligned in last 18 minutes."
-                )
-            }
-
-            // Watch Signal Card
-            item {
-                TradingWatchCard(
-                    symbol = "ICICI BANK",
-                    price = "₹1,248.60",
-                    change = "+1.6%",
-                    badge = "Watch",
-                    note = "Volume spike 2.8x average",
-                    confidence = "76%"
-                )
-            }
-
-            // Ticker Card
-            item {
-                TradingTickerCard(
-                    symbol = "NIFTY 50",
-                    price = "25,143.20",
-                    change = "+0.8%"
-                )
-            }
-
-            item {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Captured Trading Activity",
-                    color = MarksyTheme.TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (insights.isEmpty()) {
-                item {
-                    EmptyState(
-                        "No trading events captured yet.",
-                        "Brokerage orders and market notifications will appear here when captured."
-                    )
+            when (selectedFilter) {
+                TAB_PICKS -> {
+                    val picks = snapshot?.opportunities.orEmpty()
+                    if (picks.isEmpty()) item { EmptyState("No Marksy picks right now.", marketMessage(market, "Top opportunities from Marksy will appear here.")) }
+                    items(picks, key = { "pick-${it.symbol}" }) { pick ->
+                        val reference = pick.entryPrice ?: pick.price
+                        TradingSignalCard(
+                            symbol = pick.symbol,
+                            price = pick.price?.let(::rupees) ?: "—",
+                            change = pick.changePct?.let(::signedPct) ?: "",
+                            signalType = if (reference == null || pick.targetPrice >= reference) "BUY" else "SELL",
+                            headline = pick.name,
+                            entry = pick.entryPrice?.let(::rupees) ?: "—",
+                            target = rupees(pick.targetPrice),
+                            stopLoss = rupees(pick.stopLoss),
+                            confidence = confidencePct(pick.confidence),
+                            alignment = listOfNotNull(
+                                pick.score?.let { "Score ${it.toInt()}" },
+                                pick.horizonDays?.let { "$it-day horizon" },
+                                pick.upsidePct?.let { "upside ${signedPct(it)}" }
+                            ).joinToString(" · ")
+                        )
+                    }
                 }
-            } else {
-                items(insights, key = { it.eventId }) { insight ->
-                    CapturedInsightCard(insight) { onInsightSelected(insight) }
+                TAB_MOVERS -> {
+                    val movers = snapshot?.gainers.orEmpty() + snapshot?.losers.orEmpty()
+                    if (movers.isEmpty()) item { EmptyState("No movers yet.", marketMessage(market, "Top gainers and losers from Marksy will appear here.")) }
+                    items(movers, key = { "mover-${it.symbol}-${it.changePct}" }) { mover ->
+                        TradingTickerCard(mover.symbol, mover.price?.let(::rupees) ?: mover.name, signedPct(mover.changePct))
+                    }
+                }
+                TAB_INDICES -> {
+                    val indices = snapshot?.indices.orEmpty()
+                    if (indices.isEmpty()) item { EmptyState("No index data.", marketMessage(market, "Market indices from Marksy will appear here.")) }
+                    items(indices, key = { "index-${it.name}" }) { index ->
+                        TradingTickerCard(index.name, String.format(Locale.getDefault(), "%,.2f", index.value), signedPct(index.changePct))
+                    }
+                }
+                else -> {
+                    if (insights.isEmpty()) {
+                        item {
+                            EmptyState(
+                                "No trading events captured yet.",
+                                "Brokerage orders and market notifications will appear here when captured."
+                            )
+                        }
+                    } else {
+                        items(insights, key = { it.eventId }) { insight ->
+                            CapturedInsightCard(insight) { onInsightSelected(insight) }
+                        }
+                    }
                 }
             }
         }
     }
+    OneHandControls(
+        filters = listOf(TAB_PICKS, TAB_MOVERS, TAB_INDICES, TAB_CAPTURED).map { it to it },
+        selectedFilter = selectedFilter,
+        onFilterSelected = { selectedFilter = it }
+    )
+    }
 }
+
+private const val TAB_PICKS = "Marksy picks"
+private const val TAB_MOVERS = "Movers"
+private const val TAB_INDICES = "Indices"
+private const val TAB_CAPTURED = "Captured"
+
+private fun marketMessage(market: MarketState, loaded: String): String = when (market) {
+    MarketState.Loading -> "Loading market data…"
+    MarketState.NotConfigured -> "Connect the Marksy gateway in Settings to load market data."
+    is MarketState.Unavailable -> "Marksy market data is unavailable right now."
+    is MarketState.Loaded -> loaded
+}
+
+private fun rupees(value: Double): String = "₹" + String.format(Locale.getDefault(), "%,.2f", value)
+
+private fun signedPct(value: Double): String = String.format(Locale.US, "%+.2f%%", value)
+
+// Marksy reports confidence as 0–1 on some routes and 0–100 on others.
+private fun confidencePct(value: Double): String = "${(if (value <= 1.0) value * 100 else value).toInt()}%"
+
+private fun changeColor(change: String): Color = if (change.startsWith("-")) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald
 
 @Composable
 private fun TradingSignalCard(
@@ -225,7 +221,7 @@ private fun TradingSignalCard(
                     ) {
                         Text(price, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(6.dp))
-                        Text(change, color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(change, color = changeColor(change), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -320,81 +316,6 @@ private fun TradingSignalCard(
 }
 
 @Composable
-private fun TradingWatchCard(
-    symbol: String,
-    price: String,
-    change: String,
-    badge: String,
-    note: String,
-    confidence: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(MarksyTheme.BadgeFinanceBg),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("ℹ️", fontSize = 12.sp)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            symbol,
-                            color = MarksyTheme.TextPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
-                        Text(price, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(6.dp))
-                        Text(change, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Watch Pill Button
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF0288D1))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Text(badge, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(note, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                Text("Confidence: $confidence", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
 private fun TradingTickerCard(
     symbol: String,
     price: String,
@@ -428,7 +349,7 @@ private fun TradingTickerCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(price, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(6.dp))
-                Text(change, color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(change, color = changeColor(change), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.marksy.os.ui
 
+import com.marksy.os.EmptyState
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -35,88 +37,20 @@ fun TimelineScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Column {
-                Text("Today's Timeline", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Wed, 11 Sep", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-            }
-        }
-
-        // Demo timeline items matching the design mockups if events are few
-        item {
-            TimelineNodeRow(
-                time = "09:15 AM",
-                title = "NIFTY Gap-Up Alert",
-                source = "Trading Agent",
-                icon = Icons.Default.ShowChart,
-                iconBg = Color(0xFFC62828),
-                badge = null
+            Text(
+                "Today · " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", java.util.Locale.getDefault())),
+                color = MarksyTheme.TextSecondary,
+                fontSize = 13.sp
             )
         }
 
-        item {
-            TimelineNodeRow(
-                time = "09:22 AM",
-                title = "16 WhatsApp messages",
-                source = "Family Group",
-                icon = Icons.Default.Chat,
-                iconBg = Color(0xFF2E7D32),
-                badge = "16"
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "10:01 AM",
-                title = "₹12,500 credited",
-                source = "ICICI Bank",
-                icon = Icons.Default.AccountBalance,
-                iconBg = Color(0xFF0288D1),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "10:15 AM",
-                title = "Reliance breakout",
-                source = "Trading Agent",
-                icon = Icons.Default.TrendingUp,
-                iconBg = Color(0xFFC62828),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "11:45 AM",
-                title = "AGM Mail Approved",
-                source = "Gmail",
-                icon = Icons.Default.Email,
-                iconBg = Color(0xFF1565C0),
-                badge = null
-            )
-        }
-
-        item {
-            TimelineNodeRow(
-                time = "01:20 PM",
-                title = "Your order is out for delivery",
-                source = "Swiggy",
-                icon = Icons.Default.LocalShipping,
-                iconBg = Color(0xFFE65100),
-                badge = null
-            )
-        }
-
-        if (events.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(10.dp))
-                Text("Captured Events", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+        if (events.isEmpty()) {
+            item { EmptyState("Nothing here yet.", "Captured notifications will appear here, newest first.") }
+        } else {
             items(events, key = { it.id }) { event ->
                 TimelineNodeRow(
                     time = formatTimestamp(event.postedAt),
@@ -142,27 +76,32 @@ private fun TimelineNodeRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
-        Text(
-            time,
-            color = MarksyTheme.TextMuted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(65.dp)
-        )
-
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(iconBg),
-            contentAlignment = Alignment.Center
+        // Time + category icon share one column instead of two, so the card gets the width back.
+        Column(
+            modifier = Modifier.width(46.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text(
+                time,
+                color = MarksyTheme.TextMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(iconBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+            }
         }
 
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),

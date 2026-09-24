@@ -29,6 +29,14 @@ class SmartInboxModelTest {
     }
 
     @Test
+    fun teamsFilterMatchesBySourceNotCategory() {
+        val teams = event(1, "WORK", "Standup", 1, sourcePackage = "com.microsoft.teams")
+        val other = event(2, "WORK", "Jira", 2, sourcePackage = "com.atlassian.android.jira.core")
+        assertEquals(SmartInboxModel.Filter.TEAMS, SmartInboxModel.Filter.forCategoryLabel("Teams"))
+        assertEquals(listOf(teams), SmartInboxModel.filter(listOf(teams, other), SmartInboxModel.Filter.TEAMS))
+    }
+
+    @Test
     fun archivedEventsNeverEnterActiveInbox() {
         val events = listOf(event(1, "TRADING", "AAPL", now), event(2, "TRADING", "AAPL", now, archived = true))
         val filtered = SmartInboxModel.filter(events, SmartInboxModel.Filter.ALL)

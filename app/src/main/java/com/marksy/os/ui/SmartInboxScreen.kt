@@ -5,12 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +43,10 @@ fun SmartInboxScreen(
     onEventSelected: (NotificationEventEntity) -> Unit,
     selectedFilterName: String,
     onFilterSelected: (String) -> Unit,
+    // Swipe actions act on the whole thread (every row incl. folded duplicates).
+    onArchive: (List<NotificationEventEntity>) -> Unit = {},
+    onDelete: (List<NotificationEventEntity>) -> Unit = {},
+    onHide: (List<NotificationEventEntity>) -> Unit = {},
     actions: InboxActions = InboxActions(),
     learningProfile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY
 ) {
@@ -62,14 +66,19 @@ fun SmartInboxScreen(
     val inbox = remember(events, filter, searchQuery, now, learningProfile) {
         SmartInboxModel.inbox(events, filter, searchQuery, now, learningProfile)
     }
+    val shown = remember(inbox) { inbox.sections.values.sumOf { it.size } }
+    val byId = remember(events) { events.associateBy { it.id } }
+    fun rowsOf(thread: SmartInboxModel.InboxThread) = thread.allIds.mapNotNull { byId[it] }
 
-    Column(
-        modifier = Modifier
+    Box(
+        Modifier
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .consumeWindowInsets(padding)
     ) {
-        // Header & Search Bar
+    Column(Modifier.fillMaxSize()) {
+        // Header
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -82,82 +91,7 @@ fun SmartInboxScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MarksyTheme.Surface)
-                        .border(1.dp, MarksyTheme.BorderGlow, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Tune,
-                        contentDescription = "Filter",
-                        tint = MarksyTheme.PrimaryEmerald,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // Search Bar Input
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                placeholder = { Text("Search notifications...", color = MarksyTheme.TextMuted, fontSize = 13.sp) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MarksyTheme.TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(25.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MarksyTheme.Surface,
-                    unfocusedContainerColor = MarksyTheme.Surface,
-                    focusedBorderColor = MarksyTheme.PrimaryEmerald,
-                    unfocusedBorderColor = MarksyTheme.BorderGlow,
-                    focusedTextColor = MarksyTheme.TextPrimary,
-                    unfocusedTextColor = MarksyTheme.TextPrimary
-                )
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // Filter Chips Row
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmartInboxModel.Filter.entries.forEach { item ->
-                    val isSelected = filter == item
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                            .border(
-                                1.dp,
-                                if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { onFilterSelected(item.name) }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
-                    ) {
-                        Text(
-                            item.label,
-                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
-                }
+                Text(if (filter == SmartInboxModel.Filter.ALL) "$shown shown" else "${filter.label} · $shown", color = MarksyTheme.TextMuted, fontSize = 12.sp)
             }
         }
 
@@ -166,7 +100,7 @@ fun SmartInboxScreen(
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 20.dp)
+            contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
             if (inbox.isEmpty) {
                 item {
@@ -188,14 +122,20 @@ fun SmartInboxScreen(
                         )
                     }
                     items(threads, key = { "t-" + it.key }) { thread ->
-                        InboxNotificationCard(
-                            thread = thread,
-                            onClick = {
-                                actions.markSeen(thread.allIds)
-                                onEventSelected(thread.latest)
-                            },
-                            onLongClick = { actionThreadKey = thread.key }
-                        )
+                        SwipeActionsRow(
+                            onDelete = { onDelete(rowsOf(thread)) },
+                            onArchive = { onArchive(rowsOf(thread)) },
+                            onHide = { onHide(rowsOf(thread)) }
+                        ) {
+                            InboxNotificationCard(
+                                thread = thread,
+                                onClick = {
+                                    actions.markSeen(thread.allIds)
+                                    onEventSelected(thread.latest)
+                                },
+                                onLongClick = { actionThreadKey = thread.key }
+                            )
+                        }
                     }
                 }
             }
@@ -210,6 +150,15 @@ fun SmartInboxScreen(
                 }
             }
         }
+    }
+    OneHandControls(
+        filters = SmartInboxModel.Filter.entries.map { it.name to it.label },
+        selectedFilter = filter.name,
+        onFilterSelected = onFilterSelected,
+        searchQuery = searchQuery,
+        onSearchChange = { searchQuery = it },
+        searchPlaceholder = "Search notifications..."
+    )
     }
 
     val actionThread = actionThreadKey?.let { key -> inbox.sections.values.flatten().firstOrNull { it.key == key } }
@@ -280,7 +229,8 @@ private fun InboxNotificationCard(
     onLongClick: () -> Unit
 ) {
     val event = thread.latest
-    val (appIcon, iconBg, pillLabel, pillText, pillBg) = resolveSourceStyle(event)
+    val unread = thread.unread
+    val (appIcon, iconBg, pillLabel, pillText, pillIcon) = resolveSourceStyle(event)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
@@ -319,18 +269,36 @@ private fun InboxNotificationCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        event.sourceName.ifBlank { "System" },
-                        color = MarksyTheme.TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        if (unread) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            event.sourceName.ifBlank { "System" },
+                            color = MarksyTheme.TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(pillIcon, contentDescription = pillLabel, tint = pillText, modifier = Modifier.size(13.dp))
+                        if (event.kept) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.Star, contentDescription = "Kept", tint = MarksyTheme.YellowImportant, modifier = Modifier.size(13.dp))
+                        }
+                        if (event.remindAt != null) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.Alarm, contentDescription = "Reminder set", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(13.dp))
+                        }
+                    }
                     Text(
                         formatInboxTime(event.postedAt),
-                        color = MarksyTheme.TextMuted,
-                        fontSize = 10.sp
+                        color = if (!unread) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald,
+                        fontSize = 10.sp,
+                        fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold
                     )
                 }
 
@@ -338,9 +306,9 @@ private fun InboxNotificationCard(
 
                 Text(
                     event.title.ifBlank { "Notification event" },
-                    color = if (thread.unread) MarksyTheme.TextPrimary else MarksyTheme.TextSecondary,
+                    color = if (!unread) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary,
                     fontSize = 12.sp,
-                    fontWeight = if (thread.unread) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -371,23 +339,6 @@ private fun InboxNotificationCard(
                     )
                 }
             }
-
-            Spacer(Modifier.width(8.dp))
-
-            // Pill Badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(pillBg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    pillLabel,
-                    color = pillText,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
     }
 }
@@ -397,7 +348,7 @@ private data class SourceStyle(
     val iconBg: Color,
     val pillLabel: String,
     val pillText: Color,
-    val pillBg: Color
+    val pillIcon: ImageVector
 )
 
 private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
@@ -406,48 +357,54 @@ private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
     val category = event.category.uppercase()
 
     return when {
-        event.isTrading || src.contains("zerodha") || src.contains("groww") || src.contains("upstox") -> SourceStyle(
-            icon = Icons.Default.ShowChart,
-            iconBg = Color(0xFFC62828),
-            pillLabel = if (title.contains("breakout") || event.priority >= 80) "Urgent" else "Trading",
-            pillText = if (title.contains("breakout") || event.priority >= 80) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
-            pillBg = if (title.contains("breakout") || event.priority >= 80) MarksyTheme.BadgeUrgentBg else MarksyTheme.BadgeTradingBg
-        )
+        event.isTrading || src.contains("zerodha") || src.contains("groww") || src.contains("upstox") -> {
+            val urgent = title.contains("breakout") || event.priority >= 80
+            SourceStyle(
+                icon = Icons.Default.ShowChart,
+                iconBg = Color(0xFFC62828),
+                pillLabel = if (urgent) "Urgent" else "Trading",
+                pillText = if (urgent) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
+                pillIcon = if (urgent) Icons.Default.PriorityHigh else Icons.Default.TrendingUp
+            )
+        }
         src.contains("whatsapp") -> SourceStyle(
             icon = Icons.Default.Chat,
             iconBg = Color(0xFF2E7D32),
             pillLabel = "Grouped",
             pillText = MarksyTheme.PrimaryEmerald,
-            pillBg = MarksyTheme.BadgeTradingBg
+            pillIcon = Icons.Default.Forum
         )
         src.contains("gmail") || src.contains("mail") || category == "WORK" -> SourceStyle(
             icon = Icons.Default.Email,
             iconBg = Color(0xFF1565C0),
             pillLabel = "Important",
             pillText = MarksyTheme.YellowImportant,
-            pillBg = MarksyTheme.BadgeImportantBg
+            pillIcon = Icons.Default.Star
         )
         src.contains("icici") || src.contains("bank") || src.contains("upi") || category == "PAYMENTS" || category == "BANKING" -> SourceStyle(
             icon = Icons.Default.AccountBalance,
             iconBg = Color(0xFF0288D1),
             pillLabel = "Finance",
             pillText = MarksyTheme.BlueFinance,
-            pillBg = MarksyTheme.BadgeFinanceBg
+            pillIcon = Icons.Default.AccountBalanceWallet
         )
         src.contains("swiggy") || src.contains("zomato") || category == "DELIVERY" -> SourceStyle(
             icon = Icons.Default.LocalShipping,
             iconBg = Color(0xFFE65100),
             pillLabel = "Delivery",
             pillText = MarksyTheme.OrangeDelivery,
-            pillBg = MarksyTheme.BadgeDeliveryBg
+            pillIcon = Icons.Default.LocalShipping
         )
-        else -> SourceStyle(
-            icon = Icons.Default.Notifications,
-            iconBg = Color(0xFF37474F),
-            pillLabel = if (event.priority >= 70) "Priority" else "Notice",
-            pillText = if (event.priority >= 70) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-            pillBg = MarksyTheme.SurfaceRaised
-        )
+        else -> {
+            val priority = event.priority >= 70
+            SourceStyle(
+                icon = Icons.Default.Notifications,
+                iconBg = Color(0xFF37474F),
+                pillLabel = if (priority) "Priority" else "Notice",
+                pillText = if (priority) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+                pillIcon = if (priority) Icons.Default.ArrowUpward else Icons.Default.Info
+            )
+        }
     }
 }
 
