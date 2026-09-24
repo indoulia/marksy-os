@@ -47,6 +47,7 @@ import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.intelligence.EventIntelligenceWorker
+import com.marksy.os.intelligence.ContextGraph
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InboxActions
 import com.marksy.os.ui.LearningScreen
@@ -94,7 +95,10 @@ class MainActivity : ComponentActivity() {
         val learning = remember { MarksyContainer.learning(applicationContext) }
         val learningSettings = remember { LearningSettings(applicationContext) }
         val actionRepository = remember { MarksyContainer.actions(applicationContext) }
-        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository, learning, learningSettings, actionRepository))
+        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
+            repository, learning, learningSettings, actionRepository,
+            ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
+        ))
         val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
         val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
@@ -244,9 +248,13 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(event.id) { vm.markSeen(event.id); vm.clearActionMessage() }
             // Re-discovered after each action so the list reflects the new state (e.g. resolved).
             val available = remember(event.id, actionMessage) { vm.availableActions(event) }
+            var relatedVersion by remember(event.id) { mutableIntStateOf(0) }
+            val related by produceState(emptyList<com.marksy.os.data.local.ContextEntity>(), event.id, relatedVersion) { value = vm.relatedEntities(event.id) }
             EventDetailDialog(
                 event = event,
                 actions = available,
+                related = related,
+                onUnlinkEntity = { entityId -> vm.unlinkEntity(entityId, event.id); relatedVersion++ },
                 actionMessage = actionMessage,
                 onAction = { type, at, detail -> vm.runAction(event.id, type, at, detail) },
                 onRequestNotificationPermission = {

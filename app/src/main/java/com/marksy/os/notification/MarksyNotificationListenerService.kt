@@ -22,7 +22,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
     private val ruleStore by lazy { RuleStore(applicationContext) }
-    private val pipeline by lazy { EventIntelligencePipeline(dao) }
+    private val pipeline by lazy {
+        EventIntelligencePipeline(dao, graph = com.marksy.os.intelligence.ContextGraph(MarksyDatabase.getInstance(applicationContext).contextGraphDao()))
+    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()

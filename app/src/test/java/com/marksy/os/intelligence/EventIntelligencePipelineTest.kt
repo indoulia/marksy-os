@@ -32,7 +32,7 @@ class EventIntelligencePipelineTest {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), MarksyDatabase::class.java)
             .allowMainThreadQueries().build()
         dao = db.notificationEventDao()
-        pipeline = EventIntelligencePipeline(dao, ZoneOffset.UTC) { t0 + 999 }
+        pipeline = EventIntelligencePipeline(dao, ZoneOffset.UTC, { t0 + 999 })
     }
 
     @After

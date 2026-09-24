@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.marksy.os.data.ActionRepository
+import com.marksy.os.data.local.ContextEntity
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.ActionEngine
 import java.text.SimpleDateFormat
@@ -39,6 +40,8 @@ fun EventDetailDialog(
     actionMessage: String? = null,
     onAction: (ActionEngine.Type, Long?, String?) -> Unit = { _, _, _ -> },
     onRequestNotificationPermission: () -> Unit = {},
+    related: List<ContextEntity> = emptyList(),
+    onUnlinkEntity: (Long) -> Unit = {},
 ) {
     val scrollState = rememberScrollState()
     var reporting by remember(event.id) { mutableStateOf(false) }
@@ -63,6 +66,17 @@ fun EventDetailDialog(
                     event.insightSummary?.takeIf { it.isNotBlank() }?.let { DetailRow("Marksy", it) }
                     event.insightAction?.takeIf { it.isNotBlank() }?.let { DetailRow("Action", it) }
                     event.insightConfidence?.let { DetailRow("Marksy confidence", "${(it * 100).toInt()}%") }
+                }
+                if (related.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Related", color = DetailMuted, fontSize = 11.sp)
+                    related.forEach { r ->
+                        Text(
+                            "${r.displayName} · ${r.type.lowercase()} · ${r.mentionCount} events" + if (r.sourceCount > 1) " across ${r.sourceCount} apps" else "",
+                            color = DetailSecondary, fontSize = 12.sp
+                        )
+                        TextButton(onClick = { onUnlinkEntity(r.id) }) { Text("Not related", fontSize = 11.sp) }
+                    }
                 }
                 if (actions.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))

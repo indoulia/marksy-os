@@ -102,7 +102,9 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
                     )
                 )
                 if (insertedId != -1L) {
-                    runCatching { EventIntelligencePipeline(dao).process(insertedId) }
+                    runCatching { EventIntelligencePipeline(
+                        dao, graph = com.marksy.os.intelligence.ContextGraph(MarksyDatabase.getInstance(applicationContext).contextGraphDao())
+                    ).process(insertedId) }
                         .onFailure { EventIntelligenceWorker.schedule(applicationContext) }
                 }
                 if (isTrading && isActive) {

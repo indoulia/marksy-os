@@ -16,7 +16,8 @@ import java.util.concurrent.TimeUnit
  */
 class EventIntelligenceWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = try {
-        val pipeline = EventIntelligencePipeline(MarksyDatabase.getInstance(applicationContext).notificationEventDao())
+        val db = MarksyDatabase.getInstance(applicationContext)
+        val pipeline = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao()))
         var batches = 0
         while (batches < MAX_BATCHES_PER_RUN && pipeline.processPending() > 0) batches++
         if (batches == MAX_BATCHES_PER_RUN) schedule(applicationContext, replace = true)

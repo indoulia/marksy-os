@@ -14,7 +14,8 @@ import java.time.ZoneId
 class EventIntelligencePipeline(
     private val dao: NotificationEventDao,
     private val zone: ZoneId = ZoneId.systemDefault(),
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val graph: ContextGraph? = null
 ) {
     data class Outcome(val eventId: Long, val normalized: NormalizedEvent, val duplicateOfId: Long?, val resolvedCount: Int)
 
@@ -78,6 +79,13 @@ class EventIntelligencePipeline(
                 atMillis = clock()
             )
         } else 0
+
+        // Graph indexing is idempotent and secondary: a failure must not lose the event's own intelligence.
+        try {
+            graph?.index(event, normalized.facts)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+        }
 
         return Outcome(event.id, normalized, duplicateOfId, resolved)
     }

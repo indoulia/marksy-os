@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class],
     version = 3,
     exportSchema = false
 )
@@ -16,6 +16,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun notificationEventDao(): NotificationEventDao
     abstract fun learningDao(): LearningDao
     abstract fun eventActionDao(): EventActionDao
+    abstract fun contextGraphDao(): ContextGraphDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -50,6 +51,14 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-015 context graph.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `context_entities` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `canonicalKey` TEXT NOT NULL, `displayName` TEXT NOT NULL, `confidence` REAL NOT NULL, `firstSeenAt` INTEGER NOT NULL, `lastSeenAt` INTEGER NOT NULL, `mentionCount` INTEGER NOT NULL, `sourceCount` INTEGER NOT NULL, `mergedIntoId` INTEGER)")
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_context_entities_type_canonicalKey` ON `context_entities` (`type`, `canonicalKey`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_context_entities_mergedIntoId` ON `context_entities` (`mergedIntoId`)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `context_links` (`entityId` INTEGER NOT NULL, `eventId` INTEGER NOT NULL, `sourcePackage` TEXT NOT NULL, `confidence` REAL NOT NULL, `signal` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`entityId`, `eventId`))")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_context_links_eventId` ON `context_links` (`eventId`)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `context_relations` (`fromId` INTEGER NOT NULL, `toId` INTEGER NOT NULL, `weight` INTEGER NOT NULL, `confidence` REAL NOT NULL, `lastSeenAt` INTEGER NOT NULL, PRIMARY KEY(`fromId`, `toId`))")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_context_relations_toId` ON `context_relations` (`toId`)")
                 // EPIC-014 action history / audit trail.
                 database.execSQL("CREATE TABLE IF NOT EXISTS `event_actions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `eventId` INTEGER NOT NULL, `type` TEXT NOT NULL, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `scheduledFor` INTEGER, `detail` TEXT, `error` TEXT, `attempts` INTEGER NOT NULL)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_event_actions_eventId` ON `event_actions` (`eventId`)")

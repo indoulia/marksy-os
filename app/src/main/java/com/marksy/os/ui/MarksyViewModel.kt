@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.marksy.os.data.ActionRepository
 import com.marksy.os.data.LearningRepository
 import com.marksy.os.intelligence.ActionEngine
+import com.marksy.os.intelligence.ContextGraph
+import com.marksy.os.data.local.ContextEntity
 import com.marksy.os.data.LearningSettings
 import com.marksy.os.data.NotificationRepository
 import com.marksy.os.intelligence.PersonalLearning
@@ -24,8 +26,14 @@ class MarksyViewModel(
     private val repository: NotificationRepository,
     private val learning: LearningRepository? = null,
     private val learningSettings: LearningSettings? = null,
-    private val actions: ActionRepository? = null
+    private val actions: ActionRepository? = null,
+    private val graph: ContextGraph? = null
 ) : ViewModel() {
+    suspend fun relatedEntities(eventId: Long): List<ContextEntity> =
+        graph?.entitiesFor(eventId).orEmpty().filter { it.type != ContextGraph.NodeType.APP.name }
+
+    fun unlinkEntity(entityId: Long, eventId: Long) { viewModelScope.launch { graph?.unlink(entityId, eventId) } }
+
     private val actionMessageState = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = actionMessageState
 
@@ -109,12 +117,13 @@ class MarksyViewModelFactory(
     private val repository: NotificationRepository,
     private val learning: LearningRepository? = null,
     private val learningSettings: LearningSettings? = null,
-    private val actions: ActionRepository? = null
+    private val actions: ActionRepository? = null,
+    private val graph: ContextGraph? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(MarksyViewModel::class.java)) {
-            return MarksyViewModel(repository, learning, learningSettings, actions) as T
+            return MarksyViewModel(repository, learning, learningSettings, actions, graph) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
