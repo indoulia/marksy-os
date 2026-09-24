@@ -24,6 +24,7 @@ class LearningRepository(
     private val dao: LearningDao,
     private val eventDao: NotificationEventDao,
     private val isEnabled: () -> Boolean,
+    private val metrics: MetricsRecorder? = null,
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     suspend fun record(events: List<NotificationEventEntity>, signal: PersonalLearning.Signal): Int {
@@ -34,7 +35,9 @@ class LearningRepository(
                 LearningSignalEntity(eventId = e.id, subjectType = s.type.name, subjectKey = s.key, label = s.label.take(MAX_LABEL), signal = signal.name, createdAt = now)
             }
         }
-        return dao.insertSignals(rows).count { it != -1L }
+        val recorded = dao.insertSignals(rows).count { it != -1L }
+        if (recorded > 0) metrics?.count(Metric.LEARNING_SIGNAL, delta = recorded.toLong())
+        return recorded
     }
 
     /** Records interaction signals for a thread action; must be called before the action mutates state. */
@@ -66,6 +69,7 @@ class LearningRepository(
 
     /** Explicit corrections are honoured even when learning is disabled. */
     suspend fun setPreference(subject: PersonalLearning.Subject, preference: PersonalLearning.Preference?) {
+        metrics?.count(Metric.CORRECTION, "correction:preference")
         if (preference == null) dao.deleteOverride(subject.type.name, subject.key)
         else dao.upsertOverride(LearningOverrideEntity(subject.type.name, subject.key, preference.name, subject.label.take(MAX_LABEL), clock()))
     }

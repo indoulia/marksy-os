@@ -12,8 +12,14 @@ object AiModelRegistry {
     fun installed(): List<LocalModel> = emptyList()
 }
 
-class RoomAiInvocationSink(private val dao: AiInvocationDao) : AiInvocationSink {
+class RoomAiInvocationSink(private val dao: AiInvocationDao, private val metrics: com.marksy.os.data.MetricsRecorder? = null) : AiInvocationSink {
     override suspend fun record(invocation: AiInvocation) {
+        metrics?.let { m ->
+            val scope = "ai:${invocation.task.name}"
+            m.count(com.marksy.os.data.Metric.AI_CALL, scope)
+            m.count(com.marksy.os.data.Metric.AI_LATENCY_MS_SUM, scope, delta = invocation.latencyMs)
+            if (invocation.outcome != AiInvocation.Outcome.OK) m.count(com.marksy.os.data.Metric.AI_FAILURE, scope)
+        }
         dao.insert(
             AiInvocationEntity(
                 task = invocation.task.name, modelId = invocation.modelId, modelVersion = invocation.modelVersion,

@@ -74,6 +74,10 @@ interface MetricsDao {
         add(day, scope, metric, delta)
     }
 
+    /** Gauges (a daily snapshot value) overwrite instead of adding. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun set(row: MetricCounterEntity)
+
     @Query("SELECT * FROM metric_counters WHERE day >= :fromDay AND day <= :toDay ORDER BY day ASC, scope ASC, metric ASC")
     suspend fun range(fromDay: String, toDay: String): List<MetricCounterEntity>
 

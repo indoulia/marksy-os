@@ -36,7 +36,8 @@ class MemoryRepository(
     private val learningDao: LearningDao,
     private val settings: MemorySettings,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val zone: () -> ZoneId = ZoneId::systemDefault
+    private val zone: () -> ZoneId = ZoneId::systemDefault,
+    private val metrics: MetricsRecorder? = null
 ) {
     fun observe(): Flow<List<MemoryEntryEntity>> = dao.observeActive(clock())
 
@@ -73,8 +74,15 @@ class MemoryRepository(
         }
     }
 
-    suspend fun forget(id: Long) = dao.forget(id, clock()) > 0
-    suspend fun correct(id: Long, label: String) = dao.correct(id, label.trim().take(60), clock()) > 0
+    suspend fun forget(id: Long): Boolean {
+        metrics?.count(Metric.CORRECTION, "correction:memory")
+        return dao.forget(id, clock()) > 0
+    }
+
+    suspend fun correct(id: Long, label: String): Boolean {
+        metrics?.count(Metric.CORRECTION, "correction:memory")
+        return dao.correct(id, label.trim().take(60), clock()) > 0
+    }
 
     suspend fun setKindEnabled(kind: PersonalMemory.Kind, enabled: Boolean) {
         settings.setKindEnabled(kind, enabled)

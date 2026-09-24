@@ -20,6 +20,8 @@ class RetentionWorker(
             val now = System.currentTimeMillis()
             // Memory and learning run before pruning so events about to expire are still observed.
             MarksyContainer.memory(applicationContext).ingest()
+            // Daily gauge snapshot for the 30-day validation (EPIC-023); must not block housekeeping.
+            runCatching { ValidationRepository(applicationContext).snapshot() }
             MarksyContainer.learning(applicationContext).run {
                 sweepIgnored(now)
                 pruneExpired(now)

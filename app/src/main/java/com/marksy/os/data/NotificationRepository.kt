@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 class NotificationRepository(
     private val dao: NotificationEventDao,
-    private val learning: LearningRepository? = null
+    private val learning: LearningRepository? = null,
+    private val metrics: MetricsRecorder? = null
 ) {
+    private suspend fun interaction(n: Int = 1) { metrics?.count(Metric.USER_INTERACTION, delta = n.toLong()) }
+
     companion object {
         /** Enough for ~a week of real traffic; threads/grouping need more than the 50-row recent feed. */
         const val INBOX_LIMIT = 500
@@ -36,6 +39,7 @@ class NotificationRepository(
 
     suspend fun archive(eventId: Long): Boolean {
         learning?.recordAction(listOf(eventId), PersonalLearning.Signal.ARCHIVED_UNOPENED)
+        interaction()
         return dao.setArchived(eventId, true) > 0
     }
 
@@ -44,6 +48,7 @@ class NotificationRepository(
     /** NEW -> ACTIVE once the user has opened the event; no-op for any other state. */
     suspend fun markSeen(eventId: Long, nowMillis: Long = System.currentTimeMillis()): Boolean {
         learning?.recordAction(listOf(eventId), PersonalLearning.Signal.OPENED)
+        interaction()
         return dao.transitionLifecycle(eventId, EventLifecycle.State.NEW.name, EventLifecycle.State.ACTIVE.name, null, nowMillis) > 0
     }
 
@@ -51,11 +56,13 @@ class NotificationRepository(
 
     suspend fun markThreadSeen(ids: List<Long>, nowMillis: Long = System.currentTimeMillis()): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.OPENED)
+        interaction()
         return dao.markSeen(ids, nowMillis)
     }
 
     suspend fun resolveThread(ids: List<Long>, nowMillis: Long = System.currentTimeMillis()): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.RESOLVED)
+        interaction()
         return dao.resolve(ids, "Resolved by you", nowMillis)
     }
 
@@ -63,6 +70,7 @@ class NotificationRepository(
 
     suspend fun snoozeThread(ids: List<Long>, untilMillis: Long): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.SNOOZED)
+        interaction()
         return dao.setSnoozedUntil(ids, untilMillis)
     }
 
@@ -70,6 +78,7 @@ class NotificationRepository(
 
     suspend fun archiveThread(ids: List<Long>, nowMillis: Long = System.currentTimeMillis()): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.ARCHIVED_UNOPENED)
+        interaction()
         return dao.archiveAll(ids, nowMillis)
     }
 

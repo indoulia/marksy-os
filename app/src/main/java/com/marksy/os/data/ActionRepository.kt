@@ -28,6 +28,7 @@ class ActionRepository(
     private val notifications: NotificationRepository,
     private val learning: LearningRepository?,
     private val platform: ActionPlatform,
+    private val metrics: MetricsRecorder? = null,
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     data class Outcome(val actionId: Long, val state: ActionState, val message: String)
@@ -39,6 +40,9 @@ class ActionRepository(
     suspend fun execute(eventId: Long, type: Type, scheduledFor: Long? = null, detail: String? = null): Outcome {
         val now = clock()
         val event = eventDao.getById(eventId) ?: return Outcome(-1, ActionState.FAILED, "Event no longer exists")
+        metrics?.count(Metric.USER_INTERACTION, "action:${type.name}")
+        // A category report is the ground-truth signal for classification accuracy (EPIC-023).
+        if (type == Type.REPORT) metrics?.count(Metric.CORRECTION, "correction:category", MetricsRecorder.source(event.sourcePackage), MetricsRecorder.category(event.category))
         // Re-check at execution time: the app may have been uninstalled since discovery.
         val offered = ActionEngine.discover(event, platform, now).firstOrNull { it.type == type }
         if (offered == null || !offered.enabled) {

@@ -18,7 +18,7 @@ object MarksyContainer {
     fun learning(context: Context): LearningRepository {
         val db = database(context)
         val settings = LearningSettings(context.applicationContext)
-        return LearningRepository(db.learningDao(), db.notificationEventDao(), isEnabled = { settings.enabled })
+        return LearningRepository(db.learningDao(), db.notificationEventDao(), isEnabled = { settings.enabled }, metrics = metrics(context))
     }
 
     fun actions(context: Context): ActionRepository {
@@ -26,8 +26,9 @@ object MarksyContainer {
         val learning = learning(context)
         return ActionRepository(
             db.eventActionDao(), db.notificationEventDao(),
-            NotificationRepository(db.notificationEventDao(), learning), learning,
-            com.marksy.os.notification.AndroidActionPlatform(context.applicationContext)
+            NotificationRepository(db.notificationEventDao(), learning, metrics(context)), learning,
+            com.marksy.os.notification.AndroidActionPlatform(context.applicationContext),
+            metrics = metrics(context)
         )
     }
 
@@ -47,7 +48,7 @@ object MarksyContainer {
 
     fun memory(context: Context): MemoryRepository {
         val db = database(context)
-        return MemoryRepository(db.memoryDao(), db.notificationEventDao(), db.learningDao(), PrefsMemorySettings(context.applicationContext))
+        return MemoryRepository(db.memoryDao(), db.notificationEventDao(), db.learningDao(), PrefsMemorySettings(context.applicationContext), metrics = metrics(context))
     }
 
     fun rules(context: Context): RuleRunner {
@@ -62,7 +63,7 @@ object MarksyContainer {
 
     /** No external provider exists, so external processing is hard-off rather than a setting. */
     fun intelligence(context: Context): IntelligenceService =
-        IntelligenceService(AiModelRegistry.installed(), allowExternal = { false }, sink = RoomAiInvocationSink(database(context).aiInvocationDao()))
+        IntelligenceService(AiModelRegistry.installed(), allowExternal = { false }, sink = RoomAiInvocationSink(database(context).aiInvocationDao(), metrics(context)))
 
     fun ask(context: Context): AskMarksyRepository {
         val db = database(context)
@@ -70,5 +71,5 @@ object MarksyContainer {
     }
 
     fun repository(context: Context): NotificationRepository =
-        NotificationRepository(database(context).notificationEventDao(), learning(context))
+        NotificationRepository(database(context).notificationEventDao(), learning(context), metrics(context))
 }

@@ -53,6 +53,7 @@ import com.marksy.os.ui.BriefingScreen
 import com.marksy.os.ui.LearningScreen
 import com.marksy.os.ui.MemoryScreen
 import com.marksy.os.ui.HealthScreen
+import com.marksy.os.ui.ValidationScreen
 import com.marksy.os.data.LearningSettings
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ui.InsightsScreen
@@ -123,6 +124,8 @@ class MainActivity : ComponentActivity() {
         var showLearning by rememberSaveable { mutableStateOf(false) }
         var showMemory by rememberSaveable { mutableStateOf(false) }
         var showHealth by rememberSaveable { mutableStateOf(false) }
+        var showValidation by rememberSaveable { mutableStateOf(false) }
+        val validationRepository = remember { com.marksy.os.data.ValidationRepository(applicationContext) }
         val healthRepository = remember { com.marksy.os.data.HealthRepository(applicationContext) }
         val memoryRepository = remember { MarksyContainer.memory(applicationContext) }
         var showDigest by rememberSaveable { mutableStateOf(false) }
@@ -137,9 +140,10 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
+                showValidation -> showValidation = false
                 showHealth -> showHealth = false
                 showMemory -> showMemory = false
                 showLearning -> showLearning = false
@@ -188,6 +192,10 @@ class MainActivity : ComponentActivity() {
             }
         ) { padding ->
             when {
+                showValidation -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("30-day validation") { showValidation = false }
+                    ValidationScreen(validationRepository, padding)
+                }
                 showHealth -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
                     ScreenHeader("Marksy Health") { showHealth = false }
                     HealthScreen(padding) { healthRepository.report() }
@@ -260,6 +268,7 @@ class MainActivity : ComponentActivity() {
                     openWhatsAppAccess = ::openWhatsAppConnector,
                     openGatewaySettings = { showGatewaySettings = true },
                     openHealth = { showHealth = true },
+                    openValidation = { showValidation = true },
                     clearAll = {
                         TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
                         repository.clearAll()
@@ -370,6 +379,7 @@ class MainActivity : ComponentActivity() {
     openWhatsAppAccess: () -> Unit,
     openGatewaySettings: () -> Unit,
     openHealth: () -> Unit,
+    openValidation: () -> Unit,
     clearAll: suspend () -> Unit,
     openTimeline: () -> Unit,
     openCalendar: () -> Unit,
@@ -425,6 +435,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black) } } }
+        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black) } } }
         item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black) } } }
         item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black) } } }
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black) } } }
