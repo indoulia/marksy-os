@@ -1,11 +1,13 @@
 package com.marksy.os
 
 import android.app.Application
+import com.marksy.os.gateway.SecureCredentialStore
 
 class MarksyOsApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContext.initialize(this)
+        SecureCredentialStore.purgeLegacyCredentials(this)
     }
 }
 

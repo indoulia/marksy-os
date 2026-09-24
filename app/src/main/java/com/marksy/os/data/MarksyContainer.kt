@@ -76,4 +76,11 @@ object MarksyContainer {
 
     fun marketIntelligence(context: Context): com.marksy.os.market.MarketIntelligenceRepository =
         com.marksy.os.market.MarketIntelligenceRepository(com.marksy.os.gateway.MarksyGatewayProvider.marketIntelligenceClient())
+
+    fun authRepository(context: Context): com.marksy.os.gateway.AuthRepository {
+        val baseUrl = (com.marksy.os.gateway.SecureCredentialStore(context).getBaseUrl() ?: com.marksy.os.BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
+        val client = runCatching { com.marksy.os.gateway.RealAuthApiClient(baseUrl) }
+            .getOrElse { com.marksy.os.gateway.RealAuthApiClient(com.marksy.os.BuildConfig.MARKSY_API_BASE_URL) }
+        return com.marksy.os.gateway.AuthRepository(client, com.marksy.os.gateway.AuthSessionStore(context))
+    }
 }

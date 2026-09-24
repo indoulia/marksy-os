@@ -3,26 +3,37 @@ package com.marksy.os.gateway
 import com.marksy.os.AppContext
 import com.marksy.os.BuildConfig
 
-/** Single construction point for the Marksy API client. */
+/** Single construction point for the Marksy API clients, both authenticated
+ * via the real session login (see `AuthRepository`) rather than a static key. */
 object MarksyGatewayProvider {
+    private fun authRepository(): AuthRepository {
+        val baseUrl = (SecureCredentialStore(AppContext.get()).getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
+        return AuthRepository(RealAuthApiClient(baseUrl), AuthSessionStore(AppContext.get()))
+    }
+
     fun client(): MarksyGatewayClient {
-        val store = SecureCredentialStore(AppContext.get())
-        val key = store.getIntegrationKey() ?: return UnconfiguredMarksyGatewayClient()
-        val baseUrl = (store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
-        // A malformed stored base URL must not crash delivery: refuse it and stay unconfigured.
-        return runCatching { MarksyTipsApiClient(key, baseUrl) as MarksyGatewayClient }
+        val baseUrl = (SecureCredentialStore(AppContext.get()).getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
+        if (AuthSessionStore(AppContext.get()).getToken() == null) return UnconfiguredMarksyGatewayClient()
+        return runCatching { MarksyTipsApiClient(authRepository(), baseUrl) as MarksyGatewayClient }
             .getOrElse { UnconfiguredMarksyGatewayClient() }
     }
 
-    /** Null until the gateway is provisioned; market data is read-only and optional. */
+    /** Null until the user is signed in; market data is read-only and optional. */
     fun marketClient(): MarksyTipsApiClient? = client() as? MarksyTipsApiClient
 
-    /** Null until the market API key is provisioned; every Market screen must degrade to
+    /** Whether a call made right now would actually carry a usable session token --
+     * unlike the synchronous `getToken() != null` checks above (which only mean "has
+     * ever signed in"), this proactively refreshes, so a lapsed remembered session is
+     * correctly reported as unusable. Lets background work skip a whole batch upfront
+     * instead of claiming-then-failing every item one at a time. */
+    suspend fun currentAuthToken(): String? =
+        if (AuthSessionStore(AppContext.get()).getToken() == null) null else authRepository().currentToken()
+
+    /** Null until the user is signed in; every Market screen must degrade to
      * its own Unavailable state rather than crash when this is null. */
     fun marketIntelligenceClient(): com.marksy.os.market.MarketApiClient? {
-        val store = SecureCredentialStore(AppContext.get())
-        val key = store.getMarketApiKey() ?: return null
-        val baseUrl = (store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
-        return runCatching { com.marksy.os.market.RealMarketApiClient(key, baseUrl) as com.marksy.os.market.MarketApiClient }.getOrNull()
+        if (AuthSessionStore(AppContext.get()).getToken() == null) return null
+        val baseUrl = (SecureCredentialStore(AppContext.get()).getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
+        return runCatching { com.marksy.os.market.RealMarketApiClient(authRepository(), baseUrl) as com.marksy.os.market.MarketApiClient }.getOrNull()
     }
 }

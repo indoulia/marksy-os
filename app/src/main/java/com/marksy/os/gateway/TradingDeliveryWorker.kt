@@ -37,6 +37,13 @@ class TradingDeliveryWorker(
             Log.i(TAG, "Trading delivery deferred: Marksy Gateway is not configured")
             return Result.success()
         }
+        if (MarksyGatewayProvider.currentAuthToken() == null) {
+            // Never-signed-in is already caught above; this additionally catches a
+            // remembered session that has lapsed and could not be refreshed -- avoids
+            // claiming (and per-event failing) an entire batch we already know cannot deliver.
+            Log.i(TAG, "Trading delivery deferred: Marksy session is not currently usable")
+            return Result.success()
+        }
 
         var retryRequested = false
         for (event in pending) {

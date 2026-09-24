@@ -26,8 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,13 +34,9 @@ import kotlinx.coroutines.launch
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
 import com.marksy.os.data.local.NotificationEventEntity
-import com.marksy.os.gateway.GatewayQrParser
 import com.marksy.os.gateway.MarketRepository
 import com.marksy.os.gateway.MarketState
-import com.marksy.os.gateway.SecureCredentialStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.NotificationTrend
@@ -63,7 +57,6 @@ import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskExchange
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
-import com.marksy.os.ui.CompactTextField
 import com.marksy.os.ui.DailyDigestModel
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
@@ -90,6 +83,7 @@ import com.marksy.os.ui.TradingInsightDetailDialog
 import com.marksy.os.ui.TradingIntelligenceScreen
 import com.marksy.os.ui.toTradingInsight
 import com.marksy.os.ui.MarketScreen
+import com.marksy.os.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
     private var notificationAccessEnabled by mutableStateOf(false)
@@ -251,8 +245,8 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
-            "More" to Icons.Default.MoreHoriz,
-            "Market" to Icons.Default.QueryStats
+            "Market" to Icons.Default.QueryStats,
+            "More" to Icons.Default.MoreHoriz
         )
 
         Scaffold(
@@ -331,7 +325,14 @@ class MainActivity : ComponentActivity() {
                     onOpenTrading = { showDigest = false; selectedTab = 3 },
                     onEventSelected = openEvent
                 )
-                showGatewaySettings -> GatewaySettingsHost(padding)
+                showGatewaySettings -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background)) {
+                    LoginScreen(
+                        authRepository = remember { MarksyContainer.authRepository(applicationContext) },
+                        padding = padding,
+                        currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).let { if (it.isSessionActive()) it.getUserId() else null } },
+                        onSignedIn = { showGatewaySettings = false }
+                    )
+                }
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = homeSnapshot,
                     events = homeEvents,
@@ -348,7 +349,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
-                    onOpenProfile = { selectedTab = 4 },
+                    onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
                     onDelete = deleteNow,
                     onHide = { homeHidden = homeHidden + it.id },
@@ -381,7 +382,7 @@ class MainActivity : ComponentActivity() {
                     loadEvent = { id -> repository.event(id) }
                 )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
-                selectedTab == 5 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
+                selectedTab == 4 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,
@@ -446,153 +447,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun GatewaySettingsHost(padding: PaddingValues) {
-    val store = remember { SecureCredentialStore(AppContext.get()) }
-    var key by rememberSaveable { mutableStateOf("") }
-    var baseUrl by rememberSaveable { mutableStateOf(store.getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL) }
-    var configured by remember { mutableStateOf(store.getIntegrationKey() != null) }
-    var message by rememberSaveable { mutableStateOf<String?>(null) }
-    var revealKey by rememberSaveable { mutableStateOf(false) }
-    var marketKey by rememberSaveable { mutableStateOf("") }
-    var marketKeyConfigured by remember { mutableStateOf(store.getMarketApiKey() != null) }
-    var revealMarketKey by rememberSaveable { mutableStateOf(false) }
-
-    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-        val contents = result.contents
-        if (contents == null) {
-            message = "Scan cancelled."
-        } else {
-            val parsed = GatewayQrParser.parse(contents)
-            parsed.integrationKey?.let { key = it }
-            parsed.baseUrl?.let { baseUrl = it }
-            revealKey = true
-            message = if (parsed.hasAny) "Scanned. Review the fields and Save." else "QR code not recognized."
-        }
-    }
-
-    Column(
-        Modifier.fillMaxSize().background(MarksyTheme.Background)
-            .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
-            .verticalScroll(rememberScrollState())
-    ) {
-        ScreenHeader("Marksy Gateway")
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (configured) "Gateway configured" else "Gateway not configured", color = if (configured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold)
-            Text("Scan the QR code from the Marksy admin, or enter the values manually. The integration key is encrypted with Android Keystore and is never displayed after saving.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
-
-            OutlinedButton(
-                onClick = {
-                    scanLauncher.launch(ScanOptions().apply {
-                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                        setPrompt("Scan the Marksy gateway QR")
-                        setBeepEnabled(false)
-                        setOrientationLocked(false)
-                    })
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MarksyTheme.PrimaryEmerald)
-                Spacer(Modifier.width(8.dp))
-                Text("Scan QR code", color = MarksyTheme.PrimaryEmerald)
-            }
-
-            CompactTextField(
-                value = baseUrl,
-                onValueChange = { baseUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = "Base URL"
-            )
-            CompactTextField(
-                value = key,
-                onValueChange = { key = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = "Integration key",
-                visualTransformation = if (revealKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailing = {
-                    TextButton(onClick = { revealKey = !revealKey }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(if (revealKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
-                }
-            )
-            Text("Market intelligence key", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            Text(
-                "A separate, scoped API key for market data, predictions and IPOs — minted by a Marksy admin, independent of the integration key above.",
-                color = MarksyTheme.TextSecondary,
-                fontSize = 12.sp
-            )
-            CompactTextField(
-                value = marketKey,
-                onValueChange = { marketKey = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = "Market API key",
-                visualTransformation = if (revealMarketKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailing = {
-                    TextButton(onClick = { revealMarketKey = !revealMarketKey }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                        Text(if (revealMarketKey) "Hide" else "Show", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp)
-                    }
-                }
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        val url = baseUrl.trim()
-                        if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
-                            message = "Base URL must start with https://"
-                            return@Button
-                        }
-                        runCatching {
-                            store.setBaseUrl(url)
-                            store.setMarketApiKey(marketKey.trim())
-                        }
-                            .onSuccess { marketKey = ""; revealMarketKey = false; marketKeyConfigured = true; message = "Market key saved securely on this device." }
-                            .onFailure { message = "Could not save the market key. Try again." }
-                    },
-                    enabled = marketKey.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
-                ) { Text("Save Market Key", color = Color.Black) }
-                OutlinedButton(onClick = {
-                    store.clearMarketApiKey()
-                    marketKey = ""
-                    revealMarketKey = false
-                    marketKeyConfigured = false
-                    message = "Market key removed. Market Intelligence is unavailable until reconfigured."
-                }) { Text("Remove", color = MarksyTheme.RedUrgent) }
-            }
-            Text(if (marketKeyConfigured) "Market key configured" else "Market key not configured", color = if (marketKeyConfigured) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontSize = 12.sp)
-            Button(
-                onClick = {
-                    val url = baseUrl.trim()
-                    if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
-                        message = "Base URL must start with https://"
-                        return@Button
-                    }
-                    runCatching {
-                        store.setBaseUrl(url)
-                        store.setIntegrationKey(key.trim())
-                    }.onSuccess {
-                        key = ""
-                        revealKey = false
-                        configured = true
-                        message = "Saved securely on this device."
-                    }.onFailure {
-                        message = "Could not save the credential. Try again."
-                    }
-                },
-                enabled = key.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
-            ) { Text("Save Securely", color = Color.Black) }
-            OutlinedButton(onClick = {
-                store.clearIntegrationKey()
-                store.clearBaseUrl()
-                key = ""
-                revealKey = false
-                configured = false
-                baseUrl = BuildConfig.MARKSY_API_BASE_URL
-                message = "Credential removed. Trading delivery and Market Intelligence are disabled until reconfigured."
-            }) { Text("Remove Credential", color = MarksyTheme.RedUrgent) }
-            message?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
-        }
-    }
-}
-
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline"); TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights"); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
@@ -625,9 +479,6 @@ class MainActivity : ComponentActivity() {
     var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val store = remember { SecureCredentialStore(AppContext.get()) }
-    var gatewayConfigured by remember { mutableStateOf(store.getIntegrationKey() != null) }
-
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
         contentPadding = PaddingValues(18.dp),
@@ -675,7 +526,18 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Marksy Gateway", if (gatewayConfigured) "READY" else "NOT CONFIGURED", "Integration credentials stored securely.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Configure Gateway", color = Color.Black, fontSize = 12.sp) } } }
+        item {
+            val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).let { if (it.isSessionActive()) it.getUserId() else null } }
+            SettingsCard(
+                "Marksy Account",
+                if (signedInUserId != null) "SIGNED IN" else "NOT SIGNED IN",
+                if (signedInUserId != null) "Signed in as $signedInUserId." else "Sign in to enable Trading delivery and Market Intelligence."
+            ) {
+                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) {
+                    Text(if (signedInUserId != null) "Manage Account" else "Sign In", color = Color.Black, fontSize = 12.sp)
+                }
+            }
+        }
         item {
             val zone by WorldClockSettings.secondZone
             SettingsCard("World clock", WorldClock.abbreviation(java.time.ZonedDateTime.now(zone)), "Home shows IST and ${WorldClock.cityName(zone)}. Tap the clocks to convert meeting times.") {
@@ -688,7 +550,7 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
     }
     if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
-    if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll(); gatewayConfigured = store.getIntegrationKey() != null } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }, containerColor = MarksyTheme.SurfaceRaised)
+    if (showClear) AlertDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }, containerColor = MarksyTheme.SurfaceRaised)
 }
 
 @Composable private fun SettingsCard(title: String, status: String, description: String, action: (@Composable () -> Unit)? = null) {
