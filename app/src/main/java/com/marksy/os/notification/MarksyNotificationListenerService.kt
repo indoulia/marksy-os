@@ -3,30 +3,24 @@ package com.marksy.os.notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.marksy.os.connector.ConnectorRegistry
+import com.marksy.os.connector.IngestionPipeline
+import com.marksy.os.connector.RawCapture
+import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
-import com.marksy.os.data.local.DeliveryState
-import com.marksy.os.data.local.MarksyDatabase
-import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
-import com.marksy.os.intelligence.EventIntelligencePipeline
 import com.marksy.os.intelligence.EventIntelligenceWorker
-import com.marksy.os.intelligence.RuleApplication
-import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/** Connector for all Android notifications (EPIC-021); processing lives in [IngestionPipeline]. */
 class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
-    private val ruleStore by lazy { RuleStore(applicationContext) }
-    private val ruleRunner by lazy {
-        com.marksy.os.data.RuleRunner(dao, MarksyDatabase.getInstance(applicationContext).ruleExecutionDao())
-    }
-    private val pipeline by lazy {
-        EventIntelligencePipeline(dao, graph = com.marksy.os.intelligence.ContextGraph(MarksyDatabase.getInstance(applicationContext).contextGraphDao()))
+    private val ingestion by lazy {
+        MarksyContainer.ingestion(applicationContext) { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) }
     }
 
     override fun onListenerConnected() {
@@ -34,12 +28,16 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
-        serviceScope.launch { runCatching { com.marksy.os.data.MarksyContainer.actions(applicationContext).recover() } }
+        serviceScope.launch {
+            runCatching { ingestion.connected(ConnectorRegistry.NOTIFICATIONS) }
+            runCatching { MarksyContainer.actions(applicationContext).recover() }
+        }
         Log.i(TAG, "Notification listener connected; background work scheduled")
     }
 
     override fun onListenerDisconnected() {
         Log.w(TAG, "Notification listener disconnected")
+        serviceScope.launch { runCatching { ingestion.disconnected(ConnectorRegistry.NOTIFICATIONS) } }
         super.onListenerDisconnected()
     }
 
@@ -58,64 +56,29 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
 
-        val result = NotificationClassifier.classify(packageName, title, text)
-        val isTrading = result.category == NotificationClassifier.Category.TRADING
-        val sourceName = SourceRegistry.displayName(applicationContext, packageName)
-        val fingerprint = EventFingerprint.create(
-            packageName,
-            result.category.name,
-            title,
-            text,
-            sbn.postTime
-        )
-        val baseEvent = NotificationEventEntity(
+        val raw = RawCapture(
+            connectorId = ConnectorRegistry.NOTIFICATIONS,
             sourcePackage = packageName,
-            sourceName = sourceName,
+            sourceName = SourceRegistry.displayName(applicationContext, packageName),
             sourceKey = sbn.key,
-            eventFingerprint = fingerprint,
             title = title,
             body = text,
-            postedAt = sbn.postTime,
-            category = result.category.name,
-            priority = result.priority,
-            confidence = result.confidence,
-            isTrading = isTrading,
-            deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+            postedAt = sbn.postTime
         )
-        val applied = RuleApplication.apply(ruleStore.load(), baseEvent)
-        val event = applied.event
 
         serviceScope.launch {
-            try {
-                val insertedId = dao.insert(event)
-
-                if (insertedId != -1L && isTrading && !applied.archived) {
-                    TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
-                }
-                if (insertedId != -1L) {
-                    runCatching { ruleRunner.recordCapture(insertedId, applied.evaluation) }
-                    processIntelligence(insertedId)
-                }
-
-                try {
-                    cancelNotification(sbn.key)
-                } catch (_: SecurityException) {
-                    Log.w(TAG, "Unable to cancel notification")
-                }
-            } catch (_: Exception) {
-                Log.e(TAG, "Failed to persist notification event")
+            val result = ingestion.ingest(raw)
+            if (result is IngestionPipeline.Result.Failed) {
+                // Not stored, so leave it in the shade rather than lose it.
+                Log.e(TAG, "Failed to persist notification event (${result.reason})")
+                return@launch
             }
-        }
-    }
-
-    // Inline so surfaces update immediately; on failure the row stays at version 0 for the backfill worker.
-    private suspend fun processIntelligence(eventId: Long) {
-        try {
-            pipeline.process(eventId)
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.w(TAG, "Event intelligence deferred to backfill")
-            EventIntelligenceWorker.schedule(applicationContext)
+            // Preserves V1 behaviour: the captured notification is removed from the shade.
+            try {
+                cancelNotification(sbn.key)
+            } catch (_: SecurityException) {
+                Log.w(TAG, "Unable to cancel notification")
+            }
         }
     }
 

@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class],
     version = 3,
     exportSchema = false
 )
@@ -20,6 +20,8 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun ruleExecutionDao(): RuleExecutionDao
     abstract fun aiInvocationDao(): AiInvocationDao
     abstract fun memoryDao(): MemoryDao
+    abstract fun connectorDao(): ConnectorDao
+    abstract fun metricsDao(): MetricsDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -54,6 +56,12 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-021..023 connector lifecycle log and daily metric counters.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `connector_events` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `connectorId` TEXT NOT NULL, `adapterId` TEXT, `type` TEXT NOT NULL, `detail` TEXT, `at` INTEGER NOT NULL)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_connector_events_connectorId_at` ON `connector_events` (`connectorId`, `at`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_connector_events_at` ON `connector_events` (`at`)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS `metric_counters` (`day` TEXT NOT NULL, `scope` TEXT NOT NULL, `metric` TEXT NOT NULL, `value` INTEGER NOT NULL, PRIMARY KEY(`day`, `scope`, `metric`))")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_metric_counters_metric` ON `metric_counters` (`metric`)")
                 // EPIC-020 personal memory.
                 database.execSQL("CREATE TABLE IF NOT EXISTS `memory_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kind` TEXT NOT NULL, `memoryKey` TEXT NOT NULL, `label` TEXT NOT NULL, `confidence` REAL NOT NULL, `firstObservedAt` INTEGER NOT NULL, `lastObservedAt` INTEGER NOT NULL, `observations` INTEGER NOT NULL, `expiresAt` INTEGER, `origin` TEXT NOT NULL, `state` TEXT NOT NULL, `detailJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL)")
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_memory_entries_kind_memoryKey` ON `memory_entries` (`kind`, `memoryKey`)")

@@ -28,6 +28,9 @@ class RetentionWorker(
             MarksyDatabase.getInstance(applicationContext).contextGraphDao().pruneOrphanLinks()
             MarksyDatabase.getInstance(applicationContext).ruleExecutionDao().pruneOrphans()
             MarksyDatabase.getInstance(applicationContext).aiInvocationDao().prune(now - 45L * 24 * 60 * 60 * 1000)
+            // Lifecycle/failure log and counters are kept longer than a 30-day validation window.
+            MarksyDatabase.getInstance(applicationContext).connectorDao().prune(now - 45L * 24 * 60 * 60 * 1000)
+            MarksyDatabase.getInstance(applicationContext).metricsDao().prune(java.time.LocalDate.now().minusDays(120).toString())
             Result.success()
         } catch (e: Exception) {
             // Retention is local housekeeping. A transient database failure should

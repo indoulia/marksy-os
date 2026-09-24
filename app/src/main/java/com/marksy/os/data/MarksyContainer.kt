@@ -5,7 +5,11 @@ import com.marksy.os.ai.AiModelRegistry
 import com.marksy.os.ai.IntelligenceService
 import com.marksy.os.ai.ModelQueryInterpreter
 import com.marksy.os.ai.RoomAiInvocationSink
+import com.marksy.os.connector.IngestionPipeline
 import com.marksy.os.data.local.MarksyDatabase
+import com.marksy.os.intelligence.ContextGraph
+import com.marksy.os.intelligence.EventIntelligencePipeline
+import com.marksy.os.intelligence.RuleStore
 
 object MarksyContainer {
     fun database(context: Context): MarksyDatabase =
@@ -24,6 +28,20 @@ object MarksyContainer {
             db.eventActionDao(), db.notificationEventDao(),
             NotificationRepository(db.notificationEventDao(), learning), learning,
             com.marksy.os.notification.AndroidActionPlatform(context.applicationContext)
+        )
+    }
+
+    fun metrics(context: Context): MetricsRecorder = MetricsRecorder(database(context).metricsDao())
+
+    fun ingestion(context: Context, onTradingCaptured: () -> Unit = {}): IngestionPipeline {
+        val db = database(context)
+        val app = context.applicationContext
+        val ruleStore = RuleStore(app)
+        return IngestionPipeline(
+            db.notificationEventDao(), db.connectorDao(), metrics(context), rules = { ruleStore.load() },
+            ruleRunner = rules(context),
+            intelligence = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao())),
+            onTradingCaptured = onTradingCaptured
         )
     }
 
