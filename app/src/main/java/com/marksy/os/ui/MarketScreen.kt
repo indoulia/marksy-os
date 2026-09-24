@@ -35,11 +35,18 @@ fun MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValue
                 }
                 MarketOverviewScreen(state = state, padding = padding, health = health)
             }
-            // STOCKS and PREDICTIONS are wired to their real screens in Task 8; IPOS in Task 9.
-            // Placeholders here keep this task's build and tests green without a forward
-            // reference to composables those tasks haven't created yet.
-            MarketTab.STOCKS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
-            MarketTab.PREDICTIONS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+            MarketTab.STOCKS -> {
+                val symbol = selectedSymbol
+                if (symbol == null) {
+                    StockSearchPlaceholder(padding = padding, onSymbolChosen = { selectedSymbol = it })
+                } else {
+                    val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol) {
+                        value = repository.instrument(symbol)
+                    }
+                    StockDetailScreen(state = state, padding = padding, onBack = { selectedSymbol = null })
+                }
+            }
+            MarketTab.PREDICTIONS -> PredictionsScreen(repository = repository, padding = padding, onOpenSymbol = { selectedSymbol = it; tab = MarketTab.STOCKS })
             MarketTab.IPOS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
         }
     }
