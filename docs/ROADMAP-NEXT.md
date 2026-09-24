@@ -484,6 +484,8 @@ Do not expand the UI unnecessarily. Prefer strengthening the existing V2 surface
 - Queries work without a cloud model when the configured local intelligence path supports them.
 - Sensitive source data is not sent externally unless explicitly configured.
 
+**Status (2026-09-25):** Deterministic Ask is COMPLETE, and model-routed interpretation is wired in. AI interpretation stays PARTIAL until Nano runs on a real device.
+
 ---
 
 ## EPIC-017 — Daily Briefing
@@ -538,6 +540,8 @@ Do not expand the UI unnecessarily. Prefer strengthening the existing V2 surface
 - Every execution has an audit record.
 - Users can simulate a rule against historical events before enabling it.
 
+**Status (2026-09-25):** COMPLETE in tests. The editor builds nested AND/OR/NOT trees in the engine's own model, and they reload without loss. Each rule has one action. Not yet run on a device.
+
 ---
 
 ## EPIC-019 — On-Device Intelligence
@@ -563,6 +567,8 @@ Do not expand the UI unnecessarily. Prefer strengthening the existing V2 surface
 - Failure/timeout falls back safely.
 - The user can see which processing is local vs remote.
 - No sensitive data is sent remotely without explicit configuration.
+
+**Status (2026-09-25):** PARTIAL. Gemini Nano runs through ML Kit GenAI/AICore, with capability detection, lifecycle, diagnostics and fallback. It is not verified on hardware, because the test phone has no AICore. Devices without AICore still have no local runtime.
 
 ---
 
@@ -594,6 +600,8 @@ Do not expand the UI unnecessarily. Prefer strengthening the existing V2 surface
 - Memory does not silently override explicit user settings.
 - Sensitive information is handled according to the privacy model.
 
+**Status (2026-09-25):** COMPLETE for places named in notification text: they are learned, coarsened, explainable, correctable and expiring. Learning from device location is deliberately not built, because it needs a product and privacy decision.
+
 ---
 
 ## EPIC-021 — Connector Framework
@@ -619,6 +627,8 @@ Connector → Source Adapter → Normalizer → Classifier → Event Intelligenc
 - Connector failures are isolated.
 - Duplicate events are prevented at the ingestion boundary.
 - Adding a connector does not require changing core intelligence logic.
+
+**Status (2026-09-25):** PARTIAL. The pull-connector framework and the Calendar provider connector are done. The Gmail API connector is built but not configured, because it needs OAuth. SMS stays notification-only because of the Android restriction.
 
 ---
 

@@ -62,7 +62,7 @@ class ConnectorSyncTest {
         CalendarConnector.Instance(id, begin, begin + hour, title, location, "lead@corp.com", "Work", allDay = false, canceled = canceled, declined = false)
 
     private fun calendar(source: FakeCalendar) = CalendarConnector(source, { now }, { ZoneOffset.UTC })
-    private fun rows() = runBlocking { db.notificationEventDao().findInRange(0, Long.MAX_VALUE, 100) }
+    private fun rows() = runBlocking { db.notificationEventDao().findInRange(0, Long.MAX_VALUE, 1000) }
     private fun sync(c: SyncConnector) = runBlocking { syncer.sync(c) }
 
     @Test
@@ -119,6 +119,22 @@ class ConnectorSyncTest {
         now = t0 + 2 * 24 * hour + 3 * hour
         assertEquals(0, (sync(calendar(source)) as ConnectorSyncer.Outcome.Synced).removed)
         assertTrue(rows().none { it.lifecycleState == "RESOLVED" })
+    }
+
+    @Test
+    fun truncatedProviderResultDoesNotLookLikeDeletions() {
+        syncer.setEnabled(CalendarConnector.ID, true)
+        val many = (0 until CalendarConnector.MAX_INSTANCES + 5).map { inst(100L + it, t0 + hour + it * 60_000L, "E$it", null) }
+        val source = FakeCalendar(many.drop(5))
+        sync(calendar(source))
+        // Five earlier events appear, so the capped result no longer reaches the last five known instances.
+        source.instances = many
+        assertEquals(0, (sync(calendar(source)) as ConnectorSyncer.Outcome.Synced).removed)
+        assertTrue(rows().none { it.lifecycleState == "RESOLVED" })
+        // An instance inside the returned range that really vanished is still detected.
+        source.instances = many.drop(1)
+        assertEquals(1, (sync(calendar(source)) as ConnectorSyncer.Outcome.Synced).removed)
+        assertEquals("E0", rows().single { it.lifecycleState == "RESOLVED" }.title)
     }
 
     @Test
