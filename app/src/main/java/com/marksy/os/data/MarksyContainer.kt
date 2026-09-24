@@ -73,4 +73,7 @@ object MarksyContainer {
 
     fun repository(context: Context): NotificationRepository =
         NotificationRepository(database(context).notificationEventDao(), learning(context), metrics(context))
+
+    fun marketIntelligence(context: Context): com.marksy.os.market.MarketIntelligenceRepository =
+        com.marksy.os.market.MarketIntelligenceRepository(com.marksy.os.gateway.MarksyGatewayProvider.marketIntelligenceClient())
 }
