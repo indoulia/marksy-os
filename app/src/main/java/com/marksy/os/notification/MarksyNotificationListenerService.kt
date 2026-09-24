@@ -22,6 +22,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
     private val ruleStore by lazy { RuleStore(applicationContext) }
+    private val ruleRunner by lazy {
+        com.marksy.os.data.RuleRunner(dao, MarksyDatabase.getInstance(applicationContext).ruleExecutionDao())
+    }
     private val pipeline by lazy {
         EventIntelligencePipeline(dao, graph = com.marksy.os.intelligence.ContextGraph(MarksyDatabase.getInstance(applicationContext).contextGraphDao()))
     }
@@ -89,7 +92,10 @@ class MarksyNotificationListenerService : NotificationListenerService() {
                 if (insertedId != -1L && isTrading && !applied.archived) {
                     TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
                 }
-                if (insertedId != -1L) processIntelligence(insertedId)
+                if (insertedId != -1L) {
+                    runCatching { ruleRunner.recordCapture(insertedId, applied.evaluation) }
+                    processIntelligence(insertedId)
+                }
 
                 try {
                     cancelNotification(sbn.key)

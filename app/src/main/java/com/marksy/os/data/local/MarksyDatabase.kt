@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class],
     version = 3,
     exportSchema = false
 )
@@ -17,6 +17,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun learningDao(): LearningDao
     abstract fun eventActionDao(): EventActionDao
     abstract fun contextGraphDao(): ContextGraphDao
+    abstract fun ruleExecutionDao(): RuleExecutionDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -51,6 +52,10 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-018 rule audit trail.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `rule_executions` (`ruleId` TEXT NOT NULL, `ruleVersion` INTEGER NOT NULL, `eventId` INTEGER NOT NULL, `action` TEXT NOT NULL, `trigger` TEXT NOT NULL, `applied` INTEGER NOT NULL, `note` TEXT, `executedAt` INTEGER NOT NULL, PRIMARY KEY(`ruleId`, `ruleVersion`, `eventId`))")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_rule_executions_eventId` ON `rule_executions` (`eventId`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_rule_executions_executedAt` ON `rule_executions` (`executedAt`)")
                 // EPIC-015 context graph.
                 database.execSQL("CREATE TABLE IF NOT EXISTS `context_entities` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `canonicalKey` TEXT NOT NULL, `displayName` TEXT NOT NULL, `confidence` REAL NOT NULL, `firstSeenAt` INTEGER NOT NULL, `lastSeenAt` INTEGER NOT NULL, `mentionCount` INTEGER NOT NULL, `sourceCount` INTEGER NOT NULL, `mergedIntoId` INTEGER)")
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_context_entities_type_canonicalKey` ON `context_entities` (`type`, `canonicalKey`)")

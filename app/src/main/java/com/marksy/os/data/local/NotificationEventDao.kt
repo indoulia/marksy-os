@@ -160,6 +160,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE postedAt >= :fromMillis AND postedAt < :toMillis ORDER BY postedAt DESC LIMIT :limit")
     suspend fun findInRange(fromMillis: Long, toMillis: Long, limit: Int): List<NotificationEventEntity>
 
+    @Query("UPDATE notification_events SET priority = :priority WHERE id = :eventId")
+    suspend fun setPriority(eventId: Long, priority: Int): Int
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

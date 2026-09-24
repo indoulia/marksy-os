@@ -12,12 +12,19 @@ object RuleApplication {
 
     fun apply(rules: List<RuleEngine.Rule>, event: NotificationEventEntity): Result {
         val evaluation = RuleEngine.evaluate(rules, event)
-        val archived = evaluation.matchedRules.any { it.action == RuleEngine.Action.ARCHIVE }
+        val archived = evaluation.stateAction == RuleEngine.Action.ARCHIVE
+        val resolved = evaluation.stateAction == RuleEngine.Action.MARK_RESOLVED
+        val stateRule = RuleEngine.ordered(evaluation.matchedRules).firstOrNull { it.action == evaluation.stateAction }
         return Result(
             event = event.copy(
                 priority = evaluation.priority,
                 archived = archived,
-                lifecycleState = if (archived) EventLifecycle.State.ARCHIVED.name else event.lifecycleState,
+                lifecycleState = when {
+                    archived -> EventLifecycle.State.ARCHIVED.name
+                    resolved -> EventLifecycle.State.RESOLVED.name
+                    else -> event.lifecycleState
+                },
+                lifecycleReason = stateRule?.let { "Rule: ${it.name}" } ?: event.lifecycleReason,
             ),
             evaluation = evaluation,
             archived = archived,

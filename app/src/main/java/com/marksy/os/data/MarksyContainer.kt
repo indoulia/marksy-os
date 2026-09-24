@@ -23,6 +23,11 @@ object MarksyContainer {
         )
     }
 
+    fun rules(context: Context): RuleRunner {
+        val db = database(context)
+        return RuleRunner(db.notificationEventDao(), db.ruleExecutionDao())
+    }
+
     fun briefing(context: Context): BriefingRepository {
         val db = database(context)
         return BriefingRepository(db.notificationEventDao(), db.eventActionDao(), learning(context))
