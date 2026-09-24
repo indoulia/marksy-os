@@ -86,7 +86,10 @@ class MarksyTipsApiClient(
     }
 
     private suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
-        val token = authRepository.currentToken() ?: throw MarksyTerminalException("Not signed in to Marksy")
+        // Not a MarksyTerminalException: a lapsed/never-established session is retryable --
+        // the user may sign back in before the next delivery attempt. Treating it as terminal
+        // would permanently FAIL every queued trading tip the moment a session expires.
+        val token = authRepository.currentToken() ?: throw IOException("Not signed in to Marksy")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = CONNECT_TIMEOUT_MS

@@ -21,6 +21,14 @@ object MarksyGatewayProvider {
     /** Null until the user is signed in; market data is read-only and optional. */
     fun marketClient(): MarksyTipsApiClient? = client() as? MarksyTipsApiClient
 
+    /** Whether a call made right now would actually carry a usable session token --
+     * unlike the synchronous `getToken() != null` checks above (which only mean "has
+     * ever signed in"), this proactively refreshes, so a lapsed remembered session is
+     * correctly reported as unusable. Lets background work skip a whole batch upfront
+     * instead of claiming-then-failing every item one at a time. */
+    suspend fun currentAuthToken(): String? =
+        if (AuthSessionStore(AppContext.get()).getToken() == null) null else authRepository().currentToken()
+
     /** Null until the user is signed in; every Market screen must degrade to
      * its own Unavailable state rather than crash when this is null. */
     fun marketIntelligenceClient(): com.marksy.os.market.MarketApiClient? {

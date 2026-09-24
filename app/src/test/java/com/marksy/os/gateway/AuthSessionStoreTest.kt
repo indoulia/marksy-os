@@ -97,4 +97,25 @@ class AuthSessionStoreTest {
         assertNull(store.getUserId())
         assertNull(store.getExpiresAtEpochMs())
     }
+
+    @Test
+    fun isSessionActiveIsFalseWhenNeverSignedIn() {
+        assertFalse(AuthSessionStore(context).isSessionActive())
+    }
+
+    @Test
+    fun isSessionActiveIsTrueForAFutureExpiry() {
+        val store = AuthSessionStore(context)
+        store.saveSession("sess_abc123", "prsingh", System.currentTimeMillis() + 60_000L, remember = true)
+
+        assertTrue(store.isSessionActive())
+    }
+
+    @Test
+    fun isSessionActiveIsFalseOncePastExpiry() {
+        val store = AuthSessionStore(context)
+        store.saveSession("sess_abc123", "prsingh", System.currentTimeMillis() - 1_000L, remember = true)
+
+        assertFalse(store.isSessionActive())
+    }
 }

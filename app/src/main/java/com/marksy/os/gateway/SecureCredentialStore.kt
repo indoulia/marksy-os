@@ -1,6 +1,7 @@
 package com.marksy.os.gateway
 
 import android.content.Context
+import java.security.KeyStore
 
 /**
  * Endpoint configuration for the Marksy API. Credentials themselves are no
@@ -25,8 +26,24 @@ class SecureCredentialStore(context: Context) {
         preferences.edit().remove(KEY_BASE_URL).apply()
     }
 
-    private companion object {
-        const val PREFERENCES = "secure_credentials"
-        const val KEY_BASE_URL = "marksy_base_url"
+    companion object {
+        private const val PREFERENCES = "secure_credentials"
+        private const val KEY_BASE_URL = "marksy_base_url"
+        private const val LEGACY_KEY_CIPHERTEXT = "marksy_integration_key"
+        private const val LEGACY_KEY_IV = "marksy_integration_key_iv"
+        private const val LEGACY_MARKET_KEY_CIPHERTEXT = "marksy_market_api_key"
+        private const val LEGACY_MARKET_KEY_IV = "marksy_market_api_key_iv"
+        private const val LEGACY_KEYSTORE_ALIAS = "marksy_os_integration_key"
+
+        fun purgeLegacyCredentials(context: Context) {
+            context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit()
+                .remove(LEGACY_KEY_CIPHERTEXT).remove(LEGACY_KEY_IV)
+                .remove(LEGACY_MARKET_KEY_CIPHERTEXT).remove(LEGACY_MARKET_KEY_IV)
+                .apply()
+            runCatching {
+                val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                if (keyStore.containsAlias(LEGACY_KEYSTORE_ALIAS)) keyStore.deleteEntry(LEGACY_KEYSTORE_ALIAS)
+            }
+        }
     }
 }

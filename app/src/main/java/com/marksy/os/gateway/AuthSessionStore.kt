@@ -71,6 +71,11 @@ class AuthSessionStore(context: Context) {
 
     fun isRemembered(): Boolean = InMemorySession.remembered ?: preferences.getBoolean(KEY_REMEMBERED, false)
 
+    fun isSessionActive(): Boolean {
+        val expiresAt = getExpiresAtEpochMs() ?: return false
+        return getToken() != null && expiresAt > System.currentTimeMillis()
+    }
+
     fun clearSession() {
         InMemorySession.token = null
         InMemorySession.userId = null

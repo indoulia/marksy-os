@@ -329,7 +329,7 @@ class MainActivity : ComponentActivity() {
                     LoginScreen(
                         authRepository = remember { MarksyContainer.authRepository(applicationContext) },
                         padding = padding,
-                        currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).getUserId() },
+                        currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).let { if (it.isSessionActive()) it.getUserId() else null } },
                         onSignedIn = { showGatewaySettings = false }
                     )
                 }
@@ -527,7 +527,7 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
         item {
-            val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).getUserId() }
+            val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).let { if (it.isSessionActive()) it.getUserId() else null } }
             SettingsCard(
                 "Marksy Account",
                 if (signedInUserId != null) "SIGNED IN" else "NOT SIGNED IN",
