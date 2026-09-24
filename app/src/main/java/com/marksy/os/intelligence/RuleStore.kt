@@ -28,7 +28,10 @@ class RuleStore(context: Context) {
                             sourcePackage = item.optString("sourcePackage").trim().take(MAX_FILTER).ifBlank { null },
                             category = item.optString("category").trim().take(MAX_FILTER).uppercase().ifBlank { null },
                             containsText = item.optString("containsText").trim().take(MAX_FILTER).ifBlank { null },
-                            action = action
+                            action = action,
+                            condition = item.optJSONObject("condition")?.let { RuleEngine.conditionFromJson(it) },
+                            priority = item.optInt("priority", 0).coerceIn(-100, 100),
+                            version = item.optInt("version", 1).coerceAtLeast(1)
                         )
                     )
                 }
@@ -38,7 +41,8 @@ class RuleStore(context: Context) {
 
     fun save(rules: List<RuleEngine.Rule>) {
         val json = JSONArray()
-        rules.take(MAX_RULES).forEach { rule ->
+        val previous = runCatching { load() }.getOrDefault(emptyList()).associateBy { it.id }
+        rules.take(MAX_RULES).map { versioned(previous[it.id], it) }.forEach { rule ->
             json.put(JSONObject().apply {
                 put("id", rule.id.take(MAX_ID))
                 put("name", rule.name.trim().take(MAX_NAME))
@@ -47,12 +51,23 @@ class RuleStore(context: Context) {
                 put("category", rule.category?.trim()?.take(MAX_FILTER)?.uppercase() ?: "")
                 put("containsText", rule.containsText?.trim()?.take(MAX_FILTER) ?: "")
                 put("action", rule.action.name)
+                rule.condition?.let { put("condition", RuleEngine.conditionToJson(it)) }
+                put("priority", rule.priority)
+                put("version", rule.version)
             })
         }
         preferences.edit().putString(KEY_RULES, json.toString()).apply()
     }
 
     fun reset() = save(defaultRules())
+
+    /** Any change to what a rule matches or does bumps its version; renaming or toggling does not. */
+    private fun versioned(old: RuleEngine.Rule?, new: RuleEngine.Rule): RuleEngine.Rule {
+        if (old == null) return new
+        val base = maxOf(old.version, new.version)
+        val changed = old.copy(enabled = new.enabled, name = new.name, version = new.version) != new
+        return new.copy(version = if (changed) base + 1 else base)
+    }
 
     companion object {
         private const val FILE_NAME = "marksy_rules"

@@ -1,3 +1,131 @@
+# Marksy OS Next-Generation Roadmap
+
+## Product Evolution
+Marksy evolves through:
+V1 — Capture
+V2 — Organize
+V3 — Understand
+V4 — Learn
+V5 — Act
+V6 — Personal Intelligence
+
+The objective is to strengthen the existing Marksy architecture and intelligence pipeline rather than continuously creating unrelated UI surfaces.
+
+## EPIC-010 — Unified Event Intelligence
+Build a normalized intelligence layer over captured notifications/events.
+Requirements: normalize captured notifications/events; extract entities (person, company, merchant, bank, delivery, stock, app); extract amount, currency, date/time, reference/order/transaction IDs; calculate confidence score and importance score; cross-source deduplication; event threading; event lifecycle NEW → ACTIVE → RESOLVED → ARCHIVED.
+Acceptance: stable normalized event contract; deduplication works; event threading works; confidence and importance are persisted; derived decisions are explainable; existing V2 behavior remains compatible; unit tests cover important cases.
+
+## EPIC-011 — Smart Inbox
+Build a useful intelligence-oriented inbox using real event data.
+Requirements: priority inbox; needs action; important; informational; resolved; group related events; collapse duplicates; explain "Why am I seeing this?"; support read/resolved/snooze/archive/search.
+Acceptance: uses real persisted events; threads displayed correctly; state survives app restart; no hardcoded production data.
+
+## EPIC-012 — Personal Learning Engine
+Create a learning layer based on actual user interaction.
+Learn signals: apps, senders/contacts, recurring events, ignored notifications, opened notifications, actions resulting from notifications, personal importance, category confidence.
+Requirements: learning history; user feedback; observable learning signals; deterministic rules remain authoritative where appropriate; user corrections override learned behavior; ability to disable/reset learning.
+Acceptance: learning is observable and inspectable; corrections work; disable/reset works; no opaque uncontrolled behavior.
+
+## EPIC-013 — Adaptive Notification Intelligence
+Make notification importance/ranking adaptive. Consider: dynamic priority, context, time of day, repeated events, notification fatigue, important-vs-noisy prediction, confidence, personal history.
+Requirements: explainable ranking signals; deterministic protection for explicitly high-priority events; deterministic test fixtures. Do not allow an AI model to silently override safety-critical deterministic rules.
+
+## EPIC-014 — Action Engine
+Create a common action framework. Support: open source, track, order, payment, remind, mark expected, mark resolved, report, ignore. Only expose actions genuinely supported by the source/event.
+Requirements: action model; event-specific action discovery; action state; action history; failure/recovery; audit trail; permission/user interaction handling. Do not fake external actions.
+
+## EPIC-015 — Cross-Source Context Graph
+Build relationships between people, organizations, merchants, events, applications, dates/times, locations, transactions, deliveries, other relevant entities.
+Requirements: stable entity references; cross-source correlation; duplicate entity merging; relationship confidence; context timeline; corrections.
+Acceptance: cross-source relationships are real; confidence is persisted; corrections work; performance remains reasonable.
+
+## EPIC-016 — Ask Marksy
+Build a grounded local intelligence/query layer. Examples: "What payments did I make this week?", "What deliveries are coming tomorrow?", "What did Rahul send me?", "Which bills are due?", "What are the important things today?"
+Requirements: intent detection; local retrieval; event retrieval; graph retrieval; structured answers; source references; drill-down; follow-up questions; no-result handling.
+CRITICAL: the model must NOT invent database facts — answers must be grounded in retrieved Marksy data. AI enhances interpretation, not the source of truth. Support a local-model path through an abstraction/interface; do not hard-code one specific model vendor into the domain layer.
+
+## EPIC-017 — Daily Briefing
+Build deterministic daily intelligence. Support morning briefing, evening briefing, overnight summary. Include where applicable: important events, pending actions, upcoming events, financial summary, personalized highlights, "why this matters", drill-down. Same input state should produce deterministic core results. AI may improve wording but must not fabricate facts.
+
+## EPIC-018 — Rules 2.0
+Build a proper rules engine. Support: conditions, AND/OR, nested conditions, time, sender, app, category, entity, confidence, actions, priority, history, enable/disable, simulation/testing.
+Requirements: versioned rules; idempotent execution; deterministic conflict resolution; audit trail; historical simulation. Do not create a rules UI with no functioning engine behind it.
+
+## EPIC-019 — On-Device Intelligence
+Create a provider-independent local AI abstraction. Requirements: local model interface; capability detection; model lifecycle; install/update handling where appropriate; model versioning; prompt/template management; structured JSON output; schema validation; confidence; deterministic fallback; latency metrics; privacy visibility. Architecture should allow models to be swapped without rewriting the application. Never send sensitive user data externally unless explicitly configured.
+
+## EPIC-020 — Personal Memory
+Build controlled personal memory: frequent contacts, merchants, recurring payments, recurring deliveries, locations, organizations, recurring events, preferences. Every memory entry supports: provenance, confidence, last observed, expiry where appropriate, correction, deletion/forget, source learning controls. Explicit user settings must override learned behavior. Privacy controls are mandatory.
+
+## EPIC-021 — Connector Framework
+Create a clean connector architecture. Target sources: WhatsApp, Gmail, SMS, Calendar, banking/payment notifications, delivery/shopping apps, other Android notification sources. Architecture target: Connector → Source Adapter → Normalizer → Classifier → Event Intelligence.
+Requirements: common event contract; connector lifecycle/status; connector isolation; deduplication at ingestion; adding a connector should not require modifying core intelligence logic. Do not pretend a connector exists if it cannot actually operate.
+
+## EPIC-022 — Marksy Health
+Build runtime health/diagnostics tracking real runtime state: notifications captured/day, processing latency, duplicate count, classification failures, important-event detection, connector uptime, queue state, AI latency, AI failures, database/storage usage, battery/resource indicators where available, last successful event, data freshness.
+Requirements: stale detection; actionable diagnostics; real runtime data; avoid exposing notification content unnecessarily.
+
+## EPIC-023 — 30-Day Marksy Validation
+Prepare Marksy for a real 30-day validation period. Track: captured events, classified events, classification accuracy, false classifications, duplicates, important-event detection, user interactions, corrections, rules, learning, AI latency, connector uptime, freshness, storage, battery/resource usage. Generate a "Marksy Intelligence Validation Report".
+IMPORTANT: do NOT fabricate historical data — collect real metrics from actual runtime operation.
+Acceptance: metrics are automatically collected; available by day and by source; failures are traceable; validation can operate for 30 days without manual reconstruction.
+
+## Implementation Order
+EPIC-010, 011, 012, 013, 014, 015, 016, 017, 018, 019, 020, 021, 022, 023 (in that order, but subject to repository reality — if part of an epic already exists, do not rebuild it, complete the missing portions).
+
+## Per-Epic Constraint
+Divide each epic's work into a maximum of 5 implementation stories (e.g. Story 1 domain model, Story 2 persistence, Story 3 processing/service layer, Story 4 UI/integration, Story 5 tests/hardening). Do not create many artificial tiny tasks just to claim progress.
+
+## Required Workflow Per Epic
+Step A Understand (inspect existing code: what exists, incomplete, reusable, needs refactor, test coverage) → Step B Plan (≤5 stories) → Step C Implement (domain/data layer → persistence → services → processing → ViewModels → UI; do not start with decorative UI) → Step D Test (focused tests, then `./gradlew :app:testDebugUnitTest`; fix failures rather than weakening tests) → Step E Review (backwards compatibility, lifecycle handling, persistence, concurrency, null/error cases, process death, configuration changes, duplicate processing, migration safety, security/privacy, performance) → Step F Commit (focused commit, descriptive message) → Step G Continue (move to next incomplete epic without waiting for confirmation).
+
+## Architectural Principles
+- Local-first: user data stays local unless explicitly configured otherwise.
+- AI is not the source of truth: AI classifies/summarizes/extracts/explains/ranks/interprets; deterministic application data remains authoritative.
+- Explainability: retain enough information to explain why an event was important/categorized/ranked, why an action was suggested, which signals contributed.
+- Provenance: derived information should identify its source where practical (e.g. `derivedFromEventIds`).
+- Determinism: core processing deterministic wherever practical; AI behind interfaces.
+- Backward compatibility: existing stored data and app behavior must remain compatible; use migrations where necessary.
+- No fake data: never hard-code fake notifications, transactions, AI results, health metrics, or validation results to make a screen look complete.
+- No secrets: never commit API keys, tokens, passwords, private credentials, personal notification content, production secrets.
+
+## Database/Migrations
+If schema changes are required: create proper migrations, preserve existing data, test migrations, handle old installations, avoid destructive migration unless absolutely necessary. Never delete user data simply to make a migration pass.
+
+## Android Reliability
+Pay attention to: process death, background execution, notification listener lifecycle, permissions, accessibility lifecycle if used, database concurrency, duplicate events, WorkManager/job lifecycle, battery impact, configuration changes, app restarts. Marksy is intended to run continuously — a feature that only works while a screen is open is not sufficient when background operation is required.
+
+## Testing Standard
+Every meaningful feature requires tests. Prioritize: unit, repository, parser, normalization, deduplication, ranking, rules-engine, learning, retrieval, migration, error-handling tests. Run `./gradlew :app:testDebugUnitTest` frequently. Never delete failing tests, weaken assertions merely to pass, skip tests without documenting why, or replace real implementation with mocks solely to avoid work.
+
+## Genuine Blockers Only
+Stop only for: mandatory external credential, unavailable external service, destructive migration requiring a product decision, security-critical ambiguity, repository corruption, impossible requirement conflict. Difficulty, large refactors, failing tests, unfamiliar code, missing helper/abstraction, UI integration work, DB migration, or a reasonable design choice are NOT blockers.
+
+## Git Discipline
+Check `git status` and `git log --oneline --decorate -20` before changing anything. Never force-push, reset someone else's work, discard unrelated working changes, rewrite history, or commit secrets. Preserve pre-existing changes. Use focused commits. Inspect `git diff` and `git status` before every commit.
+
+## Do Not Pretend Completion
+An epic is complete only when its acceptance criteria are substantially satisfied — not because a class/interface/screen exists, tests only test mocks, data is hardcoded, a button exists, or a model returns placeholder JSON. If only part is complete, explicitly mark it PARTIAL.
+
+## UI Priority
+Do not spend all your effort on UI redesign. Priority order: domain model, persistence, intelligence pipeline, processing, learning, actions, retrieval, AI abstraction, health/metrics, UI integration. Extend existing V2 screens rather than replace them unless there's a strong architectural reason.
+
+## Performance
+Avoid unnecessary DB scans, repeated full-table processing, blocking main-thread work, loading large notification histories into memory, expensive AI calls per event, duplicate processing. Prefer incremental processing, indexed queries, batching, caching, background workers, bounded queues, lazy retrieval.
+
+## Security/Privacy
+Treat notification content as sensitive. Do not log full notification content unnecessarily, send notification contents to external services by default, persist unnecessary sensitive data, expose secrets in debug output, or place sensitive info into analytics. If external AI is supported, make external transmission explicit and configurable.
+
+## Classification vocabulary
+When inspecting existing code for each epic, classify it as COMPLETE / PARTIAL / MISSING / BROKEN and report accordingly.
+
+---
+
+# Appendix A — Original roadmap spec (commit 86204f5, preserved unchanged)
+
+The text below is the version of this file that was committed to `main` in 86204f5. It is kept verbatim so no scope detail is lost; where the two differ, the sections above are the execution spec.
+
 # Marksy OS — Next Roadmap Specs
 
 This document defines the next product roadmap after Marksy OS V2. Each EPIC is intentionally bounded and should be implemented incrementally. Keep each EPIC to a maximum of 5 implementation prompts/stories.

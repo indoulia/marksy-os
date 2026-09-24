@@ -4,7 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -41,9 +44,18 @@ import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
-import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
+import com.marksy.os.intelligence.EventIntelligenceWorker
+import com.marksy.os.intelligence.ContextGraph
 import com.marksy.os.ui.EventDetailDialog
+import com.marksy.os.ui.InboxActions
+import com.marksy.os.ui.BriefingScreen
+import com.marksy.os.ui.LearningScreen
+import com.marksy.os.ui.MemoryScreen
+import com.marksy.os.ui.HealthScreen
+import com.marksy.os.ui.ValidationScreen
+import com.marksy.os.data.LearningSettings
+import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ui.InsightsScreen
 import com.marksy.os.ui.MarksyTheme
 import com.marksy.os.ui.MarksyViewModel
@@ -64,6 +76,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
+        EventIntelligenceWorker.schedule(applicationContext)
+        lifecycleScope.launch { runCatching { MarksyContainer.actions(applicationContext).recover() } }
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { MarksyApp() }
@@ -81,11 +95,24 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun MarksyApp() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
-        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(repository))
+        val learning = remember { MarksyContainer.learning(applicationContext) }
+        val learningSettings = remember { LearningSettings(applicationContext) }
+        val actionRepository = remember { MarksyContainer.actions(applicationContext) }
+        val askRepository = remember { MarksyContainer.ask(applicationContext) }
+        val briefingRepository = remember { MarksyContainer.briefing(applicationContext) }
+        val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
+            repository, learning, learningSettings, actionRepository,
+            ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
+        ))
+        val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
+        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
+        val learningEnabled by vm.learningEnabled.collectAsStateWithLifecycle()
         val events by vm.recentEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val snapshot by vm.dashboardSnapshot.collectAsStateWithLifecycle(initialValue = DashboardSnapshot.from(emptyList()))
         val timelineEvents by vm.timelineEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        val inboxEvents by vm.inboxEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -94,6 +121,13 @@ class MainActivity : ComponentActivity() {
         var showCalendar by rememberSaveable { mutableStateOf(false) }
         var showInsights by rememberSaveable { mutableStateOf(false) }
         var showRules by rememberSaveable { mutableStateOf(false) }
+        var showLearning by rememberSaveable { mutableStateOf(false) }
+        var showMemory by rememberSaveable { mutableStateOf(false) }
+        var showHealth by rememberSaveable { mutableStateOf(false) }
+        var showValidation by rememberSaveable { mutableStateOf(false) }
+        val validationRepository = remember { com.marksy.os.data.ValidationRepository(applicationContext) }
+        val healthRepository = remember { com.marksy.os.data.HealthRepository(applicationContext) }
+        val memoryRepository = remember { MarksyContainer.memory(applicationContext) }
         var showDigest by rememberSaveable { mutableStateOf(false) }
         var showGatewaySettings by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
@@ -106,9 +140,13 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
+                showValidation -> showValidation = false
+                showHealth -> showHealth = false
+                showMemory -> showMemory = false
+                showLearning -> showLearning = false
                 showTimeline -> showTimeline = false
                 showCalendar -> showCalendar = false
                 showInsights -> showInsights = false
@@ -129,7 +167,7 @@ class MainActivity : ComponentActivity() {
         Scaffold(
             containerColor = MarksyTheme.Background,
             bottomBar = {
-                if (!showTimeline && !showCalendar && !showInsights && !showRules && !showDigest && !showGatewaySettings) {
+                if (!hostOpen) {
                     NavigationBar(
                         containerColor = MarksyTheme.Surface,
                         contentColor = MarksyTheme.TextSecondary
@@ -154,11 +192,43 @@ class MainActivity : ComponentActivity() {
             }
         ) { padding ->
             when {
+                showValidation -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("30-day validation") { showValidation = false }
+                    ValidationScreen(validationRepository, padding)
+                }
+                showHealth -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("Marksy Health") { showHealth = false }
+                    HealthScreen(padding) { healthRepository.report() }
+                }
+                showMemory -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("What Marksy remembers") { showMemory = false }
+                    MemoryScreen(memoryRepository, padding)
+                }
+                showLearning -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("What Marksy learned") { showLearning = false }
+                    LearningScreen(
+                        profile = learningProfile,
+                        enabled = learningEnabled,
+                        padding = padding,
+                        onEnabledChanged = vm::setLearningEnabled,
+                        onPreference = vm::setPreference,
+                        onResetLearning = vm::resetLearning,
+                        onClearCorrections = vm::clearCorrections,
+                        aiStatus = remember { MarksyContainer.intelligence(applicationContext).status() }
+                    )
+                }
                 showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }
                 showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
                 showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
-                showRules -> RulesHost(padding) { showRules = false }
-                showDigest -> DigestHost(events, padding) { showDigest = false }
+                showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }, onOpenMemory = { showMemory = true }) { showRules = false }
+                showDigest -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("Daily Briefing") { showDigest = false }
+                    BriefingScreen(
+                        padding = padding,
+                        load = { kind -> briefingRepository.briefing(kind) },
+                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                    )
+                }
                 showGatewaySettings -> GatewaySettingsHost(padding) { showGatewaySettings = false }
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = snapshot,
@@ -168,13 +238,28 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().padding(padding)
                 )
                 selectedTab == 1 -> SmartInboxScreen(
-                    events = events,
+                    events = inboxEvents,
                     padding = padding,
                     onEventSelected = openEvent,
                     selectedFilterName = inboxFilterName,
-                    onFilterSelected = { inboxFilterName = it }
+                    onFilterSelected = { inboxFilterName = it },
+                    learningProfile = learningProfile,
+                    actions = remember(vm) {
+                        InboxActions(
+                            markSeen = vm::markThreadSeen,
+                            resolve = vm::resolveThread,
+                            reopen = vm::reopenThread,
+                            snooze = vm::snoozeThread,
+                            archive = vm::archiveThread,
+                            prefer = vm::setPreference
+                        )
+                    }
                 )
-                selectedTab == 2 -> AskMarksyScreen(padding)
+                selectedTab == 2 -> AskMarksyScreen(
+                    padding = padding,
+                    ask = { q, prev -> askRepository.ask(q, prev) },
+                    onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
@@ -182,6 +267,8 @@ class MainActivity : ComponentActivity() {
                     openAccess = ::openNotificationAccess,
                     openWhatsAppAccess = ::openWhatsAppConnector,
                     openGatewaySettings = { showGatewaySettings = true },
+                    openHealth = { showHealth = true },
+                    openValidation = { showValidation = true },
                     clearAll = {
                         TradingDeliveryScheduler.cancelPendingDelivery(applicationContext)
                         repository.clearAll()
@@ -198,8 +285,21 @@ class MainActivity : ComponentActivity() {
         }
 
         selectedEvent?.let { event ->
+            LaunchedEffect(event.id) { vm.markSeen(event.id); vm.clearActionMessage() }
+            // Re-discovered after each action so the list reflects the new state (e.g. resolved).
+            val available = remember(event.id, actionMessage) { vm.availableActions(event) }
+            var relatedVersion by remember(event.id) { mutableIntStateOf(0) }
+            val related by produceState(emptyList<com.marksy.os.data.local.ContextEntity>(), event.id, relatedVersion) { value = vm.relatedEntities(event.id) }
             EventDetailDialog(
                 event = event,
+                actions = available,
+                related = related,
+                onUnlinkEntity = { entityId -> vm.unlinkEntity(entityId, event.id); relatedVersion++ },
+                actionMessage = actionMessage,
+                onAction = { type, at, detail -> vm.runAction(event.id, type, at, detail) },
+                onRequestNotificationPermission = {
+                    if (android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                },
                 onArchive = { vm.archive(event.id); selectedEvent = null },
                 onUnarchive = { vm.unarchive(event.id); selectedEvent = null },
                 onDismiss = { selectedEvent = null }
@@ -263,8 +363,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights", onBack); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun RulesHost(padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest", onBack); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); Row(Modifier.padding(horizontal = 10.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned") }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers") } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
 
 @Composable private fun ScreenHeader(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -279,6 +378,8 @@ class MainActivity : ComponentActivity() {
     openAccess: () -> Unit,
     openWhatsAppAccess: () -> Unit,
     openGatewaySettings: () -> Unit,
+    openHealth: () -> Unit,
+    openValidation: () -> Unit,
     clearAll: suspend () -> Unit,
     openTimeline: () -> Unit,
     openCalendar: () -> Unit,
@@ -333,7 +434,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        item { SettingsCard("Daily Digest", "8 PM REPORT", "Get an AI-generated summary of your day's notifications.") { Button(onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black) } } }
+        item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black) } } }
+        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black) } } }
+        item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black) } } }
         item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black) } } }
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black) } } }
         item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black) } } }
