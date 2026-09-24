@@ -336,7 +336,7 @@ private fun ruleDescription(rule: RuleEngine.Rule): String = buildList {
     rule.category?.let { add("Category: $it") }
     rule.sourcePackage?.let { add("Source: $it") }
     rule.containsText?.let { add("Contains: $it") }
-    rule.condition?.let { add("When ${RuleConditionTree.describe(it).take(160)}") }
+    rule.condition?.let { add(if (RuleConditionTree.isUnreadable(it)) "Condition unreadable: edit to fix" else "When ${RuleConditionTree.describe(it).take(160)}") }
     add(rule.action.name.lowercase().replace('_', ' '))
     if (rule.priority != 0) add("priority ${rule.priority}")
     add("v${rule.version}")

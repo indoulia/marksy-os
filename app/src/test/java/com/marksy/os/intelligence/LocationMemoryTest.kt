@@ -80,6 +80,10 @@ class LocationMemoryTest {
         assertNull(LocationMemory.extract(e("DELIVERY", "Delivered", "Delivered to 12 MG Road")))
         // A recipient name is not a place.
         assertNull(LocationMemory.extract(e("DELIVERY", "Delivered", "Your parcel was delivered to Priya")))
+        // A calendar location that is just a person's name is not a place.
+        assertNull(LocationMemory.extract(e("REMINDERS", "1:1", "Location: Priya Sharma")))
+        // A two-part address keeps only the city, never the street.
+        assertEquals("Pune", LocationMemory.normalize("12 MG Road, Pune")?.label)
         // Chats carry other people's whereabouts.
         assertNull(LocationMemory.extract(e("MESSAGES", "Rahul", "📍 Koregaon Park", "com.whatsapp")))
         // Online meetings and time-like values are not places.

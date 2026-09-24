@@ -149,14 +149,18 @@ class RuleConditionTreeTest {
     }
 
     @Test
-    fun storeDropsARuleWhoseConditionIsCorruptInsteadOfMatchingEverything() {
+    fun storeDisablesARuleWhoseConditionIsCorruptInsteadOfMatchingEverything() {
         val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("marksy_rules", 0)
         prefs.edit().putString("rules_v1", """[
             {"id":"bad","name":"Bad","action":"ARCHIVE","condition":{"op":"AND","children":[]}},
             {"id":"ok","name":"Ok","category":"PAYMENTS"}
         ]""").commit()
         val loaded = RuleStore(RuntimeEnvironment.getApplication()).load()
-        assertEquals(listOf("ok"), loaded.map { it.id })
+        assertEquals(listOf("bad", "ok"), loaded.map { it.id })
+        val bad = loaded.first()
+        assertFalse(bad.enabled)
+        assertTrue(T.isUnreadable(bad.condition!!))
+        assertFalse(RuleEngine.matches(bad.copy(enabled = true), event("a", "b", "OTHER")))
         assertFalse(RuleEngine.matches(Rule("x", "x", condition = Condition.AnyOf(emptyList())), event("a", "b", "OTHER")))
     }
 }

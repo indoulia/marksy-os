@@ -16,7 +16,10 @@ object LocationMemory {
     fun extract(event: NotificationEventEntity): Place? {
         val text = "${event.title}\n${event.body}"
         // Chats are excluded: a "📍"/"location:" there is usually someone else's whereabouts.
-        if (event.category != "MESSAGES") MARKERS.firstNotNullOfOrNull { it.find(text)?.groupValues?.get(1) }?.let { return normalize(it) }
+        // A marker value like "Location: Priya Sharma" is a person: require an address shape or a venue word.
+        if (event.category != "MESSAGES") MARKERS.firstNotNullOfOrNull { it.find(text)?.groupValues?.get(1) }?.let { v ->
+            return normalize(v)?.takeIf { it.role != Role.PLACE || v.contains(',') || VENUE.containsMatchIn(v) }
+        }
         val phrase = (DELIVERY.takeIf { event.category == "DELIVERY" }?.find(text)?.groupValues?.get(1)
             ?: RIDE.find(text)?.groupValues?.get(1)
             ?: return null).split(PHRASE_END).first()
@@ -34,7 +37,8 @@ object LocationMemory {
             val parts = s.split(',').map { it.replace(Regex("\\d+"), " ").replace(Regex("\\s+"), " ").trim() }.filter { it.length >= 3 }
             // A digit-bearing place with no comma parts is a bare street address: too precise to keep.
             if (!s.contains(',') || parts.isEmpty()) return null
-            s = parts.takeLast(2).joinToString(", ")
+            // "12 MG Road, Pune" keeps only the city; longer addresses keep locality and city.
+            s = parts.takeLast(if (s.split(',').size >= 3) 2 else 1).joinToString(", ")
         }
         s = s.take(MAX_LABEL).trim()
         val key = PersonalMemory.key(s)
@@ -49,6 +53,7 @@ object LocationMemory {
     )
     private val DELIVERY = Regex("\\b(?:delivered|delivering|arriving|dropped off)\\s+(?:to|at)\\s+$PLACE", RegexOption.IGNORE_CASE)
     private val RIDE = Regex("\\b(?:ride|trip|cab|auto|drop)\\s+(?:to|at)\\s+$PLACE", RegexOption.IGNORE_CASE)
+    private val VENUE = Regex("(?i)\\b(?:office|mall|cafe|restaurant|hotel|hall|room|tower|park|centre|center|hospital|clinic|station|airport|school|college|university|campus|building|floor|plaza|wework|cowork\\w*|club|gym|studio|market|stadium|theatre|theater|temple|church|mosque)\\b")
     // "ride to Office is arriving" -> "Office".
     private val PHRASE_END = Regex("\\s+(?:is|has|was|will|by|on|for|from|and|in|arriving|confirmed|today|tomorrow|at \\d)\\b", RegexOption.IGNORE_CASE)
     // "home in Baner" is home; "Home Centre" (a shop) is not.

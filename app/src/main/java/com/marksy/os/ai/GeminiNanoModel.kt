@@ -37,6 +37,7 @@ class GeminiNanoModel(
 ) : LocalModel {
     @Volatile private var state = ModelState.UNKNOWN
     @Volatile private var checkedAt: Long? = null
+    @Volatile private var downloadInProgress = false
     @Volatile private var modelName: String? = null
     @Volatile private var initMs: Long? = null
     @Volatile private var lastLatencyMs: Long? = null
@@ -51,7 +52,8 @@ class GeminiNanoModel(
 
     override suspend fun refresh(): ModelState {
         val last = checkedAt
-        if (state == ModelState.DOWNLOADING || (state != ModelState.UNKNOWN && last != null && clock() - last < statusTtlMs)) return state
+        // Only our own download pins the state; one started by the OS must keep being re-probed until READY.
+        if (downloadInProgress || (state != ModelState.UNKNOWN && last != null && clock() - last < statusTtlMs)) return state
         state = try {
             val probed = withContext(Dispatchers.Default) { backend.availability() }
             if (probed == PromptBackend.Availability.AVAILABLE && modelName == null) {
@@ -77,7 +79,8 @@ class GeminiNanoModel(
         try {
             if (state == ModelState.NOT_INSTALLED) {
                 state = ModelState.DOWNLOADING
-                withContext(Dispatchers.Default) { backend.download() }
+                downloadInProgress = true
+                try { withContext(Dispatchers.Default) { backend.download() } } finally { downloadInProgress = false }
                 state = ModelState.UNKNOWN
                 refresh()
             }

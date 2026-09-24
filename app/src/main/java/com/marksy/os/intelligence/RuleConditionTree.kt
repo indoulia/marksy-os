@@ -50,6 +50,9 @@ object RuleConditionTree {
         else -> root
     }
 
+    /** The store's marker for a condition that failed to load: an empty OR, which never matches. */
+    fun isUnreadable(c: Condition) = c is Condition.AnyOf && c.children.isEmpty()
+
     fun isGroup(c: Condition) = inner(c).let { it is Condition.All || it is Condition.AnyOf }
     fun isAny(c: Condition) = inner(c) is Condition.AnyOf
     fun isNegated(c: Condition) = c is Condition.Not

@@ -125,7 +125,7 @@ class AndroidCalendarSource(private val context: Context) : CalendarConnector.Ca
             CalendarContract.Instances.SELF_ATTENDEE_STATUS
         )
         val out = mutableListOf<CalendarConnector.Instance>()
-        context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+        context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC, ${CalendarContract.Instances.EVENT_ID} ASC")?.use { c ->
             while (c.moveToNext() && out.size < limit) {
                 out += CalendarConnector.Instance(
                     eventId = c.getLong(0), begin = c.getLong(1), end = c.getLong(2),

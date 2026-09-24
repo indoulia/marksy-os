@@ -50,7 +50,7 @@ New query support:
 
 `RuleConditionTree` edits the engine's own `Condition` tree: AND/OR groups, NOT, nested groups and per-field comparators. It validates against the store's reload limits (depth 6, 20 children, 120-char values).
 
-A stored rule whose condition fails to parse is now dropped on load. Before, it kept no condition and matched every event.
+A stored rule whose condition fails to parse now loads disabled, with a never-matching condition, and shows "Condition unreadable". Before, it kept no condition and matched every event.
 
 A rule still has one action. The engine does not support multi-action rules.
 
@@ -63,8 +63,8 @@ A rule still has one action. The engine does not support multi-action rules.
 Marksy never reads device location. The coarse-location permission is still used only for weather.
 
 Privacy handling:
-- Addresses keep only their last two comma parts.
-- Bare street addresses and recipient names are dropped.
+- Addresses keep at most their last two comma parts (locality, city). A two-part address keeps only the city.
+- Bare street addresses, recipient names and person-only calendar locations are dropped.
 
 Places use the existing memory provenance, confidence, 90-day expiry, correction and forget. Memory entries now also record source apps (`detailJson.sources`). Only events ingested after this change are scanned.
 

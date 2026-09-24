@@ -82,6 +82,16 @@ class GeminiNanoModelTest {
     }
 
     @Test
+    fun downloadStartedOutsideTheAppIsReprobedUntilReady() = runBlocking {
+        val b = FakeBackend(PromptBackend.Availability.DOWNLOADING)
+        val m = model(b)
+        assertEquals(ModelState.DOWNLOADING, m.refresh())
+        b.availability = PromptBackend.Availability.AVAILABLE
+        now += GeminiNanoModel.STATUS_TTL_MS
+        assertEquals(ModelState.READY, m.refresh())
+    }
+
+    @Test
     fun downloadFailureIsReportedAsError() = runBlocking {
         val b = FakeBackend(PromptBackend.Availability.DOWNLOADABLE).apply { failDownload = IllegalStateException("x") }
         val m = model(b)

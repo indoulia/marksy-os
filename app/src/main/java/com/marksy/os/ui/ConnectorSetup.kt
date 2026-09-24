@@ -15,6 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,10 +40,14 @@ internal fun ConnectorSetupCard() {
     val syncer = remember(context) { SyncConnectors.syncer(context) }
     val connectors = remember(context) { SyncConnectors.all(context) }
     var tick by remember { mutableIntStateOf(0) }
-    fun connect(id: String, on: Boolean) {
-        syncer.setEnabled(id, on)
-        if (on) ConnectorSyncWorker.schedule(context)
-        else if (connectors.none { syncer.status(it.descriptor.id).enabled }) ConnectorSyncWorker.cancel(context)
+    val scope = rememberCoroutineScope()
+    // The store commits synchronously (cursor durability), so toggles write off the main thread.
+    fun connect(id: String, on: Boolean) = scope.launch {
+        withContext(Dispatchers.IO) {
+            syncer.setEnabled(id, on)
+            if (on) ConnectorSyncWorker.schedule(context)
+            else if (connectors.none { syncer.status(it.descriptor.id).enabled }) ConnectorSyncWorker.cancel(context)
+        }
         tick++
     }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
