@@ -31,8 +31,7 @@ class MarketApiException(message: String) : IOException(message)
 /** HTTPS-enforced, `X-API-Key`-authenticated client for the `marksy-api` market-intelligence
  * surface, structurally mirroring `MarksyTipsApiClient` (raw `HttpURLConnection`, `{data, meta}`
  * envelope). Uses a separate scoped credential — never the EPIC-803 tips integration key. */
-class RealMarketApiClient(apiKey: String, baseUrl: String) : MarketApiClient {
-    private val apiKey: String = apiKey.trim().also { require(it.isNotBlank()) { "Market API key must not be blank" } }
+class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.AuthRepository, baseUrl: String) : MarketApiClient {
     private val base: String = normalizeBaseUrl(baseUrl)
 
     override suspend fun marketSummary(): MarketSummaryDto =
@@ -85,43 +84,46 @@ class RealMarketApiClient(apiKey: String, baseUrl: String) : MarketApiClient {
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
-    private suspend fun execute(url: String): JSONObject = withContext(Dispatchers.IO) {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = false
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("X-API-Key", apiKey)
-            doInput = true
-        }
-        try {
-            val code = connection.responseCode
-            if (code in REDIRECT_CODES) throw MarketApiException("Marksy Market API redirect refused")
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val response = stream?.bufferedReader()?.use { reader ->
-                val buffer = CharArray(4096)
-                val builder = StringBuilder()
-                while (true) {
-                    val read = reader.read(buffer)
-                    if (read < 0) break
-                    builder.append(buffer, 0, read)
-                    if (builder.length > MAX_RESPONSE_CHARS) throw IOException("Marksy Market API response exceeded the safety limit")
+    private suspend fun execute(url: String): JSONObject {
+        val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy")
+        return withContext(Dispatchers.IO) {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("Authorization", "Bearer $token")
+                doInput = true
+            }
+            try {
+                val code = connection.responseCode
+                if (code in REDIRECT_CODES) throw MarketApiException("Marksy Market API redirect refused")
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val response = stream?.bufferedReader()?.use { reader ->
+                    val buffer = CharArray(4096)
+                    val builder = StringBuilder()
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read < 0) break
+                        builder.append(buffer, 0, read)
+                        if (builder.length > MAX_RESPONSE_CHARS) throw IOException("Marksy Market API response exceeded the safety limit")
+                    }
+                    builder.toString()
+                }.orEmpty()
+                if (code !in 200..299) {
+                    val detail = errorDetail(response)
+                    if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail")
+                    throw IOException("Marksy Market API returned HTTP $code$detail")
                 }
-                builder.toString()
-            }.orEmpty()
-            if (code !in 200..299) {
-                val detail = errorDetail(response)
-                if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail")
-                throw IOException("Marksy Market API returned HTTP $code$detail")
+                return@withContext JSONObject(response).also { envelope ->
+                    if (!envelope.has("data") || !envelope.has("meta")) throw IOException("Marksy Market API returned an invalid response envelope")
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } finally {
+                connection.disconnect()
             }
-            return@withContext JSONObject(response).also { envelope ->
-                if (!envelope.has("data") || !envelope.has("meta")) throw IOException("Marksy Market API returned an invalid response envelope")
-            }
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } finally {
-            connection.disconnect()
         }
     }
 

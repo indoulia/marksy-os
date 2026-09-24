@@ -9,13 +9,12 @@ import java.net.URL
 
 /** Direct client for the confirmed Marksy Tips API. */
 class MarksyTipsApiClient(
-    private val integrationKey: String,
+    private val authRepository: com.marksy.os.gateway.AuthRepository,
     baseUrl: String = DEFAULT_MARKSY_API_BASE_URL
 ) : MarksyGatewayClient {
     private val apiBaseUrl = normalizeBaseUrl(baseUrl)
 
     override suspend fun analyze(request: MarksyTradingEventRequest): Result<MarksyInsight> {
-        if (integrationKey.isBlank()) return Result.failure(IllegalStateException("MARKSY_INTEGRATION_KEY is not configured"))
         return try {
             val payload = MarksyTipPayloadBuilder.from(request)
                 ?: throw IllegalArgumentException("Trading notification does not contain a safe symbol candidate")
@@ -31,18 +30,17 @@ class MarksyTipsApiClient(
         }
     }
 
-    /** Blocking; call off the main thread. */
-    fun marketSnapshot(): MarketSnapshot =
+    suspend fun marketSnapshot(): MarketSnapshot =
         MarketSnapshot.parse(execute("GET", "$apiBaseUrl/dashboard/snapshot?limit=10").getJSONObject("data"))
 
-    private fun postTip(payload: MarksyTipPayload): CreatedTip {
+    private suspend fun postTip(payload: MarksyTipPayload): CreatedTip {
         val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
         val tipId = data.optString("tipId").trim()
         if (tipId.isBlank()) throw IOException("Marksy Tips API returned a successful response without tipId")
         return CreatedTip(tipId, data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
     }
 
-    private fun fetchTip(tipId: String, eventId: Long, createdStatus: String): MarksyInsight {
+    private suspend fun fetchTip(tipId: String, eventId: Long, createdStatus: String): MarksyInsight {
         val data = execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data")
         val comparison = data.optJSONObject("comparison")
         val marksyView = data.optJSONObject("marksyView")
@@ -87,7 +85,8 @@ class MarksyTipsApiClient(
         )
     }
 
-    private fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
+    private suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
+        val token = authRepository.currentToken() ?: throw MarksyTerminalException("Not signed in to Marksy")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
             connectTimeout = CONNECT_TIMEOUT_MS
@@ -95,7 +94,7 @@ class MarksyTipsApiClient(
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("X-Marksy-Integration-Key", integrationKey)
+            setRequestProperty("Authorization", "Bearer $token")
             doInput = true
             if (payload != null) doOutput = true
         }
