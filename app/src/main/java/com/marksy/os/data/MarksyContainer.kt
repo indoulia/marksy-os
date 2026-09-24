@@ -23,6 +23,11 @@ object MarksyContainer {
         )
     }
 
+    fun ask(context: Context): AskMarksyRepository {
+        val db = database(context)
+        return AskMarksyRepository(db.notificationEventDao(), db.contextGraphDao())
+    }
+
     fun repository(context: Context): NotificationRepository =
         NotificationRepository(database(context).notificationEventDao(), learning(context))
 }

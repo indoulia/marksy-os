@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
         val learning = remember { MarksyContainer.learning(applicationContext) }
         val learningSettings = remember { LearningSettings(applicationContext) }
         val actionRepository = remember { MarksyContainer.actions(applicationContext) }
+        val askRepository = remember { MarksyContainer.ask(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
             repository, learning, learningSettings, actionRepository,
             ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
@@ -221,7 +222,11 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 )
-                selectedTab == 2 -> AskMarksyScreen(padding)
+                selectedTab == 2 -> AskMarksyScreen(
+                    padding = padding,
+                    ask = { q, prev -> askRepository.ask(q, prev) },
+                    onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding) { selectedTradingInsight = it }
                 else -> MoreScreen(
                     access = notificationAccessEnabled,

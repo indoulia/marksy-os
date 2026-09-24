@@ -156,6 +156,10 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET category = :category WHERE id = :eventId")
     suspend fun updateCategory(eventId: Long, category: String): Int
 
+    /** EPIC-016 retrieval: archived rows included (archived does not mean it did not happen). */
+    @Query("SELECT * FROM notification_events WHERE postedAt >= :fromMillis AND postedAt < :toMillis ORDER BY postedAt DESC LIMIT :limit")
+    suspend fun findInRange(fromMillis: Long, toMillis: Long, limit: Int): List<NotificationEventEntity>
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

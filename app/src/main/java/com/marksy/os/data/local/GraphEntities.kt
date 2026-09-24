@@ -121,6 +121,9 @@ interface ContextGraphDao {
         markMerged(fromId, intoId)
     }
 
+    @Query("SELECT eventId FROM context_links WHERE entityId IN (SELECT id FROM context_entities WHERE id = :entityId OR mergedIntoId = :entityId)")
+    suspend fun eventIdsFor(entityId: Long): List<Long>
+
     /** Graph rows for events removed by retention; keeps the graph from pointing at deleted events. */
     @Query("DELETE FROM context_links WHERE eventId NOT IN (SELECT id FROM notification_events)")
     suspend fun pruneOrphanLinks(): Int

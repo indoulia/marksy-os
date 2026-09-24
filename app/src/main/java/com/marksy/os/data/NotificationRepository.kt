@@ -73,5 +73,7 @@ class NotificationRepository(
         return dao.archiveAll(ids, nowMillis)
     }
 
+    suspend fun event(eventId: Long): NotificationEventEntity? = dao.getById(eventId)
+
     suspend fun clearAll() = dao.deleteAll()
 }
