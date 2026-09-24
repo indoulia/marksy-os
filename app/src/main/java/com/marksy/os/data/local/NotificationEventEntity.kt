@@ -12,7 +12,11 @@ import androidx.room.PrimaryKey
         Index(value = ["category"]),
         Index(value = ["postedAt"]),
         Index(value = ["deliveryState"]),
-        Index(value = ["archived"])
+        Index(value = ["archived"]),
+        Index(value = ["threadKey"]),
+        Index(value = ["correlationKey"]),
+        Index(value = ["lifecycleState"]),
+        Index(value = ["intelligenceVersion"])
     ]
 )
 data class NotificationEventEntity(
@@ -46,7 +50,25 @@ data class NotificationEventEntity(
     /** Kept forever: retention pruning never deletes it. */
     val kept: Boolean = false,
     /** Pending reminder time; retention skips the row until the reminder fires. */
-    val remindAt: Long? = null
+    val remindAt: Long? = null,
+    // EPIC-010 derived intelligence. Written only by EventIntelligencePipeline; raw capture fields above stay authoritative.
+    /** EventLifecycle.State name. Rows from before v3 migrate to ACTIVE/ARCHIVED. */
+    val lifecycleState: String = "NEW",
+    val lifecycleUpdatedAt: Long? = null,
+    /** Why the lifecycle last changed automatically (e.g. resolved by a later event), for explainability. */
+    val lifecycleReason: String? = null,
+    val importanceScore: Int = 0,
+    val intelligenceConfidence: Float = 0f,
+    val threadKey: String? = null,
+    val correlationKey: String? = null,
+    /** Canonical event this one duplicates (cross-source); the row is kept, only collapsed on surfaces. */
+    val duplicateOfId: Long? = null,
+    /** Bounded JSON: extracted entities/amounts/references/times and explanation reasons. */
+    val intelligenceJson: String? = null,
+    /** 0 = not yet processed; bumping EventIntelligencePipeline.VERSION triggers a background re-derive. */
+    val intelligenceVersion: Int = 0,
+    /** EPIC-011: hidden from the inbox until this time; persisted so snoozes survive restarts. */
+    val snoozedUntil: Long? = null
 )
 
 enum class DeliveryState {

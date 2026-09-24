@@ -2,9 +2,9 @@ package com.marksy.os.notification
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
-import com.marksy.os.data.local.DeliveryState
-import com.marksy.os.data.local.MarksyDatabase
-import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.connector.ConnectorRegistry
+import com.marksy.os.connector.RawCapture
+import com.marksy.os.data.MarksyContainer
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +21,9 @@ import kotlinx.coroutines.launch
  */
 class MarksyWhatsAppAccessibilityService : AccessibilityService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
+    private val ingestion by lazy {
+        MarksyContainer.ingestion(applicationContext) { if (isActive) TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) }
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.packageName?.toString()?.let(SourceRegistry::isWhatsApp) != true) return
@@ -65,45 +67,29 @@ class MarksyWhatsAppAccessibilityService : AccessibilityService() {
         val occurredAt = System.currentTimeMillis()
         val sourcePackage = event.packageName.toString().trim().lowercase()
         val category = NotificationClassifier.classify(sourcePackage, sender, message)
-        val fingerprint = EventFingerprint.create(
-            sourcePackage,
-            category.category.name,
-            sender,
-            message,
-            occurredAt
+        // Accessibility emits several callbacks for one visible state; the 5-minute fingerprint
+        // bucket gives them one stable source key, which the ingestion pipeline dedups on.
+        val fingerprint = EventFingerprint.create(sourcePackage, category.category.name, sender, message, occurredAt)
+        val raw = RawCapture(
+            connectorId = ConnectorRegistry.WHATSAPP_ACCESSIBILITY,
+            sourcePackage = sourcePackage,
+            sourceName = SourceRegistry.displayName(applicationContext, sourcePackage),
+            sourceKey = "wa-accessibility:$fingerprint",
+            title = sender,
+            body = message,
+            postedAt = occurredAt
         )
-        val sourceKey = "wa-accessibility:$fingerprint"
-        val isTrading = category.category == NotificationClassifier.Category.TRADING
+        scope.launch { runCatching { ingestion.ingest(raw) } }
+    }
 
-        scope.launch {
-            runCatching {
-                // Accessibility can emit several callbacks for the same visible
-                // conversation state. The five-minute fingerprint bucket gives
-                // those callbacks one stable source key; check it before insert.
-                if (dao.findIdBySourceKey(sourcePackage, sourceKey) != null) return@runCatching
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        scope.launch { runCatching { ingestion.connected(ConnectorRegistry.WHATSAPP_ACCESSIBILITY) } }
+    }
 
-                dao.insert(
-                    NotificationEventEntity(
-                        sourcePackage = sourcePackage,
-                        sourceName = SourceRegistry.displayName(applicationContext, sourcePackage),
-                        sourceKey = sourceKey,
-                        eventFingerprint = fingerprint,
-                        title = sender,
-                        body = message,
-                        postedAt = occurredAt,
-                        category = category.category.name,
-                        priority = category.priority,
-                        confidence = category.confidence,
-                        isTrading = isTrading,
-                        deliveryState = if (isTrading) DeliveryState.PENDING.name
-                        else DeliveryState.NOT_APPLICABLE.name
-                    )
-                )
-                if (isTrading && isActive) {
-                    TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
-                }
-            }
-        }
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        scope.launch { runCatching { ingestion.disconnected(ConnectorRegistry.WHATSAPP_ACCESSIBILITY) } }
+        return super.onUnbind(intent)
     }
 
     override fun onInterrupt() = Unit

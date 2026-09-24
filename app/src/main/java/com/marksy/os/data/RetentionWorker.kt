@@ -17,9 +17,25 @@ class RetentionWorker(
     override suspend fun doWork(): Result {
         return try {
             val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
-            dao.pruneExpired(System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            // Memory and learning run before pruning so events about to expire are still observed.
+            MarksyContainer.memory(applicationContext).ingest()
+            // Daily gauge snapshot for the 30-day validation (EPIC-023); must not block housekeeping.
+            runCatching { ValidationRepository(applicationContext).snapshot() }
+            MarksyContainer.learning(applicationContext).run {
+                sweepIgnored(now)
+                pruneExpired(now)
+            }
+            dao.pruneExpired(now)
+            MarksyDatabase.getInstance(applicationContext).contextGraphDao().pruneOrphanLinks()
+            MarksyDatabase.getInstance(applicationContext).ruleExecutionDao().pruneOrphans()
+            MarksyDatabase.getInstance(applicationContext).aiInvocationDao().prune(now - 45L * 24 * 60 * 60 * 1000)
+            // Lifecycle/failure log and counters are kept longer than a 30-day validation window.
+            MarksyDatabase.getInstance(applicationContext).connectorDao().prune(now - 45L * 24 * 60 * 60 * 1000)
+            MarksyDatabase.getInstance(applicationContext).metricsDao().prune(java.time.LocalDate.now().minusDays(120).toString())
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             // Retention is local housekeeping. A transient database failure should
             // retry instead of silently waiting for the next daily schedule.
             Result.retry()

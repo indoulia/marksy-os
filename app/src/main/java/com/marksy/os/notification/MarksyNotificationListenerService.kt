@@ -5,28 +5,35 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.marksy.os.connector.ConnectorRegistry
+import com.marksy.os.connector.IngestionPipeline
+import com.marksy.os.connector.RawCapture
+import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
-import com.marksy.os.data.local.DeliveryState
-import com.marksy.os.data.local.MarksyDatabase
-import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.TradingDeliveryScheduler
-import com.marksy.os.intelligence.RuleApplication
-import com.marksy.os.intelligence.RuleStore
+import com.marksy.os.intelligence.EventIntelligenceWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/** Connector for all Android notifications (EPIC-021); processing lives in [IngestionPipeline]. */
 class MarksyNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val dao by lazy { MarksyDatabase.getInstance(applicationContext).notificationEventDao() }
-    private val ruleStore by lazy { RuleStore(applicationContext) }
+    private val ingestion by lazy {
+        MarksyContainer.ingestion(applicationContext) { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) }
+    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
+        EventIntelligenceWorker.schedule(applicationContext)
+        serviceScope.launch {
+            runCatching { ingestion.connected(ConnectorRegistry.NOTIFICATIONS) }
+            runCatching { MarksyContainer.actions(applicationContext).recover() }
+        }
         // Anything posted while the listener was unbound (app update, OS kill) is still in the shade.
         val backlog = runCatching { activeNotifications.orEmpty().toList() }.getOrDefault(emptyList())
         backlog.forEach(::capture)
@@ -35,6 +42,7 @@ class MarksyNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         Log.w(TAG, "Notification listener disconnected; requesting rebind")
+        serviceScope.launch { runCatching { ingestion.disconnected(ConnectorRegistry.NOTIFICATIONS) } }
         super.onListenerDisconnected()
         requestRebind(applicationContext)
     }
@@ -66,62 +74,31 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         if (title.isBlank() && text.isBlank()) return
         OriginalAppLauncher.remember(sbn)
 
-        val result = NotificationClassifier.classify(packageName, title, text)
-        val isTrading = result.category == NotificationClassifier.Category.TRADING
-        val sourceName = SourceRegistry.displayName(applicationContext, packageName)
-        val fingerprint = EventFingerprint.create(
-            packageName,
-            result.category.name,
-            title,
-            text,
-            sbn.postTime
-        )
-        val baseEvent = NotificationEventEntity(
+        val raw = RawCapture(
+            connectorId = ConnectorRegistry.NOTIFICATIONS,
             sourcePackage = packageName,
-            sourceName = sourceName,
+            sourceName = SourceRegistry.displayName(applicationContext, packageName),
             sourceKey = sbn.key,
-            eventFingerprint = fingerprint,
             title = title,
             body = text,
-            postedAt = sbn.postTime,
-            category = result.category.name,
-            priority = result.priority,
-            confidence = result.confidence,
-            isTrading = isTrading,
-            deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+            postedAt = sbn.postTime
         )
-        val applied = RuleApplication.apply(ruleStore.load(), baseEvent)
-        val event = applied.event
 
         serviceScope.launch {
-            try {
-                val insertedId = dao.insert(event)
-                if (insertedId == -1L) mergeRepost(event)
-
-                if (insertedId != -1L && isTrading && !applied.archived) {
-                    TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
+            val result = ingestion.ingest(raw)
+            if (result is IngestionPipeline.Result.Failed) {
+                // Not stored, so never dismiss it.
+                Log.e(TAG, "Failed to persist notification event (${result.reason})")
+                return@launch
+            }
+            if (DISMISS_AFTER_CAPTURE) {
+                try {
+                    cancelNotification(sbn.key)
+                } catch (_: SecurityException) {
+                    Log.w(TAG, "Unable to cancel notification")
                 }
-
-                if (DISMISS_AFTER_CAPTURE) {
-                    try {
-                        cancelNotification(sbn.key)
-                    } catch (_: SecurityException) {
-                        Log.w(TAG, "Unable to cancel notification")
-                    }
-                }
-            } catch (_: Exception) {
-                Log.e(TAG, "Failed to persist notification event")
             }
         }
-    }
-
-    /** Apps re-post the same key with new messages; fold the new content into the stored event. */
-    private suspend fun mergeRepost(event: NotificationEventEntity) {
-        val existing = dao.findBySourceKey(event.sourcePackage, event.sourceKey) ?: return
-        val body = NotificationTextExtractor.merge(existing.body, event.body)
-        val title = event.title.ifBlank { existing.title }
-        if (body == existing.body && title == existing.title) return
-        dao.updateContent(existing.id, title, body, maxOf(existing.postedAt, event.postedAt))
     }
 
     override fun onDestroy() {

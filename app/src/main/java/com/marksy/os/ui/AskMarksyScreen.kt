@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.AskMarksy
+import kotlinx.coroutines.launch
 import com.marksy.os.gateway.MarketState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,10 +49,26 @@ private val promptOptions = listOf(
     "💬 Summarize my WhatsApp",
     "📈 Show trading opportunities",
     "✉️ Any important emails?",
-    "🔍 What did I miss?"
+    "🔍 What did I miss?",
+    "💳 What payments did I make this week?",
+    "📦 What deliveries are coming tomorrow?",
+    "🧾 Which bills are due?"
 )
 
-data class AskExchange(val question: String, val answer: AskMarksyEngine.Answer)
+/**
+ * Intents answered by the EPIC-016 grounded engine (typed retrieval over all stored rows incl. archived,
+ * duplicate folding, provenance, follow-ups). Everything else keeps the gateway engine, which also
+ * knows the Marksy market snapshot and does named-app / fuzzy search.
+ */
+private val GROUNDED_INTENTS = setOf(AskMarksy.Intent.PAYMENTS, AskMarksy.Intent.DELIVERIES, AskMarksy.Intent.BILLS_DUE, AskMarksy.Intent.FROM_PERSON)
+
+data class AskExchange(
+    val question: String,
+    val answer: AskMarksyEngine.Answer,
+    /** Present when the grounded engine answered; carries the query for follow-ups and provenance. */
+    val grounded: AskMarksy.Answer? = null,
+    val pending: Boolean = false
+)
 
 @Composable
 fun AskMarksyScreen(
@@ -59,8 +77,11 @@ fun AskMarksyScreen(
     market: MarketState = MarketState.Loading,
     onEventSelected: (NotificationEventEntity) -> Unit = {},
     // Hoisted so the conversation survives switching tabs.
-    conversation: SnapshotStateList<AskExchange> = remember { mutableStateListOf() }
+    conversation: SnapshotStateList<AskExchange> = remember { mutableStateListOf() },
+    askGrounded: (suspend (String, AskMarksy.Query?) -> AskMarksy.Answer)? = null,
+    loadEvent: suspend (Long) -> NotificationEventEntity? = { null }
 ) {
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -68,8 +89,28 @@ fun AskMarksyScreen(
     fun ask(question: String) {
         val clean = question.replace(Regex("^[^\\p{L}\\p{N}]+"), "").trim()
         if (clean.isEmpty()) return
-        conversation += AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
         input = ""
+        val previous = conversation.lastOrNull { it.grounded != null }?.grounded?.query
+        val intent = AskMarksy.parse(clean, previous, System.currentTimeMillis(), java.time.ZoneId.systemDefault()).intent
+        val grounded = askGrounded
+        if (grounded == null || intent !in GROUNDED_INTENTS) {
+            conversation += AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
+            return
+        }
+        conversation += AskExchange(clean, AskMarksyEngine.Answer("Looking through your notifications…"), pending = true)
+        val index = conversation.lastIndex
+        scope.launch {
+            val result = runCatching { grounded(clean, previous) }.getOrNull()
+            val exchange = if (result == null) {
+                // Grounded retrieval failed: fall back to the local engine rather than show nothing.
+                AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
+            } else {
+                val byId = events.associateBy { it.id }
+                val shown = result.items.take(5).mapNotNull { byId[it.eventId] ?: loadEvent(it.eventId) }
+                AskExchange(clean, AskMarksyEngine.Answer(result.headline, shown), grounded = result)
+            }
+            if (index < conversation.size) conversation[index] = exchange
+        }
     }
 
     LaunchedEffect(conversation.size) {
@@ -131,7 +172,7 @@ fun AskMarksyScreen(
                     }
                 }
             } else {
-                itemsIndexed(conversation) { _, exchange -> ExchangeView(exchange, onEventSelected) }
+                itemsIndexed(conversation) { _, exchange -> ExchangeView(exchange, onEventSelected, onFollowUp = ::ask) }
             }
         }
 
@@ -239,7 +280,7 @@ private fun Greeting(compact: Boolean) {
 }
 
 @Composable
-private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit) {
+private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit, onFollowUp: (String) -> Unit = {}) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             exchange.question,
@@ -285,6 +326,21 @@ private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEv
                         )
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(16.dp))
+                }
+            }
+            exchange.grounded?.let { g ->
+                val n = g.derivedFromEventIds.size
+                Text(
+                    "Based on $n local notification${if (n == 1) "" else "s"} · ${g.query.range.label}" + if (n > exchange.answer.events.size) " · showing ${exchange.answer.events.size}" else "",
+                    color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp)
+                )
+                if (g.followUps.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    g.followUps.forEach { f ->
+                        Text(
+                            f, color = MarksyTheme.TextSecondary, fontSize = 11.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(MarksyTheme.SurfaceRaised).clickable { onFollowUp(f) }.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
                 }
             }
         }

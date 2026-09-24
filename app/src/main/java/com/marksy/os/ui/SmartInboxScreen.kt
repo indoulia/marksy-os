@@ -1,8 +1,11 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.intelligence.SmartInboxModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,24 +43,32 @@ fun SmartInboxScreen(
     onEventSelected: (NotificationEventEntity) -> Unit,
     selectedFilterName: String,
     onFilterSelected: (String) -> Unit,
-    onArchive: (NotificationEventEntity) -> Unit = {},
-    onDelete: (NotificationEventEntity) -> Unit = {},
-    onHide: (NotificationEventEntity) -> Unit = {}
+    // Swipe actions act on the whole thread (every row incl. folded duplicates).
+    onArchive: (List<NotificationEventEntity>) -> Unit = {},
+    onDelete: (List<NotificationEventEntity>) -> Unit = {},
+    onHide: (List<NotificationEventEntity>) -> Unit = {},
+    actions: InboxActions = InboxActions(),
+    learningProfile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var actionThreadKey by rememberSaveable { mutableStateOf<String?>(null) }
 
     val filter = SmartInboxModel.Filter.entries.firstOrNull { it.name == selectedFilterName }
         ?: SmartInboxModel.Filter.ALL
-    
-    val filtered = remember(events, filter, searchQuery) {
-        val base = SmartInboxModel.filter(events, filter)
-        if (searchQuery.isBlank()) base
-        else base.filter { 
-            it.title.contains(searchQuery, ignoreCase = true) ||
-            it.body.contains(searchQuery, ignoreCase = true) ||
-            it.sourceName.contains(searchQuery, ignoreCase = true)
+
+    // Re-evaluated every minute so snoozed threads reappear on time without new data arriving.
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            value = System.currentTimeMillis()
         }
     }
+    val inbox = remember(events, filter, searchQuery, now, learningProfile) {
+        SmartInboxModel.inbox(events, filter, searchQuery, now, learningProfile)
+    }
+    val shown = remember(inbox) { inbox.sections.values.sumOf { it.size } }
+    val byId = remember(events) { events.associateBy { it.id } }
+    fun rowsOf(thread: SmartInboxModel.InboxThread) = thread.allIds.mapNotNull { byId[it] }
 
     Box(
         Modifier
@@ -79,9 +91,8 @@ fun SmartInboxScreen(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text(if (filter == SmartInboxModel.Filter.ALL) "${filtered.size} shown" else "${filter.label} · ${filtered.size}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                Text(if (filter == SmartInboxModel.Filter.ALL) "$shown shown" else "${filter.label} · $shown", color = MarksyTheme.TextMuted, fontSize = 12.sp)
             }
-
         }
 
         LazyColumn(
@@ -91,7 +102,7 @@ fun SmartInboxScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
-            if (filtered.isEmpty()) {
+            if (inbox.isEmpty) {
                 item {
                     EmptyState(
                         "Nothing here yet.",
@@ -99,10 +110,43 @@ fun SmartInboxScreen(
                     )
                 }
             } else {
-                items(filtered, key = { it.id }) { event ->
-                    SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
-                        InboxNotificationCard(event = event) { onEventSelected(event) }
+                inbox.sections.forEach { (bucket, threads) ->
+                    if (threads.isEmpty()) return@forEach
+                    item(key = "header-${bucket.name}") {
+                        Text(
+                            "${bucket.label} · ${threads.size}",
+                            color = MarksyTheme.TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
                     }
+                    items(threads, key = { "t-" + it.key }) { thread ->
+                        SwipeActionsRow(
+                            onDelete = { onDelete(rowsOf(thread)) },
+                            onArchive = { onArchive(rowsOf(thread)) },
+                            onHide = { onHide(rowsOf(thread)) }
+                        ) {
+                            InboxNotificationCard(
+                                thread = thread,
+                                onClick = {
+                                    actions.markSeen(thread.allIds)
+                                    onEventSelected(thread.latest)
+                                },
+                                onLongClick = { actionThreadKey = thread.key }
+                            )
+                        }
+                    }
+                }
+            }
+            if (inbox.snoozedCount > 0) {
+                item(key = "snoozed") {
+                    Text(
+                        "${inbox.snoozedCount} snoozed",
+                        color = MarksyTheme.TextMuted,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
                 }
             }
         }
@@ -116,13 +160,76 @@ fun SmartInboxScreen(
         searchPlaceholder = "Search notifications..."
     )
     }
+
+    val actionThread = actionThreadKey?.let { key -> inbox.sections.values.flatten().firstOrNull { it.key == key } }
+    if (actionThread != null) {
+        ThreadActionsDialog(actionThread, actions, onDismiss = { actionThreadKey = null })
+    }
 }
 
+/** Thread-level inbox actions; each receives every row id the thread represents. */
+data class InboxActions(
+    val markSeen: (List<Long>) -> Unit = {},
+    val resolve: (List<Long>) -> Unit = {},
+    val reopen: (List<Long>) -> Unit = {},
+    val snooze: (List<Long>, Long) -> Unit = { _, _ -> },
+    val archive: (List<Long>) -> Unit = {},
+    val prefer: (PersonalLearning.Subject, PersonalLearning.Preference?) -> Unit = { _, _ -> }
+)
+
+@Composable
+private fun ThreadActionsDialog(
+    thread: SmartInboxModel.InboxThread,
+    actions: InboxActions,
+    onDismiss: () -> Unit
+) {
+    fun run(block: () -> Unit) { block(); onDismiss() }
+    val ids = thread.allIds
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MarksyTheme.Surface,
+        title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, color = MarksyTheme.TextPrimary, fontSize = 16.sp, maxLines = 2) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                thread.why.take(8).forEach { Text("• $it", color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                Spacer(Modifier.height(8.dp))
+                if (thread.unread) TextButton(onClick = { run { actions.markSeen(ids) } }) { Text("Mark read") }
+                if (thread.bucket == SmartInboxModel.Bucket.RESOLVED) {
+                    TextButton(onClick = { run { actions.reopen(ids) } }) { Text("Reopen") }
+                } else {
+                    TextButton(onClick = { run { actions.resolve(ids) } }) { Text("Mark resolved") }
+                }
+                TextButton(onClick = { run { actions.snooze(ids, System.currentTimeMillis() + 60 * 60 * 1000L) } }) { Text("Snooze 1 hour") }
+                TextButton(onClick = { run { actions.snooze(ids, nextMorningMillis()) } }) { Text("Snooze until tomorrow 9:00") }
+                TextButton(onClick = { run { actions.archive(ids) } }) { Text("Archive") }
+                // Explicit corrections (EPIC-012) outrank anything learned.
+                PersonalLearning.subjectsOf(thread.latest)
+                    .filter { it.type != PersonalLearning.SubjectType.CATEGORY }
+                    .forEach { subject ->
+                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }) { Text("Always important: ${subject.label}") }
+                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.LESS_IMPORTANT) } }) { Text("Less from ${subject.label}") }
+                    }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+private fun nextMorningMillis(): Long {
+    val zone = java.time.ZoneId.systemDefault()
+    return java.time.LocalDate.now(zone).plusDays(1).atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InboxNotificationCard(
-    event: NotificationEventEntity,
-    onClick: () -> Unit
+    thread: SmartInboxModel.InboxThread,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
+    val event = thread.latest
+    val unread = thread.unread
     val (appIcon, iconBg, pillLabel, pillText, pillIcon) = resolveSourceStyle(event)
 
     Card(
@@ -130,8 +237,9 @@ private fun InboxNotificationCard(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp)),
-        onClick = onClick
+            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -162,7 +270,7 @@ private fun InboxNotificationCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        if (!event.isRead) {
+                        if (unread) {
                             Box(Modifier.size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
                             Spacer(Modifier.width(6.dp))
                         }
@@ -170,7 +278,7 @@ private fun InboxNotificationCard(
                             event.sourceName.ifBlank { "System" },
                             color = MarksyTheme.TextPrimary,
                             fontSize = 14.sp,
-                            fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold,
+                            fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -188,9 +296,9 @@ private fun InboxNotificationCard(
                     }
                     Text(
                         formatInboxTime(event.postedAt),
-                        color = if (event.isRead) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald,
+                        color = if (!unread) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald,
                         fontSize = 10.sp,
-                        fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold
+                        fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold
                     )
                 }
 
@@ -198,9 +306,9 @@ private fun InboxNotificationCard(
 
                 Text(
                     event.title.ifBlank { "Notification event" },
-                    color = if (event.isRead) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary,
+                    color = if (!unread) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary,
                     fontSize = 12.sp,
-                    fontWeight = if (event.isRead) FontWeight.Normal else FontWeight.Bold,
+                    fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -213,6 +321,21 @@ private fun InboxNotificationCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                val meta = buildList {
+                    if (thread.count > 1) add("${thread.count} in thread")
+                    if (thread.duplicates.isNotEmpty()) add("+${thread.duplicates.size} duplicate")
+                    if (thread.sources.size > 1) add(thread.sources.joinToString(" · "))
+                }
+                if (meta.isNotEmpty()) {
+                    Text(
+                        meta.joinToString("  ·  "),
+                        color = MarksyTheme.PrimaryEmerald,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }

@@ -1,5 +1,9 @@
 package com.marksy.os.ui
 
+import com.marksy.os.data.MarksyContainer
+import com.marksy.os.data.RuleRunner
+import com.marksy.os.intelligence.SimpleCondition
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -33,8 +37,16 @@ fun RulesScreen(padding: PaddingValues) {
     var showEditor by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<RuleEngine.Rule?>(null) }
     var deleteRule by remember { mutableStateOf<RuleEngine.Rule?>(null) }
+    var testing by remember { mutableStateOf<RuleEngine.Rule?>(null) }
+    val runner = remember(context) { MarksyContainer.rules(context.applicationContext) }
 
-    fun persist() = scope.launch { store.save(rules.toList()) }
+    // Reload after saving so versions bumped by the store are reflected (and used by simulation).
+    fun persist() = scope.launch {
+        store.save(rules.toList())
+        val saved = store.load()
+        rules.clear()
+        rules.addAll(saved)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -123,7 +135,8 @@ fun RulesScreen(padding: PaddingValues) {
                     if (index >= 0) { rules[index] = rule.copy(enabled = enabled); persist() }
                 },
                 onEdit = { editingRule = rule; showEditor = true },
-                onDelete = { deleteRule = rule }
+                onDelete = { deleteRule = rule },
+                onTest = { testing = rule }
             )
         }
     }
@@ -140,6 +153,8 @@ fun RulesScreen(padding: PaddingValues) {
             }
         )
     }
+
+    testing?.let { rule -> RuleTestDialog(rule, runner, onDismiss = { testing = null }) }
 
     deleteRule?.let { rule ->
         AlertDialog(
@@ -164,7 +179,8 @@ private fun RuleToggleCard(
     rule: RuleEngine.Rule,
     onEnabledChanged: (Boolean) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onTest: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
@@ -195,6 +211,7 @@ private fun RuleToggleCard(
                 )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onTest) { Text("Test on history", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp) }
                 TextButton(onClick = onEdit) { Text("Edit", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp) }
                 TextButton(onClick = onDelete) { Text("Delete", color = MarksyTheme.RedUrgent, fontSize = 11.sp) }
             }
@@ -213,12 +230,25 @@ private fun RuleEditorDialog(
     var source by remember(initial) { mutableStateOf(initial?.sourcePackage.orEmpty()) }
     var containsText by remember(initial) { mutableStateOf(initial?.containsText.orEmpty()) }
     var action by remember(initial) { mutableStateOf(initial?.action ?: RuleEngine.Action.HIGHLIGHT) }
+    val simple = remember(initial) { SimpleCondition.from(initial?.condition) }
+    var anyWords by remember(initial) { mutableStateOf(simple?.anyWords?.joinToString(", ").orEmpty()) }
+    var hours by remember(initial) { mutableStateOf(simple?.hours.orEmpty()) }
+    var minAmount by remember(initial) { mutableStateOf(simple?.minAmount?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty()) }
+    var minConfidence by remember(initial) { mutableStateOf(simple?.minConfidencePercent?.toString().orEmpty()) }
+    var priority by remember(initial) { mutableStateOf((initial?.priority ?: 0).toString()) }
+    // A tree the simple editor cannot represent is preserved unchanged.
+    val editedCondition = if (simple == null) initial?.condition else SimpleCondition(
+        anyWords = anyWords.split(',').map { it.trim() }.filter { it.isNotEmpty() },
+        hours = hours.trim().ifBlank { null },
+        minAmount = minAmount.trim().toDoubleOrNull(),
+        minConfidencePercent = minConfidence.trim().toIntOrNull()?.coerceIn(0, 100)
+    ).toCondition()
 
     val cleanName = name.trim().take(60)
     val cleanCategory = category.trim().take(120).ifBlank { null }
     val cleanSource = source.trim().take(120).ifBlank { null }
     val cleanText = containsText.trim().take(120).ifBlank { null }
-    val valid = cleanName.isNotBlank() && (cleanCategory != null || cleanSource != null || cleanText != null)
+    val valid = cleanName.isNotBlank() && (cleanCategory != null || cleanSource != null || cleanText != null || editedCondition != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -241,6 +271,22 @@ private fun RuleEditorDialog(
                     placeholder = "e.g. BUY, OTP",
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedTextField(value = category, onValueChange = { category = it.take(20) }, label = { Text("Category (e.g. PAYMENTS)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = source, onValueChange = { source = it.take(120) }, label = { Text("App package (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (simple != null) {
+                    OutlinedTextField(value = anyWords, onValueChange = { anyWords = it.take(200) }, label = { Text("Any of these words (comma separated)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = hours, onValueChange = { hours = it.take(5) }, label = { Text("Only between hours, e.g. 22..6") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = minAmount, onValueChange = { minAmount = it.take(12) }, label = { Text("Minimum amount") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = minConfidence, onValueChange = { minConfidence = it.take(3) }, label = { Text("Minimum classifier confidence %") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                } else {
+                    Text("This rule has an advanced condition; it is kept as is.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                }
+                OutlinedTextField(value = priority, onValueChange = { priority = it.take(4) }, label = { Text("Rule priority (higher wins conflicts)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RuleEngine.Action.entries.forEach { a ->
+                        FilterChip(selected = action == a, onClick = { action = a }, label = { Text(a.name.lowercase().replace('_', ' '), fontSize = 11.sp) })
+                    }
+                }
             }
         },
         confirmButton = {
@@ -248,14 +294,14 @@ private fun RuleEditorDialog(
                 enabled = valid,
                 onClick = {
                     onSave(
-                        RuleEngine.Rule(
-                            id = initial?.id ?: "rule-${System.currentTimeMillis()}",
+                        (initial ?: RuleEngine.Rule(id = "rule-${System.currentTimeMillis()}", name = cleanName)).copy(
                             name = cleanName,
-                            enabled = initial?.enabled ?: true,
                             sourcePackage = cleanSource,
                             category = cleanCategory?.uppercase(),
                             containsText = cleanText,
-                            action = action
+                            action = action,
+                            condition = editedCondition,
+                            priority = priority.trim().toIntOrNull()?.coerceIn(-100, 100) ?: 0
                         )
                     )
                 }
@@ -266,8 +312,53 @@ private fun RuleEditorDialog(
     )
 }
 
+@Composable
+private fun RuleTestDialog(rule: RuleEngine.Rule, runner: RuleRunner, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var refresh by remember { mutableIntStateOf(0) }
+    var applied by remember { mutableStateOf<Int?>(null) }
+    val result by produceState<Pair<Int, List<RuleEngine.SimulationHit>>?>(null, refresh) { value = runCatching { runner.simulate(rule) }.getOrNull() }
+    val executions by produceState(0, refresh) { value = runCatching { runner.executionCount(rule.id) }.getOrDefault(0) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Test \"${rule.name}\" (v${rule.version})", color = MarksyTheme.TextPrimary) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val r = result
+                if (r == null) Text("Checking the last 7 days...", color = MarksyTheme.TextMuted)
+                else {
+                    Text("Would match ${r.second.size} of ${r.first} notifications from the last 7 days.", color = MarksyTheme.TextSecondary)
+                    r.second.take(6).forEach { hit ->
+                        val effect = hit.stateAction?.name?.lowercase()?.replace('_', ' ') ?: "priority ${hit.priorityBefore} → ${hit.priorityAfter}"
+                        Text("• ${hit.title.take(60)} — $effect", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                    }
+                }
+                Text("Audit: $executions recorded execution${if (executions == 1) "" else "s"}", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                applied?.let { Text("Applied to $it past notification${if (it == 1) "" else "s"}.", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = (result?.second?.isNotEmpty() == true) && rule.enabled,
+                onClick = { scope.launch { applied = runCatching { runner.applyToHistory(rule) }.getOrNull(); refresh++ } }
+            ) { Text("Apply to these", color = MarksyTheme.PrimaryEmerald) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } },
+        containerColor = MarksyTheme.SurfaceRaised
+    )
+}
+
 private fun ruleDescription(rule: RuleEngine.Rule): String = buildList {
     rule.category?.let { add("Category: $it") }
     rule.sourcePackage?.let { add("Source: $it") }
     rule.containsText?.let { add("Contains: $it") }
+    SimpleCondition.from(rule.condition)?.let { s ->
+        if (s.anyWords.isNotEmpty()) add("Any of: ${s.anyWords.joinToString()}")
+        s.hours?.let { add("Hours $it") }
+        s.minAmount?.let { add("Amount ≥ $it") }
+        s.minConfidencePercent?.let { add("Confidence ≥ $it%") }
+    } ?: if (rule.condition != null) add("Advanced condition") else Unit
+    add(rule.action.name.lowercase().replace('_', ' '))
+    if (rule.priority != 0) add("priority ${rule.priority}")
+    add("v${rule.version}")
 }.ifEmpty { listOf("Applies to all matching events") }.joinToString(" • ")

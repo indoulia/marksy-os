@@ -63,7 +63,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.marksy.os.data.ActionRepository
+import com.marksy.os.data.local.ContextEntity
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.ActionEngine
 import com.marksy.os.notification.OriginalAppLauncher
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -82,8 +89,14 @@ fun EventDetailDialog(
     onToggleKeep: () -> Unit = {},
     onSetReminder: (Long?) -> Unit = {},
     onMarkUnread: () -> Unit = {},
+    engineActions: List<ActionEngine.Available> = emptyList(),
+    actionMessage: String? = null,
+    onAction: (ActionEngine.Type, Long?, String?) -> Unit = { _, _, _ -> },
+    related: List<ContextEntity> = emptyList(),
+    onUnlinkEntity: (Long) -> Unit = {},
 ) {
     var showReminderOptions by remember { mutableStateOf(false) }
+    var reporting by remember(event.id) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val actions = OriginalAppLauncher.actionsFor(event.sourcePackage, event.sourceKey)
@@ -204,6 +217,35 @@ fun EventDetailDialog(
                         fontSize = 11.sp
                     )
                 }
+                if (related.isNotEmpty()) {
+                    // EPIC-015 context graph: entities this event is linked to, with a correction.
+                    Text("Related", color = DetailMuted, fontSize = 11.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                        related.forEach { r ->
+                            val label = r.displayName + if (r.sourceCount > 1) " · ${r.sourceCount} apps" else ""
+                            ActionChip(Icons.Default.Close, label, selected = false) { onUnlinkEntity(r.id) }
+                        }
+                    }
+                }
+                // EPIC-014 actions not already covered by the Open / Remind / Keep controls above.
+                val extra = engineActions.filter { it.enabled && it.type !in COVERED_BY_DIALOG }
+                if (extra.isNotEmpty()) {
+                    actionMessage?.let { Text(it, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp) }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                        extra.forEach { a ->
+                            if (a.type == ActionEngine.Type.REPORT) {
+                                ActionChip(Icons.Default.Schedule, a.type.label, selected = reporting) { reporting = !reporting }
+                            } else {
+                                ActionChip(Icons.Default.OpenInNew, a.type.label, selected = false) { onAction(a.type, null, null) }
+                            }
+                        }
+                    }
+                    if (reporting) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                        ActionRepository.CATEGORIES.filter { it != event.category && it != "TRADING" }.forEach { c ->
+                            ActionChip(Icons.Default.Schedule, c.lowercase(), selected = false) { reporting = false; onAction(ActionEngine.Type.REPORT, null, c) }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
@@ -299,6 +341,9 @@ private fun DetailCell(label: String, value: String, modifier: Modifier = Modifi
         )
     }
 }
+
+/** Open-in-app and reminders already have dedicated controls in this dialog (keep/remind/open). */
+private val COVERED_BY_DIALOG = setOf(ActionEngine.Type.OPEN_SOURCE, ActionEngine.Type.REMIND)
 
 private fun formatTimestamp(timestamp: Long): String =
     SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
