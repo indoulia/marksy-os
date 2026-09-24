@@ -20,6 +20,9 @@ class RuleStore(context: Context) {
                     val action = runCatching {
                         RuleEngine.Action.valueOf(item.optString("action", RuleEngine.Action.HIGHLIGHT.name))
                     }.getOrDefault(RuleEngine.Action.HIGHLIGHT)
+                    val conditionJson = item.optJSONObject("condition")
+                    val condition = conditionJson?.let { RuleEngine.conditionFromJson(it) }
+                    if (conditionJson != null && condition == null) continue
                     add(
                         RuleEngine.Rule(
                             id = item.optString("id").trim().take(MAX_ID).ifBlank { "rule-$index" },
@@ -29,7 +32,8 @@ class RuleStore(context: Context) {
                             category = item.optString("category").trim().take(MAX_FILTER).uppercase().ifBlank { null },
                             containsText = item.optString("containsText").trim().take(MAX_FILTER).ifBlank { null },
                             action = action,
-                            condition = item.optJSONObject("condition")?.let { RuleEngine.conditionFromJson(it) },
+                            // A corrupt tree drops the rule; keeping it with no condition would match every event.
+                            condition = condition,
                             priority = item.optInt("priority", 0).coerceIn(-100, 100),
                             version = item.optInt("version", 1).coerceAtLeast(1)
                         )
