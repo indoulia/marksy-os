@@ -27,6 +27,11 @@ object MarksyContainer {
         )
     }
 
+    fun memory(context: Context): MemoryRepository {
+        val db = database(context)
+        return MemoryRepository(db.memoryDao(), db.notificationEventDao(), db.learningDao(), PrefsMemorySettings(context.applicationContext))
+    }
+
     fun rules(context: Context): RuleRunner {
         val db = database(context)
         return RuleRunner(db.notificationEventDao(), db.ruleExecutionDao())

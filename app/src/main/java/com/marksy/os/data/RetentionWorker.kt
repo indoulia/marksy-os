@@ -18,7 +18,8 @@ class RetentionWorker(
         return try {
             val dao = MarksyDatabase.getInstance(applicationContext).notificationEventDao()
             val now = System.currentTimeMillis()
-            // Learning sweep runs before pruning so events about to expire still count as ignored.
+            // Memory and learning run before pruning so events about to expire are still observed.
+            MarksyContainer.memory(applicationContext).ingest()
             MarksyContainer.learning(applicationContext).run {
                 sweepIgnored(now)
                 pruneExpired(now)

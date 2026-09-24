@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class],
     version = 3,
     exportSchema = false
 )
@@ -19,6 +19,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun contextGraphDao(): ContextGraphDao
     abstract fun ruleExecutionDao(): RuleExecutionDao
     abstract fun aiInvocationDao(): AiInvocationDao
+    abstract fun memoryDao(): MemoryDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -53,6 +54,11 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-020 personal memory.
+                database.execSQL("CREATE TABLE IF NOT EXISTS `memory_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kind` TEXT NOT NULL, `memoryKey` TEXT NOT NULL, `label` TEXT NOT NULL, `confidence` REAL NOT NULL, `firstObservedAt` INTEGER NOT NULL, `lastObservedAt` INTEGER NOT NULL, `observations` INTEGER NOT NULL, `expiresAt` INTEGER, `origin` TEXT NOT NULL, `state` TEXT NOT NULL, `detailJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL)")
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_memory_entries_kind_memoryKey` ON `memory_entries` (`kind`, `memoryKey`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_entries_state` ON `memory_entries` (`state`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_entries_expiresAt` ON `memory_entries` (`expiresAt`)")
                 // EPIC-019 AI invocation metrics (no content).
                 database.execSQL("CREATE TABLE IF NOT EXISTS `ai_invocations` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `task` TEXT NOT NULL, `modelId` TEXT, `modelVersion` TEXT, `templateId` TEXT NOT NULL, `templateVersion` INTEGER NOT NULL, `outcome` TEXT NOT NULL, `latencyMs` INTEGER NOT NULL, `confidence` REAL, `at` INTEGER NOT NULL)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_invocations_at` ON `ai_invocations` (`at`)")

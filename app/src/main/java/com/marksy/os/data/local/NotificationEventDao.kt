@@ -163,6 +163,10 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET priority = :priority WHERE id = :eventId")
     suspend fun setPriority(eventId: Long, priority: Int): Int
 
+    /** EPIC-020 memory ingestion: rows the intelligence pipeline has already processed, in id order. */
+    @Query("SELECT * FROM notification_events WHERE id > :afterId AND intelligenceVersion > 0 ORDER BY id ASC LIMIT :limit")
+    suspend fun findProcessedAfterId(afterId: Long, limit: Int): List<NotificationEventEntity>
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }

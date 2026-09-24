@@ -51,6 +51,7 @@ import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InboxActions
 import com.marksy.os.ui.BriefingScreen
 import com.marksy.os.ui.LearningScreen
+import com.marksy.os.ui.MemoryScreen
 import com.marksy.os.data.LearningSettings
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ui.InsightsScreen
@@ -119,6 +120,8 @@ class MainActivity : ComponentActivity() {
         var showInsights by rememberSaveable { mutableStateOf(false) }
         var showRules by rememberSaveable { mutableStateOf(false) }
         var showLearning by rememberSaveable { mutableStateOf(false) }
+        var showMemory by rememberSaveable { mutableStateOf(false) }
+        val memoryRepository = remember { MarksyContainer.memory(applicationContext) }
         var showDigest by rememberSaveable { mutableStateOf(false) }
         var showGatewaySettings by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
@@ -131,9 +134,10 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
+                showMemory -> showMemory = false
                 showLearning -> showLearning = false
                 showTimeline -> showTimeline = false
                 showCalendar -> showCalendar = false
@@ -180,6 +184,10 @@ class MainActivity : ComponentActivity() {
             }
         ) { padding ->
             when {
+                showMemory -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("What Marksy remembers") { showMemory = false }
+                    MemoryScreen(memoryRepository, padding)
+                }
                 showLearning -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
                     ScreenHeader("What Marksy learned") { showLearning = false }
                     LearningScreen(
@@ -196,7 +204,7 @@ class MainActivity : ComponentActivity() {
                 showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }
                 showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
                 showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
-                showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }) { showRules = false }
+                showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }, onOpenMemory = { showMemory = true }) { showRules = false }
                 showDigest -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
                     ScreenHeader("Daily Briefing") { showDigest = false }
                     BriefingScreen(
@@ -337,7 +345,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline", onBack); TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights", onBack); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); TextButton(onClick = onOpenLearning, modifier = Modifier.padding(horizontal = 10.dp)) { Text("What Marksy learned") }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); Row(Modifier.padding(horizontal = 10.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned") }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers") } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
 
 @Composable private fun ScreenHeader(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
