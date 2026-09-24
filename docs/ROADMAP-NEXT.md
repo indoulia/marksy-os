@@ -226,6 +226,107 @@ Acceptance: metrics are automatically collected; available by day and by source;
 - Validation distinguishes data-source failures from prediction failures.
 - No fabricated market, prediction or validation results are introduced.
 
+
+## EPIC-031 — MarksyOS Live Market Home
+
+**Goal:** Turn the MarksyOS home page into a live market-intelligence dashboard driven by the Marksy market stream.
+
+### Scope
+1. Live Market Pulse with NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, NIFTY FIN SERVICE and India VIX where supported.
+2. Live market status: PRE_OPEN / OPEN / CLOSED / UNKNOWN.
+3. Market breadth: advances, declines and unchanged.
+4. Live Top Gainers, Top Losers and Most Active sections.
+5. Quote cards showing LTP, absolute change, percentage change and available OHLC/volume/VWAP data.
+6. Data freshness/source indicators: LIVE, delayed, stale or unavailable.
+7. Tap-through from every instrument/card into the instrument detail experience.
+8. Graceful REST-snapshot fallback when the live stream is unavailable.
+9. Preserve existing Marksy home/inbox/intelligence surfaces; market content must be additive and composable.
+
+### Acceptance criteria
+- Home market values update from Marksy's live API stream without manual refresh.
+- No Upstox credentials or direct Upstox API calls exist in the Android client.
+- Every live market component exposes a truthful freshness state.
+- Gainers/losers and index values are derived from real provider data, never hardcoded.
+- Stream loss does not make the home page unusable; latest valid snapshot and stale state remain visible.
+- Tapping a market item opens the correct instrument detail route.
+
+## EPIC-032 — MarksyOS Instrument Intelligence Workspace
+
+**Goal:** Build a rich Upstox-style instrument page that becomes MarksyOS's primary market research and decision-support surface.
+
+### Scope
+1. Instrument header with symbol, company/index name, exchange/segment, LTP, change, percentage change and live/freshness state.
+2. Interactive price chart with supported timeframes: intraday intervals plus 1D/1W/1M/3M/6M/1Y/5Y/MAX where data is available.
+3. Candlestick/line modes with volume.
+4. Technical indicator overlays and panels: EMA/SMA, VWAP, RSI, MACD, Bollinger Bands, ATR, Supertrend, ADX and other indicators supported by the backend.
+5. Market-depth section where the provider supplies depth: bid/ask prices, quantities, spread and depth totals.
+6. Key quote statistics: OHLC, volume, average/relative volume, VWAP, 52-week high/low and available trading statistics.
+7. Watchlist, alert and navigation actions using existing Marksy action/navigation conventions.
+8. Separate tabs/sections for Overview, Technical, Fundamentals, News, Events and Derivatives when applicable.
+9. Clear separation between provider facts and Marksy-derived intelligence.
+
+### Acceptance criteria
+- Opening any supported stock/index from Home, Search, Watchlist, Gainers/Losers or Predictions resolves to the same canonical instrument screen.
+- Chart data is timestamped and does not silently mix incompatible intervals or stale snapshots.
+- Unsupported data is shown as unavailable/not applicable rather than fabricated.
+- Technical indicators use the same backend calculations consumed by prediction/intelligence pipelines where practical.
+- The page remains usable on slow networks, stream interruptions, empty data and process recreation.
+- Existing navigation and V2 behavior remain backward compatible.
+
+## EPIC-033 — Market Fundamentals, News & Corporate Intelligence
+
+**Goal:** Enrich the instrument workspace with trustworthy non-price information while keeping provider facts, timestamps and Marksy interpretation separate.
+
+### Scope
+1. Fundamentals: valuation, market cap, revenue, EBITDA, PAT, EPS, margins, ROE, ROCE, debt, cash and other fields available from configured sources.
+2. Period-aware financial history with quarter/fiscal-period labels and as-of timestamps.
+3. Shareholding information where available.
+4. Corporate events: results, dividends, splits, bonuses, rights, AGM and material announcements where available.
+5. Instrument/company news with headline, source, publication time, URL and symbol relevance.
+6. News categorization and optional Marksy relevance/sentiment analysis behind an explicit derived-intelligence boundary.
+7. Source attribution and freshness for every externally sourced section.
+8. Backend aggregation contracts so the Android app does not call multiple external providers directly.
+9. Empty/unavailable states for missing provider capabilities.
+10. Caching that respects source freshness and does not present stale fundamentals/news as current.
+
+### Acceptance criteria
+- Fundamentals, news and events are sourced from real configured providers.
+- Every externally sourced dataset has source and as-of metadata.
+- Historical financial periods cannot be presented as current values without period context.
+- Marksy interpretation never overwrites or masquerades as provider facts.
+- News links resolve to the original/source destination when available.
+- No fabricated fundamentals, news, corporate events or sentiment are shown.
+
+## EPIC-034 — Market Intelligence Experience & Realtime Hardening
+
+**Goal:** Make the complete Home → Instrument workflow feel reliable under real market conditions and prepare it for continuous use.
+
+### Scope
+1. Unified realtime state model for Home and Instrument screens.
+2. Subscription lifecycle based on visible instruments, watchlist and currently opened instrument.
+3. Stream reconnect/recovery UX with bounded retries and REST reconciliation handled by the backend.
+4. Client-side duplicate/out-of-order update protection.
+5. Loading, empty, delayed, stale, disconnected and provider-unavailable states.
+6. Screen/process recreation without losing the canonical instrument or creating duplicate subscriptions.
+7. Performance controls: bounded rendering frequency, batching/debouncing where appropriate and no blocking work on the main thread.
+8. Observability for stream latency, update age, reconnect count and client-side rendering failures.
+9. Accessibility/readability for rapidly changing financial values.
+10. End-to-end tests for Home → Gainers/Losers → Instrument → back navigation and stream interruption/recovery.
+
+### Acceptance criteria
+- Home and Instrument screens remain stable through WebSocket disconnect/reconnect and API failures.
+- The client never displays an old value as LIVE after its freshness threshold has expired.
+- Repeated navigation does not leak collectors/subscriptions or multiply updates.
+- High-frequency market updates do not cause visible UI jank or unbounded memory growth.
+- Tests cover realtime state transitions, stale data, process recreation, navigation and failure recovery.
+- Runtime diagnostics can identify whether a problem originated in the API, stream, client repository or UI.
+
+## Market Experience Implementation Order
+
+EPIC-024 → EPIC-025 → EPIC-031 → EPIC-032 → EPIC-033 → EPIC-026 → EPIC-028 → EPIC-034 → EPIC-027 → EPIC-029 → EPIC-030
+
+EPIC-031 through EPIC-034 are the MarksyOS experience layer over the existing Market Data Gateway, Real-Time Market Stream, Stock Intelligence, IPO Intelligence and Market Health architecture. Do not create a second market-data or intelligence pipeline to implement these screens.
+
 ## Market Intelligence Implementation Order
 
 EPIC-024 → EPIC-025 → EPIC-026 → EPIC-027 → EPIC-028 → EPIC-029 → EPIC-030
