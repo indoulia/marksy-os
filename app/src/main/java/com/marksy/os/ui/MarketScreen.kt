@@ -47,7 +47,7 @@ fun MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValue
                 }
             }
             MarketTab.PREDICTIONS -> PredictionsScreen(repository = repository, padding = padding, onOpenSymbol = { selectedSymbol = it; tab = MarketTab.STOCKS })
-            MarketTab.IPOS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+            MarketTab.IPOS -> IpoScreen(repository = repository, padding = padding)
         }
     }
 }
