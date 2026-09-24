@@ -50,6 +50,36 @@ class SecureCredentialStore(context: Context) {
         preferences.edit().remove(KEY_CIPHERTEXT).remove(KEY_IV).apply()
     }
 
+    fun getMarketApiKey(): String? {
+        val ciphertext = preferences.getString(KEY_MARKET_API_KEY_CIPHERTEXT, null) ?: return null
+        val iv = preferences.getString(KEY_MARKET_API_KEY_IV, null) ?: return null
+        return try {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(TAG_BITS, decode(iv)))
+            String(cipher.doFinal(decode(ciphertext)), StandardCharsets.UTF_8)
+                .trim()
+                .takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun setMarketApiKey(value: String) {
+        val key = value.trim()
+        require(key.isNotBlank()) { "Market API key must not be blank" }
+
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey())
+        preferences.edit()
+            .putString(KEY_MARKET_API_KEY_CIPHERTEXT, encode(cipher.doFinal(key.toByteArray(StandardCharsets.UTF_8))))
+            .putString(KEY_MARKET_API_KEY_IV, encode(cipher.iv))
+            .apply()
+    }
+
+    fun clearMarketApiKey() {
+        preferences.edit().remove(KEY_MARKET_API_KEY_CIPHERTEXT).remove(KEY_MARKET_API_KEY_IV).apply()
+    }
+
     // The base URL is endpoint configuration, not a secret, so it is stored as
     // plaintext. A blank value clears it, falling delivery back to the build default.
     fun getBaseUrl(): String? =
@@ -92,6 +122,8 @@ class SecureCredentialStore(context: Context) {
         const val PREFERENCES = "secure_credentials"
         const val KEY_CIPHERTEXT = "marksy_integration_key"
         const val KEY_IV = "marksy_integration_key_iv"
+        const val KEY_MARKET_API_KEY_CIPHERTEXT = "marksy_market_api_key"
+        const val KEY_MARKET_API_KEY_IV = "marksy_market_api_key_iv"
         const val KEY_BASE_URL = "marksy_base_url"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
