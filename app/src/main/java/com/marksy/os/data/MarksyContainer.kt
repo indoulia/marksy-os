@@ -23,6 +23,11 @@ object MarksyContainer {
         )
     }
 
+    fun briefing(context: Context): BriefingRepository {
+        val db = database(context)
+        return BriefingRepository(db.notificationEventDao(), db.eventActionDao(), learning(context))
+    }
+
     fun ask(context: Context): AskMarksyRepository {
         val db = database(context)
         return AskMarksyRepository(db.notificationEventDao(), db.contextGraphDao())

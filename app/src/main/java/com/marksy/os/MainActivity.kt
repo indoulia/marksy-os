@@ -44,12 +44,12 @@ import com.marksy.os.notification.WhatsAppConnectorStatus
 import com.marksy.os.notification.WhatsAppSettingsActivity
 import com.marksy.os.ui.AskMarksyScreen
 import com.marksy.os.ui.CalendarScreen
-import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.ContextGraph
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InboxActions
+import com.marksy.os.ui.BriefingScreen
 import com.marksy.os.ui.LearningScreen
 import com.marksy.os.data.LearningSettings
 import com.marksy.os.intelligence.PersonalLearning
@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
         val learningSettings = remember { LearningSettings(applicationContext) }
         val actionRepository = remember { MarksyContainer.actions(applicationContext) }
         val askRepository = remember { MarksyContainer.ask(applicationContext) }
+        val briefingRepository = remember { MarksyContainer.briefing(applicationContext) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
             repository, learning, learningSettings, actionRepository,
             ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
@@ -195,7 +196,14 @@ class MainActivity : ComponentActivity() {
                 showCalendar -> CalendarHost(historyEvents, padding, openEvent) { showCalendar = false }
                 showInsights -> InsightsHost(historyEvents, padding) { showInsights = false }
                 showRules -> RulesHost(padding, onOpenLearning = { showLearning = true }) { showRules = false }
-                showDigest -> DigestHost(events, padding) { showDigest = false }
+                showDigest -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
+                    ScreenHeader("Daily Briefing") { showDigest = false }
+                    BriefingScreen(
+                        padding = padding,
+                        load = { kind -> briefingRepository.briefing(kind) },
+                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let { selectedEvent = it } } }
+                    )
+                }
                 showGatewaySettings -> GatewaySettingsHost(padding) { showGatewaySettings = false }
                 selectedTab == 0 -> DashboardScreen(
                     snapshot = snapshot,
@@ -329,7 +337,6 @@ class MainActivity : ComponentActivity() {
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar", onBack); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights", onBack); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
 @Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation", onBack); TextButton(onClick = onOpenLearning, modifier = Modifier.padding(horizontal = 10.dp)) { Text("What Marksy learned") }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onBack: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest", onBack); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding())) } }
 
 @Composable private fun ScreenHeader(title: String, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
