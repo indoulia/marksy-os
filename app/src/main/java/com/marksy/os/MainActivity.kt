@@ -249,8 +249,8 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
-            "Market" to Icons.Default.QueryStats,
-            "More" to Icons.Default.MoreHoriz
+            "More" to Icons.Default.MoreHoriz,
+            "Market" to Icons.Default.QueryStats
         )
 
         Scaffold(
