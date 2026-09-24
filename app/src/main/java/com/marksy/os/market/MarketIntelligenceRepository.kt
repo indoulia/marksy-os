@@ -3,6 +3,7 @@ package com.marksy.os.market
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONException
 import java.io.IOException
 
 /** Every Market screen reads through this repository, never `MarketApiClient` directly, so
@@ -39,6 +40,8 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
                 throw cancellation
             } catch (error: IOException) {
                 MarketDataState.Error(error.message ?: "Market feed health unavailable")
+            } catch (error: JSONException) {
+                MarketDataState.Error(error.message ?: "Market feed health unavailable")
             }
         }
     }
@@ -55,6 +58,8 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: IOException) {
+                MarketDataState.Error(error.message ?: "Market data unavailable")
+            } catch (error: JSONException) {
                 MarketDataState.Error(error.message ?: "Market data unavailable")
             }
         }

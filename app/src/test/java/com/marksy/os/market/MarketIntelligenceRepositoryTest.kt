@@ -74,6 +74,15 @@ class MarketIntelligenceRepositoryTest {
     }
 
     @Test
+    fun jsonExceptionYieldsError() = runBlocking {
+        val repository = MarketIntelligenceRepository(FakeMarketApiClient(summaryError = org.json.JSONException("malformed response")))
+
+        val state = repository.overview()
+
+        assertTrue(state is MarketDataState.Error)
+    }
+
+    @Test
     fun emptyPredictionPageYieldsEmpty() = runBlocking {
         val repository = MarketIntelligenceRepository(FakeMarketApiClient(predictionPage = ActivePredictionPageDto(items = emptyList(), nextCursor = null)))
 
