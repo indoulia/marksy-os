@@ -71,8 +71,181 @@ Prepare Marksy for a real 30-day validation period. Track: captured events, clas
 IMPORTANT: do NOT fabricate historical data — collect real metrics from actual runtime operation.
 Acceptance: metrics are automatically collected; available by day and by source; failures are traceable; validation can operate for 30 days without manual reconstruction.
 
+## EPIC-024 — Marksy Market Data Gateway
+
+**Goal:** Make Marksy the normalized market-data gateway for MarksyOS, using Upstox directly wherever the provider is authoritative and available.
+
+### Scope
+1. Upstox authentication/configuration boundary — credentials remain server-side and are never shipped in MarksyOS.
+2. Current market status.
+3. Quotes/LTP/OHLC/volume for supported instruments.
+4. NIFTY, BANK NIFTY and relevant index data.
+5. Gainers, losers and most-active views.
+6. Instrument identity/lookup and stable symbol-to-instrument mapping.
+7. Data-source attribution and freshness metadata.
+8. REST fallback/reconciliation for live data.
+9. Marksy API contracts for MarksyOS.
+10. Reuse existing Marksy market/history data rather than creating a parallel data store.
+
+### Acceptance criteria
+- MarksyOS consumes market data through Marksy APIs; Upstox credentials are not present in the app.
+- Upstox is used as the primary market source wherever supported.
+- Responses identify source, timestamp/as-of time, market status and freshness.
+- Stale/unavailable data is represented explicitly rather than fabricated.
+- Existing Marksy historical data remains compatible.
+
+## EPIC-025 — Real-Time Market Stream
+
+**Goal:** Provide near-real-time market updates through Marksy while keeping Upstox WebSocket details behind the API boundary.
+
+### Scope
+1. Upstox WebSocket market-data adapter.
+2. Subscription management for configured instruments/watchlists.
+3. Normalized Marksy market events.
+4. Reconnect/backoff and subscription recovery.
+5. REST reconciliation after reconnect or detected gaps.
+6. Marksy WebSocket/SSE delivery to MarksyOS where appropriate.
+7. Stream health and last-update metrics.
+8. Bounded buffering and duplicate-event protection.
+
+### Acceptance criteria
+- Live updates reach MarksyOS without exposing Upstox credentials.
+- Disconnects recover without creating duplicate market events.
+- Gaps are reconciled from REST data where possible.
+- Stream freshness and health are observable.
+- The app remains functional with live streaming unavailable by using the latest valid REST snapshot.
+
+## EPIC-026 — Stock Intelligence & Prediction Pipeline
+
+**Goal:** Turn Marksy's existing market data, historical observations and learning infrastructure into a traceable stock-prediction pipeline.
+
+### Scope
+1. Reuse existing Marksy market/history datasets.
+2. Feature generation for trend, momentum, volume, volatility and market regime.
+3. Prediction contract with symbol/instrument identity, horizon, direction, entry range, stop loss, targets and confidence.
+4. Prediction lifecycle: CREATED → ACTIVE → EXPIRED → OUTCOME_RECORDED.
+5. Prediction outcome tracking without look-ahead bias.
+6. Evidence/provenance for prediction inputs.
+7. Prediction history and accuracy metrics.
+8. Deterministic fallback when a model is unavailable.
+
+### Acceptance criteria
+- Predictions are generated from timestamped data available at prediction time.
+- Future information cannot leak into feature generation or scoring.
+- Every prediction records its horizon, inputs/evidence and creation time.
+- Outcomes are calculated after the prediction window closes.
+- Prediction performance can be inspected by symbol, horizon and date.
+
+## EPIC-027 — IPO Intelligence
+
+**Goal:** Bring IPO lifecycle data into Marksy and add a separate Marksy intelligence layer.
+
+### Scope
+1. Upcoming IPOs.
+2. Open IPOs.
+3. Closed IPOs.
+4. Listed/recent IPOs.
+5. IPO details including price band, lot size, dates and available subscription information.
+6. Stable IPO identity and deduplication.
+7. IPO observations/history in Marksy.
+8. Marksy analysis/evidence separate from provider facts.
+9. IPO detail and watchlist APIs for MarksyOS.
+
+### Acceptance criteria
+- Provider facts are stored with source and as-of timestamps.
+- IPO lifecycle transitions are tracked correctly.
+- Duplicate provider records do not create duplicate IPO entities.
+- Marksy analysis never overwrites or masquerades as provider facts.
+- Missing provider data is represented as unavailable rather than guessed.
+
+## EPIC-028 — Market Predictions & Daily Setups
+
+**Goal:** Expose Marksy's stock and IPO intelligence through a consistent daily/intraday setup experience.
+
+### Scope
+1. Morning Daily Setups.
+2. Intraday prediction updates when meaningful new information arrives.
+3. Stock prediction cards and detail views.
+4. IPO opportunity/observation cards.
+5. Evidence and "why" explanations.
+6. Prediction outcome/history view.
+7. Existing `marksy-tips/v1` DAILY_SETUPS JSON contract compatibility.
+8. Source/freshness display.
+9. No fabricated predictions when required data is unavailable.
+
+### Acceptance criteria
+- Human-readable Daily Setups remain compatible with the existing JSON schema contract.
+- Every prediction links to its underlying Marksy prediction record.
+- Current market facts and Marksy predictions are visually and semantically separated.
+- Empty/stale datasets produce explicit empty/stale states.
+- Prediction history is available for later validation and learning.
+
+## EPIC-029 — MarksyOS Market & IPO Surfaces
+
+**Goal:** Add native MarksyOS surfaces for current market information, stocks, predictions and IPOs without moving market-provider logic into Android.
+
+### Scope
+1. Market overview.
+2. Current indices/quotes.
+3. Stock list/search/watchlist.
+4. Stock detail with current data and Marksy intelligence.
+5. Predictions list/detail/history.
+6. IPO list/detail/watchlist.
+7. Market/data freshness indicators.
+8. Deep links from notifications/Ask Marksy/Daily Briefing into market details.
+9. Tradsy placeholder navigation only.
+
+### Acceptance criteria
+- All production market data is loaded from Marksy APIs.
+- Existing MarksyOS navigation and intelligence surfaces remain intact.
+- No Upstox token or provider secret is bundled in the application.
+- UI clearly distinguishes provider facts from Marksy-derived intelligence.
+- Tradsy contains only non-functional placeholder buttons/links/details in this epic.
+
+## EPIC-030 — Market Intelligence Health & 30-Day Validation
+
+**Goal:** Extend Marksy Health and validation so market ingestion, prediction quality and data freshness can be measured continuously.
+
+### Scope
+1. Upstox REST/API availability.
+2. WebSocket connection/subscription health.
+3. Market-data freshness.
+4. Missing/stale instrument detection.
+5. Market ingestion latency and failure rate.
+6. Prediction generation latency/failure rate.
+7. Prediction outcome accuracy by horizon.
+8. IPO data freshness.
+9. Source/provider attribution.
+10. Daily and 30-day Market Intelligence Validation Report.
+11. No-look-ahead and data-integrity validation checks.
+
+### Acceptance criteria
+- Market and prediction metrics are collected automatically from real runtime operation.
+- Stale or missing data is visible and traceable.
+- Prediction outcomes are measured only after their defined horizons.
+- Validation distinguishes data-source failures from prediction failures.
+- No fabricated market, prediction or validation results are introduced.
+
+## Market Intelligence Implementation Order
+
+EPIC-024 → EPIC-025 → EPIC-026 → EPIC-027 → EPIC-028 → EPIC-029 → EPIC-030
+
+These EPICs extend EPIC-010 through EPIC-023; they must reuse existing Marksy intelligence, health, validation and on-device abstraction capabilities rather than introducing parallel implementations.
+
+## Market Intelligence Architectural Rules
+
+- **Upstox is the primary market-data source** wherever its API supports the required data.
+- **Marksy is the intelligence and normalization boundary.** MarksyOS should consume Marksy APIs rather than calling Upstox directly.
+- **Upstox credentials remain server-side.** Never commit, log, bundle or expose access tokens.
+- **Current market facts and Marksy predictions are different data classes** and must remain distinguishable in storage, APIs and UI.
+- **No look-ahead bias.** A prediction may use only data available at its creation timestamp.
+- **No fake market data.** Missing, stale or unavailable data must be represented explicitly.
+- **Reuse existing Marksy data.** Do not create a second market database if the existing Marksy data model can be extended safely.
+- **Tradsy is placeholder-only for now.** Do not implement order execution, portfolio mutation or trading automation as part of these EPICs.
+- Keep each EPIC to a maximum of 5 implementation stories/prompts.
+
 ## Implementation Order
-EPIC-010, 011, 012, 013, 014, 015, 016, 017, 018, 019, 020, 021, 022, 023 (in that order, but subject to repository reality — if part of an epic already exists, do not rebuild it, complete the missing portions).
+EPIC-010, 011, 012, 013, 014, 015, 016, 017, 018, 019, 020, 021, 022, 023, 024, 025, 026, 027, 028, 029, 030 (in that order, but subject to repository reality — if part of an epic already exists, do not rebuild it, complete the missing portions).
 
 ## Per-Epic Constraint
 Divide each epic's work into a maximum of 5 implementation stories (e.g. Story 1 domain model, Story 2 persistence, Story 3 processing/service layer, Story 4 UI/integration, Story 5 tests/hardening). Do not create many artificial tiny tasks just to claim progress.
