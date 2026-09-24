@@ -87,6 +87,7 @@ import com.marksy.os.ui.TradingInsight
 import com.marksy.os.ui.TradingInsightDetailDialog
 import com.marksy.os.ui.TradingIntelligenceScreen
 import com.marksy.os.ui.toTradingInsight
+import com.marksy.os.ui.MarketScreen
 
 class MainActivity : ComponentActivity() {
     private var notificationAccessEnabled by mutableStateOf(false)
@@ -248,6 +249,7 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
+            "Market" to Icons.Default.QueryStats,
             "More" to Icons.Default.MoreHoriz
         )
 
@@ -377,6 +379,7 @@ class MainActivity : ComponentActivity() {
                     loadEvent = { id -> repository.event(id) }
                 )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
+                selectedTab == 5 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,
