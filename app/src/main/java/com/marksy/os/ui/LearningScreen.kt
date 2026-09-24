@@ -14,6 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.intelligence.PersonalLearning
+import com.marksy.os.ai.ModelInfo
+import com.marksy.os.ai.ModelState
 
 /** EPIC-012: everything Marksy learned, why, and the controls to correct, disable or reset it. */
 @Composable
@@ -24,7 +26,8 @@ fun LearningScreen(
     onEnabledChanged: (Boolean) -> Unit,
     onPreference: (PersonalLearning.Subject, PersonalLearning.Preference?) -> Unit,
     onResetLearning: () -> Unit,
-    onClearCorrections: () -> Unit
+    onClearCorrections: () -> Unit,
+    aiStatus: List<Pair<ModelInfo, ModelState>> = emptyList()
 ) {
     val subjects = profile.subjects.values
         .sortedWith(compareByDescending<PersonalLearning.SubjectProfile> { it.override != null }
@@ -51,6 +54,18 @@ fun LearningScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onResetLearning) { Text("Reset learning") }
                 TextButton(onClick = onClearCorrections) { Text("Clear my corrections") }
+            }
+        }
+        item {
+            // EPIC-019 privacy visibility: exactly which models exist and whether data can leave the device.
+            Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
+                Text("On-device AI", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                if (aiStatus.isEmpty()) {
+                    Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                } else aiStatus.forEach { (info, state) ->
+                    Text("${info.id} v${info.version} · ${if (info.onDevice) "on-device" else "external"} · ${state.name.lowercase()}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                }
+                Text("External AI: off. Notification content never leaves this device.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
             }
         }
         if (subjects.isEmpty()) {

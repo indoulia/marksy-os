@@ -189,7 +189,8 @@ class MainActivity : ComponentActivity() {
                         onEnabledChanged = vm::setLearningEnabled,
                         onPreference = vm::setPreference,
                         onResetLearning = vm::resetLearning,
-                        onClearCorrections = vm::clearCorrections
+                        onClearCorrections = vm::clearCorrections,
+                        aiStatus = remember { MarksyContainer.intelligence(applicationContext).status() }
                     )
                 }
                 showTimeline -> TimelineHost(timelineEvents, padding, openEvent) { showTimeline = false }

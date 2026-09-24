@@ -26,6 +26,7 @@ class RetentionWorker(
             dao.pruneExpired(now)
             MarksyDatabase.getInstance(applicationContext).contextGraphDao().pruneOrphanLinks()
             MarksyDatabase.getInstance(applicationContext).ruleExecutionDao().pruneOrphans()
+            MarksyDatabase.getInstance(applicationContext).aiInvocationDao().prune(now - 45L * 24 * 60 * 60 * 1000)
             Result.success()
         } catch (e: Exception) {
             // Retention is local housekeeping. A transient database failure should

@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class],
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class],
     version = 3,
     exportSchema = false
 )
@@ -18,6 +18,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun eventActionDao(): EventActionDao
     abstract fun contextGraphDao(): ContextGraphDao
     abstract fun ruleExecutionDao(): RuleExecutionDao
+    abstract fun aiInvocationDao(): AiInvocationDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -52,6 +53,9 @@ abstract class MarksyDatabase : RoomDatabase() {
                 database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_learning_signals_eventId_subjectType_signal` ON `learning_signals` (`eventId`, `subjectType`, `signal`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_subjectType_subjectKey` ON `learning_signals` (`subjectType`, `subjectKey`)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_learning_signals_createdAt` ON `learning_signals` (`createdAt`)")
+                // EPIC-019 AI invocation metrics (no content).
+                database.execSQL("CREATE TABLE IF NOT EXISTS `ai_invocations` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `task` TEXT NOT NULL, `modelId` TEXT, `modelVersion` TEXT, `templateId` TEXT NOT NULL, `templateVersion` INTEGER NOT NULL, `outcome` TEXT NOT NULL, `latencyMs` INTEGER NOT NULL, `confidence` REAL, `at` INTEGER NOT NULL)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_invocations_at` ON `ai_invocations` (`at`)")
                 // EPIC-018 rule audit trail.
                 database.execSQL("CREATE TABLE IF NOT EXISTS `rule_executions` (`ruleId` TEXT NOT NULL, `ruleVersion` INTEGER NOT NULL, `eventId` INTEGER NOT NULL, `action` TEXT NOT NULL, `trigger` TEXT NOT NULL, `applied` INTEGER NOT NULL, `note` TEXT, `executedAt` INTEGER NOT NULL, PRIMARY KEY(`ruleId`, `ruleVersion`, `eventId`))")
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_rule_executions_eventId` ON `rule_executions` (`eventId`)")

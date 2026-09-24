@@ -1,6 +1,10 @@
 package com.marksy.os.data
 
 import android.content.Context
+import com.marksy.os.ai.AiModelRegistry
+import com.marksy.os.ai.IntelligenceService
+import com.marksy.os.ai.ModelQueryInterpreter
+import com.marksy.os.ai.RoomAiInvocationSink
 import com.marksy.os.data.local.MarksyDatabase
 
 object MarksyContainer {
@@ -33,9 +37,13 @@ object MarksyContainer {
         return BriefingRepository(db.notificationEventDao(), db.eventActionDao(), learning(context))
     }
 
+    /** No external provider exists, so external processing is hard-off rather than a setting. */
+    fun intelligence(context: Context): IntelligenceService =
+        IntelligenceService(AiModelRegistry.installed(), allowExternal = { false }, sink = RoomAiInvocationSink(database(context).aiInvocationDao()))
+
     fun ask(context: Context): AskMarksyRepository {
         val db = database(context)
-        return AskMarksyRepository(db.notificationEventDao(), db.contextGraphDao())
+        return AskMarksyRepository(db.notificationEventDao(), db.contextGraphDao(), listOf(ModelQueryInterpreter(intelligence(context))))
     }
 
     fun repository(context: Context): NotificationRepository =
