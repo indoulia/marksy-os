@@ -167,6 +167,19 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE id > :afterId AND intelligenceVersion > 0 ORDER BY id ASC LIMIT :limit")
     suspend fun findProcessedAfterId(afterId: Long, limit: Int): List<NotificationEventEntity>
 
+    // ---- EPIC-022 health (counts only) ----
+    @Query("SELECT MAX(createdAt) FROM notification_events")
+    suspend fun lastCreatedAt(): Long?
+
+    @Query("SELECT COUNT(*) FROM notification_events WHERE intelligenceVersion < :version")
+    suspend fun countNeedingIntelligence(version: Int): Int
+
+    @Query("SELECT COUNT(*) FROM notification_events WHERE deliveryState = :state")
+    suspend fun countDeliveryState(state: String): Int
+
+    @Query("SELECT COUNT(*) FROM notification_events")
+    suspend fun countAll(): Int
+
     @Query("DELETE FROM notification_events")
     suspend fun deleteAll()
 }
