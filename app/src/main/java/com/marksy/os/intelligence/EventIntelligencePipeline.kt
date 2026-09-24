@@ -46,7 +46,7 @@ class EventIntelligencePipeline(
         val duplicateOfId = if (!firstPass) {
             event.duplicateOfId
         } else n.correlationKey?.let { key ->
-            dao.findCorrelatedCanonical(
+            val candidates = dao.findCorrelatedCanonical(
                 correlationKey = key,
                 excludeId = event.id,
                 fromMillis = event.postedAt - DEDUP_WINDOW_MS,
@@ -54,6 +54,10 @@ class EventIntelligencePipeline(
                 sourcePackage = event.sourcePackage,
                 otherSourceOnly = !n.correlationIsStrong
             )
+            if (n.correlationIsStrong) candidates.firstOrNull()
+            else candidates.firstOrNull { id ->
+                dao.getById(id)?.let { counterpartiesCompatible(n.facts, EventNormalizer.factsFromJson(it.intelligenceJson)) } ?: false
+            }
         }
         val reasons = if (duplicateOfId != null) n.reasons + "Duplicate of event #$duplicateOfId from another observation" else n.reasons
         val normalized = n.copy(reasons = reasons)
@@ -90,6 +94,17 @@ class EventIntelligencePipeline(
         return Outcome(event.id, normalized, duplicateOfId, resolved)
     }
 
+    /**
+     * Amount-only matches: two payments of the same amount to *different* named counterparties are
+     * different transactions. Unknown on either side (typical bank SMS) stays compatible.
+     */
+    private fun counterpartiesCompatible(a: EventExtractor.Facts, b: EventExtractor.Facts): Boolean {
+        fun names(f: EventExtractor.Facts) = f.entities.filter { it.type in COUNTERPARTY_TYPES }.map { ContextGraph.canonicalKey(ContextGraph.NodeType.MERCHANT, it.value) }.toSet()
+        val x = names(a)
+        val y = names(b)
+        return x.isEmpty() || y.isEmpty() || x.intersect(y).isNotEmpty()
+    }
+
     /** A row that cannot be derived is stamped (with a traceable marker) so it can never stall the backfill. */
     private suspend fun markFailed(event: NotificationEventEntity) {
         dao.updateIntelligence(
@@ -111,5 +126,6 @@ class EventIntelligencePipeline(
         const val BATCH_SIZE = 200
         const val DEDUP_WINDOW_MS = 10 * 60 * 1000L
         private val LOCK = Mutex()
+        private val COUNTERPARTY_TYPES = setOf(EventExtractor.EntityType.MERCHANT, EventExtractor.EntityType.PERSON, EventExtractor.EntityType.COMPANY)
     }
 }

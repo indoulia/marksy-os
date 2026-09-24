@@ -69,6 +69,13 @@ class EventNormalizationTest {
     }
 
     @Test
+    fun eachAmountTakesTheDirectionOfItsNearestVerb() {
+        val f = facts(event("Alert", "Rs 500 debited from a/c XX1. Salary Rs 12,300 credited yesterday"))
+        assertEquals(EventExtractor.Direction.DEBIT, f.amounts.single { it.amountMinor == 50000L }.direction)
+        assertEquals(EventExtractor.Direction.CREDIT, f.amounts.single { it.amountMinor == 1230000L }.direction)
+    }
+
+    @Test
     fun deliveredIsTerminal() {
         assertTrue(facts(event("Delivered", "Your order ID 403-1234567-7654321 has been delivered", category = "DELIVERY")).terminal)
     }

@@ -35,7 +35,7 @@ class IngestionPipelineTest {
         metrics = MetricsRecorder(db.metricsDao(), { t0 + 500 }, { ZoneOffset.UTC })
         pipeline = IngestionPipeline(
             db.notificationEventDao(), db.connectorDao(), metrics, { rules },
-            RuleRunner(db.notificationEventDao(), db.ruleExecutionDao(), { t0 }),
+            RuleRunner(db.notificationEventDao(), db.ruleExecutionDao(), clock = { t0 }),
             EventIntelligencePipeline(db.notificationEventDao(), ZoneOffset.UTC),
             onTradingCaptured = { trading++ }, clock = { t0 + 500 }
         )

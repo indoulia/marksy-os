@@ -23,6 +23,7 @@ class EventIntelligenceWorker(appContext: Context, params: WorkerParameters) : C
         if (batches == MAX_BATCHES_PER_RUN) schedule(applicationContext, replace = true)
         Result.success()
     } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
         Result.retry()
     }
 

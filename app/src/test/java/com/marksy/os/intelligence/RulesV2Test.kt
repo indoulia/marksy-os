@@ -134,7 +134,7 @@ class RulesV2Test {
             dao.insert(event("PROMOTIONS", "Deal", "coupon", noon + 1, "com.shop")),
             dao.insert(event("BANKING", "Debited", "Rs 5 debited", noon + 2))
         )
-        val runner = RuleRunner(dao, db.ruleExecutionDao(), { now }, { zone })
+        val runner = RuleRunner(dao, db.ruleExecutionDao(), clock = { now }, zone = { zone })
         val rule = Rule("promo", "Archive promos", enabled = false, category = "PROMOTIONS", action = Action.ARCHIVE)
 
         val (considered, hits) = runner.simulate(rule)
@@ -147,6 +147,25 @@ class RulesV2Test {
         assertEquals(0, runner.applyToHistory(rule))
         assertEquals(2, runner.executionCount("promo"))
         assertEquals(1, runner.applyToHistory(rule.copy(version = 2, action = Action.MARK_RESOLVED, category = "BANKING")))
+
+        // A highlight applied to history boosts once, however often it is re-run.
+        val hl = Rule("hl", "Highlight bank", category = "BANKING", action = Action.HIGHLIGHT)
+        runner.applyToHistory(hl)
+        runner.applyToHistory(hl)
+        assertEquals(65, dao.getById(ids[2])!!.priority)
+    }
+
+    @Test
+    fun overriddenCaptureExecutionDoesNotBlockLaterApplyToHistory() = runBlocking {
+        val dao = db.notificationEventDao()
+        val e = event("PROMOTIONS", "Sale", "big sale", noon, "com.shop")
+        val rules = listOf(Rule("a", "Archive", category = "PROMOTIONS", action = Action.ARCHIVE, priority = 1), Rule("b", "Resolve", category = "PROMOTIONS", action = Action.MARK_RESOLVED))
+        val applied = RuleApplication.apply(listOf(rules[1]), e)
+        val id = dao.insert(applied.event.copy(lifecycleState = "ACTIVE"))
+        val runner = RuleRunner(dao, db.ruleExecutionDao(), clock = { noon + 1000 }, zone = { zone })
+        runner.recordCapture(id, RuleEngine.evaluate(rules, dao.getById(id)!!))
+        assertEquals(1, runner.applyToHistory(rules[1]))
+        assertTrue(runner.history("b").single().applied)
     }
 
     @Test
@@ -156,7 +175,7 @@ class RulesV2Test {
         val rules = listOf(Rule("a", "Archive", category = "PROMOTIONS", action = Action.ARCHIVE, priority = 1), Rule("b", "Resolve", category = "PROMOTIONS", action = Action.MARK_RESOLVED))
         val applied = RuleApplication.apply(rules, e)
         val id = dao.insert(applied.event)
-        val runner = RuleRunner(dao, db.ruleExecutionDao(), { noon }, { zone })
+        val runner = RuleRunner(dao, db.ruleExecutionDao(), clock = { noon }, zone = { zone })
         runner.recordCapture(id, applied.evaluation)
         runner.recordCapture(id, applied.evaluation)
         val a = runner.history("a").single()

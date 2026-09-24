@@ -29,6 +29,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
     var enabled by remember { mutableStateOf(repo.isEnabled()) }
     var kindState by remember { mutableStateOf(PersonalMemory.Kind.entries.associateWith { repo.isKindEnabled(it) }) }
     var renaming by remember { mutableStateOf<MemoryEntryEntity?>(null) }
+    var confirmErase by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { repo.ingest() } }
 
     LazyColumn(
@@ -41,12 +42,13 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
                 Column(Modifier.weight(1f)) {
                     Text("Personal memory", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Built only from notifications on this device. Turning it off erases everything learned; your own corrections stay.",
+                        "Built only from notifications on this device. Turning it off stops learning; use Erase to delete what was learned.",
                         color = MarksyTheme.TextMuted, fontSize = 11.sp
                     )
                 }
-                Switch(checked = enabled, onCheckedChange = { v -> enabled = v; scope.launch { repo.setEnabled(v) } })
+                Switch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) })
             }
+            TextButton(onClick = { confirmErase = true }) { Text("Erase learned memory", color = MarksyTheme.RedUrgent, fontSize = 12.sp) }
         }
         PersonalMemory.Kind.entries.forEach { kind ->
             val ofKind = entries.filter { it.kind == kind.name }
@@ -56,7 +58,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
                     if (kind != PersonalMemory.Kind.PREFERENCE) Switch(
                         checked = kindState.getValue(kind),
                         enabled = enabled,
-                        onCheckedChange = { v -> kindState = kindState + (kind to v); scope.launch { repo.setKindEnabled(kind, v) } }
+                        onCheckedChange = { v -> kindState = kindState + (kind to v); repo.setKindEnabled(kind, v) }
                     )
                 }
                 if (kind == PersonalMemory.Kind.LOCATION) {
@@ -67,6 +69,16 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
                 MemoryRow(e, onForget = { scope.launch { repo.forget(e.id) } }, onRename = { renaming = e })
             }
         }
+    }
+
+    if (confirmErase) {
+        AlertDialog(
+            onDismissRequest = { confirmErase = false },
+            title = { Text("Erase learned memory?") },
+            text = { Text("Everything Marksy learned is deleted and cannot be rebuilt from notifications that have already expired. Entries you corrected or set stay.") },
+            confirmButton = { TextButton(onClick = { scope.launch { repo.eraseLearned() }; confirmErase = false }) { Text("Erase", color = MarksyTheme.RedUrgent) } },
+            dismissButton = { TextButton(onClick = { confirmErase = false }) { Text("Cancel") } }
+        )
     }
 
     renaming?.let { e ->

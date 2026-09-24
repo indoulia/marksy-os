@@ -115,12 +115,15 @@ class PersonalMemoryTest {
         assertEquals("Shop: less important", entry(Kind.PREFERENCE, "APP|com.shop")!!.label)
         assertTrue(entry(Kind.CONTACT, "amit") != null)
 
+        // Switching off stops learning but deletes nothing (review finding: silent irreversible loss).
         repo.setEnabled(false)
-        assertNull(entry(Kind.CONTACT, "amit"))
-        assertTrue(entry(Kind.PREFERENCE, "APP|com.shop") != null)
         capture("MESSAGES", "Amit", "again", t0 + day, "com.whatsapp")
         repo.ingest()
+        assertEquals(1, entry(Kind.CONTACT, "amit")!!.observations)
+
+        repo.eraseLearned()
         assertNull(entry(Kind.CONTACT, "amit"))
+        assertTrue(entry(Kind.PREFERENCE, "APP|com.shop") != null)
     }
 
     @Test

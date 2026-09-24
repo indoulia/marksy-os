@@ -57,7 +57,7 @@ class ReminderWorker(appContext: Context, params: WorkerParameters) : CoroutineW
         return if (state == ActionState.FAILED) Result.failure() else Result.success()
     }
 
-    // Only the title and source are shown; the body stays inside Marksy (lock-screen privacy).
+    // The body never leaves Marksy; the captured title is only shown when the device is unlocked.
     private fun post(actionId: Long, title: String, source: String): Boolean {
         val platform = AndroidActionPlatform(applicationContext)
         if (!platform.canPostNotifications()) return false
@@ -70,11 +70,18 @@ class ReminderWorker(appContext: Context, params: WorkerParameters) : CoroutineW
             Intent(applicationContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val public = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setContentTitle("Marksy reminder")
+            .setContentText(if (source.isBlank()) "Open Marksy" else source)
+            .build()
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title.take(80))
             .setContentText(if (source.isBlank()) "Reminder" else "Reminder · $source")
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            // Explicit redacted version: the lock screen shows only "Marksy reminder" and the source app.
+            .setPublicVersion(public)
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

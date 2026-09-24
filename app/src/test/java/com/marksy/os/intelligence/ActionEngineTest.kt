@@ -124,6 +124,8 @@ class ActionEngineTest {
         assertEquals("DELIVERY", event(promo).category)
         assertEquals("PROMOTIONS->DELIVERY", audit(report.actionId).detail)
 
+        assertEquals(0, event(promo).intelligenceVersion) // re-derived for the corrected category
+
         val trade = insert("com.broker", "TRADING", "Order executed", trading = true)
         actions.execute(trade, Type.REPORT, detail = "OTHER")
         assertEquals("TRADING", event(trade).category)

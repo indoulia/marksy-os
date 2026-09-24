@@ -33,7 +33,7 @@ interface RuleExecutionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(rows: List<RuleExecutionEntity>): List<Long>
 
-    @Query("SELECT eventId FROM rule_executions WHERE ruleId = :ruleId AND ruleVersion = :version")
+    @Query("SELECT eventId FROM rule_executions WHERE ruleId = :ruleId AND ruleVersion = :version AND applied = 1")
     suspend fun executedEventIds(ruleId: String, version: Int): List<Long>
 
     @Query("SELECT * FROM rule_executions WHERE ruleId = :ruleId ORDER BY executedAt DESC LIMIT :limit")
@@ -41,6 +41,10 @@ interface RuleExecutionDao {
 
     @Query("SELECT COUNT(*) FROM rule_executions WHERE ruleId = :ruleId")
     suspend fun count(ruleId: String): Int
+
+    /** Replaces an earlier "overridden" row once the rule is really applied. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(row: RuleExecutionEntity)
 
     @Query("DELETE FROM rule_executions WHERE eventId NOT IN (SELECT id FROM notification_events)")
     suspend fun pruneOrphans(): Int

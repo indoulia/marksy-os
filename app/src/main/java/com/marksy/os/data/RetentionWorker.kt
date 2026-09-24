@@ -35,6 +35,7 @@ class RetentionWorker(
             MarksyDatabase.getInstance(applicationContext).metricsDao().prune(java.time.LocalDate.now().minusDays(120).toString())
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             // Retention is local housekeeping. A transient database failure should
             // retry instead of silently waiting for the next daily schedule.
             Result.retry()

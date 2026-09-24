@@ -10,6 +10,8 @@ import java.time.ZoneId
 class RuleRunner(
     private val eventDao: NotificationEventDao,
     private val executions: RuleExecutionDao,
+    /** Runs each history mutation together with its audit row so a crash cannot re-apply a boost. */
+    private val transaction: suspend (suspend () -> Unit) -> Unit = { it() },
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: () -> ZoneId = ZoneId::systemDefault
 ) {
@@ -41,13 +43,15 @@ class RuleRunner(
         val done = executions.executedEventIds(rule.id, rule.version).toHashSet()
         val hits = simulate(rule, days).second.filter { it.eventId !in done }
         hits.forEach { hit ->
-            when (rule.action) {
-                RuleEngine.Action.ARCHIVE -> eventDao.archiveAll(listOf(hit.eventId), now)
-                RuleEngine.Action.MARK_RESOLVED -> eventDao.resolve(listOf(hit.eventId), "Rule ${rule.name}", now)
-                RuleEngine.Action.HIGHLIGHT, RuleEngine.Action.MARK_TRADING_PRIORITY -> eventDao.setPriority(hit.eventId, hit.priorityAfter)
+            transaction {
+                when (rule.action) {
+                    RuleEngine.Action.ARCHIVE -> eventDao.archiveAll(listOf(hit.eventId), now)
+                    RuleEngine.Action.MARK_RESOLVED -> eventDao.resolve(listOf(hit.eventId), "Rule ${rule.name}", now)
+                    RuleEngine.Action.HIGHLIGHT, RuleEngine.Action.MARK_TRADING_PRIORITY -> eventDao.setPriority(hit.eventId, hit.priorityAfter)
+                }
+                executions.upsert(RuleExecutionEntity(rule.id, rule.version, hit.eventId, rule.action.name, TRIGGER_HISTORY, true, null, now))
             }
         }
-        executions.insert(hits.map { RuleExecutionEntity(rule.id, rule.version, it.eventId, rule.action.name, TRIGGER_HISTORY, true, null, now) })
         return hits.size
     }
 

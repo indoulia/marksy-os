@@ -84,15 +84,14 @@ class MemoryRepository(
         return dao.correct(id, label.trim().take(60), clock()) > 0
     }
 
-    suspend fun setKindEnabled(kind: PersonalMemory.Kind, enabled: Boolean) {
-        settings.setKindEnabled(kind, enabled)
-        if (!enabled) dao.deleteLearnedOfKind(kind.name)
-    }
+    /** Stops (or resumes) learning this kind; existing entries stay until erased or expired. */
+    fun setKindEnabled(kind: PersonalMemory.Kind, enabled: Boolean) = settings.setKindEnabled(kind, enabled)
 
-    suspend fun setEnabled(enabled: Boolean) {
-        settings.enabled = enabled
-        if (!enabled) dao.deleteAllLearned()
-    }
+    fun setEnabled(enabled: Boolean) { settings.enabled = enabled }
+
+    /** Irreversible (source events may already be pruned); the UI confirms first. User-owned entries stay. */
+    suspend fun eraseLearned(kind: PersonalMemory.Kind? = null): Int =
+        if (kind == null) dao.deleteAllLearned() else dao.deleteLearnedOfKind(kind.name)
 
     fun isEnabled() = settings.enabled
     fun isKindEnabled(kind: PersonalMemory.Kind) = settings.isKindEnabled(kind)

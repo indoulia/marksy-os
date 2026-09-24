@@ -83,6 +83,16 @@ class EventIntelligencePipelineTest {
     }
 
     @Test
+    fun sameAmountToDifferentNamedCounterpartiesIsNotFoldedAsDuplicate() = runBlocking {
+        val a = insert("com.phonepe.app", "Paid", "You paid ₹500 to Rahul Sharma", "PAYMENTS")
+        val b = insert("com.snapwork.hdfc", "Debited", "Rs 500 debited at AMAZON RETAIL.", "BANKING", postedAt = t0 + 60_000)
+        val c = insert("com.snapwork.hdfc", "Debited", "Rs 500 debited from a/c", "BANKING", postedAt = t0 + 90_000)
+        listOf(a, b, c).forEach { pipeline.process(it) }
+        assertNull(get(b).duplicateOfId)
+        assertEquals(a, get(c).duplicateOfId) // no counterparty on the bank side: still compatible
+    }
+
+    @Test
     fun tradingObservationsFromDifferentBrokersAreNeverDeduplicated() = runBlocking {
         val z = insert("com.zerodha.kite3", "Order executed", "BUY INFY at ₹1500 Txn ID AB12345678", "TRADING", trading = true)
         val u = insert("com.upstox.pro", "Order executed", "BUY INFY at ₹1500 Txn ID AB12345678", "TRADING", trading = true)

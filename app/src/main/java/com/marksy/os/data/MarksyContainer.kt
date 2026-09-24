@@ -1,5 +1,6 @@
 package com.marksy.os.data
 
+import androidx.room.withTransaction
 import android.content.Context
 import com.marksy.os.ai.AiModelRegistry
 import com.marksy.os.ai.IntelligenceService
@@ -53,7 +54,7 @@ object MarksyContainer {
 
     fun rules(context: Context): RuleRunner {
         val db = database(context)
-        return RuleRunner(db.notificationEventDao(), db.ruleExecutionDao())
+        return RuleRunner(db.notificationEventDao(), db.ruleExecutionDao(), transaction = { block -> db.withTransaction { block() } })
     }
 
     fun briefing(context: Context): BriefingRepository {

@@ -82,7 +82,7 @@ interface NotificationEventDao {
     suspend fun findNeedingIntelligence(version: Int, limit: Int): List<NotificationEventEntity>
 
     /** Earliest canonical (non-duplicate) event sharing a correlation key inside the window. */
-    @Query("SELECT id FROM notification_events WHERE correlationKey = :correlationKey AND id != :excludeId AND duplicateOfId IS NULL AND isTrading = 0 AND postedAt BETWEEN :fromMillis AND :toMillis AND (:otherSourceOnly = 0 OR sourcePackage != :sourcePackage) ORDER BY postedAt ASC, id ASC LIMIT 1")
+    @Query("SELECT id FROM notification_events WHERE correlationKey = :correlationKey AND id != :excludeId AND duplicateOfId IS NULL AND isTrading = 0 AND postedAt BETWEEN :fromMillis AND :toMillis AND (:otherSourceOnly = 0 OR sourcePackage != :sourcePackage) ORDER BY postedAt ASC, id ASC LIMIT 5")
     suspend fun findCorrelatedCanonical(
         correlationKey: String,
         excludeId: Long,
@@ -90,7 +90,7 @@ interface NotificationEventDao {
         toMillis: Long,
         sourcePackage: String,
         otherSourceOnly: Boolean
-    ): Long?
+    ): List<Long>
 
     @Query("UPDATE notification_events SET importanceScore = :importance, intelligenceConfidence = :confidence, threadKey = :threadKey, correlationKey = :correlationKey, duplicateOfId = :duplicateOfId, intelligenceJson = :json, intelligenceVersion = :version WHERE id = :eventId")
     suspend fun updateIntelligence(
@@ -153,7 +153,8 @@ interface NotificationEventDao {
     suspend fun findStaleNew(beforeMillis: Long, limit: Int): List<NotificationEventEntity>
 
     /** EPIC-014 REPORT: the user's corrected category replaces the classifier's (the original is kept in the audit row). */
-    @Query("UPDATE notification_events SET category = :category WHERE id = :eventId")
+    // Resetting intelligenceVersion makes the backfill re-derive thread/importance for the new category.
+    @Query("UPDATE notification_events SET category = :category, intelligenceVersion = 0 WHERE id = :eventId")
     suspend fun updateCategory(eventId: Long, category: String): Int
 
     /** EPIC-016 retrieval: archived rows included (archived does not mean it did not happen). */

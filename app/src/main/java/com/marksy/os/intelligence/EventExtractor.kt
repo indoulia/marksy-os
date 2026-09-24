@@ -131,12 +131,16 @@ object EventExtractor {
     // ---- money ------------------------------------------------------------
 
     private fun amounts(text: String, lower: String): List<Money> {
-        val direction = when {
-            DEBIT_TERMS.any { lower.containsWord(it) } -> Direction.DEBIT
-            CREDIT_TERMS.any { lower.containsWord(it) } -> Direction.CREDIT
+        fun directionOf(s: String) = when {
+            DEBIT_TERMS.any { s.containsWord(it) } -> Direction.DEBIT
+            CREDIT_TERMS.any { s.containsWord(it) } -> Direction.CREDIT
             else -> Direction.UNKNOWN
         }
+        val whole = directionOf(lower)
         return MONEY.findAll(text).mapNotNull { m ->
+            // The verb nearest an amount decides its direction ("500 debited ... balance 12,300 credited").
+            val window = lower.substring(maxOf(0, m.range.first - DIRECTION_WINDOW), minOf(lower.length, m.range.last + 1 + DIRECTION_WINDOW))
+            val direction = directionOf(window).takeIf { it != Direction.UNKNOWN } ?: whole
             val symbol = (m.groups[1]?.value ?: m.groups[4]?.value)?.trim() ?: return@mapNotNull null
             val number = (m.groups[2]?.value ?: m.groups[3]?.value)?.replace(",", "") ?: return@mapNotNull null
             val currency = CURRENCIES[symbol.lowercase(Locale.ROOT).trimEnd('.')] ?: return@mapNotNull null
@@ -156,7 +160,7 @@ object EventExtractor {
                 if (value.length >= 6 && value.any(Char::isDigit)) out += Reference(type, value)
             }
         }
-        return out.distinctBy { it.value }
+        return out.distinctBy { it.type to it.value }
     }
 
     // ---- dates/times ------------------------------------------------------
@@ -222,6 +226,7 @@ object EventExtractor {
     }
 
     private const val MAX_NAME = 60
+    private const val DIRECTION_WINDOW = 24
 
     private val CURRENCIES = mapOf(
         "₹" to "INR", "rs" to "INR", "inr" to "INR",

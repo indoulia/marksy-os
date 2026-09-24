@@ -41,8 +41,7 @@ class ActionRepository(
         val now = clock()
         val event = eventDao.getById(eventId) ?: return Outcome(-1, ActionState.FAILED, "Event no longer exists")
         metrics?.count(Metric.USER_INTERACTION, "action:${type.name}")
-        // A category report is the ground-truth signal for classification accuracy (EPIC-023).
-        if (type == Type.REPORT) metrics?.count(Metric.CORRECTION, "correction:category", MetricsRecorder.source(event.sourcePackage), MetricsRecorder.category(event.category))
+
         // Re-check at execution time: the app may have been uninstalled since discovery.
         val offered = ActionEngine.discover(event, platform, now).firstOrNull { it.type == type }
         if (offered == null || !offered.enabled) {
@@ -72,7 +71,10 @@ class ActionRepository(
             Type.REPORT -> runNow(eventId, type, now, "${event.category}->${detail ?: "UNSPECIFIED"}") {
                 // Trading routing (isTrading/delivery state) is source-driven, so it is recorded but never re-labelled.
                 val corrected = detail?.takeIf { it in CATEGORIES && it != "TRADING" && !event.isTrading }
-                if (corrected != null) eventDao.updateCategory(eventId, corrected)
+                if (corrected != null && eventDao.updateCategory(eventId, corrected) > 0) {
+                    // Ground-truth signal for classification accuracy (EPIC-023).
+                    metrics?.count(Metric.CORRECTION, "correction:category", MetricsRecorder.source(event.sourcePackage), MetricsRecorder.category(event.category))
+                }
                 null
             }
             Type.IGNORE -> runNow(eventId, type, now, detail) {

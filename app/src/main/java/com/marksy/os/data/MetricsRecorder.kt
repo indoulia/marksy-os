@@ -36,10 +36,12 @@ class MetricsRecorder(
 
     /** Increments [metric] for "all" and each extra scope; metrics must never break the caller. */
     suspend fun count(metric: String, vararg scopes: String, delta: Long = 1, at: Long = clock()) {
-        runCatching {
+        try {
             val d = day(at)
             dao.increment(d, SCOPE_ALL, metric, delta)
             scopes.filter { it.isNotBlank() }.distinct().forEach { dao.increment(d, it, metric, delta) }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
         }
     }
 
