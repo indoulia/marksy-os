@@ -1628,8 +1628,8 @@ git commit -m "feat(market): add MarketDataState and MarketIntelligenceRepositor
 - Test: `app/src/test/java/com/marksy/os/ui/MarketOverviewScreenTest.kt`
 
 **Interfaces:**
-- Consumes: `MarketDataState<MarketSummaryDto>` (Task 6), `MarksyTheme` tokens (existing).
-- Produces: `MarketOverviewScreen(state: MarketDataState<MarketSummaryDto>, padding: PaddingValues)` composable; `MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, onOpenSymbol: (String) -> Unit)` composable with internal sub-tab state, consumed by `MainActivity`.
+- Consumes: `MarketDataState<MarketSummaryDto>`, `MarketDataState<LiveFeedHealthDto>`, `MarketIntelligenceRepository.overview()`/`.liveFeedHealth()` (Task 6), `MarksyTheme` tokens (existing).
+- Produces: `MarketOverviewScreen(state: MarketDataState<MarketSummaryDto>, padding: PaddingValues, health: MarketDataState<LiveFeedHealthDto> = MarketDataState.Unavailable)` composable; `MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValues)` composable — internal `MarketTab` sub-tab state, `STOCKS`/`PREDICTIONS`/`IPOS` branches are placeholders in this task, wired to their real screens by Task 8 (`STOCKS`, `PREDICTIONS`) and Task 9 (`IPOS`) modifying this same file. Consumed by `MainActivity`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1798,10 +1798,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.marksy.os.market.MarketIntelligenceRepository
 
 private enum class MarketTab(val label: String) { OVERVIEW("Overview"), STOCKS("Stocks"), PREDICTIONS("Predictions"), IPOS("IPOs") }
@@ -1827,19 +1829,12 @@ fun MarketScreen(repository: MarketIntelligenceRepository, padding: PaddingValue
                 }
                 MarketOverviewScreen(state = state, padding = padding, health = health)
             }
-            MarketTab.STOCKS -> {
-                val symbol = selectedSymbol
-                if (symbol == null) {
-                    StockSearchPlaceholder(padding = padding, onSymbolChosen = { selectedSymbol = it })
-                } else {
-                    val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol) {
-                        value = repository.instrument(symbol)
-                    }
-                    StockDetailScreen(state = state, padding = padding, onBack = { selectedSymbol = null })
-                }
-            }
-            MarketTab.PREDICTIONS -> PredictionsScreen(repository = repository, padding = padding, onOpenSymbol = { selectedSymbol = it; tab = MarketTab.STOCKS })
-            MarketTab.IPOS -> IpoScreen(repository = repository, padding = padding)
+            // STOCKS and PREDICTIONS are wired to their real screens in Task 8; IPOS in Task 9.
+            // Placeholders here keep this task's build and tests green without a forward
+            // reference to composables those tasks haven't created yet.
+            MarketTab.STOCKS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+            MarketTab.PREDICTIONS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+            MarketTab.IPOS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
         }
     }
 }
@@ -1856,7 +1851,7 @@ Expected: PASS (5 tests).
 
 - [ ] **Step 5: Manually verify the tab**
 
-Run the debug build, confirm a 6th "Market" bottom tab appears, opens to Overview, and the internal Overview/Stocks/Predictions/IPOs `TabRow` switches without affecting the bottom bar or other tabs' state.
+Run the debug build, confirm a 6th "Market" bottom tab appears, opens to Overview with real data/states, and the internal `TabRow` switches to Stocks/Predictions/IPOs, each showing "Coming soon" until Tasks 8-9 wire them — without affecting the bottom bar or other tabs' state.
 
 - [ ] **Step 6: Commit**
 
@@ -1872,12 +1867,13 @@ git commit -m "feat(market): add Market tab shell and Overview screen"
 **Files:**
 - Create: `app/src/main/java/com/marksy/os/ui/StockDetailScreen.kt`
 - Create: `app/src/main/java/com/marksy/os/ui/PredictionsScreen.kt`
+- Modify: `app/src/main/java/com/marksy/os/ui/MarketScreen.kt` (wire `STOCKS`/`PREDICTIONS` branches, created as placeholders in Task 7)
 - Test: `app/src/test/java/com/marksy/os/ui/StockDetailScreenTest.kt`
 - Test: `app/src/test/java/com/marksy/os/ui/PredictionsScreenTest.kt`
 
 **Interfaces:**
-- Consumes: `MarketDataState<InstrumentLifecycleDto>`, `MarketIntelligenceRepository.activePredictions(cursor)` (Task 6).
-- Produces: `StockDetailScreen(state: MarketDataState<InstrumentLifecycleDto>, padding: PaddingValues, onBack: () -> Unit)`; `StockSearchPlaceholder(padding: PaddingValues, onSymbolChosen: (String) -> Unit)`; `PredictionsScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, onOpenSymbol: (String) -> Unit)`. Consumed by `MarketScreen` (Task 7).
+- Consumes: `MarketDataState<InstrumentLifecycleDto>`, `MarketIntelligenceRepository.activePredictions(cursor)`, `.instrument(symbol)` (Task 6); `MarketTab` enum, `MarketScreen`'s `tab`/`selectedSymbol` state (Task 7, same file).
+- Produces: `StockDetailScreen(state: MarketDataState<InstrumentLifecycleDto>, padding: PaddingValues, onBack: () -> Unit)`; `StockSearchPlaceholder(padding: PaddingValues, onSymbolChosen: (String) -> Unit)`; `PredictionsScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, onOpenSymbol: (String) -> Unit)`. Consumed by `MarketScreen` (this task wires them in; `IPOS` stays a placeholder for Task 9 to wire).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2159,11 +2155,43 @@ private fun PredictionRow(prediction: ActivePredictionDto, onOpenSymbol: (String
 Run: `./gradlew :app:testDebugUnitTest --tests "com.marksy.os.ui.StockDetailScreenTest" --tests "com.marksy.os.ui.PredictionsScreenTest"`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Wire these screens into `MarketScreen`**
+
+In `MarketScreen.kt`, replace the two placeholder lines from Task 7:
+
+```kotlin
+            MarketTab.STOCKS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+            MarketTab.PREDICTIONS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+```
+
+with:
+
+```kotlin
+            MarketTab.STOCKS -> {
+                val symbol = selectedSymbol
+                if (symbol == null) {
+                    StockSearchPlaceholder(padding = padding, onSymbolChosen = { selectedSymbol = it })
+                } else {
+                    val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol) {
+                        value = repository.instrument(symbol)
+                    }
+                    StockDetailScreen(state = state, padding = padding, onBack = { selectedSymbol = null })
+                }
+            }
+            MarketTab.PREDICTIONS -> PredictionsScreen(repository = repository, padding = padding, onOpenSymbol = { selectedSymbol = it; tab = MarketTab.STOCKS })
+```
+
+(`MarketTab.IPOS` stays the Task 7 placeholder — Task 9 wires it.) Run `./gradlew :app:compileDebugKotlin` to confirm the module still compiles; there is no new automated test for this wiring itself (`StockDetailScreenTest`/`PredictionsScreenTest` already cover the screens' own logic directly).
+
+- [ ] **Step 6: Manually verify the wiring**
+
+Run the debug build, open the Market tab, switch to Stocks, enter a symbol, confirm it loads (or shows Unavailable/Error honestly without a configured key), then switch to Predictions and confirm tapping a row opens that symbol's Stock detail.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add app/src/main/java/com/marksy/os/ui/StockDetailScreen.kt app/src/main/java/com/marksy/os/ui/PredictionsScreen.kt app/src/test/java/com/marksy/os/ui/StockDetailScreenTest.kt app/src/test/java/com/marksy/os/ui/PredictionsScreenTest.kt
-git commit -m "feat(market): add Stock detail and Predictions screens"
+git add app/src/main/java/com/marksy/os/ui/StockDetailScreen.kt app/src/main/java/com/marksy/os/ui/PredictionsScreen.kt app/src/main/java/com/marksy/os/ui/MarketScreen.kt app/src/test/java/com/marksy/os/ui/StockDetailScreenTest.kt app/src/test/java/com/marksy/os/ui/PredictionsScreenTest.kt
+git commit -m "feat(market): add Stock detail and Predictions screens, wire into Market tab"
 ```
 
 ---
@@ -2172,11 +2200,12 @@ git commit -m "feat(market): add Stock detail and Predictions screens"
 
 **Files:**
 - Create: `app/src/main/java/com/marksy/os/ui/IpoScreen.kt`
+- Modify: `app/src/main/java/com/marksy/os/ui/MarketScreen.kt` (wire the `IPOS` branch, the last placeholder from Task 7)
 - Test: `app/src/test/java/com/marksy/os/ui/IpoScreenTest.kt`
 
 **Interfaces:**
-- Consumes: `MarketIntelligenceRepository.ipos(stage, query)`, `.ipoStageCounts()` (Task 6).
-- Produces: `IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues)`, consumed by `MarketScreen` (Task 7).
+- Consumes: `MarketIntelligenceRepository.ipos(stage, query)`, `.ipoStageCounts()` (Task 6); `MarketTab` enum (Task 7, same file).
+- Produces: `IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues)`, consumed by `MarketScreen` (this task wires it in — the last of the three placeholders Task 7 left).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2349,16 +2378,32 @@ private fun IpoRow(ipo: IpoListItemDto) {
 Run: `./gradlew :app:testDebugUnitTest --tests "com.marksy.os.ui.IpoScreenTest"`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Full unit test suite + manual end-to-end verification**
+- [ ] **Step 5: Wire this screen into `MarketScreen`**
+
+In `MarketScreen.kt`, replace the last placeholder line from Task 7:
+
+```kotlin
+            MarketTab.IPOS -> Text("Coming soon", color = MarksyTheme.TextMuted, modifier = Modifier.padding(18.dp))
+```
+
+with:
+
+```kotlin
+            MarketTab.IPOS -> IpoScreen(repository = repository, padding = padding)
+```
+
+No placeholder branches remain in `MarketScreen.kt` after this step.
+
+- [ ] **Step 6: Full unit test suite + manual end-to-end verification**
 
 Run: `./gradlew :app:testDebugUnitTest`
 Expected: PASS (all tests, including Tasks 1-9's new tests and every pre-existing test unchanged).
 
 Manually: with a real `scopes=["marksy"]` API key minted via `POST /admin/clients` and entered in Gateway Settings, run the debug build against a live `marksy-api` deployment; confirm Overview/Stocks/Predictions/IPOs each render real data, and that removing the Market API key immediately drops every Market screen to its `Unavailable` state (not a crash, not stale data presented as live).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add app/src/main/java/com/marksy/os/ui/IpoScreen.kt app/src/test/java/com/marksy/os/ui/IpoScreenTest.kt
-git commit -m "feat(market): add IPO screen with server-sourced stage filters"
+git add app/src/main/java/com/marksy/os/ui/IpoScreen.kt app/src/main/java/com/marksy/os/ui/MarketScreen.kt app/src/test/java/com/marksy/os/ui/IpoScreenTest.kt
+git commit -m "feat(market): add IPO screen, wire into Market tab"
 ```
