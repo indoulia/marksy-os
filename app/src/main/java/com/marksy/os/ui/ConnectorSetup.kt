@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.connector.CalendarConnector
+import com.marksy.os.connector.ConnectorDisplay
+import com.marksy.os.connector.connectorDisplay
 import com.marksy.os.connector.ConnectorState
 import com.marksy.os.connector.ConnectorSyncWorker
 import com.marksy.os.connector.SyncConnectors
@@ -64,13 +66,16 @@ internal fun ConnectorSetupCard() {
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(c.descriptor.label, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                    val detail = when {
-                        state == ConnectorState.NOT_CONFIGURED -> "Not available yet: needs Google sign-in setup. Gmail still arrives via its notifications."
-                        !status.enabled -> c.descriptor.mechanism
-                        state == ConnectorState.NEEDS_PERMISSION -> "Permission was removed; reconnect to grant it again."
+                    val detail = when (connectorDisplay(state, status)) {
+                        ConnectorDisplay.NOT_CONFIGURED -> "Not available yet: needs Google sign-in setup. Gmail still arrives via its notifications."
+                        ConnectorDisplay.NOT_AVAILABLE -> "Not available on this device."
+                        ConnectorDisplay.DISABLED -> c.descriptor.mechanism
+                        ConnectorDisplay.PERMISSION_REQUIRED -> "Permission was removed; reconnect to grant it again."
+                        ConnectorDisplay.AUTH_REQUIRED -> "Sign-in expired or was revoked; reconnect the account."
                         else -> buildString {
                             append(status.lastSuccessAt?.let { "Last sync ${time.format(Date(it))} (+${status.lastAdded} new, ${status.lastUpdated} updated, ${status.lastRemoved} removed)" } ?: "Waiting for first sync")
                             status.lastError?.let { append(" · last problem: $it") }
+                            if (status.consecutiveFailures > 1) append(" (${status.consecutiveFailures} attempts)")
                         }
                     }
                     Text(detail, color = MarksyTheme.TextMuted, fontSize = 10.sp)

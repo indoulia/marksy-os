@@ -27,18 +27,26 @@ object SyncConnectors {
 /** Background sync so connectors keep working with no screen open and across process death. */
 class ConnectorSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val syncer = SyncConnectors.syncer(applicationContext)
-        // Each connector is isolated: one failing provider neither blocks nor rolls back the others.
-        val outcomes = SyncConnectors.all(applicationContext).map { c ->
-            runCatching { syncer.sync(c) }.getOrElse { e ->
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                ConnectorSyncer.Outcome.Failed(ConnectorException.Kind.TRANSIENT)
-            }
-        }
-        if (outcomes.any { it is ConnectorSyncer.Outcome.Failed && it.retryable } && runAttemptCount < MAX_RETRIES) Result.retry() else Result.success()
+        val outcomes = syncAll(SyncConnectors.syncer(applicationContext), SyncConnectors.all(applicationContext))
+        if (shouldRetry(outcomes, runAttemptCount)) Result.retry() else Result.success()
     }
 
     companion object {
+        private const val TAG = "MarksyConnector"
+
+        /** Each connector is isolated: one failing provider neither blocks nor rolls back the others. */
+        internal suspend fun syncAll(syncer: ConnectorSyncer, connectors: List<SyncConnector>): List<ConnectorSyncer.Outcome> = connectors.map { c ->
+            runCatching { syncer.sync(c) }.getOrElse { e ->
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                com.marksy.os.ai.DiagLog.w(TAG, "${runCatching { c.descriptor.id }.getOrDefault("?")}: unexpected ${e.javaClass.simpleName}")
+                ConnectorSyncer.Outcome.Failed(ConnectorException.Kind.TRANSIENT)
+            }
+        }
+
+        /** Only retryable failures (network/provider) retry, and only a bounded number of times; auth/permission wait for the user. */
+        internal fun shouldRetry(outcomes: List<ConnectorSyncer.Outcome>, attempt: Int) =
+            outcomes.any { it is ConnectorSyncer.Outcome.Failed && it.retryable } && attempt < MAX_RETRIES
+
         private const val PERIODIC = "marksy-connector-sync"
         private const val NOW = "marksy-connector-sync-now"
         private const val MAX_RETRIES = 3
