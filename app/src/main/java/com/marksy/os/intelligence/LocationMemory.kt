@@ -14,12 +14,17 @@ object LocationMemory {
     data class Place(val key: String, val label: String, val role: Role)
 
     fun extract(event: NotificationEventEntity): Place? {
-        val text = "${event.title}\n${event.body}"
-        // Chats are excluded: a "📍"/"location:" there is usually someone else's whereabouts.
-        // A marker value like "Location: Priya Sharma" is a person: require an address shape or a venue word.
-        if (event.category != "MESSAGES") MARKERS.firstNotNullOfOrNull { it.find(text)?.groupValues?.get(1) }?.let { v ->
-            return normalize(v)?.takeIf { it.role != Role.PLACE || v.contains(',') || VENUE.containsMatchIn(v) }
+        val pkg = event.sourcePackage.lowercase(Locale.ROOT)
+        // Chats are excluded by source, not only category: text there is usually someone else's whereabouts.
+        if (event.category == "MESSAGES" || CHAT_PACKAGES.any { it in pkg }) return null
+        // Calendar records teach only through their "Location:" field; a title like "Trip to Goa" is a plan, not a place.
+        val calendar = "calendar" in pkg
+        val text = if (calendar) event.body else "${event.title}\n${event.body}"
+        // A marker value like "Location: Priya Sharma" or "Sharma, Priya" is a person: require a venue word or an address shape.
+        MARKERS.firstNotNullOfOrNull { it.find(text)?.groupValues?.get(1) }?.let { v ->
+            return normalize(v)?.takeIf { it.role != Role.PLACE || VENUE.containsMatchIn(v) || (v.contains(',') && v.any(Char::isDigit)) }
         }
+        if (calendar) return null
         val phrase = (DELIVERY.takeIf { event.category == "DELIVERY" }?.find(text)?.groupValues?.get(1)
             ?: RIDE.find(text)?.groupValues?.get(1)
             ?: return null).split(PHRASE_END).first()
@@ -34,7 +39,9 @@ object LocationMemory {
         if (HOME.matches(lower)) return Place("home", "Home", Role.HOME)
         if (WORK.matches(lower)) return Place("work", "Work", Role.WORK)
         if (s.any { it.isDigit() }) {
-            val parts = s.split(',').map { it.replace(Regex("\\d+"), " ").replace(Regex("\\s+"), " ").trim() }.filter { it.length >= 3 }
+            // Digit-bearing tokens ("4B", "5th") go entirely, and unit-only parts ("Flat", "Tower") are never a locality.
+            val parts = s.split(',').map { p -> p.trim().split(' ').filterNot { w -> w.any(Char::isDigit) }.joinToString(" ").trim() }
+                .filter { p -> p.length >= 3 && !p.lowercase(Locale.ROOT).split(' ').all { it in UNIT_WORDS } }
             // A digit-bearing place with no comma parts is a bare street address: too precise to keep.
             if (!s.contains(',') || parts.isEmpty()) return null
             // "12 MG Road, Pune" keeps only the city; longer addresses keep locality and city.
@@ -60,5 +67,7 @@ object LocationMemory {
     private val HOME = Regex("^(?:home|house|residence)(?:\\s+(?:in|at|address)\\b.*|\\s*,.*)?$")
     private val WORK = Regex("^(?:work|office|workplace)(?:\\s+(?:in|at|address)\\b.*|\\s*,.*)?$")
     private val NOT_PLACES = setOf("you", "your", "door", "doorstep", "the door", "reception", "security", "today", "tomorrow", "tonight", "now", "soon", "online", "tbd", "none", "n a", "virtual", "zoom", "teams", "microsoft", "google", "meet", "meeting", "call", "link", "video", "webex")
+    private val UNIT_WORDS = setOf("flat", "floor", "tower", "room", "wing", "block", "apt", "apartment", "unit", "suite", "level", "plot", "no", "conference", "meeting", "desk", "gate")
+    private val CHAT_PACKAGES = listOf("whatsapp", "telegram", "securesms", "com.facebook.orca", "instagram", "snapchat", "discord", "com.slack", "com.microsoft.teams", "signal")
     private const val MAX_LABEL = 60
 }
