@@ -165,9 +165,15 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.PROMOTIONS, result.category)
     }
 
-    @Test fun paymentAppFallsBackToPayments() {
-        val result = NotificationClassifier.classify("com.phonepe.app", "PhonePe", "Your friend just joined")
-        assertEquals(NotificationClassifier.Category.PAYMENTS, result.category)
+    // Regression: PhonePe marketing (SIP, insurance, loans) ranked as PAYMENTS on Home; only transfers are payments.
+    @Test fun paymentAppMarketingIsPromotionsButTransfersStayPayments() {
+        fun cat(t: String, b: String) = NotificationClassifier.classify("com.phonepe.app", t, b).category
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Daily Mutual Fund SIP from ₹10", "Start now"))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Pay faster every time ⚡", "Save VISA card details on PhonePe & enjoy seamless checkouts"))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("PhonePe", "Your friend just joined"))
+        assertEquals(NotificationClassifier.Category.PAYMENTS, cat("Received ₹500", "Received ₹500 from Rahul"))
+        assertEquals(NotificationClassifier.Category.PAYMENTS, cat("Asha requested ₹250", "Tap to pay or decline"))
+        assertEquals(NotificationClassifier.Category.PAYMENTS, cat("Payment successful", "₹120 paid to Swiggy"))
     }
 
     @Test fun packageHintNeverOverridesAnExplicitTermSignal() {
