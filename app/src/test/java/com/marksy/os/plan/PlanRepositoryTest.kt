@@ -88,6 +88,22 @@ class PlanRepositoryTest {
         assertEquals(0, db.planItemDao().all().size)
     }
 
+    // Items captured by an older parser are re-derived: invalid ones go, stale ones are rebuilt.
+    @Test fun revalidateDropsItemsThatNoLongerParseAndRebuildsStaleOnes() = runBlocking {
+        val email = event(3, "Cultural Club", "The challenge is due on 24th September 2026.").copy(sourcePackage = "com.microsoft.office.outlook", sourceName = "Outlook")
+        val cred = event(5, "your bill is due on Oct 05, 2026", "pay your bill of ₹14,364.00 now").copy(sourcePackage = "com.dreamplug.androidapp", sourceName = "CRED")
+        fun stale(e: NotificationEventEntity, title: String) = PlanItemEntity(
+            kind = "BILL", title = title, counterparty = title, dueAt = now + 86_400_000, recurrence = "NONE", status = "TODO",
+            origin = "SMS", sourceEventId = e.id, dedupeKey = "sms|BILL|${title.lowercase()}|x", createdAt = 0, updatedAt = 0
+        )
+        val dao = db.planItemDao()
+        val old = listOf(dao.insert(stale(email, "Cultural Club bill")), dao.insert(stale(cred, "your bill is due on Oct 05, 2026 bill")))
+        repo.revalidate(mapOf(email.id to email, cred.id to cred)::get)
+        val items = dao.all()
+        assertEquals(listOf("CRED bill"), items.map { it.title })
+        assertTrue(old.all { it in cancelled })
+    }
+
     @Test fun contactBirthdayIsYearlyAndUpdatedInPlace() = runBlocking {
         repo.upsertBirthday("lookup-1", "Aisha", 3, 14)
         repo.upsertBirthday("lookup-1", "Aisha K", 3, 14)

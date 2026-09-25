@@ -23,11 +23,7 @@ class PlanRepository(
 
     /** A due found in a REMINDERS notification becomes (or refreshes) one item; a paid item stays paid. */
     suspend fun captureFromEvent(event: NotificationEventEntity): PlanItemEntity? {
-        if (event.category != "REMINDERS") return null
-        val notice = DueDateParser.parse(event.title, event.body, event.postedAt, zone) ?: return null
-        val day = Instant.ofEpochMilli(notice.dueAt).atZone(zone).toLocalDate()
-        val who = notice.counterparty?.lowercase()?.replace(Regex("\\s+"), " ") ?: notice.amountMinor?.toString() ?: "?"
-        val key = "sms|${notice.kind.name}|$who|$day"
+        val (notice, key) = noticeFor(event) ?: return null
         dao.byKey(key)?.let { existing ->
             if (existing.amountMinor == notice.amountMinor || notice.amountMinor == null) return existing
             return existing.copy(amountMinor = notice.amountMinor, updatedAt = clock()).also { dao.update(it) }
@@ -42,6 +38,28 @@ class PlanRepository(
     }
 
     suspend fun backfill(events: List<NotificationEventEntity>): Int = events.count { captureFromEvent(it) != null }
+
+    /** Re-derives open auto-captured items with today's parser: ones it rejects go, ones it reads differently are rebuilt. */
+    suspend fun revalidate(event: suspend (Long) -> NotificationEventEntity?) {
+        dao.all().filter { it.origin == PlanOrigin.SMS.name && it.status != PlanStatus.DONE.name }.forEach { item ->
+            val source = item.sourceEventId?.let { event(it) } ?: return@forEach
+            val key = noticeFor(source)?.second
+            if (key == item.dedupeKey) return@forEach
+            delete(item.id)
+            if (key != null) captureFromEvent(source)
+        }
+    }
+
+    private fun noticeFor(event: NotificationEventEntity): Pair<DueNotice, String>? {
+        if (event.category != "REMINDERS") return null
+        val parsed = DueDateParser.parse(event.title, event.body, event.postedAt, zone) ?: return null
+        // SMS apps (Truecaller, Messages) aren't the biller; other apps (CRED, a bank app) are.
+        val notice = if (parsed.counterparty != null || SMS_APPS.any { event.sourcePackage.contains(it) }) parsed
+            else parsed.copy(counterparty = event.sourceName.takeIf { it.isNotBlank() })
+        val day = Instant.ofEpochMilli(notice.dueAt).atZone(zone).toLocalDate()
+        val who = notice.counterparty?.lowercase()?.replace(Regex("\\s+"), " ") ?: notice.amountMinor?.toString() ?: "?"
+        return notice to "sms|${notice.kind.name}|$who|$day"
+    }
 
     suspend fun add(kind: PlanKind, title: String, counterparty: String?, amountMinor: Long?, dueAt: Long?, recurrence: Recurrence, status: PlanStatus = PlanStatus.TODO): Long {
         val now = clock()
@@ -124,6 +142,10 @@ class PlanRepository(
     private fun reschedule(item: PlanItemEntity) {
         alarms.cancel(item.id)
         if (item.status != PlanStatus.DONE.name && item.dueAt != null && item.origin != PlanOrigin.REMIND_ME.name) alarms.schedule(item)
+    }
+
+    private companion object {
+        val SMS_APPS = listOf("truecaller", "messaging", "mms", "sms")
     }
 
     private fun titleFor(kind: PlanKind, counterparty: String?): String = when (kind) {

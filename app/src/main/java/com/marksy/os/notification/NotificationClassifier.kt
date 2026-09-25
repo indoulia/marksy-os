@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 6
+    const val VERSION = 7
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -115,6 +115,7 @@ object NotificationClassifier {
 
     // Market-news apps: not brokers, but their alerts belong with the market, not in OTHER.
     private val marketPackages = setOf("com.divum.moneycontrol")
+    private const val EMAIL_PRIORITY_CEILING = 50
     private val BROKER_UTILITY = setOf(Category.DELIVERY, Category.BANKING, Category.PAYMENTS, Category.BILLS)
     private val paymentAppTransferTerms = listOf("received ₹", "received rs", "sent ₹", "paid ₹", "paid to", "requested", "refund", "cashback received")
     private val callChannels = listOf("messaging", "mms", "sms", "whatsapp", "telegram")
@@ -165,11 +166,15 @@ object NotificationClassifier {
         val rule = rules.firstOrNull { candidate ->
             candidate.category != Category.TRADING && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
         }
+        val hinted = packageHints.firstOrNull { (token, _) -> normalizedPackage.contains(token) }?.second
+        // In a mail app, weak words ("reminder", "meeting") describe the email; dues, money and promos still win.
+        if (rule != null && hinted == Category.EMAIL && rule.priority <= EMAIL_PRIORITY_CEILING && rule.category != Category.PROMOTIONS) {
+            return Result(Category.EMAIL, 48, .82f)
+        }
         if (rule != null) return Result(rule.category, rule.priority, rule.confidence)
 
         // Fallback: infer from the source app when the text alone was inconclusive.
         // Modest priority/confidence marks it as a weaker, package-only inference.
-        val hinted = packageHints.firstOrNull { (token, _) -> normalizedPackage.contains(token) }?.second
         // Payment apps mostly push marketing (SIPs, loans, insurance); only money movement is a payment.
         if (hinted == Category.PAYMENTS && paymentAppTransferTerms.none { notificationText.containsRuleTerm(it) }) {
             return Result(Category.PROMOTIONS, 20, .70f)

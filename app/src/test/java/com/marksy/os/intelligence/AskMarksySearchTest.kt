@@ -86,6 +86,18 @@ class AskMarksySearchTest {
         assertEquals(listOf(chat.id), ask(store, "messages from Rahul on WhatsApp").derivedFromEventIds)
     }
 
+    // Seen on device: Teams titles are "Chat: Person" and hidden Outlook mails are titled "Outlook".
+    @Test
+    fun sendersAreThePersonNotTheChatOrTheAppItself() {
+        val store = Store(listOf(
+            event("WORK", "NPM795 SU: David Shpil", "please review", now - hour, "com.microsoft.teams"),
+            event("WORK", "Design sync: David Shpil", "joining", now - 2 * hour, "com.microsoft.teams"),
+            event("WORK", "Prashant Verma", "ok", now - 3 * hour, "com.microsoft.teams"),
+            event("WORK", "teams", "Sensitive notification content hidden", now - hour, "com.microsoft.teams")
+        ))
+        assertEquals("4 Teams notifications today. Most from David Shpil (2), Prashant Verma (1).", ask(store, "What came on Teams today?").headline)
+    }
+
     @Test
     fun sitemapNavigatesToPagesAndTabs() {
         fun nav(text: String) = ask(Store(), text).also { assertEquals(text, Intent.NAVIGATE, it.query.intent) }.action!!

@@ -376,10 +376,16 @@ object AskMarksy {
                 }
                 val noun = channel?.noun ?: "notification"
                 val about = query.subject?.let { " about \"$it\"" }.orEmpty()
-                // Per channel the sender is the title; across all apps the app itself is the sender.
-                val senders = rows.groupingBy { if (channel == null) it.sourceName else it.title.ifBlank { it.sourceName } }.eachCount()
-                    .entries.sortedByDescending { it.value }.take(3)
-                val from = if (senders.size == 1) " From ${senders[0].key}." else " Most from " + senders.joinToString { "${it.key} (${it.value})" } + "."
+                // Per channel the sender is the title's person ("Chat: Person"); across all apps it's the app.
+                // A title that is just the app's name (content hidden by Android) names no sender.
+                val senders = rows.mapNotNull { e ->
+                    if (channel == null) e.sourceName else e.title.substringAfterLast(": ").trim().takeUnless { it.isBlank() || it.equals(e.sourceName, ignoreCase = true) }
+                }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(3)
+                val from = when (senders.size) {
+                    0 -> ""
+                    1 -> " From ${senders[0].key}."
+                    else -> " Most from " + senders.joinToString { "${it.key} (${it.value})" } + "."
+                }
                 build(query, rows, interpretedBy,
                     headline = if (rows.isEmpty()) "No ${plural(noun, 0)}$about ${over(r)}." else "${rows.size} ${plural(noun, rows.size)}$about ${over(r)}.$from",
                     detail = { e -> e.body.take(PREVIEW) }, followUps = listOf("Yesterday", "This week", "Last week"))

@@ -5,6 +5,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NotificationClassifierTest {
+    // Seen on device: 18 Outlook emails were REMINDERS/WORK because they said "reminder" or "meeting".
+    @Test fun mailAppWordsLikeReminderOrMeetingStayEmailButDuesAndPromosDoNot() {
+        fun cat(t: String, b: String) = NotificationClassifier.classify("com.microsoft.office.outlook", t, b).category
+        assertEquals(NotificationClassifier.Category.EMAIL, cat("MySpace", "Timesheet update reminder for September 23,2026"))
+        assertEquals(NotificationClassifier.Category.EMAIL, cat("Josh Mau", "Meeting moved to 3pm, join on Teams"))
+        assertEquals(NotificationClassifier.Category.REMINDERS, cat("HDFC Bank", "Your card bill of Rs 4,210 is due on 5 Oct"))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Myntra", "Flat 50% off, sale ends tonight"))
+    }
+
     @Test fun tradingNotificationIsTrading() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Order Executed", "BUY 10 RELIANCE")
         assertEquals(NotificationClassifier.Category.TRADING, result.category)

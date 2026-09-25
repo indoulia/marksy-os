@@ -152,6 +152,8 @@ fun AskMarksyScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            // The bottom bar's padding sits under the keyboard; without this it's added on top as a black gap.
+            .consumeWindowInsets(padding)
             .imePadding()
     ) {
         LazyColumn(
