@@ -9,6 +9,8 @@ import com.google.mlkit.genai.prompt.generateContentRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -44,6 +46,8 @@ class GeminiNanoModel(
     @Volatile private var lastError: String? = null
     private val calls = AtomicInteger()
     private val failures = AtomicInteger()
+    // Serialises user-initiated download/warm-up so concurrent taps cannot start two downloads or warm-ups.
+    private val prepareLock = Mutex()
 
     override val info: ModelInfo
         get() = ModelInfo(ID, modelName ?: "unknown", setOf(AiTask.INTERPRET_QUERY), onDevice = true, runtime = backend.runtimeVersion)
@@ -71,10 +75,11 @@ class GeminiNanoModel(
             ModelState.FAILED
         }
         checkedAt = clock()
+        DiagLog.i(TAG, "availability: $state")
         return state
     }
 
-    override suspend fun prepare(): ModelState {
+    override suspend fun prepare(): ModelState = prepareLock.withLock {
         if (state == ModelState.UNKNOWN || state == ModelState.FAILED) { checkedAt = null; refresh() }
         try {
             if (state == ModelState.NOT_INSTALLED) {
@@ -88,14 +93,16 @@ class GeminiNanoModel(
                 val start = clock()
                 withContext(Dispatchers.Default) { backend.warmup() }
                 initMs = clock() - start
+                DiagLog.i(TAG, "warmup ok initMs=$initMs")
             }
         } catch (e: Exception) {
             if (e is CancellationException) { if (state == ModelState.DOWNLOADING) state = ModelState.UNKNOWN; throw e }
             failed(e)
             state = ModelState.FAILED
             checkedAt = clock()
+            DiagLog.w(TAG, "prepare failed: ${e.javaClass.simpleName}")
         }
-        return state
+        state
     }
 
     override suspend fun generate(prompt: String, task: AiTask): String {
@@ -110,6 +117,7 @@ class GeminiNanoModel(
             if (e is CancellationException) throw e
             lastLatencyMs = clock() - start
             failed(e)
+            DiagLog.w(TAG, "inference failed: ${e.javaClass.simpleName}")
             checkedAt = null // the runtime may have dropped the model; re-probe on the next refresh
             throw e
         }
@@ -135,6 +143,7 @@ class GeminiNanoModel(
     companion object {
         const val ID = "gemini-nano-aicore"
         const val STATUS_TTL_MS = 60_000L
+        private const val TAG = "MarksyAi"
 
         /** Small models often wrap JSON in prose or fences; the schema validator then decides. */
         fun firstJsonObject(text: String?): String? {

@@ -55,11 +55,14 @@ class MemoryRepository(
         while (true) {
             val events = eventDao.findProcessedAfterId(settings.watermark, batch)
             if (events.isEmpty()) break
-            events.flatMap { e -> PersonalMemory.observe(e, EventNormalizer.factsFromJson(e.intelligenceJson)) }
+            // A cross-source duplicate is the same real-world event; learning from it would double-count evidence.
+            val learned = events.filter { it.duplicateOfId == null }.flatMap { e -> PersonalMemory.observe(e, EventNormalizer.factsFromJson(e.intelligenceJson)) }
                 .groupBy { it.kind to it.key }
-                .forEach { (k, obs) ->
-                    PersonalMemory.fold(dao.find(k.first.name, k.second), obs, enabled, now, zone())?.let { dao.upsert(it) }
+                .count { (k, obs) ->
+                    PersonalMemory.fold(dao.find(k.first.name, k.second), obs, enabled, now, zone())?.let { dao.upsert(it) } != null
                 }
+            // Counts only: memory keys/labels are personal data.
+            com.marksy.os.ai.DiagLog.i("MarksyMemory", "ingest events=${events.size} upserts=$learned")
             settings.watermark = events.maxOf { it.id }
             processed += events.size
             if (events.size < batch) break

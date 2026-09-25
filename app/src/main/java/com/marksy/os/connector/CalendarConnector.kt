@@ -69,8 +69,9 @@ class CalendarConnector(
         // Only instances still inside the window count as deleted; ones that slid out of it simply age out.
         // A truncated result says nothing about instances after the last one returned.
         val horizon = if (all.size >= MAX_INSTANCES) all.maxOf { it.begin } else Long.MAX_VALUE
-        val removed = previous.keys.filter { it !in current && (beginOf(it) ?: 0L).let { b -> b >= from && b <= horizon } }
-        val kept = previous.filterKeys { it !in current && (beginOf(it) ?: 0L) > horizon }.mapValues { (_, v) -> "${v.first}|${v.second}" }
+        // An instance starting exactly at the horizon may have been cut by the cap too, so it is kept, not deleted.
+        val removed = previous.keys.filter { it !in current && (beginOf(it) ?: 0L).let { b -> b >= from && b < horizon } }
+        val kept = previous.filterKeys { it !in current && (beginOf(it) ?: 0L) >= horizon }.mapValues { (_, v) -> "${v.first}|${v.second}" }
         return SyncBatch(upserts, removed, JSONObject((seen + kept) as Map<*, *>).toString())
     }
 

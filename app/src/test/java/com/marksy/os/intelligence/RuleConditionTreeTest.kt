@@ -149,6 +149,33 @@ class RuleConditionTreeTest {
     }
 
     @Test
+    fun malformedPersistedEntriesOnlyAffectThemselvesAndActionsSurviveRecreation() {
+        val deep = (1..RuleEngine.MAX_DEPTH + 2).fold("""{"field":"TEXT","cmp":"CONTAINS","value":"x"}""") { acc, _ -> """{"op":"NOT","child":$acc}""" }
+        val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("marksy_rules", 0)
+        prefs.edit().putString("rules_v1", """[
+            null, "garbage", 42,
+            {"id":"deep","name":"Deep","condition":$deep},
+            {"id":"badfield","name":"Bad field","condition":{"field":"GPS","cmp":"EQ","value":"x"}},
+            {"id":"notgrp","name":"Not group","action":"ARCHIVE","condition":{"op":"NOT","child":{"op":"OR","children":[
+                {"field":"CATEGORY","cmp":"EQ","value":"PROMOTIONS"},{"field":"TEXT","cmp":"CONTAINS","value":"sale"}]}}}
+        ]""").commit()
+        // A fresh store instance models process recreation / config reload.
+        val loaded = RuleStore(RuntimeEnvironment.getApplication()).load()
+        assertEquals(listOf("deep", "badfield", "notgrp"), loaded.map { it.id })
+        assertFalse(loaded.first { it.id == "deep" }.enabled)
+        assertFalse(loaded.first { it.id == "badfield" }.enabled)
+        val notGroup = loaded.first { it.id == "notgrp" }
+        assertTrue(notGroup.enabled)
+        assertEquals(RuleEngine.Action.ARCHIVE, notGroup.action)
+        assertTrue(RuleEngine.matches(notGroup, event("a", "hello", "PAYMENTS")))
+        assertFalse(RuleEngine.matches(notGroup, event("a", "hello", "PROMOTIONS")))
+        // The editor shows NOT-around-group as a negated OR group and saves it back unchanged.
+        val root = T.root(notGroup.condition)
+        assertTrue(T.isNegated(T.nodeAt(root, listOf(0))!!) && T.isAny(T.nodeAt(root, listOf(0))!!))
+        assertEquals(notGroup.condition, T.toSaved(root))
+    }
+
+    @Test
     fun storeDisablesARuleWhoseConditionIsCorruptInsteadOfMatchingEverything() {
         val prefs = RuntimeEnvironment.getApplication().getSharedPreferences("marksy_rules", 0)
         prefs.edit().putString("rules_v1", """[

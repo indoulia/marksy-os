@@ -117,7 +117,8 @@ class IntelligenceService(
     private val sink: AiInvocationSink = AiInvocationSink { },
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    private val minConfidence: Double = DEFAULT_MIN_CONFIDENCE
+    private val minConfidence: Double = DEFAULT_MIN_CONFIDENCE,
+    private val refreshTimeoutMs: Long = REFRESH_TIMEOUT_MS
 ) {
     data class Outcome<T>(val value: T, val usedModel: ModelInfo?, val invocation: AiInvocation)
 
@@ -133,9 +134,10 @@ class IntelligenceService(
     suspend fun refresh(): List<Pair<ModelInfo, ModelState>> {
         models.forEach { m ->
             try {
-                withTimeoutOrNull(REFRESH_TIMEOUT_MS) { m.refresh() }
+                withTimeoutOrNull(refreshTimeoutMs) { m.refresh() } ?: DiagLog.w(TAG, "refresh timeout: ${m.info.id}")
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                DiagLog.w(TAG, "refresh failed: ${m.info.id} ${e.javaClass.simpleName}")
             }
         }
         return status()
@@ -182,6 +184,7 @@ class IntelligenceService(
     }
 
     private suspend fun <T> done(value: T, model: ModelInfo?, inv: AiInvocation): Outcome<T> {
+        if (inv.outcome != AiInvocation.Outcome.OK) DiagLog.i(TAG, "${inv.templateId}: ${inv.outcome} model=${inv.modelId} latencyMs=${inv.latencyMs}; fallback used")
         runCatching { sink.record(inv) }
         return Outcome(value, model, inv)
     }
@@ -194,5 +197,6 @@ class IntelligenceService(
         const val DEFAULT_TIMEOUT_MS = 3_000L
         const val DEFAULT_MIN_CONFIDENCE = 0.6
         const val REFRESH_TIMEOUT_MS = 2_000L
+        private const val TAG = "MarksyAi"
     }
 }

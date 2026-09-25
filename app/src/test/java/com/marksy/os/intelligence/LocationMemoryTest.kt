@@ -97,6 +97,70 @@ class LocationMemoryTest {
     }
 
     @Test
+    fun learnsNothingWithoutAMeaningfulLocationRelationship() {
+        val cal = "com.android.providers.calendar"
+        // Chat text, even when its wording classifies it as work/delivery or it has no "MESSAGES" category.
+        assertNull(LocationMemory.extract(e("WORK", "Rahul", "meeting here 📍 Koregaon Park, Pune", "com.whatsapp")))
+        assertNull(LocationMemory.extract(e("DELIVERY", "Rahul", "parcel delivered to Baner, Pune", "com.whatsapp")))
+        assertNull(LocationMemory.extract(e("OTHER", "Amit", "book a cab to Viman Nagar, Pune", "org.telegram.messenger")))
+        assertNull(LocationMemory.extract(e("OTHER", "Priya", "Priya at 📍 Phoenix Mall", "com.instagram.android")))
+        // Calendar: title alone, organiser and attendee names never become places.
+        assertNull(LocationMemory.extract(e("WORK", "Trip to Goa, India", "Mon 1 Jan, 10:00–11:00", cal)))
+        assertNull(LocationMemory.extract(e("WORK", "Sync", "10:00–11:00\nOrganizer: Priya Sharma\nAttendees: Rahul Verma, Priya Sharma", cal)))
+        assertNull(LocationMemory.extract(e("WORK", "1:1", "10:00–11:00\nLocation: Sharma, Priya", cal)))
+        assertNull(LocationMemory.extract(e("WORK", "1:1", "10:00–11:00\nLocation: Rahul Verma", cal)))
+        // Unrelated street/address text and plain notifications without a place relationship.
+        assertNull(LocationMemory.extract(e("PROMOTIONS", "Sale", "Visit our new store at 12 MG Road, Pune", "com.shop")))
+        assertNull(LocationMemory.extract(e("EMAIL", "Newsletter", "Office hours are changing next week", "com.google.android.gm")))
+        assertNull(LocationMemory.extract(e("OTHER", "Priya Sharma", "Priya Sharma", "com.contacts")))
+        // Malformed content never throws.
+        assertNull(LocationMemory.extract(e("DELIVERY", "", "")))
+        assertNull(LocationMemory.extract(e("DELIVERY", "Delivered", "Delivered to ,,, ")))
+        assertNull(LocationMemory.extract(e("REMINDERS", "x", "Location: \n📍")))
+    }
+
+    @Test
+    fun calendarLocationFieldIsTheOnlyCalendarSignalAndUnitFragmentsNeverBecomeLabels() {
+        val cal = "com.android.providers.calendar"
+        assertEquals("WeWork Baner", LocationMemory.extract(e("WORK", "Review", "10:00–11:00\nLocation: WeWork Baner", cal))?.label)
+        assertEquals(Role.WORK, LocationMemory.extract(e("WORK", "Review", "10:00–11:00\nLocation: Office", cal))?.role)
+        assertNull(LocationMemory.normalize("Conference Room 4B, 5th Floor"))
+        assertNull(LocationMemory.normalize("Flat 402, Tower 3"))
+        assertEquals("Baner, Pune", LocationMemory.normalize("Flat 402, Tower 3, Baner, Pune 411045")?.label)
+        // Stored labels never keep a digit (house/flat/PIN numbers).
+        listOf("Delivered to 7 Rose Villa, Aundh, Pune 411007", "Delivered to B-12, Sector 5, Noida").forEach { body ->
+            LocationMemory.extract(e("DELIVERY", "Delivered", body))?.let { assertFalse(body, it.label.any(Char::isDigit)) }
+        }
+    }
+
+    @Test
+    fun crossSourceDuplicatesAreNotCountedAsExtraEvidence() = runBlocking {
+        val first = capture("DELIVERY", "Delivered", "Your order was delivered to your office", t0)
+        db.notificationEventDao().insert(
+            e("DELIVERY", "Delivered", "Your order was delivered to your office", "com.amazon.mShop.android.shopping")
+                .copy(postedAt = t0 + 1000, duplicateOfId = first, intelligenceVersion = 1)
+        )
+        now = t0 + day
+        repo.ingest()
+        assertEquals(1, place("work")!!.observations)
+    }
+
+    @Test
+    fun newEventsOnlyAndStateSurvivesARecreatedRepository() = runBlocking {
+        capture("DELIVERY", "Delivered", "Your order was delivered to Home", t0)
+        now = t0 + day
+        repo.ingest()
+        // Same DB, fresh repository (process recreation): already-seen events are not re-counted.
+        val recreated = MemoryRepository(db.memoryDao(), db.notificationEventDao(), db.learningDao(), settings, { now }, { ZoneOffset.UTC })
+        recreated.ingest()
+        assertEquals(1, place("home")!!.observations)
+        capture("DELIVERY", "Delivered", "Your order was delivered to Home", t0 + 2 * day)
+        now = t0 + 3 * day
+        recreated.ingest()
+        assertEquals(2, place("home")!!.observations)
+    }
+
+    @Test
     fun repeatedObservationsAccumulateConfidenceWithProvenanceAndNoDuplicates() = runBlocking {
         val ids = (0..2).map { d -> capture("DELIVERY", "Delivered", "Your order was delivered to Home", t0 + d * day) }
         capture("OTHER", "Uber", "Your ride to home is arriving", t0 + 3 * day, "com.ubercab")

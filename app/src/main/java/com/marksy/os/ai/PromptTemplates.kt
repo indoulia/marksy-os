@@ -45,7 +45,10 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
     override suspend fun interpret(text: String, previous: AskMarksy.Query?, nowMillis: Long, zone: ZoneId): AskMarksy.Query? {
         if (service.available(AiTask.INTERPRET_QUERY) == null) {
             service.refresh()
-            if (service.available(AiTask.INTERPRET_QUERY) == null) return null
+            if (service.available(AiTask.INTERPRET_QUERY) == null) {
+                DiagLog.i(TAG, "interpret: no local model; deterministic fallback")
+                return null
+            }
         }
         val outcome = service.run(
             PromptTemplates.ASK_INTERPRET,
@@ -53,7 +56,15 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
             parse = { o -> toQuery(o, text, previous, nowMillis, zone) },
             fallback = { null }
         )
-        return outcome.value
+        val q = outcome.value
+        // Keyword-backed wording is explicit user intent; a model that contradicts it is not trusted.
+        val deterministic = AskMarksy.parse(text, previous, nowMillis, zone).intent
+        if (q != null && deterministic != AskMarksy.Intent.SEARCH && deterministic != q.intent) {
+            DiagLog.i(TAG, "interpret: model intent ${q.intent} contradicts $deterministic; deterministic fallback")
+            return null
+        }
+        DiagLog.i(TAG, "interpret: outcome=${outcome.invocation.outcome} latencyMs=${outcome.invocation.latencyMs} intent=${q?.intent}")
+        return q
     }
 
     internal fun toQuery(o: JSONObject, text: String, previous: AskMarksy.Query?, nowMillis: Long, zone: ZoneId): AskMarksy.Query {
@@ -68,10 +79,21 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
         val direction = o.optString("direction").takeIf { it.isNotBlank() && o.has("direction") && !o.isNull("direction") }
             ?.let { EventExtractor.Direction.valueOf(it) }
         // A subject the user never typed is dropped: it could only narrow results, but it would misreport what was searched.
+        val typed = text.lowercase().split(Regex("[^\\p{L}\\p{N}&'.-]+")).filter { it.isNotBlank() }.toSet()
         val subject = if (o.has("subject") && !o.isNull("subject")) o.getString("subject").trim().lowercase().take(60).ifBlank { null }
-            ?.takeIf { s -> s.split(' ').all { w -> text.contains(w, ignoreCase = true) } } else null
-        return base.copy(intent = intent, subject = subject ?: base.subject, direction = direction ?: base.direction, rawText = text)
+            ?.takeIf { s -> s.split(Regex("\\s+")).all { w -> w in typed } } else null
+        // Same for the window: a range the user typed explicitly always beats the model's choice.
+        val range = AskMarksy.explicitRange(text, nowMillis, zone) ?: base.range
+        // A model that omits the merchant/person the user typed must not silently widen the answer.
+        val typedQuery = AskMarksy.parse(text, previous, nowMillis, zone).takeIf { it.intent == intent }
+        return base.copy(
+            intent = intent, range = range, rawText = text,
+            subject = subject ?: typedQuery?.subject ?: base.subject,
+            direction = typedQuery?.direction ?: direction ?: base.direction
+        )
     }
+
+    private companion object { const val TAG = "MarksyAsk" }
 
     private fun intentHint(i: AskMarksy.Intent) = when (i) {
         AskMarksy.Intent.PAYMENTS -> "payments"

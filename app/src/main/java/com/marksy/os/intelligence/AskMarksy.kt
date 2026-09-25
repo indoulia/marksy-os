@@ -66,8 +66,11 @@ object AskMarksy {
     // ---------------------------------------------------------------- parsing
 
     fun parse(text: String, previous: Query?, nowMillis: Long, zone: ZoneId): Query {
-        val t = text.lowercase(Locale.ROOT).replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
-        val explicitRange = rangeFor(t, nowMillis, zone)
+        val normalized = normalize(text)
+        val span = DATE_SPAN.find(normalized)
+        // The date span is removed so "from 1 sep to 15 sep" is never read as a counterparty or person.
+        val t = span?.let { normalized.removeRange(it.range).replace(Regex("\\s+"), " ").trim() } ?: normalized
+        val explicitRange = span?.let { dateSpan(it, nowMillis, zone) } ?: rangeFor(t, nowMillis, zone)
         val person = personFor(t)
         val source = SOURCES.entries.firstOrNull { (k, _) -> t.containsWord(k) }?.value
 
@@ -99,13 +102,40 @@ object AskMarksy {
             else -> null
         }
         val subject = when (intent) {
-            Intent.PAYMENTS -> counterpartyFor(t) ?: if (inherit) previous!!.subject else null
+            Intent.PAYMENTS -> counterpartyFor(t) ?: residualSubject(t) ?: if (inherit) previous!!.subject else null
             Intent.FROM_PERSON -> person ?: if (inherit) previous!!.subject else null
             Intent.SOURCE -> source
             Intent.SEARCH -> searchTerm(t)
             else -> null
         }
         return Query(intent, explicitRange ?: if (inherit) previous!!.range else defaultRange, subject, direction, text.trim())
+    }
+
+    /** A time window the user stated explicitly; an interpreter must not override it. */
+    fun explicitRange(text: String, nowMillis: Long, zone: ZoneId): TimeRange? {
+        val t = normalize(text)
+        return DATE_SPAN.find(t)?.let { dateSpan(it, nowMillis, zone) } ?: rangeFor(t, nowMillis, zone)
+    }
+
+    private fun normalize(text: String) = text.lowercase(Locale.ROOT).replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** "between 1 september and 15 september": inclusive days; a year-less span is the most recent one not in the future. */
+    private fun dateSpan(m: MatchResult, now: Long, zone: ZoneId): TimeRange? {
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val g = m.groupValues
+        // DATE_RX groups per date: day-first day, day-first month, month-first month, month-first day, year.
+        fun date(i: Int, defaultYear: Int): LocalDate? {
+            val mon = MONTHS[(g[i + 1].ifBlank { g[i + 2] }).take(3)] ?: return null
+            val d = g[i].ifBlank { g[i + 3] }.toIntOrNull() ?: return null
+            return runCatching { LocalDate.of(g[i + 4].toIntOrNull() ?: defaultYear, mon, d) }.getOrNull()
+        }
+        val fromYear = g[5].toIntOrNull()
+        var from = date(1, today.year) ?: return null
+        var to = date(6, fromYear ?: today.year) ?: return null
+        if (fromYear == null && g[10].isBlank() && from.isAfter(today)) { from = from.minusYears(1); to = to.minusYears(1) }
+        if (to.isBefore(from)) to = to.plusYears(1)
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+        return TimeRange(start(from, zone), start(to.plusDays(1), zone), "${from.format(fmt)} – ${to.format(fmt)}")
     }
 
     private fun rangeFor(t: String, now: Long, zone: ZoneId): TimeRange? {
@@ -153,9 +183,14 @@ object AskMarksy {
     /** "payments to amazon last month" -> "amazon": the counterparty is a filter over retrieved rows, never a fact. */
     private fun counterpartyFor(t: String): String? {
         val m = Regex("\\b(?:to|at|from|with)\\s+([a-z0-9][a-z0-9&.'-]*(?:\\s+[a-z0-9][a-z0-9&.'-]*){0,2})").find(t) ?: return null
-        val words = m.groupValues[1].split(' ').takeWhile { it !in COUNTERPARTY_STOP }
+        val words = m.groupValues[1].split(' ').dropWhile { it in ARTICLES }.takeWhile { it !in COUNTERPARTY_STOP }
         return words.joinToString(" ").trim().ifBlank { null }?.takeUnless { it in setOf("me", "my", "i", "us") }
     }
+
+    /** "show my amazon transactions" -> "amazon": leftover words after removing question and payment vocabulary. */
+    private fun residualSubject(t: String): String? =
+        t.split(' ').filterNot { it in STOP_WORDS || it in PAYMENT_WORDS || it in COUNTERPARTY_STOP || it.length < 3 || it.any(Char::isDigit) }
+            .takeIf { it.size in 1..3 }?.joinToString(" ")
 
     private fun searchTerm(t: String): String? =
         t.split(' ').filterNot { it in STOP_WORDS || it.length < 3 }.joinToString(" ").ifBlank { null }
@@ -343,6 +378,13 @@ object AskMarksy {
     private val SOURCES = linkedMapOf("whatsapp" to "whatsapp", "gmail" to "gm", "email" to "mail", "emails" to "mail", "sms" to "messaging", "telegram" to "telegram", "slack" to "slack", "teams" to "teams")
     private val NOT_PEOPLE = setOf("me", "you", "them", "work", "bank", "the bank", "amazon", "whatsapp", "email")
     private val COUNTERPARTY_STOP = setOf("last", "this", "today", "yesterday", "tomorrow", "week", "month", "in", "on", "for", "during", "since", "and", "or")
+    private val PAYMENT_WORDS = setOf("payment", "payments", "paid", "pay", "spent", "spend", "spending", "debited", "credited", "received", "transaction",
+        "transactions", "money", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
+    private val ARTICLES = setOf("a", "an", "the")
+    private val MONTHS = mapOf("jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12)
+    private const val MONTH_RX = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    private const val DATE_RX = "(?:(\\d{1,2})(?:st|nd|rd|th)?(?: of)? $MONTH_RX|$MONTH_RX (\\d{1,2})(?:st|nd|rd|th)?)(?: (\\d{4}))?"
+    private val DATE_SPAN = Regex("\\b(?:between|from) $DATE_RX (?:and|to|until|till|-) $DATE_RX\\b")
     private const val MAX_CLARIFY = 4
     private val rangeWords = listOf("today", "yesterday", "tomorrow", "week", "month")
     private val STOP_WORDS = setOf("what", "whats", "show", "find", "tell", "about", "the", "and", "any", "did", "does", "for", "from", "with", "this", "that", "last", "week", "today", "yesterday", "month", "have", "has", "was", "are", "were", "get", "got", "all", "my", "me", "your", "how", "when", "where", "who", "which")

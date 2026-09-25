@@ -14,7 +14,8 @@ class RuleStore(context: Context) {
             val json = JSONArray(raw)
             buildList {
                 for (index in 0 until minOf(json.length(), MAX_RULES)) {
-                    val item = json.getJSONObject(index)
+                    // One malformed entry must not make every user rule fall back to defaults (and be overwritten on next save).
+                    val item = json.optJSONObject(index) ?: continue
                     val name = item.optString("name").trim().take(MAX_NAME)
                     if (name.isBlank()) continue
                     val action = runCatching {
@@ -25,6 +26,7 @@ class RuleStore(context: Context) {
                     val corrupt = conditionJson != null && parsed == null
                     // A corrupt tree keeps the rule visible but disabled and never-matching (empty OR), instead of matching everything or vanishing.
                     val condition = if (corrupt) RuleEngine.Condition.AnyOf(emptyList()) else parsed
+                    if (corrupt) com.marksy.os.ai.DiagLog.w("MarksyRules", "rule #$index disabled: unreadable condition")
                     add(
                         RuleEngine.Rule(
                             id = item.optString("id").trim().take(MAX_ID).ifBlank { "rule-$index" },

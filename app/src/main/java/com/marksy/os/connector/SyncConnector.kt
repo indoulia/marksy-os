@@ -1,6 +1,7 @@
 package com.marksy.os.connector
 
 import android.content.Context
+import com.marksy.os.ai.DiagLog
 import org.json.JSONObject
 
 /**
@@ -50,6 +51,23 @@ data class SyncStatus(
     val lastUpdated: Int = 0,
     val lastRemoved: Int = 0
 )
+
+/** What the connector UI shows. There is no live in-progress tracking, so no SYNCING value is claimed. */
+enum class ConnectorDisplay { NOT_CONFIGURED, NOT_AVAILABLE, DISABLED, PERMISSION_REQUIRED, AUTH_REQUIRED, ERROR, WAITING_FIRST_SYNC, ACTIVE }
+
+fun connectorDisplay(state: ConnectorState, status: SyncStatus): ConnectorDisplay {
+    val failing = status.consecutiveFailures > 0
+    return when {
+        state == ConnectorState.NOT_CONFIGURED -> ConnectorDisplay.NOT_CONFIGURED
+        state == ConnectorState.NOT_AVAILABLE -> ConnectorDisplay.NOT_AVAILABLE
+        !status.enabled -> ConnectorDisplay.DISABLED
+        state == ConnectorState.NEEDS_PERMISSION || (failing && status.lastError == ConnectorException.Kind.PERMISSION.name) -> ConnectorDisplay.PERMISSION_REQUIRED
+        failing && status.lastError == ConnectorException.Kind.AUTH.name -> ConnectorDisplay.AUTH_REQUIRED
+        failing -> ConnectorDisplay.ERROR
+        status.lastSuccessAt == null -> ConnectorDisplay.WAITING_FIRST_SYNC
+        else -> ConnectorDisplay.ACTIVE
+    }
+}
 
 interface SyncStore {
     fun load(connectorId: String): SyncStatus
@@ -101,14 +119,17 @@ class ConnectorSyncer(
         val now = clock()
         val state = runCatching { connector.state() }.getOrDefault(ConnectorState.NOT_AVAILABLE)
         if (state != ConnectorState.ACTIVE) {
+            DiagLog.i(TAG, "$id: skipped, state=$state")
             store.save(status.copy(lastAttemptAt = now, lastError = state.name))
             return Outcome.Skipped(state)
         }
+        DiagLog.i(TAG, "$id: sync start, incremental=${status.cursor != null}")
         val batch = try {
             connector.sync(status.cursor)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             val kind = (e as? ConnectorException)?.kind ?: if (e is SecurityException) ConnectorException.Kind.PERMISSION else ConnectorException.Kind.TRANSIENT
+            DiagLog.w(TAG, "$id: sync failed kind=$kind retryable=${kind.retryable} consecutive=${status.consecutiveFailures + 1}")
             store.save(status.copy(lastAttemptAt = now, lastError = kind.name, consecutiveFailures = status.consecutiveFailures + 1))
             runCatching { pipeline.syncFailed(id, kind.name) }
             return Outcome.Failed(kind)
@@ -126,6 +147,7 @@ class ConnectorSyncer(
             }
         }
         if (failed > 0) {
+            DiagLog.w(TAG, "$id: $failed record(s) failed to store; cursor kept")
             // Keep the old cursor so the failed records are fetched again; re-ingesting the rest is a no-op (source-key dedup).
             store.save(status.copy(lastAttemptAt = now, lastError = "$failed record(s) failed to store", consecutiveFailures = status.consecutiveFailures + 1))
             return Outcome.Failed(ConnectorException.Kind.TRANSIENT)
@@ -138,6 +160,7 @@ class ConnectorSyncer(
                 consecutiveFailures = 0, lastAdded = added, lastUpdated = updated, lastRemoved = removed
             )
         )
+        DiagLog.i(TAG, "$id: sync ok added=$added updated=$updated removed=$removed unchanged=$unchanged rejected=$rejected")
         return Outcome.Synced(added, updated, removed, unchanged, rejected)
     }
 
@@ -150,6 +173,7 @@ class ConnectorSyncer(
     fun status(connectorId: String) = store.load(connectorId)
 
     companion object {
+        private const val TAG = "MarksyConnector"
         fun key(connectorId: String, sourceKey: String) = "$connectorId:$sourceKey"
         private const val MAX_TITLE = 200
         private const val MAX_BODY = 2_000
