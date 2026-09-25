@@ -58,7 +58,7 @@ data class MarksyTipPayload(
 object MarksyTipPayloadBuilder {
     fun from(request: MarksyTradingEventRequest): MarksyTipPayload? {
         val text = "${request.title} ${request.body}"
-        val symbol = extractSymbol(text) ?: return null
+        val symbol = extractSymbol(request.title, request.body, text) ?: return null
         val direction = when {
             Regex("\\bBUY\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "BUY"
             Regex("\\bSELL\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "SELL"
@@ -89,10 +89,12 @@ object MarksyTipPayloadBuilder {
         )
     }
 
-    private fun extractSymbol(text: String): String? {
+    private fun extractSymbol(title: String, body: String, text: String): String? {
         val labelled = Regex("(?i)(?:symbol|scrip|ticker|stock)\\s*[:=-]?\\s*([A-Z][A-Z0-9.-]{2,14})")
             .find(text)?.groupValues?.getOrNull(1)
         if (!labelled.isNullOrBlank()) return labelled.uppercase()
+        // A parsed call names the instrument after the side; the first caps word is often the SMS sender.
+        com.marksy.os.notification.TradeCallParser.parse(title, body)?.let { return it.symbol }
 
         // Do not guess a ticker from arbitrary ALL-CAPS notification prose.
         // An unlabelled symbol is accepted only when strong trade context exists.

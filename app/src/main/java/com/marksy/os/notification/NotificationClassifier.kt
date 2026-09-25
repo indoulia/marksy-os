@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 3
+    const val VERSION = 4
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -115,7 +115,9 @@ object NotificationClassifier {
     private val callChannels = listOf("messaging", "mms", "sms", "whatsapp", "telegram")
     private val brokerPromoTerms = listOf(
         "apply now", "click to apply", "pre apply", "pre-apply", "discover", "new on", "offer", "discount", "cashback",
-        "refer", "invite", "open account", "open an account", "limited time", "sale", "coupon", "zero brokerage", "download"
+        "refer", "invite", "open account", "open an account", "limited time", "sale", "coupon", "zero brokerage", "download",
+        "join free", "join now", "webinar", "masterclass", "enroll", "enrol", "register now", "ask the expert",
+        "check your portfolio", "beating nifty", "beating the nifty"
     )
 
     // Broker tip/call shorthand: "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26", "SELL X @ 120 target 110 stoploss 125".

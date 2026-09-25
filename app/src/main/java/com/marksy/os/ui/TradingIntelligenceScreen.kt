@@ -34,11 +34,10 @@ fun TradingIntelligenceScreen(
     insights: List<TradingInsight>,
     padding: PaddingValues,
     market: MarketState = MarketState.Loading,
-    marketEvents: List<com.marksy.os.data.local.NotificationEventEntity> = emptyList(),
-    onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
+    selectedFilter: String = TradingFilters.first(),
+    onFilterSelected: (String) -> Unit = {},
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
-    var selectedFilter by remember { mutableStateOf(TAB_PICKS) }
     val snapshot = (market as? MarketState.Loaded)?.snapshot
     // Marksy supplies what to show (picks, movers, targets); prices tick live from the user's Upstox feed.
     // External calls (broker apps, SMS, chat) parsed into side / symbol / levels, shown immediately.
@@ -60,18 +59,8 @@ fun TradingIntelligenceScreen(
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
+            contentPadding = PaddingValues(top = 10.dp, bottom = OneHandListBottomPadding)
         ) {
-            // Part of the list so it scrolls away with the content.
-            item(key = "filter-header") {
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(selectedFilter, color = MarksyTheme.TextMuted, fontSize = 12.sp)
-                }
-            }
             when (selectedFilter) {
                 TAB_PICKS -> {
                     val picks = snapshot?.opportunities.orEmpty()
@@ -118,10 +107,6 @@ fun TradingIntelligenceScreen(
                         }
                     }
                 }
-                TAB_MARKET -> {
-                    if (marketEvents.isEmpty()) item { EmptyState("No market updates yet.", "Holdings alerts, research views, IPO notices and market moves from your broker and market apps appear here.") }
-                    items(marketEvents, key = { "mkt-${it.id}" }) { event -> MarketUpdateCard(event) { onEventSelected(event) } }
-                }
                 else -> {
                     val others = insights.filterNot { it.eventId in callIds }
                     if (others.isEmpty()) {
@@ -141,19 +126,19 @@ fun TradingIntelligenceScreen(
         }
     }
     OneHandControls(
-        filters = listOf(TAB_PICKS, TAB_CALLS, TAB_MARKET, TAB_CAPTURED).map { it to it },
+        filters = TradingFilters.map { it to it },
         selectedFilter = selectedFilter,
-        onFilterSelected = { selectedFilter = it }
+        onFilterSelected = onFilterSelected
     )
     }
 }
 
 private const val TAB_PICKS = "Marksy picks"
 private const val TAB_CALLS = "Calls"
-private const val TAB_MARKET = "Market"
 private const val TAB_CAPTURED = "Captured"
+val TradingFilters = listOf(TAB_PICKS, TAB_CALLS, TAB_CAPTURED)
 
-private fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
+internal fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
     if (postedAt <= 0) return null
     val minutes = (now - postedAt) / 60_000
     return when {
@@ -161,24 +146,6 @@ private fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis())
         minutes < 60 -> "${minutes}m ago"
         minutes < 24 * 60 -> "${minutes / 60}h ago"
         else -> "${minutes / (24 * 60)}d ago"
-    }
-}
-
-@Composable
-private fun MarketUpdateCard(event: com.marksy.os.data.local.NotificationEventEntity, onClick: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).clickable(onClick = onClick)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(event.sourceName, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                relativeTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
-            }
-            Text(event.title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-        }
     }
 }
 

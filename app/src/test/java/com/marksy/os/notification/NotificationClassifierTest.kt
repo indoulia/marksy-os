@@ -48,6 +48,17 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.PROMOTIONS, NotificationClassifier.classify("com.icicidirect.idirectsuper", "IPOs of Moneyview Ltd. & A-One Steels", "Click to apply now!").category)
     }
 
+    // Regression: Moneycontrol course and portfolio-checker ads landed in MARKET.
+    @Test fun marketAppCourseAndUpsellAdsArePromotions() {
+        fun cat(t: String, b: String) = NotificationClassifier.classify("com.divum.MoneyControl", t, b).category
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Popular Demand Brings Vishal Malkan Back", "Join FREE. Master swing trading in two hours."))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Is your portfolio beating NIFTY 50?", "Check your portfolio's performance in under a minute"))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Are you actually beating the NIFTY50?", "See where yours stands in seconds."))
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Ask The Expert is live!", "SEBI Reg. expert is here to answer your stock questions!"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("Live Trades", "New Options Recommendation with Profit Potential Rs.6522.75 by Dhaval Vyas has been posted. Know Details!"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("Chart Patterns", "New Horizontal Resistance formed! Check out the stock and pattern details and get real-time updates."))
+    }
+
     // Calls also arrive by SMS and chat; a parsed call (side + symbol + levels) from those apps is TRADING.
     @Test fun smsAndChatCallsAreTrading() {
         val sms = "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"
