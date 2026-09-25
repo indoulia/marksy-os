@@ -279,6 +279,14 @@ class MainActivity : ComponentActivity() {
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
         val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox || showAsk
+        // Loading Gemma takes seconds; start when Ask opens so the first question isn't the one that waits.
+        LaunchedEffect(showAsk) {
+            val gemma = com.marksy.os.ai.MediaPipeGemmaBackend.ID
+            if (showAsk) runCatching {
+                val ai = MarksyContainer.intelligence(applicationContext)
+                if (ai.refresh().any { (info, state) -> info.id == gemma && state == com.marksy.os.ai.ModelState.READY }) ai.prepare(gemma)
+            }
+        }
         LaunchedEffect(openPlanRequest) { if (openPlanRequest) { showAsk = false; selectedTab = 2; planView = com.marksy.os.ui.PlanViews.first(); openPlanRequest = false } }
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {

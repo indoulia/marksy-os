@@ -35,7 +35,9 @@ interface PromptBackend {
 class GeminiNanoModel(
     private val backend: PromptBackend,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val statusTtlMs: Long = STATUS_TTL_MS
+    private val statusTtlMs: Long = STATUS_TTL_MS,
+    // The lifecycle is runtime-agnostic, so other on-device backends (Gemma via MediaPipe) reuse it under their own id.
+    private val id: String = ID
 ) : LocalModel {
     @Volatile private var state = ModelState.UNKNOWN
     @Volatile private var checkedAt: Long? = null
@@ -50,7 +52,7 @@ class GeminiNanoModel(
     private val prepareLock = Mutex()
 
     override val info: ModelInfo
-        get() = ModelInfo(ID, modelName ?: "unknown", setOf(AiTask.INTERPRET_QUERY), onDevice = true, runtime = backend.runtimeVersion)
+        get() = ModelInfo(id, modelName ?: "unknown", setOf(AiTask.INTERPRET_QUERY), onDevice = true, runtime = backend.runtimeVersion)
 
     override fun state(): ModelState = state
 

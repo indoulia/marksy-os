@@ -138,7 +138,7 @@ class GeminiNanoModelTest {
     @Test
     fun registryShipsTheOnDeviceAdapterOnly() {
         val installed = AiModelRegistry.installed()
-        assertEquals(listOf(GeminiNanoModel.ID), installed.map { it.info.id })
+        assertEquals(listOf(GeminiNanoModel.ID, MediaPipeGemmaBackend.ID), installed.map { it.info.id })
         assertTrue(installed.all { it.info.onDevice })
     }
 }

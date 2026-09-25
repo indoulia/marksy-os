@@ -102,9 +102,26 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
     var status by remember { mutableStateOf(initial) }
     var diagnostics by remember { mutableStateOf(service.diagnostics().toMap()) }
     var busy by remember { mutableStateOf(false) }
+    var importNote by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(service) {
         status = service.refresh()
         diagnostics = service.diagnostics().toMap()
+    }
+    // Gemma isn't managed by the OS: the user picks the Kaggle download (.tar.gz or .task) and Marksy copies the model in.
+    val importGemma = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        scope.launch {
+            val result = com.marksy.os.ai.GemmaModelFile.import(context, uri) { bytes -> importNote = "Importing… ${bytes / (1024 * 1024)} MB" }
+            importNote = result.fold({ "Model imported. Loading…" }, { it.message ?: "Import failed" })
+            if (result.isSuccess) {
+                service.prepare(com.marksy.os.ai.MediaPipeGemmaBackend.ID)
+                importNote = null
+            }
+            status = service.refresh()
+            diagnostics = service.diagnostics().toMap()
+            busy = false
+        }
     }
     Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         Text("On-device AI", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -121,7 +138,13 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
                 )
                 Text(parts.joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 10.sp)
             }
-            if (state == ModelState.NOT_INSTALLED || state == ModelState.READY || state == ModelState.FAILED) {
+            val isGemma = info.id == com.marksy.os.ai.MediaPipeGemmaBackend.ID
+            if (isGemma && (state == ModelState.NOT_INSTALLED || state == ModelState.FAILED)) {
+                TextButton(enabled = !busy, onClick = { importGemma.launch(arrayOf("*/*")) }) {
+                    Text("Import Gemma model file (Kaggle .tar.gz or .task)", fontSize = 11.sp)
+                }
+                importNote?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+            } else if (state == ModelState.NOT_INSTALLED || state == ModelState.READY || state == ModelState.FAILED) {
                 TextButton(enabled = !busy, onClick = {
                     busy = true
                     scope.launch {

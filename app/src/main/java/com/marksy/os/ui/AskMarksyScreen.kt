@@ -110,8 +110,8 @@ fun AskMarksyScreen(
         val index = conversation.lastIndex
         scope.launch {
             // Routed: the model's interpretation (not the keyword parse) decides whether the grounded engine answers.
-            val result = if (routed != null) runCatching { routed(clean, previous, GROUNDED_INTENTS) }.getOrNull()
-            else runCatching { grounded!!(clean, previous) }.getOrNull()
+            val result = (if (routed != null) runCatching { routed(clean, previous, GROUNDED_INTENTS) } else runCatching { grounded!!(clean, previous) })
+                .onFailure { com.marksy.os.ai.DiagLog.w("MarksyAsk", "grounded answer failed: ${it.javaClass.name}") }.getOrNull()
             val exchange = if (result == null) {
                 // Grounded retrieval failed: fall back to the local engine rather than show nothing.
                 AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))

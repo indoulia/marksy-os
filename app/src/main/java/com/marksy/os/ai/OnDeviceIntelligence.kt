@@ -57,7 +57,8 @@ data class PromptTemplate(val id: String, val version: Int, val task: AiTask, va
         PLACEHOLDER.replace(text) { m -> values[m.groupValues[1]]?.let(::sanitize) ?: "" }
 
     private companion object {
-        val PLACEHOLDER = Regex("\\{\\{(\\w+)}}")
+        // Closing braces escaped: Android's ICU regex rejects a bare "}" that the JVM (and so unit tests) accepts.
+        val PLACEHOLDER = Regex("\\{\\{(\\w+)\\}\\}")
         // Prompt-injection hygiene: user/notification text cannot close the template's delimiters.
         fun sanitize(v: String) = v.replace("{{", "").replace("}}", "").replace("\"\"\"", "\"").take(2000)
     }
@@ -66,7 +67,11 @@ data class PromptTemplate(val id: String, val version: Int, val task: AiTask, va
 /** Minimal JSON schema: required typed fields, optional enums and numeric bounds. */
 data class JsonSchema(val fields: Map<String, FieldSpec>) {
     enum class Type { STRING, NUMBER, BOOLEAN, STRING_ARRAY }
-    data class FieldSpec(val type: Type, val required: Boolean = true, val enum: Set<String>? = null, val min: Double? = null, val max: Double? = null)
+    data class FieldSpec(
+        val type: Type, val required: Boolean = true, val enum: Set<String>? = null, val min: Double? = null, val max: Double? = null,
+        /** Small models slip on case and spelling ("bills_due", "BILLS_DEDU"): accept the clearly nearest enum value. */
+        val lenient: Boolean = false
+    )
 
     /** Returns the parsed object or a list of violations. */
     fun validate(raw: String): Result<JSONObject> {
@@ -74,13 +79,21 @@ data class JsonSchema(val fields: Map<String, FieldSpec>) {
             .getOrElse { return Result.failure(IllegalArgumentException("not a JSON object")) }
         val errors = mutableListOf<String>()
         fields.forEach { (name, spec) ->
-            if (!o.has(name) || o.isNull(name)) {
+            // Small models write an absent optional value as the string "null" or "none".
+            val saysNothing = !spec.required && (o.opt(name) as? String)?.trim()?.lowercase() in setOf("null", "none", "")
+            if (!o.has(name) || o.isNull(name) || saysNothing) {
                 if (spec.required) errors += "$name missing"
                 return@forEach
             }
             val v = o.get(name)
             when (spec.type) {
-                Type.STRING -> if (v !is String) errors += "$name not string" else if (spec.enum != null && v !in spec.enum) errors += "$name not allowed"
+                Type.STRING -> if (v !is String) errors += "$name not string"
+                    else if (spec.enum != null && v !in spec.enum) {
+                        // Nearest value, only if clearly nearest and within a third of its length (min 2 edits).
+                        val ranked = if (spec.lenient) spec.enum.map { it to distance(it.uppercase(), v.trim().uppercase()) }.sortedBy { it.second } else emptyList()
+                        val best = ranked.firstOrNull()?.takeIf { (e, d) -> d <= maxOf(2, e.length / 3) && ranked.getOrNull(1)?.second != d }
+                        if (best != null) o.put(name, best.first) else errors += "$name not allowed"
+                    }
                 Type.NUMBER -> {
                     val d = (v as? Number)?.toDouble()
                     if (d == null) errors += "$name not number"
@@ -91,6 +104,16 @@ data class JsonSchema(val fields: Map<String, FieldSpec>) {
             }
         }
         return if (errors.isEmpty()) Result.success(o) else Result.failure(IllegalArgumentException(errors.joinToString()))
+    }
+
+    private fun distance(a: String, b: String): Int {
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1).also { it[0] = i }
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
+        }
+        return prev[b.length]
     }
 }
 
@@ -176,7 +199,11 @@ class IntelligenceService(
             return done(fallback(), null, record(AiInvocation.Outcome.ERROR))
         } ?: return done(fallback(), null, record(AiInvocation.Outcome.TIMEOUT))
 
-        val obj = template.schema.validate(raw).getOrElse { return done(fallback(), null, record(AiInvocation.Outcome.INVALID_OUTPUT)) }
+        val obj = template.schema.validate(raw).getOrElse { err ->
+            // Field names and rule only ("intent not allowed"); never the model's text.
+            DiagLog.i(TAG, "${template.id}: schema violations: ${err.message}")
+            return done(fallback(), null, record(AiInvocation.Outcome.INVALID_OUTPUT))
+        }
         val confidence = obj.optDouble("confidence", Double.NaN).takeIf { !it.isNaN() }
         if (confidence == null || confidence < minConfidence) return done(fallback(), null, record(AiInvocation.Outcome.LOW_CONFIDENCE, confidence))
         val value = runCatching { parse(obj) }.getOrNull() ?: return done(fallback(), null, record(AiInvocation.Outcome.INVALID_OUTPUT, confidence))

@@ -65,6 +65,8 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     // EPIC-019: Gemini Nano through Android AICore; runs on-device, no model file ships in the APK.
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
+    // Gemma on devices without AICore; the user imports the model file, nothing ships in the APK.
+    implementation("com.google.mediapipe:tasks-genai:0.10.35")
     // Upstox market-data WebSocket (the platform has no WebSocket client).
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
