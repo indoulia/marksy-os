@@ -15,14 +15,38 @@ data class IpoValueDto(val state: String, val value: Any?, val asOf: String?) {
     }
 }
 
-data class IpoTermsDto(val priceBand: IpoValueDto?, val lotSize: IpoValueDto?, val issueSizeCrore: IpoValueDto?) {
+/** Short text for a fact: "₹120–126" for a band, "29 Sep" for a date, the number or text otherwise. */
+fun IpoValueDto?.display(prefix: String = ""): String? {
+    val v = this?.value ?: return null
+    fun n(x: Any?) = (x as? Number)?.let(IpoDetailFormatter::number)
+    return when (v) {
+        is Number -> prefix + n(v)
+        is String -> runCatching { java.time.LocalDate.parse(v).format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH)) }.getOrDefault(v)
+        is JSONObject -> {
+            val bounds = listOf("min" to "max", "low" to "high", "lower" to "upper", "from" to "to").firstOrNull { (a, b) -> v.opt(a) is Number && v.opt(b) is Number }
+            bounds?.let { (a, b) -> "$prefix${n(v.opt(a))}–${n(v.opt(b))}" } ?: v.keys().asSequence().mapNotNull { k -> n(v.opt(k)) ?: v.optString(k).takeIf { it.isNotBlank() } }.joinToString(" / ").ifBlank { null }
+        }
+        is JSONArray -> (0 until v.length()).joinToString(", ") { v.opt(it).toString() }.ifBlank { null }
+        else -> v.toString()
+    }
+}
+
+data class IpoTermsDto(
+    val priceBand: IpoValueDto?, val lotSize: IpoValueDto?, val issueSizeCrore: IpoValueDto?,
+    val minInvestment: IpoValueDto? = null, val freshIssueCrore: IpoValueDto? = null, val offerForSaleCrore: IpoValueDto? = null,
+    val exchanges: IpoValueDto? = null
+) {
     companion object {
         fun parse(json: JSONObject?): IpoTermsDto? {
             if (json == null) return null
             return IpoTermsDto(
                 priceBand = IpoValueDto.parse(json.optJSONObject("priceBand")),
                 lotSize = IpoValueDto.parse(json.optJSONObject("lotSize")),
-                issueSizeCrore = IpoValueDto.parse(json.optJSONObject("issueSizeCrore"))
+                issueSizeCrore = IpoValueDto.parse(json.optJSONObject("issueSizeCrore")),
+                minInvestment = IpoValueDto.parse(json.optJSONObject("minInvestment")),
+                freshIssueCrore = IpoValueDto.parse(json.optJSONObject("freshIssueCrore")),
+                offerForSaleCrore = IpoValueDto.parse(json.optJSONObject("offerForSaleCrore")),
+                exchanges = IpoValueDto.parse(json.optJSONObject("exchanges"))
             )
         }
     }
@@ -38,10 +62,12 @@ data class IpoListItemDto(
     val opensOn: IpoValueDto?,
     val closesOn: IpoValueDto?,
     val listsOn: IpoValueDto?,
-    val terms: IpoTermsDto?
+    val terms: IpoTermsDto?,
+    val raw: JSONObject? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = IpoListItemDto(
+            raw = json,
             id = json.textOrNull("id") ?: "",
             companyName = json.textOrNull("companyName") ?: "",
             issueName = json.textOrNull("issueName"),
@@ -66,22 +92,25 @@ data class IpoRiskRunDto(val status: String, val ranAt: String?, val findingsCou
     }
 }
 
-data class IpoDetailDto(val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?) {
+/** [raw] keeps every section the backend sends (anchor book, peers, analyst views…) for the detail page. */
+data class IpoDetailDto(val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?, val raw: JSONObject? = null) {
     companion object {
         fun parse(json: JSONObject) = IpoDetailDto(
             summary = IpoListItemDto.parse(json.optJSONObject("summary") ?: JSONObject()),
             riskEngineRan = json.boolOrFalse("riskEngineRan"),
-            riskRun = IpoRiskRunDto.parse(json.optJSONObject("riskRun"))
+            riskRun = IpoRiskRunDto.parse(json.optJSONObject("riskRun")),
+            raw = json
         )
     }
 }
 
-data class IpoHistoryEntryDto(val predictedAt: String, val decision: String?, val expectedReturnPercent: IpoValueDto?) {
+data class IpoHistoryEntryDto(val predictedAt: String, val decision: String?, val expectedReturnPercent: IpoValueDto?, val raw: JSONObject? = null) {
     companion object {
         fun parse(json: JSONObject) = IpoHistoryEntryDto(
             predictedAt = json.textOrNull("predictedAt") ?: "",
             decision = json.textOrNull("decision"),
-            expectedReturnPercent = IpoValueDto.parse(json.optJSONObject("expectedReturnPercent"))
+            expectedReturnPercent = IpoValueDto.parse(json.optJSONObject("expectedReturnPercent")),
+            raw = json
         )
         fun parseList(array: JSONArray?) = array.objects().map(::parse)
     }

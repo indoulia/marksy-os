@@ -27,6 +27,8 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     suspend fun ipoDetail(id: String): MarketDataState<IpoDetailDto> = fetch { it.ipoDetail(id) }
 
+    suspend fun ipoHistory(id: String): MarketDataState<List<IpoHistoryEntryDto>> = fetch { it.ipoHistory(id) }
+
     /** The Overview freshness footer's source. `Stale` here means the feed's own reported
      * `feedState`/`fallbackActive` say it is degraded — never a client-invented age threshold. */
     suspend fun liveFeedHealth(): MarketDataState<LiveFeedHealthDto> {

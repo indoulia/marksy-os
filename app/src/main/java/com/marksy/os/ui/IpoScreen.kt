@@ -24,6 +24,7 @@ import com.marksy.os.EmptyState
 import com.marksy.os.market.IpoListItemDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
+import com.marksy.os.market.display
 
 /** What a user acts on first: open issues, then ones closing soon, then upcoming, then history. */
 private fun stageRank(stage: String): Int {
@@ -43,6 +44,12 @@ private fun stageLabel(stage: String) = stage.lowercase().replace('_', ' ').repl
 @Composable
 fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) {
     var selectedStage by rememberSaveable { mutableStateOf<String?>(null) }
+    var opened by remember { mutableStateOf<IpoListItemDto?>(null) }
+    opened?.let { ipo ->
+        androidx.activity.compose.BackHandler { opened = null }
+        IpoDetailScreen(repository, ipo, padding)
+        return
+    }
 
     val refresh = rememberRefreshState()
     val countsState by produceState(MarketDataState.Loading as MarketDataState<com.marksy.os.market.IpoStageCountsDto>, refresh.key) {
@@ -84,8 +91,8 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) 
                 is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
                 is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                 is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues match this filter right now.") }
-                is MarketDataState.Loaded -> items(s.value) { ipo -> IpoRow(ipo) }
-                is MarketDataState.Stale -> items(s.value) { ipo -> IpoRow(ipo) }
+                is MarketDataState.Loaded -> items(s.value) { ipo -> IpoRow(ipo) { opened = ipo } }
+                is MarketDataState.Stale -> items(s.value) { ipo -> IpoRow(ipo) { opened = ipo } }
             }
         }
         }
@@ -93,10 +100,11 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) 
 }
 
 @Composable
-private fun IpoRow(ipo: IpoListItemDto) {
+private fun IpoRow(ipo: IpoListItemDto, onClick: () -> Unit = {}) {
     val isOpen = ipo.stage?.contains("open", ignoreCase = true) == true
     val stageTint = if (isOpen) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted
     Card(
+        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth().border(1.dp, if (isOpen) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
@@ -109,6 +117,12 @@ private fun IpoRow(ipo: IpoListItemDto) {
             Column(Modifier.weight(1f)) {
                 Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 ipo.sector?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
+                // Enough to decide whether to open it: when, what price, how much per lot.
+                val facts = listOfNotNull(
+                    ipo.opensOn.display()?.let { o -> ipo.closesOn.display()?.let { "$o – $it" } ?: "Opens $o" },
+                    ipo.terms?.priceBand.display("₹"), ipo.terms?.lotSize.display()?.let { "Lot $it" }, if (ipo.isSme) "SME" else null
+                )
+                if (facts.isNotEmpty()) Text(facts.joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 11.sp)
             }
             Text(
                 (ipo.stage ?: "Unknown").uppercase(),
