@@ -30,7 +30,7 @@ Diagnostics record the model name, runtime, warm-up ms, last latency, calls, fai
 
 Calls run on `Dispatchers.Default` with a 5 s timeout, then fall back to deterministic interpretation. Prompt content stays on-device. ML Kit itself may send anonymous usage telemetry (no prompt text) to Google. `allowExternal` is still `false`.
 
-Not verified on hardware. The only test device (OnePlus 12R, Android 16) has no AICore package, so Nano reports NOT_AVAILABLE there. Devices without AICore need a second runtime registered in `AiModelRegistry`, for example LiteRT-LM or MediaPipe with a user-supplied Gemma file.
+The OnePlus 12R (Android 16) has no AICore, so Nano reports NOT_AVAILABLE there. `AiModelRegistry` also registers Gemma 3 1B (int4) through MediaPipe LLM Inference: the user imports Kaggle's `.tar.gz` (or the `.task`) from What Marksy learned → On-device AI. It warms up when Ask opens and interprets in about 1.1–1.5 s on the 12R. `GemmaInterpretEval` (androidTest, run with `am instrument`, never `connectedAndroidTest`) scores it on device; a model intent for wording the rules can't read must be supported by words in the question (`AskMarksy.plausible`).
 
 ## Ask Marksy (EPIC-016)
 
@@ -115,8 +115,8 @@ No notification text goes into logs, metrics, `ai_invocations`, `connector_event
 
 ## Known gaps
 
-- Gemini Nano has not been tested on real hardware, because no AICore device is available. Every current test device uses the deterministic path.
+- Gemini Nano has not been tested on real hardware, because no AICore device is available. Gemma (MediaPipe) is the on-device model on the 12R.
 - Gmail API sync is implemented but stays inactive until an OAuth token provider exists. SMS is notification-only.
 - The Calendar connector and place learning have only unit and Robolectric tests. Neither has run on a device yet.
-- About 60 small metric writes per captured notification. This works, but they could be batched.
+- Metric counters for one capture are batched into a single transaction (`MetricsRecorder.batch`).
 - The old `DailyDigestScreen`/`DailyDigestModel` are no longer routed. The briefing replaces them.

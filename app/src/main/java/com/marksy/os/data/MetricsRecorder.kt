@@ -1,6 +1,12 @@
 package com.marksy.os.data
 
+import com.marksy.os.data.local.MetricCounterEntity
 import com.marksy.os.data.local.MetricsDao
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -36,13 +42,38 @@ class MetricsRecorder(
 
     /** Increments [metric] for "all" and each extra scope; metrics must never break the caller. */
     suspend fun count(metric: String, vararg scopes: String, delta: Long = 1, at: Long = clock()) {
+        val d = day(at)
+        val rows = (listOf(SCOPE_ALL) + scopes.filter { it.isNotBlank() }).distinct().map { MetricCounterEntity(d, it, metric, delta) }
+        val pending = currentCoroutineContext()[Pending]
+        if (pending != null) { pending.add(rows); return }
+        write(rows)
+    }
+
+    /** Holds every count made inside [block] and writes the merged totals in one transaction, even if [block] fails. */
+    suspend fun <T> batch(block: suspend () -> T): T {
+        if (currentCoroutineContext()[Pending] != null) return block()
+        val pending = Pending()
         try {
-            val d = day(at)
-            dao.increment(d, SCOPE_ALL, metric, delta)
-            scopes.filter { it.isNotBlank() }.distinct().forEach { dao.increment(d, it, metric, delta) }
+            return withContext(pending) { block() }
+        } finally {
+            withContext(NonCancellable) { write(pending.drain()) }
+        }
+    }
+
+    private suspend fun write(rows: List<MetricCounterEntity>) {
+        if (rows.isEmpty()) return
+        try {
+            dao.incrementAll(rows)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
         }
+    }
+
+    private class Pending : AbstractCoroutineContextElement(Pending) {
+        companion object Key : CoroutineContext.Key<Pending>
+        private val totals = LinkedHashMap<Triple<String, String, String>, Long>()
+        @Synchronized fun add(rows: List<MetricCounterEntity>) = rows.forEach { r -> totals.merge(Triple(r.day, r.scope, r.metric), r.value, Long::plus) }
+        @Synchronized fun drain() = totals.map { (k, v) -> MetricCounterEntity(k.first, k.second, k.third, v) }.also { totals.clear() }
     }
 
     suspend fun range(from: LocalDate, to: LocalDate) = dao.range(from.toString(), to.toString())
