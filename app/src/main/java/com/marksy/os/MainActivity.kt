@@ -621,6 +621,7 @@ class MainActivity : ComponentActivity() {
                     onSymbolSelected = { marketSymbol = it; stockQuery = it ?: "" },
                     stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
+                    stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
                     onEventSelected = openEvent
                 )
                 else -> MoreScreen(
