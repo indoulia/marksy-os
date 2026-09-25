@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,45 +25,69 @@ import com.marksy.os.market.IpoListItemDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 
-private fun List<IpoListItemDto>.openedFirst(): List<IpoListItemDto> =
-    sortedByDescending { it.stage?.contains("open", ignoreCase = true) == true }
+/** What a user acts on first: open issues, then ones closing soon, then upcoming, then history. */
+private fun stageRank(stage: String): Int {
+    val s = stage.uppercase()
+    return when {
+        s.contains("CLOS") && (s.contains("SOON") || s.contains("TODAY")) -> 1
+        s == "OPEN" || s.startsWith("OPEN") -> 0
+        s.contains("UPCOMING") || s.contains("ANNOUNC") -> 2
+        s.contains("ALLOT") -> 3
+        s.contains("LIST") -> 4
+        else -> 5
+    }
+}
+
+private fun stageLabel(stage: String) = stage.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 
 @Composable
 fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) {
     var selectedStage by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val countsState by produceState(MarketDataState.Loading as MarketDataState<com.marksy.os.market.IpoStageCountsDto>) {
+    val refresh = rememberRefreshState()
+    val countsState by produceState(MarketDataState.Loading as MarketDataState<com.marksy.os.market.IpoStageCountsDto>, refresh.key) {
         value = repository.ipoStageCounts()
     }
-    val listState by produceState(MarketDataState.Loading as MarketDataState<List<IpoListItemDto>>, selectedStage) {
-        value = repository.ipos(stage = selectedStage)
+    val stages = (countsState as? MarketDataState.Loaded)?.value?.byStage.orEmpty()
+        .filterValues { it > 0 }.entries.sortedWith(compareBy({ stageRank(it.key) }, { it.key }))
+    // No "All": default to the most actionable stage (Open) once counts arrive.
+    LaunchedEffect(stages) { if (selectedStage == null || stages.none { it.key == selectedStage }) selectedStage = stages.firstOrNull()?.key }
+    val listState by produceState(MarketDataState.Loading as MarketDataState<List<IpoListItemDto>>, selectedStage, refresh.key) {
+        val stage = selectedStage ?: return@produceState
+        value = when (val fetched = repository.ipos(stage = stage)) {
+            // Keep only the chosen stage even if the server returns more than asked for.
+            is MarketDataState.Loaded -> fetched.value.filter { it.stage.equals(stage, ignoreCase = true) }.let { if (it.isEmpty()) MarketDataState.Empty else MarketDataState.Loaded(it) }
+            else -> fetched
+        }
+        refresh.done()
     }
 
-    Column(Modifier.fillMaxSize().background(MarksyTheme.Background)) {
-        val counts = (countsState as? MarketDataState.Loaded)?.value
-        if (counts != null && counts.byStage.isNotEmpty()) {
-            LazyRow(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(selected = selectedStage == null, onClick = { selectedStage = null }, label = { Text("All (${counts.total})") })
-                }
-                items(counts.byStage.entries.toList()) { (stage, count) ->
-                    FilterChip(selected = selectedStage == stage, onClick = { selectedStage = stage }, label = { Text("$stage ($count)") })
+    val chipsHeader = rememberCollapsingHeaderState()
+    Column(Modifier.fillMaxSize().background(MarksyTheme.Background).nestedScroll(chipsHeader.connection)) {
+        if (stages.isNotEmpty()) {
+            LazyRow(Modifier.collapsingHeader(chipsHeader), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(stages) { (stage, count) ->
+                    FilterChip(selected = selectedStage == stage, onClick = { selectedStage = stage }, label = { Text("${stageLabel(stage)} ($count)") })
                 }
             }
         }
+        MarksyRefreshBox(refresh) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
             contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            when (val s = listState) {
-                is MarketDataState.Loading -> item { Text("Checking IPOs...", color = MarksyTheme.TextMuted, fontSize = 13.sp) }
+            // Counts arrived with no stages at all: nothing to select, so don't wait on a list forever.
+            val noStages = countsState is MarketDataState.Loaded && stages.isEmpty()
+            when (val s = if (noStages) MarketDataState.Empty else listState) {
+                is MarketDataState.Loading -> item { MarksyLoader("Checking IPOs...") }
                 is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
                 is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                 is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues match this filter right now.") }
-                is MarketDataState.Loaded -> items(s.value.openedFirst()) { ipo -> IpoRow(ipo) }
-                is MarketDataState.Stale -> items(s.value.openedFirst()) { ipo -> IpoRow(ipo) }
+                is MarketDataState.Loaded -> items(s.value) { ipo -> IpoRow(ipo) }
+                is MarketDataState.Stale -> items(s.value) { ipo -> IpoRow(ipo) }
             }
+        }
         }
     }
 }

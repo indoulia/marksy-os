@@ -19,7 +19,12 @@ object SourceRegistry {
         "com.nextbillion.groww" to "Groww",
         "com.angelbroking.smartmoney" to "Angel One",
         "com.angelbroking.lite" to "Angel One",
-        "com.fivepaisa.trade" to "5paisa"
+        "com.fivepaisa.trade" to "5paisa",
+        "in.upstox.app" to "Upstox",
+        "com.icicidirect.idirectsuper" to "ICICI Direct",
+        "com.zerodha.coin" to "Zerodha Coin",
+        "com.assetgro.stockgro.prod" to "StockGro",
+        "com.divum.moneycontrol" to "Moneycontrol"
     )
 
     /** Stable list for diagnostics/settings UI. */
@@ -61,6 +66,11 @@ object SourceRegistry {
         "com.nextbillion.groww",
         "com.angelbroking.smartmoney",
         "com.angelbroking.lite",
-        "com.fivepaisa.trade"
+        "com.fivepaisa.trade",
+        // Package ids as actually installed (Play Store builds), verified on-device 2026-09-25.
+        "in.upstox.app",
+        "com.icicidirect.idirectsuper",
+        "com.zerodha.coin",
+        "com.assetgro.stockgro.prod"
     )
 }

@@ -56,7 +56,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Bottom padding lists need so their last item clears the floating one-hand buttons. */
-val OneHandListBottomPadding = 140.dp
+val OneHandListBottomPadding = 120.dp
+
+private val FloatingButtonSize = 44.dp
+private val FloatingIconSize = 22.dp
 
 /**
  * Thumb-reachable search/filter, bottom-right: filter above search. Search opens a multi-line field along the
@@ -180,20 +183,49 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, placehol
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
+/**
+ * Always-visible bottom-right option buttons (e.g. Morning / Evening / Overnight), same size and
+ * placement as the filter/search buttons. The selected one is solid emerald; the rest are outlined.
+ */
+@Composable
+fun BoxScope.OneHandToggleButtons(options: List<Triple<String, ImageVector, String>>, selected: String, onSelected: (String) -> Unit) {
+    Column(
+        Modifier.align(Alignment.BottomEnd).padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        options.forEach { (key, icon, label) ->
+            val on = key == selected
+            Box(
+                Modifier
+                    .size(FloatingButtonSize)
+                    .shadow(6.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+                    .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                    .clickable(onClickLabel = label) { onSelected(key) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = label, tint = if (on) Color.Black else MarksyTheme.PrimaryEmerald, modifier = Modifier.size(FloatingIconSize))
+            }
+        }
+    }
+}
+
 /** Solid emerald so it stands out over list content; a dot marks an applied search/filter. */
 @Composable
 private fun FloatingRoundButton(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     Box {
         Box(
             Modifier
-                .size(54.dp)
-                .shadow(10.dp, CircleShape)
+                .size(FloatingButtonSize)
+                .shadow(6.dp, CircleShape)
                 .clip(CircleShape)
                 .background(MarksyTheme.PrimaryEmerald)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = label, tint = Color.Black, modifier = Modifier.size(26.dp))
+            Icon(icon, contentDescription = label, tint = Color.Black, modifier = Modifier.size(FloatingIconSize))
         }
         if (active) {
             Box(

@@ -6,7 +6,8 @@ import kotlin.math.abs
 
 /** One-paragraph Home summary built only from captured events and the Marksy market snapshot. */
 object HomeSummary {
-    fun text(digest: DailyDigest, market: MarketSnapshot?): String {
+    /** [liveIndex] (name, change %) from the user's Upstox feed wins over the snapshot's, which can be a day old. */
+    fun text(digest: DailyDigest, market: MarketSnapshot?, liveIndex: Pair<String, Double>? = null): String {
         val parts = mutableListOf<String>()
         if (digest.totalNotifications == 0) {
             parts += "No notifications captured yet today."
@@ -22,13 +23,13 @@ object HomeSummary {
                 parts += "Busiest: " + digest.topSources.take(2).joinToString { (name, count) -> "$name ($count)" } + "."
             }
         }
-        market?.indices?.firstOrNull()?.let { index ->
+        (liveIndex ?: market?.indices?.firstOrNull()?.let { it.name to it.changePct })?.let { (name, change) ->
             val direction = when {
-                index.changePct > 0 -> "up"
-                index.changePct < 0 -> "down"
+                change > 0 -> "up"
+                change < 0 -> "down"
                 else -> "flat"
             }
-            parts += if (direction == "flat") "${index.name} is flat." else "${index.name} is $direction ${pct(abs(index.changePct))}."
+            parts += if (direction == "flat") "$name is flat." else "$name is $direction ${pct(abs(change))}."
         }
         market?.opportunities?.firstOrNull()?.let { pick ->
             parts += "Top Marksy pick: ${pick.symbol}, target ₹${String.format(Locale.getDefault(), "%,.0f", pick.targetPrice)}."

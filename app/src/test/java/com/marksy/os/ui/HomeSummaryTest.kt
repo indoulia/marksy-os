@@ -35,6 +35,22 @@ class HomeSummaryTest {
         assertTrue(text, text.contains("NIFTY 50 is down 0.42%."))
     }
 
+    // Regression: with live Upstox showing NIFTY +0.23%, the summary still said "down 1.64%" from a stale snapshot.
+    @Test
+    fun liveIndexMoveReplacesTheSnapshotMove() {
+        val digest = DailyDigestModel.build(listOf(event("Teams")), now, zone)
+        val stale = MarketSnapshot(
+            marketStatus = "OPEN",
+            indices = listOf(MarketSnapshot.MarketIndex("NIFTY 50", 23063.0, -1.64, null)),
+            opportunities = emptyList(), gainers = emptyList(), losers = emptyList(), asOf = null
+        )
+
+        val text = HomeSummary.text(digest, stale, liveIndex = "NIFTY 50" to 0.23)
+
+        assertTrue(text, text.contains("NIFTY 50 is up 0.23%."))
+        assertTrue(text, !text.contains("1.64"))
+    }
+
     @Test
     fun emptyDayWithoutMarketSaysSo() {
         assertEquals("No notifications captured yet today.", HomeSummary.text(DailyDigestModel.build(emptyList(), now, zone), null))

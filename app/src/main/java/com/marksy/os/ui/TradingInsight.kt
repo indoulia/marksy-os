@@ -41,7 +41,9 @@ data class TradingInsight(
     val marksyDecisionOutcome: String? = null,
     val marksyEvidence: List<String> = emptyList(),
     val marksySource: String? = null,
-    val marksyView: String? = null
+    val marksyView: String? = null,
+    val title: String = "",
+    val postedAt: Long = 0L
 )
 
 /** Keep confidence display bounded even if a future classifier/backend returns bad values. */
@@ -71,6 +73,8 @@ fun NotificationEventEntity.toTradingInsight(): TradingInsight? {
     return TradingInsight(
         eventId = id,
         headline = tradingHeadline(title),
+        title = title,
+        postedAt = postedAt,
         source = sourceName,
         eventType = category,
         confidence = confidence.coerceIn(0f, 1f),

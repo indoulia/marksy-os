@@ -15,7 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -78,6 +83,22 @@ import java.util.Locale
 
 private val DetailSecondary = Color(0xFF9AA9A1)
 private val DetailMuted = Color(0xFF657169)
+
+/** Thin right-edge scrollbar, drawn only when the content actually overflows. */
+private fun Modifier.scrollbar(state: ScrollState): Modifier = drawWithContent {
+    drawContent()
+    val max = state.maxValue
+    if (max <= 0 || max == Int.MAX_VALUE) return@drawWithContent
+    val viewport = size.height
+    val thumb = (viewport * viewport / (viewport + max)).coerceAtLeast(24.dp.toPx())
+    val top = (viewport - thumb) * state.value / max
+    drawRoundRect(
+        color = MarksyTheme.PrimaryEmerald.copy(alpha = 0.7f),
+        topLeft = Offset(size.width - 3.dp.toPx(), top),
+        size = Size(3.dp.toPx(), thumb),
+        cornerRadius = CornerRadius(1.5.dp.toPx())
+    )
+}
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -145,7 +166,8 @@ fun EventDetailDialog(
                     }
                 }
                 SectionDivider()
-                Column(Modifier.weight(1f, fill = false).padding(end = 6.dp).verticalScroll(scrollState)) {
+                // Only the body scrolls; title above and details/actions below stay in view.
+                Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).padding(end = 10.dp).verticalScroll(scrollState)) {
                     Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = DetailSecondary, fontSize = 13.sp)
                     if (actions.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))

@@ -127,7 +127,7 @@ class ActionRepository(
             scheduledFor = scheduledFor, detail = detail?.take(MAX_DETAIL), error = error)
 
     companion object {
-        val CATEGORIES = setOf("TRADING", "BANKING", "BILLS", "PAYMENTS", "OTP", "REMINDERS", "MESSAGES", "WORK", "EMAIL", "DELIVERY", "PROMOTIONS", "SYSTEM", "OTHER")
+        val CATEGORIES = setOf("TRADING", "BANKING", "BILLS", "PAYMENTS", "OTP", "REMINDERS", "MESSAGES", "WORK", "EMAIL", "DELIVERY", "PROMOTIONS", "SYSTEM", "MARKET", "OTHER")
         private const val STALE_RUNNING_MS = 10 * 60 * 1000L
         private const val MAX_DETAIL = 80
     }

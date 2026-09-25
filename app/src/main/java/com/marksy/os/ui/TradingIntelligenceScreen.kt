@@ -10,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,10 +34,18 @@ fun TradingIntelligenceScreen(
     insights: List<TradingInsight>,
     padding: PaddingValues,
     market: MarketState = MarketState.Loading,
+    marketEvents: List<com.marksy.os.data.local.NotificationEventEntity> = emptyList(),
+    onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf(TAB_PICKS) }
     val snapshot = (market as? MarketState.Loaded)?.snapshot
+    // Marksy supplies what to show (picks, movers, targets); prices tick live from the user's Upstox feed.
+    // External calls (broker apps, SMS, chat) parsed into side / symbol / levels, shown immediately.
+    val calls = remember(insights) { insights.mapNotNull { i -> com.marksy.os.notification.TradeCallParser.parse(i.title, i.body)?.let { i to it } } }
+    val callIds = remember(calls) { calls.map { it.first.eventId }.toSet() }
+    val liveSymbols = remember(snapshot, calls) { (snapshot?.opportunities.orEmpty().map { it.symbol } + calls.map { it.second.symbol }).distinct() }
+    val live = rememberUpstoxQuotes(liveSymbols)
 
     Box(
         Modifier
@@ -46,39 +55,6 @@ fun TradingIntelligenceScreen(
             .consumeWindowInsets(padding)
     ) {
     Column(Modifier.fillMaxSize()) {
-        // Header
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Trading Intelligence",
-                    color = MarksyTheme.TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                snapshot?.marketStatus?.let { status ->
-                    val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true)
-                    val tint = if (open) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (open) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
-                            .border(1.dp, tint, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
-                        Spacer(Modifier.width(5.dp))
-                        Text(if (open) "LIVE" else status.uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            Text(selectedFilter, color = MarksyTheme.TextMuted, fontSize = 12.sp)
-        }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -86,16 +62,28 @@ fun TradingIntelligenceScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
+            // Part of the list so it scrolls away with the content.
+            item(key = "filter-header") {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(selectedFilter, color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                }
+            }
             when (selectedFilter) {
                 TAB_PICKS -> {
                     val picks = snapshot?.opportunities.orEmpty()
-                    if (picks.isEmpty()) item { EmptyState("No Marksy picks right now.", marketMessage(market, "Top opportunities from Marksy will appear here.")) }
-                    items(picks, key = { "pick-${it.symbol}" }) { pick ->
+                    if (picks.isEmpty()) item { if (market is MarketState.Loading) MarksyLoader("Loading market data…") else EmptyState("No Marksy picks right now.", marketMessage(market, "Top opportunities from Marksy will appear here.")) }
+                    // The feed can repeat a symbol (two predictions for one stock), so keys carry the position.
+                    itemsIndexed(picks, key = { i, it -> "pick-$i-${it.symbol}" }) { _, pick ->
                         val reference = pick.entryPrice ?: pick.price
+                        val quote = live[pick.symbol]
                         TradingSignalCard(
                             symbol = pick.symbol,
-                            price = pick.price?.let(::rupees) ?: "—",
-                            change = pick.changePct?.let(::signedPct) ?: "",
+                            price = (quote?.lastPrice ?: pick.price)?.let(::rupees) ?: "—",
+                            change = (quote?.changePct ?: pick.changePct)?.let(::signedPct) ?: "",
                             signalType = if (reference == null || pick.targetPrice >= reference) "BUY" else "SELL",
                             headline = pick.name,
                             entry = pick.entryPrice?.let(::rupees) ?: "—",
@@ -110,30 +98,41 @@ fun TradingIntelligenceScreen(
                         )
                     }
                 }
-                TAB_MOVERS -> {
-                    val movers = snapshot?.gainers.orEmpty() + snapshot?.losers.orEmpty()
-                    if (movers.isEmpty()) item { EmptyState("No movers yet.", marketMessage(market, "Top gainers and losers from Marksy will appear here.")) }
-                    items(movers, key = { "mover-${it.symbol}-${it.changePct}" }) { mover ->
-                        TradingTickerCard(mover.symbol, mover.price?.let(::rupees) ?: mover.name, signedPct(mover.changePct))
+                TAB_CALLS -> {
+                    if (calls.isEmpty()) item { EmptyState("No calls captured yet.", "Buy/sell calls from your broker apps, SMS and chats appear here the moment they arrive.") }
+                    itemsIndexed(calls, key = { _, (i, _) -> "call-${i.eventId}" }) { _, (insight, call) ->
+                        val quote = live[call.symbol]
+                        Box(Modifier.clickable { onInsightSelected(insight) }) {
+                            TradingSignalCard(
+                                symbol = call.symbol,
+                                price = quote?.lastPrice?.let(::rupees) ?: "—",
+                                change = quote?.changePct?.let(::signedPct) ?: "",
+                                signalType = call.side.name,
+                                headline = listOfNotNull(insight.source, call.horizon, relativeTime(insight.postedAt)).joinToString(" · "),
+                                entry = call.entry?.let(::rupees) ?: "—",
+                                target = call.target?.let(::rupees) ?: "—",
+                                stopLoss = call.stopLoss?.let(::rupees) ?: "—",
+                                confidence = insight.marksyConfidence?.let { confidencePct(it.toDouble()) } ?: "—",
+                                alignment = listOfNotNull(insight.marksyVerdict?.let { "Marksy: $it" }, insight.status).joinToString(" · ")
+                            )
+                        }
                     }
                 }
-                TAB_INDICES -> {
-                    val indices = snapshot?.indices.orEmpty()
-                    if (indices.isEmpty()) item { EmptyState("No index data.", marketMessage(market, "Market indices from Marksy will appear here.")) }
-                    items(indices, key = { "index-${it.name}" }) { index ->
-                        TradingTickerCard(index.name, String.format(Locale.getDefault(), "%,.2f", index.value), signedPct(index.changePct))
-                    }
+                TAB_MARKET -> {
+                    if (marketEvents.isEmpty()) item { EmptyState("No market updates yet.", "Holdings alerts, research views, IPO notices and market moves from your broker and market apps appear here.") }
+                    items(marketEvents, key = { "mkt-${it.id}" }) { event -> MarketUpdateCard(event) { onEventSelected(event) } }
                 }
                 else -> {
-                    if (insights.isEmpty()) {
+                    val others = insights.filterNot { it.eventId in callIds }
+                    if (others.isEmpty()) {
                         item {
                             EmptyState(
-                                "No trading events captured yet.",
-                                "Brokerage orders and market notifications will appear here when captured."
+                                "No other trading events captured yet.",
+                                "Order executions and confirmations from your broker apps appear here."
                             )
                         }
                     } else {
-                        items(insights, key = { it.eventId }) { insight ->
+                        items(others, key = { it.eventId }) { insight ->
                             CapturedInsightCard(insight) { onInsightSelected(insight) }
                         }
                     }
@@ -142,7 +141,7 @@ fun TradingIntelligenceScreen(
         }
     }
     OneHandControls(
-        filters = listOf(TAB_PICKS, TAB_MOVERS, TAB_INDICES, TAB_CAPTURED).map { it to it },
+        filters = listOf(TAB_PICKS, TAB_CALLS, TAB_MARKET, TAB_CAPTURED).map { it to it },
         selectedFilter = selectedFilter,
         onFilterSelected = { selectedFilter = it }
     )
@@ -150,9 +149,39 @@ fun TradingIntelligenceScreen(
 }
 
 private const val TAB_PICKS = "Marksy picks"
-private const val TAB_MOVERS = "Movers"
-private const val TAB_INDICES = "Indices"
+private const val TAB_CALLS = "Calls"
+private const val TAB_MARKET = "Market"
 private const val TAB_CAPTURED = "Captured"
+
+private fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
+    if (postedAt <= 0) return null
+    val minutes = (now - postedAt) / 60_000
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        minutes < 24 * 60 -> "${minutes / 60}h ago"
+        else -> "${minutes / (24 * 60)}d ago"
+    }
+}
+
+@Composable
+private fun MarketUpdateCard(event: com.marksy.os.data.local.NotificationEventEntity, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).clickable(onClick = onClick)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(event.sourceName, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                relativeTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+            }
+            Text(event.title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
 
 private fun marketMessage(market: MarketState, loaded: String): String = when (market) {
     MarketState.Loading -> "Loading market data…"
@@ -329,7 +358,7 @@ private fun TradingTickerCard(
             .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

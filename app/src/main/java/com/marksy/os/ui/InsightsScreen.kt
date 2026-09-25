@@ -180,6 +180,7 @@ private fun categoryColor(category: String): Color = when (category) {
     "DELIVERY" -> MarksyTheme.OrangeDelivery
     "WORK" -> MarksyTheme.YellowImportant
     "PROMOTIONS" -> Color(0xFFCE93D8)
+    "MARKET" -> Color(0xFF4DD0E1)
     else -> MarksyTheme.TextMuted
 }
 
