@@ -76,7 +76,10 @@ object MarksyContainer {
 
     fun ask(context: Context): AskMarksyRepository {
         val db = database(context)
-        return AskMarksyRepository(db.notificationEventDao(), db.contextGraphDao(), listOf(ModelQueryInterpreter(intelligence(context))))
+        return AskMarksyRepository(
+            db.notificationEventDao(), db.contextGraphDao(), listOf(ModelQueryInterpreter(intelligence(context))),
+            planDao = db.planItemDao(), symbols = { com.marksy.os.upstox.UpstoxInstruments.symbolFor(context.applicationContext, it) }
+        )
     }
 
     fun repository(context: Context): NotificationRepository =

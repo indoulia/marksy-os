@@ -60,6 +60,17 @@ object UpstoxInstruments {
 
     suspend fun suggest(context: Context, query: String, limit: Int = 8): List<String> = suggest(load(context).keys, query, limit)
 
+    /** The tradable symbol for a typed symbol ("tata motors" -> TATAMOTORS) or company name ("infosys" -> INFY). */
+    internal fun symbolFor(map: Map<String, String>, text: String): String? {
+        val s = text.trim().uppercase()
+        if (s.isEmpty()) return null
+        listOf(s, s.filterNot(Char::isWhitespace)).firstOrNull { !it.startsWith(NAME_PREFIX) && it in map }?.let { return it }
+        val key = map[NAME_PREFIX + normalizeName(s)] ?: return null
+        return map.entries.firstOrNull { !it.key.startsWith(NAME_PREFIX) && it.value == key }?.key
+    }
+
+    suspend fun symbolFor(context: Context, text: String): String? = runCatching { symbolFor(load(context), text) }.getOrNull()
+
     suspend fun load(context: Context): Map<String, String> = map ?: mutex.withLock {
         map ?: withContext(Dispatchers.IO) {
             val file = File(context.applicationContext.filesDir, CACHE_FILE)

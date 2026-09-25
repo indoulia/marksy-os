@@ -46,6 +46,22 @@ class UpstoxInstrumentsTest {
         assertEquals(listOf("CROPSTER"), UpstoxInstruments.suggest(map.keys, "CROP", 8))
     }
 
+    // Ask Marksy: "Infosys share price" must open INFY, not a symbol literally named INFOSYS.
+    @Test
+    fun symbolForAcceptsSymbolsSpacedSymbolsAndCompanyNames() {
+        val json = """
+            [
+              {"segment":"NSE_EQ","name":"INFOSYS LIMITED","instrument_key":"NSE_EQ|INE009A01021","trading_symbol":"INFY"},
+              {"segment":"NSE_EQ","name":"TATA MOTORS LIMITED","instrument_key":"NSE_EQ|INE155A01022","trading_symbol":"TATAMOTORS"}
+            ]
+        """.trimIndent()
+        val map = UpstoxInstruments.parse(json.byteInputStream())
+        assertEquals("INFY", UpstoxInstruments.symbolFor(map, "infosys"))
+        assertEquals("INFY", UpstoxInstruments.symbolFor(map, "Infy"))
+        assertEquals("TATAMOTORS", UpstoxInstruments.symbolFor(map, "tata motors"))
+        assertNull(UpstoxInstruments.symbolFor(map, "foobarxyz"))
+    }
+
     @Test
     fun suggestsPrefixMatchesFirstThenContainsIgnoringSpacesAndCase() {
         val symbols = listOf("TATAMOTORS", "TATASTEEL", "TATA", "RELIANCE", "MOTHERSON", "AUTOTATA")

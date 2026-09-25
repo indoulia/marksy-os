@@ -51,6 +51,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import kotlinx.coroutines.delay
 import com.marksy.os.intelligence.SmartInboxModel
+import com.marksy.os.intelligence.AskMarksy
 import com.marksy.os.notification.MarksyNotificationListenerService
 import com.marksy.os.notification.ReminderScheduler
 import com.marksy.os.notification.NotificationListenerStatus
@@ -522,7 +523,19 @@ class MainActivity : ComponentActivity() {
                     padding, inboxEvents, market, openEvent, askConversation,
                     askGrounded = { q, prev -> askRepository.ask(q, prev) },
                     askRouted = { q, prev, intents -> askRepository.askIf(q, prev, intents) },
-                    loadEvent = { id -> repository.event(id) }
+                    loadEvent = { id -> repository.event(id) },
+                    onAction = { a ->
+                        showAsk = false
+                        when (a.page) {
+                            AskMarksy.Page.HOME -> selectedTab = 0
+                            AskMarksy.Page.INBOX -> { inboxFilterName = a.arg ?: SmartInboxModel.Filter.ALL.name; selectedTab = 1 }
+                            AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); selectedTab = 2 }
+                            AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
+                            AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.OVERVIEW.name; selectedTab = 4 }
+                            AskMarksy.Page.STOCK -> { marketTabName = MarketTab.STOCKS.name; marketSymbol = a.arg; stockQuery = a.arg.orEmpty(); selectedTab = 4 }
+                            AskMarksy.Page.SETTINGS -> selectedTab = tabs.size
+                        }
+                    }
                 )
                 selectedTab == 0 -> MarksyRefreshBox(marketRefresh, Modifier.fillMaxSize().padding(padding)) { DashboardScreen(
                     snapshot = homeSnapshot,

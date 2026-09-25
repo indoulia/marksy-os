@@ -4,6 +4,8 @@ import com.marksy.os.data.local.ContextEntity
 import com.marksy.os.data.local.ContextGraphDao
 import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.data.local.PlanItemDao
+import com.marksy.os.data.local.PlanItemEntity
 import com.marksy.os.intelligence.AskMarksy
 import java.time.ZoneId
 
@@ -13,11 +15,15 @@ class AskMarksyRepository(
     private val graphDao: ContextGraphDao,
     private val interpreters: List<AskMarksy.QueryInterpreter> = emptyList(),
     private val zone: () -> ZoneId = ZoneId::systemDefault,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val planDao: PlanItemDao? = null,
+    private val symbols: suspend (String) -> String? = { null }
 ) : AskMarksy.Retriever {
     override suspend fun events(from: Long, to: Long, limit: Int): List<NotificationEventEntity> = eventDao.findInRange(from, to, limit)
     override suspend fun entities(name: String): List<ContextEntity> = graphDao.search(name, 10)
     override suspend fun eventIdsFor(entityId: Long): List<Long> = graphDao.eventIdsFor(entityId)
+    override suspend fun planItems(): List<PlanItemEntity> = planDao?.all().orEmpty()
+    override suspend fun resolveSymbol(text: String): String? = symbols(text)
 
     suspend fun ask(text: String, previous: AskMarksy.Query?): AskMarksy.Answer =
         AskMarksy.ask(text, previous, interpreters, this, clock(), zone())
@@ -27,6 +33,6 @@ class AskMarksyRepository(
         val now = clock()
         val interpretation = AskMarksy.interpret(text, previous, interpreters, now, zone())
         if (interpretation.query.intent !in intents) return null
-        return AskMarksy.answer(interpretation.query, this, now, interpretation.interpretedBy)
+        return AskMarksy.answer(interpretation.query, this, now, interpretation.interpretedBy, zone())
     }
 }
