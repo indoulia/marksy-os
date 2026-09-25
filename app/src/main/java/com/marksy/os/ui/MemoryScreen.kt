@@ -62,7 +62,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
                     )
                 }
                 if (kind == PersonalMemory.Kind.LOCATION) {
-                    Text("Marksy captures no location data, so nothing is learned here.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                    Text("Learned only from places named in your notifications (deliveries, rides, calendar). Marksy never reads your device location, and street numbers are dropped.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
                 }
             }
             items(ofKind, key = { "m-${it.id}" }) { e ->
@@ -111,6 +111,7 @@ private fun MemoryRow(e: MemoryEntryEntity, onForget: () -> Unit, onRename: () -
                 if (e.origin == PersonalMemory.ORIGIN_USER) append(" · set by you")
                 e.expiresAt?.let { append(" · forgets after ${date.format(Date(it))}") }
                 append(" · from ${PersonalMemory.eventIds(e).size} notifications")
+                PersonalMemory.sources(e).takeIf { it.isNotEmpty() }?.let { append(" via ${it.joinToString()}") }
             },
             color = MarksyTheme.TextMuted, fontSize = 10.sp
         )

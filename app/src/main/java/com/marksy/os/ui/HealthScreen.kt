@@ -44,6 +44,7 @@ fun HealthScreen(padding: PaddingValues, load: suspend () -> MarksyHealth.Report
             }
         }
         item { Text("Connectors", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
+        item { ConnectorSetupCard() }
         items(r.connectors) { c ->
             Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface, RoundedCornerShape(12.dp)).padding(10.dp)) {
                 Text("${c.label} · ${c.status}", color = color(c.level), fontSize = 13.sp)

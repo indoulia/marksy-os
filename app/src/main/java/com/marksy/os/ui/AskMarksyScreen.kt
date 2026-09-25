@@ -79,6 +79,8 @@ fun AskMarksyScreen(
     // Hoisted so the conversation survives switching tabs.
     conversation: SnapshotStateList<AskExchange> = remember { mutableStateListOf() },
     askGrounded: (suspend (String, AskMarksy.Query?) -> AskMarksy.Answer)? = null,
+    /** Interprets with the on-device model when ready and answers only grounded intents; null means use the gateway engine. */
+    askRouted: (suspend (String, AskMarksy.Query?, Set<AskMarksy.Intent>) -> AskMarksy.Answer?)? = null,
     loadEvent: suspend (Long) -> NotificationEventEntity? = { null }
 ) {
     val scope = rememberCoroutineScope()
@@ -93,14 +95,17 @@ fun AskMarksyScreen(
         val previous = conversation.lastOrNull { it.grounded != null }?.grounded?.query
         val intent = AskMarksy.parse(clean, previous, System.currentTimeMillis(), java.time.ZoneId.systemDefault()).intent
         val grounded = askGrounded
-        if (grounded == null || intent !in GROUNDED_INTENTS) {
+        val routed = askRouted
+        if (routed == null && (grounded == null || intent !in GROUNDED_INTENTS)) {
             conversation += AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
             return
         }
         conversation += AskExchange(clean, AskMarksyEngine.Answer("Looking through your notifications…"), pending = true)
         val index = conversation.lastIndex
         scope.launch {
-            val result = runCatching { grounded(clean, previous) }.getOrNull()
+            // Routed: the model's interpretation (not the keyword parse) decides whether the grounded engine answers.
+            val result = if (routed != null) runCatching { routed(clean, previous, GROUNDED_INTENTS) }.getOrNull()
+            else runCatching { grounded!!(clean, previous) }.getOrNull()
             val exchange = if (result == null) {
                 // Grounded retrieval failed: fall back to the local engine rather than show nothing.
                 AskExchange(clean, AskMarksyEngine.answer(clean, events, (market as? MarketState.Loaded)?.snapshot))
@@ -331,8 +336,10 @@ private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEv
             }
             exchange.grounded?.let { g ->
                 val n = g.derivedFromEventIds.size
+                val basis = if (g.needsClarification) "Pick one to search" else
+                    "Based on $n local notification${if (n == 1) "" else "s"} · ${g.query.range.label}" + if (n > exchange.answer.events.size) " · showing ${exchange.answer.events.size}" else ""
                 Text(
-                    "Based on $n local notification${if (n == 1) "" else "s"} · ${g.query.range.label}" + if (n > exchange.answer.events.size) " · showing ${exchange.answer.events.size}" else "",
+                    basis + if (g.interpretedBy != AskMarksy.DeterministicInterpreter.name) " · question understood by on-device AI" else "",
                     color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp)
                 )
                 if (g.followUps.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

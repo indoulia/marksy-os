@@ -11,14 +11,31 @@ import org.json.JSONObject
  */
 enum class AiTask { INTERPRET_QUERY, CLASSIFY, EXTRACT, SUMMARIZE }
 
-enum class ModelState { NOT_INSTALLED, DOWNLOADING, READY, FAILED, DISABLED }
+/**
+ * UNKNOWN = not probed yet in this process; NOT_AVAILABLE = the device/runtime cannot run it;
+ * NOT_INSTALLED = supported but the model must be downloaded first.
+ */
+enum class ModelState { UNKNOWN, NOT_AVAILABLE, NOT_INSTALLED, DOWNLOADING, READY, FAILED, DISABLED }
 
 data class ModelInfo(
     val id: String,
     val version: String,
     val tasks: Set<AiTask>,
     /** False means data would leave the device; such models need explicit user permission. */
-    val onDevice: Boolean
+    val onDevice: Boolean,
+    val runtime: String = ""
+)
+
+/** Runtime measurements for the privacy/health UI; never contains prompt or output text. */
+data class ModelDiagnostics(
+    val supportsLocalInference: Boolean,
+    val modelVersion: String?,
+    val runtimeVersion: String,
+    val initMs: Long?,
+    val lastLatencyMs: Long?,
+    val calls: Int,
+    val failures: Int,
+    val lastError: String?
 )
 
 interface LocalModel {
@@ -27,6 +44,11 @@ interface LocalModel {
     fun state(): ModelState
     /** Returns raw JSON text; the service validates it. */
     suspend fun generate(prompt: String, task: AiTask): String
+    /** Re-probes availability (may be async in the runtime); returns the new [state]. */
+    suspend fun refresh(): ModelState = state()
+    /** User-initiated download/warm-up; returns the resulting state. */
+    suspend fun prepare(): ModelState = state()
+    fun diagnostics(): ModelDiagnostics? = null
 }
 
 /** Versioned prompt template with {{name}} placeholders and the schema its output must satisfy. */
@@ -95,7 +117,8 @@ class IntelligenceService(
     private val sink: AiInvocationSink = AiInvocationSink { },
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    private val minConfidence: Double = DEFAULT_MIN_CONFIDENCE
+    private val minConfidence: Double = DEFAULT_MIN_CONFIDENCE,
+    private val refreshTimeoutMs: Long = REFRESH_TIMEOUT_MS
 ) {
     data class Outcome<T>(val value: T, val usedModel: ModelInfo?, val invocation: AiInvocation)
 
@@ -106,6 +129,31 @@ class IntelligenceService(
     }
 
     fun available(task: AiTask): ModelInfo? = pick(task)?.info
+
+    /** Re-probes every model; one hanging or throwing runtime cannot block or break the others. */
+    suspend fun refresh(): List<Pair<ModelInfo, ModelState>> {
+        models.forEach { m ->
+            try {
+                withTimeoutOrNull(refreshTimeoutMs) { m.refresh() } ?: DiagLog.w(TAG, "refresh timeout: ${m.info.id}")
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                DiagLog.w(TAG, "refresh failed: ${m.info.id} ${e.javaClass.simpleName}")
+            }
+        }
+        return status()
+    }
+
+    /** Explicit user action only: may start a model download inside the platform runtime. */
+    suspend fun prepare(modelId: String): ModelState? {
+        val m = models.firstOrNull { it.info.id == modelId } ?: return null
+        if (!m.info.onDevice && !allowExternal()) return ModelState.DISABLED
+        return try { m.prepare() } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            ModelState.FAILED
+        }
+    }
+
+    fun diagnostics(): List<Pair<ModelInfo, ModelDiagnostics?>> = models.map { it.info to runCatching { it.diagnostics() }.getOrNull() }
 
     /**
      * Runs [template] on the best ready model; [parse] maps validated JSON to T. Any failure,
@@ -136,6 +184,7 @@ class IntelligenceService(
     }
 
     private suspend fun <T> done(value: T, model: ModelInfo?, inv: AiInvocation): Outcome<T> {
+        if (inv.outcome != AiInvocation.Outcome.OK) DiagLog.i(TAG, "${inv.templateId}: ${inv.outcome} model=${inv.modelId} latencyMs=${inv.latencyMs}; fallback used")
         runCatching { sink.record(inv) }
         return Outcome(value, model, inv)
     }
@@ -147,5 +196,7 @@ class IntelligenceService(
     companion object {
         const val DEFAULT_TIMEOUT_MS = 3_000L
         const val DEFAULT_MIN_CONFIDENCE = 0.6
+        const val REFRESH_TIMEOUT_MS = 2_000L
+        private const val TAG = "MarksyAi"
     }
 }

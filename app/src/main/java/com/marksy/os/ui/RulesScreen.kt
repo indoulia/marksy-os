@@ -2,7 +2,7 @@ package com.marksy.os.ui
 
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RuleRunner
-import com.marksy.os.intelligence.SimpleCondition
+import com.marksy.os.intelligence.RuleConditionTree
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -230,25 +230,16 @@ private fun RuleEditorDialog(
     var source by remember(initial) { mutableStateOf(initial?.sourcePackage.orEmpty()) }
     var containsText by remember(initial) { mutableStateOf(initial?.containsText.orEmpty()) }
     var action by remember(initial) { mutableStateOf(initial?.action ?: RuleEngine.Action.HIGHLIGHT) }
-    val simple = remember(initial) { SimpleCondition.from(initial?.condition) }
-    var anyWords by remember(initial) { mutableStateOf(simple?.anyWords?.joinToString(", ").orEmpty()) }
-    var hours by remember(initial) { mutableStateOf(simple?.hours.orEmpty()) }
-    var minAmount by remember(initial) { mutableStateOf(simple?.minAmount?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty()) }
-    var minConfidence by remember(initial) { mutableStateOf(simple?.minConfidencePercent?.toString().orEmpty()) }
+    var tree by remember(initial) { mutableStateOf(RuleConditionTree.root(initial?.condition)) }
     var priority by remember(initial) { mutableStateOf((initial?.priority ?: 0).toString()) }
-    // A tree the simple editor cannot represent is preserved unchanged.
-    val editedCondition = if (simple == null) initial?.condition else SimpleCondition(
-        anyWords = anyWords.split(',').map { it.trim() }.filter { it.isNotEmpty() },
-        hours = hours.trim().ifBlank { null },
-        minAmount = minAmount.trim().toDoubleOrNull(),
-        minConfidencePercent = minConfidence.trim().toIntOrNull()?.coerceIn(0, 100)
-    ).toCondition()
+    val treeValid = remember(tree) { RuleConditionTree.validate(tree).isEmpty() }
+    val editedCondition = RuleConditionTree.toSaved(tree)
 
     val cleanName = name.trim().take(60)
     val cleanCategory = category.trim().take(120).ifBlank { null }
     val cleanSource = source.trim().take(120).ifBlank { null }
     val cleanText = containsText.trim().take(120).ifBlank { null }
-    val valid = cleanName.isNotBlank() && (cleanCategory != null || cleanSource != null || cleanText != null || editedCondition != null)
+    val valid = cleanName.isNotBlank() && treeValid && (cleanCategory != null || cleanSource != null || cleanText != null || editedCondition != null)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -273,14 +264,7 @@ private fun RuleEditorDialog(
                 )
                 OutlinedTextField(value = category, onValueChange = { category = it.take(20) }, label = { Text("Category (e.g. PAYMENTS)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = source, onValueChange = { source = it.take(120) }, label = { Text("App package (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (simple != null) {
-                    OutlinedTextField(value = anyWords, onValueChange = { anyWords = it.take(200) }, label = { Text("Any of these words (comma separated)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = hours, onValueChange = { hours = it.take(5) }, label = { Text("Only between hours, e.g. 22..6") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = minAmount, onValueChange = { minAmount = it.take(12) }, label = { Text("Minimum amount") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = minConfidence, onValueChange = { minConfidence = it.take(3) }, label = { Text("Minimum classifier confidence %") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                } else {
-                    Text("This rule has an advanced condition; it is kept as is.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                }
+                ConditionTreeEditor(tree, onChange = { tree = it })
                 OutlinedTextField(value = priority, onValueChange = { priority = it.take(4) }, label = { Text("Rule priority (higher wins conflicts)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RuleEngine.Action.entries.forEach { a ->
@@ -352,12 +336,7 @@ private fun ruleDescription(rule: RuleEngine.Rule): String = buildList {
     rule.category?.let { add("Category: $it") }
     rule.sourcePackage?.let { add("Source: $it") }
     rule.containsText?.let { add("Contains: $it") }
-    SimpleCondition.from(rule.condition)?.let { s ->
-        if (s.anyWords.isNotEmpty()) add("Any of: ${s.anyWords.joinToString()}")
-        s.hours?.let { add("Hours $it") }
-        s.minAmount?.let { add("Amount ≥ $it") }
-        s.minConfidencePercent?.let { add("Confidence ≥ $it%") }
-    } ?: if (rule.condition != null) add("Advanced condition") else Unit
+    rule.condition?.let { add(if (RuleConditionTree.isUnreadable(it)) "Condition unreadable: edit to fix" else "When ${RuleConditionTree.describe(it).take(160)}") }
     add(rule.action.name.lowercase().replace('_', ' '))
     if (rule.priority != 0) add("priority ${rule.priority}")
     add("v${rule.version}")

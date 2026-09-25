@@ -32,7 +32,9 @@ data class RawCapture(
     val sourceKey: String,
     val title: String,
     val body: String,
-    val postedAt: Long
+    val postedAt: Long,
+    /** Pull connectors send the provider's current full record, so an update replaces content instead of appending lines. */
+    val replaceOnUpdate: Boolean = false
 )
 
 /** Source-specific clean-up before classification. Must be pure and must not drop content silently. */
@@ -140,10 +142,11 @@ class IngestionPipeline(
             // Apps re-post the same key with new messages: fold new lines into the stored event (and
             // re-derive it) instead of dropping them as a duplicate.
             dao.findBySourceKey(raw.sourcePackage, raw.sourceKey)?.let { existing ->
-                val body = NotificationTextExtractor.merge(existing.body, raw.body)
+                val body = if (raw.replaceOnUpdate) raw.body else NotificationTextExtractor.merge(existing.body, raw.body)
                 val title = raw.title.ifBlank { existing.title }
                 if (body == existing.body && title == existing.title) {
-                    metrics.count(Metric.DUPLICATE, *scopes)
+                    // A pull connector re-sending an unchanged record is a refresh, not a duplicate capture.
+                    if (!raw.replaceOnUpdate) metrics.count(Metric.DUPLICATE, *scopes)
                     return Result.Duplicate
                 }
                 dao.updateContent(existing.id, title, body, maxOf(existing.postedAt, raw.postedAt))
@@ -192,6 +195,14 @@ class IngestionPipeline(
             Result.Failed(e.javaClass.simpleName)
         }
     }
+
+    /** A record deleted/cancelled at its source resolves the stored event (kept for history, not deleted). */
+    suspend fun retract(sourcePackage: String, sourceKey: String, reason: String): Boolean {
+        val existing = dao.findBySourceKey(sourcePackage, sourceKey) ?: return false
+        return dao.resolve(listOf(existing.id), reason.take(120), clock()) > 0
+    }
+
+    suspend fun syncFailed(connectorId: String, detail: String) = record(connectorId, null, ConnectorEventEntity.FAILED, detail)
 
     suspend fun connected(connectorId: String) = record(connectorId, null, ConnectorEventEntity.CONNECTED)
     suspend fun disconnected(connectorId: String) = record(connectorId, null, ConnectorEventEntity.DISCONNECTED)

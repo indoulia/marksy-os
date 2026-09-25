@@ -14,22 +14,29 @@ class RuleStore(context: Context) {
             val json = JSONArray(raw)
             buildList {
                 for (index in 0 until minOf(json.length(), MAX_RULES)) {
-                    val item = json.getJSONObject(index)
+                    // One malformed entry must not make every user rule fall back to defaults (and be overwritten on next save).
+                    val item = json.optJSONObject(index) ?: continue
                     val name = item.optString("name").trim().take(MAX_NAME)
                     if (name.isBlank()) continue
                     val action = runCatching {
                         RuleEngine.Action.valueOf(item.optString("action", RuleEngine.Action.HIGHLIGHT.name))
                     }.getOrDefault(RuleEngine.Action.HIGHLIGHT)
+                    val conditionJson = item.optJSONObject("condition")
+                    val parsed = conditionJson?.let { RuleEngine.conditionFromJson(it) }
+                    val corrupt = conditionJson != null && parsed == null
+                    // A corrupt tree keeps the rule visible but disabled and never-matching (empty OR), instead of matching everything or vanishing.
+                    val condition = if (corrupt) RuleEngine.Condition.AnyOf(emptyList()) else parsed
+                    if (corrupt) com.marksy.os.ai.DiagLog.w("MarksyRules", "rule #$index disabled: unreadable condition")
                     add(
                         RuleEngine.Rule(
                             id = item.optString("id").trim().take(MAX_ID).ifBlank { "rule-$index" },
                             name = name,
-                            enabled = item.optBoolean("enabled", true),
+                            enabled = item.optBoolean("enabled", true) && !corrupt,
                             sourcePackage = item.optString("sourcePackage").trim().take(MAX_FILTER).ifBlank { null },
                             category = item.optString("category").trim().take(MAX_FILTER).uppercase().ifBlank { null },
                             containsText = item.optString("containsText").trim().take(MAX_FILTER).ifBlank { null },
                             action = action,
-                            condition = item.optJSONObject("condition")?.let { RuleEngine.conditionFromJson(it) },
+                            condition = condition,
                             priority = item.optInt("priority", 0).coerceIn(-100, 100),
                             version = item.optInt("version", 1).coerceAtLeast(1)
                         )

@@ -4,12 +4,13 @@ import com.marksy.os.data.local.AiInvocationDao
 import com.marksy.os.data.local.AiInvocationEntity
 
 /**
- * Where on-device model providers are registered. None ships today: an adapter (e.g. an Android
- * system model or a bundled runtime) implements [LocalModel] and is added here; nothing else in
- * the app changes. Until then every AI task uses its deterministic fallback, and the UI says so.
+ * Where on-device model providers are registered; adding one here is the only change a new runtime
+ * needs. Models are process singletons so probed state and diagnostics survive across screens.
  */
 object AiModelRegistry {
-    fun installed(): List<LocalModel> = emptyList()
+    private val models: List<LocalModel> by lazy { listOf(GeminiNanoModel(MlKitPromptBackend())) }
+
+    fun installed(): List<LocalModel> = models
 }
 
 class RoomAiInvocationSink(private val dao: AiInvocationDao, private val metrics: com.marksy.os.data.MetricsRecorder? = null) : AiInvocationSink {

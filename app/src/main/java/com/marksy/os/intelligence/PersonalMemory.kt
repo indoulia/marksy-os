@@ -21,9 +21,9 @@ object PersonalMemory {
         RECURRING_EVENT("Recurring events", 60), LOCATION("Places", 90), PREFERENCE("Preferences", null)
     }
 
-    data class Observation(val kind: Kind, val key: String, val label: String, val at: Long, val eventId: Long, val amountMinor: Long? = null, val currency: String? = null)
+    data class Observation(val kind: Kind, val key: String, val label: String, val at: Long, val eventId: Long, val amountMinor: Long? = null, val currency: String? = null, val source: String? = null)
 
-    /** Candidate observations from one event (deterministic). Locations are never guessed: no location data is captured. */
+    /** Candidate observations from one event (deterministic). Places come only from notification text ([LocationMemory]), never device location. */
     fun observe(event: NotificationEventEntity, facts: EventExtractor.Facts): List<Observation> = buildList {
         val amount = facts.primaryAmount
         facts.entities.forEach { e ->
@@ -46,7 +46,8 @@ object PersonalMemory {
             val title = event.title.lowercase(Locale.ROOT).replace(Regex("\\d+"), "#").replace(Regex("\\s+"), " ").trim().take(60)
             if (title.isNotBlank()) add(Observation(Kind.RECURRING_EVENT, "${event.sourcePackage}|$title", "${event.sourceName}: ${event.title.take(40)}", event.postedAt, event.id))
         }
-    }.distinctBy { it.kind to it.key }
+        LocationMemory.extract(event)?.let { add(Observation(Kind.LOCATION, it.key, it.label, event.postedAt, event.id)) }
+    }.distinctBy { it.kind to it.key }.map { it.copy(source = event.sourceName.ifBlank { event.sourcePackage }.take(40)) }
 
     fun fold(
         existing: MemoryEntryEntity?,
@@ -64,6 +65,7 @@ object PersonalMemory {
         val times = (detail.optJSONArray("times").longs() + obs.map { it.at }).distinct().sorted().takeLast(MAX_TIMES)
         val eventIds = (detail.optJSONArray("events").longs() + obs.map { it.eventId }).distinct().takeLast(MAX_EVENTS)
         val amounts = (detail.optJSONArray("amounts").longs() + obs.mapNotNull { it.amountMinor }).takeLast(MAX_TIMES)
+        val sources = (detail.optJSONArray("sources").strings() + obs.mapNotNull { it.source }).distinct().takeLast(MAX_SOURCES)
         val days = times.map { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }.distinct()
 
         // A memory needs repetition on distinct days before it is believed.
@@ -78,6 +80,7 @@ object PersonalMemory {
             .put("times", JSONArray(times))
             .put("events", JSONArray(eventIds))
             .apply { if (amounts.isNotEmpty()) put("amounts", JSONArray(amounts)) }
+            .apply { if (sources.isNotEmpty()) put("sources", JSONArray(sources)) }
             .apply { obs.firstNotNullOfOrNull { it.currency }?.let { put("currency", it) } ?: detail.optString("currency").takeIf { it.isNotBlank() }?.let { put("currency", it) } }
             .apply { cadence(times)?.let { put("cadenceDays", it) } }
 
@@ -123,9 +126,13 @@ object PersonalMemory {
     fun eventIds(entry: MemoryEntryEntity): List<Long> =
         runCatching { JSONObject(entry.detailJson).optJSONArray("events").longs() }.getOrDefault(emptyList())
 
+    fun sources(entry: MemoryEntryEntity): List<String> =
+        runCatching { JSONObject(entry.detailJson).optJSONArray("sources").strings() }.getOrDefault(emptyList())
+
     fun key(value: String) = value.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N} ]"), " ").replace(Regex("\\s+"), " ").trim()
 
     private fun JSONArray?.longs(): List<Long> = if (this == null) emptyList() else (0 until length()).map { optLong(it) }
+    private fun JSONArray?.strings(): List<String> = if (this == null) emptyList() else (0 until length()).mapNotNull { optString(it).takeIf { s -> s.isNotBlank() } }
 
     const val ORIGIN_LEARNED = "LEARNED"
     const val ORIGIN_USER = "USER"
@@ -136,5 +143,6 @@ object PersonalMemory {
     private val RECURRING_EVENT_CATEGORIES = setOf("WORK", "REMINDERS", "BILLS")
     private const val MAX_TIMES = 24
     private const val MAX_EVENTS = 20
+    private const val MAX_SOURCES = 5
     private const val DAY = 24 * 60 * 60 * 1000L
 }

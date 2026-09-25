@@ -5,15 +5,91 @@ Status and contracts for the work on `feat/roadmap-next` against `docs/ROADMAP-N
 ## Pipeline
 
 ```
-Connector (NotificationListener | WhatsApp accessibility)
-  -> RawCapture                      connector/ConnectorFramework.kt
+Connector (NotificationListener | WhatsApp accessibility | pull: Calendar provider, Gmail API)
+  -> RawCapture                      connector/ConnectorFramework.kt, pull via connector/SyncConnector.kt
   -> SourceAdapter (per source)      WhatsApp, Gmail, SMS, calendar, banking, shopping
   -> IngestionPipeline               classify, dedup (source key + fingerprint), rules, persist, rule audit, metrics
   -> EventIntelligencePipeline       extract facts, normalize, cross-source dedup, reference threads, auto-resolve, graph index
   -> surfaces                        Smart Inbox, Ask, Briefing, Health, Validation
 ```
 
-The deterministic logic is the source of truth. AI (`ai/`) can only choose how an Ask query is interpreted, and every AI call has a deterministic fallback. No model ships with the app, so today every path is deterministic.
+The deterministic logic is the source of truth. AI (`ai/`) can only choose how an Ask query is interpreted, and every AI call has a deterministic fallback.
+
+## On-device AI (EPIC-019)
+
+`GeminiNanoModel` (ai/GeminiNanoModel.kt) runs Gemini Nano through the ML Kit GenAI Prompt API (`com.google.mlkit:genai-prompt:1.0.0-beta4`), and Android AICore executes it. The APK contains no model file, because AICore owns both the model and its download.
+
+States:
+- UNKNOWN: not probed yet in this process.
+- NOT_AVAILABLE: the device has no AICore or Nano.
+- NOT_INSTALLED: the model can be downloaded. It then moves through DOWNLOADING to READY, or to FAILED.
+
+Download and warm-up start only when the user taps the button in "What Marksy learned".
+
+Diagnostics record the model name, runtime, warm-up ms, last latency, calls, failures and last error type. They never contain text.
+
+Calls run on `Dispatchers.Default` with a 5 s timeout, then fall back to deterministic interpretation. Prompt content stays on-device. ML Kit itself may send anonymous usage telemetry (no prompt text) to Google. `allowExternal` is still `false`.
+
+Not verified on hardware. The only test device (OnePlus 12R, Android 16) has no AICore package, so Nano reports NOT_AVAILABLE there. Devices without AICore need a second runtime registered in `AiModelRegistry`, for example LiteRT-LM or MediaPipe with a user-supplied Gemma file.
+
+## Ask Marksy (EPIC-016)
+
+`AskMarksy.interpret` is separate from `answer`. It tries the model first and falls back to deterministic parsing. The Ask screen routes on the interpreted intent via `AskMarksyRepository.askIf`.
+
+Model output can only pick the intent, range keyword, subject and direction:
+- Ranges are resolved deterministically.
+- Subjects that are not in the question are dropped.
+- Every item comes from retrieved rows.
+
+New query support:
+- Payments can be filtered by counterparty ("to Amazon").
+- "last month" is a range.
+- A partial name that matches several active people returns a clarification (`needsClarification`) instead of merged results.
+
+## Rules editor (EPIC-018)
+
+`RuleConditionTree` edits the engine's own `Condition` tree: AND/OR groups, NOT, nested groups and per-field comparators. It validates against the store's reload limits (depth 6, 20 children, 120-char values).
+
+A stored rule whose condition fails to parse now loads disabled, with a never-matching condition, and shows "Condition unreadable". Before, it kept no condition and matched every event.
+
+A rule still has one action. The engine does not support multi-action rules.
+
+## Places (EPIC-020)
+
+`LocationMemory` learns Home, Work and named places only from notification text:
+- delivery and ride phrases
+- calendar-style `Location:`/`Where:`/pin lines (never chats)
+
+Marksy never reads device location. The coarse-location permission is still used only for weather.
+
+Privacy handling:
+- Addresses keep at most their last two comma parts (locality, city). A two-part address keeps only the city.
+- Bare street addresses, recipient names and person-only calendar locations are dropped.
+
+Places use the existing memory provenance, confidence, 90-day expiry, correction and forget. Memory entries now also record source apps (`detailJson.sources`). Only events ingested after this change are scanned.
+
+## Pull connectors (EPIC-021)
+
+`SyncConnector` and `ConnectorSyncer` feed provider records through the same `IngestionPipeline`. With `replaceOnUpdate`, an update replaces the stored content instead of appending to it.
+
+- The cursor is saved only after the whole batch is stored.
+- Records deleted or cancelled at the source are resolved, not deleted.
+- `ConnectorSyncWorker` runs every 30 minutes with backoff.
+- Sync state lives in the `marksy_connector_sync` preferences, so there is no schema change.
+
+Calendar:
+- Reads `CalendarContract.Instances` from 1 day back to 14 days ahead, with recurrence expanded.
+- Skips declined and cancelled instances.
+- The cursor is a hash snapshot, which detects new, updated and deleted instances.
+- Unchanged instances are re-sent every 3 days, so retention cannot drop upcoming events.
+- Results are capped at 300, and a capped result never produces false deletions.
+- `READ_CALENDAR` is requested only when the user connects the calendar on the Health screen.
+
+Gmail API:
+- Syncs incrementally from history, re-snapshots on a 404, and invalidates the token on 401/403.
+- Reports NOT_CONFIGURED. It needs a Google OAuth client for the app's signing key plus the restricted `gmail.readonly` scope, and the app has neither.
+
+SMS: there is no direct connector. `READ_SMS` is restricted to default SMS apps, so SMS stays notification-only.
 
 ## Normalized event contract (EPIC-010)
 
@@ -39,8 +115,8 @@ No notification text goes into logs, metrics, `ai_invocations`, `connector_event
 
 ## Known gaps
 
-- Rules UI edits a flat subset (any-of words, hours, amount, confidence). Nested trees are stored and evaluated, and the editor keeps them, but it cannot author them.
-- Gmail, SMS and Calendar arrive only through their Android notifications. There is no API connector (Gmail would need OAuth).
-- Personal memory learns no locations, because no location data is captured.
+- Gemini Nano has not been tested on real hardware, because no AICore device is available. Every current test device uses the deterministic path.
+- Gmail API sync is implemented but stays inactive until an OAuth token provider exists. SMS is notification-only.
+- The Calendar connector and place learning have only unit and Robolectric tests. Neither has run on a device yet.
 - About 60 small metric writes per captured notification. This works, but they could be batched.
 - The old `DailyDigestScreen`/`DailyDigestModel` are no longer routed. The briefing replaces them.

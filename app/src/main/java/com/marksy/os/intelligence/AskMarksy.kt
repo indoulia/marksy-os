@@ -37,8 +37,12 @@ object AskMarksy {
         val derivedFromEventIds: List<Long>,
         val followUps: List<String>,
         val noResult: Boolean,
-        val interpretedBy: String
+        val interpretedBy: String,
+        /** True when Marksy asks which of several real candidates was meant instead of guessing. */
+        val needsClarification: Boolean = false
     )
+
+    data class Interpretation(val query: Query, val interpretedBy: String)
 
     /** Read-only access to Marksy data. Implementations must never invent rows. */
     interface Retriever {
@@ -62,8 +66,11 @@ object AskMarksy {
     // ---------------------------------------------------------------- parsing
 
     fun parse(text: String, previous: Query?, nowMillis: Long, zone: ZoneId): Query {
-        val t = text.lowercase(Locale.ROOT).replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
-        val explicitRange = rangeFor(t, nowMillis, zone)
+        val normalized = normalize(text)
+        val span = DATE_SPAN.find(normalized)
+        // The date span is removed so "from 1 sep to 15 sep" is never read as a counterparty or person.
+        val t = span?.let { normalized.removeRange(it.range).replace(Regex("\\s+"), " ").trim() } ?: normalized
+        val explicitRange = span?.let { dateSpan(it, nowMillis, zone) } ?: rangeFor(t, nowMillis, zone)
         val person = personFor(t)
         val source = SOURCES.entries.firstOrNull { (k, _) -> t.containsWord(k) }?.value
 
@@ -95,12 +102,40 @@ object AskMarksy {
             else -> null
         }
         val subject = when (intent) {
+            Intent.PAYMENTS -> counterpartyFor(t) ?: residualSubject(t) ?: if (inherit) previous!!.subject else null
             Intent.FROM_PERSON -> person ?: if (inherit) previous!!.subject else null
             Intent.SOURCE -> source
             Intent.SEARCH -> searchTerm(t)
             else -> null
         }
         return Query(intent, explicitRange ?: if (inherit) previous!!.range else defaultRange, subject, direction, text.trim())
+    }
+
+    /** A time window the user stated explicitly; an interpreter must not override it. */
+    fun explicitRange(text: String, nowMillis: Long, zone: ZoneId): TimeRange? {
+        val t = normalize(text)
+        return DATE_SPAN.find(t)?.let { dateSpan(it, nowMillis, zone) } ?: rangeFor(t, nowMillis, zone)
+    }
+
+    private fun normalize(text: String) = text.lowercase(Locale.ROOT).replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** "between 1 september and 15 september": inclusive days; a year-less span is the most recent one not in the future. */
+    private fun dateSpan(m: MatchResult, now: Long, zone: ZoneId): TimeRange? {
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val g = m.groupValues
+        // DATE_RX groups per date: day-first day, day-first month, month-first month, month-first day, year.
+        fun date(i: Int, defaultYear: Int): LocalDate? {
+            val mon = MONTHS[(g[i + 1].ifBlank { g[i + 2] }).take(3)] ?: return null
+            val d = g[i].ifBlank { g[i + 3] }.toIntOrNull() ?: return null
+            return runCatching { LocalDate.of(g[i + 4].toIntOrNull() ?: defaultYear, mon, d) }.getOrNull()
+        }
+        val fromYear = g[5].toIntOrNull()
+        var from = date(1, today.year) ?: return null
+        var to = date(6, fromYear ?: today.year) ?: return null
+        if (fromYear == null && g[10].isBlank() && from.isAfter(today)) { from = from.minusYears(1); to = to.minusYears(1) }
+        if (to.isBefore(from)) to = to.plusYears(1)
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+        return TimeRange(start(from, zone), start(to.plusDays(1), zone), "${from.format(fmt)} – ${to.format(fmt)}")
     }
 
     private fun rangeFor(t: String, now: Long, zone: ZoneId): TimeRange? {
@@ -117,6 +152,10 @@ object AskMarksy {
             t.contains("this week") || t.containsWord("week") -> {
                 val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
                 TimeRange(start(monday, zone), now + 1, "this week")
+            }
+            t.contains("last month") || t.contains("previous month") -> {
+                val first = date.withDayOfMonth(1)
+                TimeRange(start(first.minusMonths(1), zone), start(first, zone), "last month")
             }
             t.contains("this month") || t.containsWord("month") -> TimeRange(start(date.withDayOfMonth(1), zone), now + 1, "this month")
             else -> null
@@ -141,15 +180,25 @@ object AskMarksy {
             ?.takeUnless { it in NOT_PEOPLE || rangeWords.any { w -> it.containsWord(w) } }
     }
 
+    /** "payments to amazon last month" -> "amazon": the counterparty is a filter over retrieved rows, never a fact. */
+    private fun counterpartyFor(t: String): String? {
+        val m = Regex("\\b(?:to|at|from|with)\\s+([a-z0-9][a-z0-9&.'-]*(?:\\s+[a-z0-9][a-z0-9&.'-]*){0,2})").find(t) ?: return null
+        val words = m.groupValues[1].split(' ').dropWhile { it in ARTICLES }.takeWhile { it !in COUNTERPARTY_STOP }
+        return words.joinToString(" ").trim().ifBlank { null }?.takeUnless { it in setOf("me", "my", "i", "us") }
+    }
+
+    /** "show my amazon transactions" -> "amazon": leftover words after removing question and payment vocabulary. */
+    private fun residualSubject(t: String): String? =
+        t.split(' ').filterNot { it in STOP_WORDS || it in PAYMENT_WORDS || it in COUNTERPARTY_STOP || it.length < 3 || it.any(Char::isDigit) }
+            .takeIf { it.size in 1..3 }?.joinToString(" ")
+
     private fun searchTerm(t: String): String? =
         t.split(' ').filterNot { it in STOP_WORDS || it.length < 3 }.joinToString(" ").ifBlank { null }
 
     // ---------------------------------------------------------------- answering
 
     /** Optional interpreters only choose the query; a failure or null falls through to deterministic parsing. */
-    suspend fun ask(
-        text: String, previous: Query?, interpreters: List<QueryInterpreter>, retriever: Retriever, nowMillis: Long, zone: ZoneId
-    ): Answer {
+    suspend fun interpret(text: String, previous: Query?, interpreters: List<QueryInterpreter>, nowMillis: Long, zone: ZoneId): Interpretation {
         for (interpreter in interpreters) {
             val q = try {
                 interpreter.interpret(text, previous, nowMillis, zone)
@@ -157,10 +206,14 @@ object AskMarksy {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 null
             }
-            if (q != null) return answer(q, retriever, nowMillis, interpreter.name)
+            if (q != null) return Interpretation(q, interpreter.name)
         }
-        return answer(parse(text, previous, nowMillis, zone), retriever, nowMillis)
+        return Interpretation(parse(text, previous, nowMillis, zone), DeterministicInterpreter.name)
     }
+
+    suspend fun ask(
+        text: String, previous: Query?, interpreters: List<QueryInterpreter>, retriever: Retriever, nowMillis: Long, zone: ZoneId
+    ): Answer = interpret(text, previous, interpreters, nowMillis, zone).let { answer(it.query, retriever, nowMillis, it.interpretedBy) }
 
     suspend fun answer(query: Query, retriever: Retriever, nowMillis: Long, interpretedBy: String = DeterministicInterpreter.name): Answer {
         val all = retriever.events(query.range.from, query.range.to, RETRIEVAL_LIMIT)
@@ -170,14 +223,17 @@ object AskMarksy {
 
         return when (query.intent) {
             Intent.PAYMENTS -> {
+                val who = query.subject
                 val rows = canonical.filter { it.category in MONEY }.mapNotNull { e ->
                     val m = facts(e).primaryAmount ?: return@mapNotNull null
-                    if (query.direction != null && m.direction != query.direction) null else e to m
+                    if (query.direction != null && m.direction != query.direction) return@mapNotNull null
+                    if (who != null && !mentions(e, facts(e), who)) null else e to m
                 }
                 val totals = rows.groupBy { it.second.currency to it.second.direction }
                     .map { (k, v) -> "${k.second.name.lowercase()} ${formatMoney(v.sumOf { it.second.amountMinor }, k.first)}" }
+                val matching = who?.let { " matching \"$it\"" }.orEmpty()
                 build(query, rows.map { it.first }, interpretedBy,
-                    headline = if (rows.isEmpty()) "I found no payments with an amount $r." else "${rows.size} payment${s(rows.size)} $r: ${totals.joinToString(", ")}.",
+                    headline = if (rows.isEmpty()) "I found no payments$matching with an amount $r." else "${rows.size} payment${s(rows.size)}$matching $r: ${totals.joinToString(", ")}.",
                     detail = { e -> rows.first { it.first.id == e.id }.second.let { "${it.direction.name.lowercase()} ${formatMoney(it.amountMinor, it.currency)}" } },
                     followUps = listOf("What did I receive $r?", "Payments yesterday", "Payments last week"))
             }
@@ -208,7 +264,9 @@ object AskMarksy {
             Intent.FROM_PERSON -> {
                 val name = query.subject
                 if (name == null) return build(query, emptyList(), interpretedBy, "Who do you mean? Try \"What did Rahul send me?\".", { null }, emptyList())
-                val graphIds = retriever.entities(name).filter { it.type in PERSONISH }.flatMap { retriever.eventIdsFor(it.mergedIntoId ?: it.id) }.toSet()
+                val candidates = retriever.entities(name).filter { it.type in PERSONISH }
+                clarifyPerson(query, name, candidates, canonical, retriever, interpretedBy)?.let { return it }
+                val graphIds = candidates.flatMap { retriever.eventIdsFor(it.mergedIntoId ?: it.id) }.toSet()
                 val rows = canonical.filter { e ->
                     e.id in graphIds || (e.category == "MESSAGES" && e.title.contains(name, ignoreCase = true)) ||
                         e.body.contains("from ${name}", ignoreCase = true)
@@ -264,6 +322,28 @@ object AskMarksy {
         }
     }
 
+    /** Several different people match a partial name and each has events in range: ask instead of merging them. */
+    private suspend fun clarifyPerson(
+        query: Query, name: String, candidates: List<ContextEntity>, canonical: List<NotificationEventEntity>, retriever: Retriever, interpretedBy: String
+    ): Answer? {
+        val people = candidates.filter { it.type == "PERSON" && it.mergedIntoId == null }.distinctBy { it.displayName.lowercase().trim() }
+        if (people.size < 2 || people.any { it.displayName.equals(name, ignoreCase = true) }) return null
+        val inRange = canonical.map { it.id }.toSet()
+        val active = people.filter { p -> retriever.eventIdsFor(p.id).any { it in inRange } }.take(MAX_CLARIFY)
+        if (active.size < 2) return null
+        val names = active.map { it.displayName }
+        return Answer(
+            query = query,
+            headline = "Which ${name.replaceFirstChar { it.titlecase(Locale.ROOT) }} do you mean: ${names.dropLast(1).joinToString(", ")} or ${names.last()}?",
+            items = emptyList(), derivedFromEventIds = emptyList(),
+            followUps = names.map { "What did $it send me?" },
+            noResult = false, interpretedBy = interpretedBy, needsClarification = true
+        )
+    }
+
+    private fun mentions(e: NotificationEventEntity, f: EventExtractor.Facts, who: String): Boolean =
+        f.entities.any { it.value.contains(who, true) } || e.title.contains(who, true) || e.body.contains(who, true)
+
     private fun build(
         query: Query, rows: List<NotificationEventEntity>, interpretedBy: String, headline: String,
         detail: (NotificationEventEntity) -> String?, followUps: List<String>
@@ -297,6 +377,15 @@ object AskMarksy {
     private val PERSONISH = setOf("PERSON", "COMPANY", "MERCHANT")
     private val SOURCES = linkedMapOf("whatsapp" to "whatsapp", "gmail" to "gm", "email" to "mail", "emails" to "mail", "sms" to "messaging", "telegram" to "telegram", "slack" to "slack", "teams" to "teams")
     private val NOT_PEOPLE = setOf("me", "you", "them", "work", "bank", "the bank", "amazon", "whatsapp", "email")
+    private val COUNTERPARTY_STOP = setOf("last", "this", "today", "yesterday", "tomorrow", "week", "month", "in", "on", "for", "during", "since", "and", "or")
+    private val PAYMENT_WORDS = setOf("payment", "payments", "paid", "pay", "spent", "spend", "spending", "debited", "credited", "received", "transaction",
+        "transactions", "money", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
+    private val ARTICLES = setOf("a", "an", "the")
+    private val MONTHS = mapOf("jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12)
+    private const val MONTH_RX = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    private const val DATE_RX = "(?:(\\d{1,2})(?:st|nd|rd|th)?(?: of)? $MONTH_RX|$MONTH_RX (\\d{1,2})(?:st|nd|rd|th)?)(?: (\\d{4}))?"
+    private val DATE_SPAN = Regex("\\b(?:between|from) $DATE_RX (?:and|to|until|till|-) $DATE_RX\\b")
+    private const val MAX_CLARIFY = 4
     private val rangeWords = listOf("today", "yesterday", "tomorrow", "week", "month")
     private val STOP_WORDS = setOf("what", "whats", "show", "find", "tell", "about", "the", "and", "any", "did", "does", "for", "from", "with", "this", "that", "last", "week", "today", "yesterday", "month", "have", "has", "was", "are", "were", "get", "got", "all", "my", "me", "your", "how", "when", "where", "who", "which")
     private const val DAY = 24 * 60 * 60 * 1000L
