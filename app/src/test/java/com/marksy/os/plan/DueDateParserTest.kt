@@ -60,4 +60,12 @@ class DueDateParserTest {
         assertNull(parse("HDFC Bank", "Your EMI of Rs 5,432 has been debited on 05/10/2026"))
         assertNull(parse("Swiggy", "Your order is due in 10 minutes"))
     }
+
+    // Seen on device: work emails became "Cultural Club bill"; CRED's title sentence became the counterparty.
+    @Test fun duesWithoutMoneyAreNotBillsAndSentenceTitlesAreNotCounterparties() {
+        assertNull(parse("Cultural Club", "Reminder: 80 KM Step Challenge The challenge is due on 24th September 2026."))
+        val cred = parse("your bill is due on Oct 05, 2026", "pay your bill of ₹14,364.00 now and earn rewards")!!
+        assertNull(cred.counterparty)
+        assertEquals(1_436_400L, cred.amountMinor)
+    }
 }

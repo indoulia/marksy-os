@@ -24,6 +24,7 @@ object DueDateParser {
     private val minimum = Regex("""min(?:imum)?\.?\s+(?:amount\s+)?due\s*(?:of|is|:)?\s*$""", RegexOption.IGNORE_CASE)
     private val bullet = Regex("""•\s*([^•]+?)\s*•""")
     private val smsFrom = Regex("""\bSMS from (.+)$""", RegexOption.IGNORE_CASE)
+    private val moneyWords = Regex("""\b(bill|emi|loan|card|payment|recharge|premium|rent|fee|fees|invoice|dues)\b""", RegexOption.IGNORE_CASE)
 
     fun parse(title: String, body: String, postedAt: Long, zone: ZoneId = ZoneId.systemDefault()): DueNotice? {
         val text = "$title\n$body"
@@ -33,13 +34,16 @@ object DueDateParser {
         // Prefer the date after "due"; fall back to any date in the message.
         val date = findDate(text.substring(due.range.first), posted) ?: findDate(text, posted) ?: return null
         val lower = text.lowercase()
+        // A due with no money in it (a work deadline, a challenge) is not a bill.
+        val amount = amount(text)
+        if (amount == null && !moneyWords.containsMatchIn(text)) return null
         val counterparty = counterparty(title, body)
         val kind = when {
             "emi" in lower.split(Regex("\\W+")) || "loan" in lower -> PlanKind.EMI
             "card" in lower || (counterparty?.contains("bank", ignoreCase = true) == true && "bill" in lower) -> PlanKind.CARD_DUE
             else -> PlanKind.BILL
         }
-        return DueNotice(kind, PlanRules.atAlertHour(date, zone), amount(text), counterparty)
+        return DueNotice(kind, PlanRules.atAlertHour(date, zone), amount, counterparty)
     }
 
     private fun findDate(text: String, posted: LocalDate): LocalDate? {
@@ -72,6 +76,8 @@ object DueDateParser {
         bullet.find(body)?.let { return it.groupValues[1].trim() }
         smsFrom.find(body)?.let { return it.groupValues[1].trim().trimEnd('.') }
         val t = title.trim()
-        return t.takeIf { it.isNotEmpty() && it.any(Char::isLetter) && !money.containsMatchIn(it) && it.length <= 40 }
+        // "your bill is due on Oct 05, 2026" is a sentence, not a name.
+        val sentence = dueWord.containsMatchIn(t) || dayMonthYear.containsMatchIn(t) || monthDayYear.containsMatchIn(t) || numeric.containsMatchIn(t)
+        return t.takeIf { it.isNotEmpty() && it.any(Char::isLetter) && !money.containsMatchIn(it) && it.length <= 40 && !sentence }
     }
 }

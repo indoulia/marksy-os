@@ -164,6 +164,7 @@ class MainActivity : ComponentActivity() {
             TradingDeliveryScheduler.schedule(applicationContext)
             // Dues captured before Plan existed (or reclassified just now) become reminders; idempotent by dedupe key.
             runCatching {
+                plan.revalidate { repository.event(it) }
                 plan.backfill(repository.inCategory("REMINDERS"))
                 plan.rescheduleAll()
                 if (contactsGranted) com.marksy.os.plan.BirthdaySync.sync(applicationContext, plan)
