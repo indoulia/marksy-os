@@ -111,16 +111,18 @@ class GeminiNanoModelTest {
     @Test
     fun malformedOutputTimeoutAndErrorsFallBackToDeterministic() = runBlocking {
         val zone = ZoneOffset.UTC
-        suspend fun interpret(b: FakeBackend): AskMarksy.Query? {
+        suspend fun interpret(b: FakeBackend, text: String = "bills"): AskMarksy.Query? {
             val m = model(b); m.refresh()
-            return ModelQueryInterpreter(IntelligenceService(listOf(m), timeoutMs = 50)).interpret("bills", null, now, zone)
+            return ModelQueryInterpreter(IntelligenceService(listOf(m), timeoutMs = 50)).interpret(text, null, now, zone)
         }
         assertNull(interpret(FakeBackend(reply = { "I think you mean bills" })))
         assertNull(interpret(FakeBackend(reply = { """{"intent":"DELETE_ALL","range":"today","confidence":0.9}""" })))
         assertNull(interpret(FakeBackend(reply = { delay(1_000); "{}" })))
         assertNull(interpret(FakeBackend(reply = { throw IOException("runtime died") })))
         assertNull(interpret(FakeBackend(PromptBackend.Availability.UNAVAILABLE)))
-        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend())?.intent)
+        // Valid output is used for wording the deterministic parser cannot place, never against explicit keywords ("bills").
+        assertNull(interpret(FakeBackend()))
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend(), "anything come in today")?.intent)
     }
 
     @Test
