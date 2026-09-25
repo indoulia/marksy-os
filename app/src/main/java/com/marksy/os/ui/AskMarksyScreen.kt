@@ -48,11 +48,13 @@ private val promptOptions = listOf(
     "💡 What happened today?",
     "💬 Summarize my WhatsApp",
     "📈 Show trading opportunities",
-    "✉️ Any important emails?",
+    "✉️ How many emails today?",
+    "🗓️ What's coming up?",
     "🔍 What did I miss?",
     "💳 What payments did I make this week?",
     "📦 What deliveries are coming tomorrow?",
-    "🧾 Which bills are due?"
+    "🧾 Which bills are due?",
+    "❓ What can you do?"
 )
 
 /**
@@ -60,7 +62,10 @@ private val promptOptions = listOf(
  * duplicate folding, provenance, follow-ups). Everything else keeps the gateway engine, which also
  * knows the Marksy market snapshot and does named-app / fuzzy search.
  */
-private val GROUNDED_INTENTS = setOf(AskMarksy.Intent.PAYMENTS, AskMarksy.Intent.DELIVERIES, AskMarksy.Intent.BILLS_DUE, AskMarksy.Intent.FROM_PERSON)
+private val GROUNDED_INTENTS = setOf(
+    AskMarksy.Intent.PAYMENTS, AskMarksy.Intent.DELIVERIES, AskMarksy.Intent.BILLS_DUE, AskMarksy.Intent.FROM_PERSON,
+    AskMarksy.Intent.SOURCE, AskMarksy.Intent.PLAN, AskMarksy.Intent.STOCK, AskMarksy.Intent.NAVIGATE, AskMarksy.Intent.HELP
+)
 
 data class AskExchange(
     val question: String,
@@ -81,7 +86,8 @@ fun AskMarksyScreen(
     askGrounded: (suspend (String, AskMarksy.Query?) -> AskMarksy.Answer)? = null,
     /** Interprets with the on-device model when ready and answers only grounded intents; null means use the gateway engine. */
     askRouted: (suspend (String, AskMarksy.Query?, Set<AskMarksy.Intent>) -> AskMarksy.Answer?)? = null,
-    loadEvent: suspend (Long) -> NotificationEventEntity? = { null }
+    loadEvent: suspend (Long) -> NotificationEventEntity? = { null },
+    onAction: (AskMarksy.Action) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -112,9 +118,10 @@ fun AskMarksyScreen(
             } else {
                 val byId = events.associateBy { it.id }
                 val shown = result.items.take(5).mapNotNull { byId[it.eventId] ?: loadEvent(it.eventId) }
-                AskExchange(clean, AskMarksyEngine.Answer(result.headline, shown), grounded = result)
+                AskExchange(clean, AskMarksyEngine.Answer(result.headline + pickNote(result.action, market), shown), grounded = result)
             }
             if (index < conversation.size) conversation[index] = exchange
+            exchange.grounded?.action?.takeIf { it.auto }?.let(onAction)
         }
     }
 
@@ -170,7 +177,7 @@ fun AskMarksyScreen(
                     }
                 }
             } else {
-                itemsIndexed(conversation) { _, exchange -> ExchangeView(exchange, onEventSelected, onFollowUp = ::ask) }
+                itemsIndexed(conversation) { _, exchange -> ExchangeView(exchange, onEventSelected, onFollowUp = ::ask, onAction = onAction) }
             }
         }
 
@@ -267,7 +274,7 @@ private fun Greeting(compact: Boolean) {
             Spacer(Modifier.height(10.dp))
             Text("Hi! I'm Marksy.", color = MarksyTheme.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Text(
-                "Ask about your notifications, emails, messages or markets.",
+                "Ask about notifications, emails, reminders or stocks, or name a page to open.",
                 color = MarksyTheme.TextSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
@@ -277,8 +284,17 @@ private fun Greeting(compact: Boolean) {
     }
 }
 
+private fun pickNote(action: AskMarksy.Action?, market: MarketState): String {
+    if (action?.page != AskMarksy.Page.STOCK) return ""
+    val pick = (market as? MarketState.Loaded)?.snapshot?.opportunities?.firstOrNull { it.symbol.equals(action.arg, ignoreCase = true) } ?: return ""
+    return " Marksy pick: target ₹${String.format(Locale.US, "%,.0f", pick.targetPrice)}, stop ₹${String.format(Locale.US, "%,.0f", pick.stopLoss)}" +
+        (pick.upsidePct?.let { ", upside ${String.format(Locale.US, "%.1f%%", it)}" } ?: "") + "."
+}
+
 @Composable
-private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit, onFollowUp: (String) -> Unit = {}) {
+private fun ExchangeView(
+    exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit, onFollowUp: (String) -> Unit = {}, onAction: (AskMarksy.Action) -> Unit = {}
+) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             exchange.question,
@@ -327,10 +343,18 @@ private fun ExchangeView(exchange: AskExchange, onEventSelected: (NotificationEv
                 }
             }
             exchange.grounded?.let { g ->
+                g.action?.let { a ->
+                    Text(
+                        "${a.label} →", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(14.dp)).background(MarksyTheme.SurfaceRaised)
+                            .clickable { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
                 val n = g.derivedFromEventIds.size
                 val basis = if (g.needsClarification) "Pick one to search" else
                     "Based on $n local notification${if (n == 1) "" else "s"} · ${g.query.range.label}" + if (n > exchange.answer.events.size) " · showing ${exchange.answer.events.size}" else ""
-                Text(
+                // Help, navigation and manual reminders aren't derived from notifications, so no basis line.
+                if (n > 0 || g.noResult || g.needsClarification) Text(
                     basis + if (g.interpretedBy != AskMarksy.DeterministicInterpreter.name) " · question understood by on-device AI" else "",
                     color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp)
                 )

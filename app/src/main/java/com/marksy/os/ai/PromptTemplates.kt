@@ -9,7 +9,7 @@ import java.time.ZoneId
 object PromptTemplates {
     val ASK_INTERPRET = PromptTemplate(
         id = "ask.interpret",
-        version = 2,
+        version = 3,
         task = AiTask.INTERPRET_QUERY,
         text = """
             You map a user's question about their own phone notifications to a query. Do not answer it.
@@ -86,10 +86,14 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
         val range = AskMarksy.explicitRange(text, nowMillis, zone) ?: base.range
         // A model that omits the merchant/person the user typed must not silently widen the answer.
         val typedQuery = AskMarksy.parse(text, previous, nowMillis, zone).takeIf { it.intent == intent }
+        // Channel and page/stock target are only ever taken from the typed words.
+        val typedAny = AskMarksy.parse(text, previous, nowMillis, zone)
         return base.copy(
             intent = intent, range = range, rawText = text,
-            subject = subject ?: typedQuery?.subject ?: base.subject,
-            direction = typedQuery?.direction ?: direction ?: base.direction
+            subject = if (intent == AskMarksy.Intent.SOURCE) typedQuery?.subject else subject ?: typedQuery?.subject ?: base.subject,
+            direction = typedQuery?.direction ?: direction ?: base.direction,
+            channel = typedAny.channel ?: subject.takeIf { intent == AskMarksy.Intent.SOURCE },
+            target = typedQuery?.target
         )
     }
 
