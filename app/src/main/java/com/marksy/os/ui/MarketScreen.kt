@@ -40,6 +40,7 @@ fun MarketScreen(
     onTabSelected: (String) -> Unit,
     selectedSymbol: String?,
     onSymbolSelected: (String?) -> Unit,
+    stockQuery: String = "",
     marketEvents: List<NotificationEventEntity> = emptyList(),
     onEventSelected: (NotificationEventEntity) -> Unit = {}
 ) {
@@ -63,7 +64,10 @@ fun MarketScreen(
             }
             MarketTab.STOCKS -> {
                 val symbol = selectedSymbol
-                if (symbol == null) {
+                val query = stockQuery.trim()
+                if (query.length >= 3 && !query.equals(symbol, ignoreCase = true)) {
+                    StockSuggestions(query, inner, onSymbolSelected)
+                } else if (symbol == null) {
                     Box(Modifier.padding(18.dp)) { EmptyState("Look up a stock", "Search a symbol in the bar above, e.g. RELIANCE.") }
                 } else {
                     val refresh = rememberRefreshState()
@@ -71,7 +75,7 @@ fun MarketScreen(
                         value = repository.instrument(symbol)
                         refresh.done()
                     }
-                    MarksyRefreshBox(refresh) { StockDetailScreen(state = state, padding = inner, onBack = { onSymbolSelected(null) }) }
+                    MarksyRefreshBox(refresh) { StockDetailScreen(state = state, padding = inner) }
                 }
             }
             MarketTab.IPOS -> IpoScreen(repository = repository, padding = inner)
@@ -89,6 +93,34 @@ fun MarketScreen(
             selectedFilter = tab.name,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) }
         )
+    }
+}
+
+@Composable
+private fun StockSuggestions(query: String, padding: PaddingValues, onSymbolSelected: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // null = still loading; the instrument master is public and cached for a day.
+    val matches by produceState<List<String>?>(null, query) {
+        value = runCatching { com.marksy.os.upstox.UpstoxInstruments.suggest(context, query) }.getOrDefault(emptyList())
+    }
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = padding.calculateBottomPadding())
+    ) {
+        val list = matches
+        when {
+            list == null -> item { MarksyLoader("Searching…") }
+            list.isEmpty() -> item { EmptyState("No NSE symbol matches \"$query\"", "Press search on the keyboard to look it up anyway.") }
+            else -> items(list, key = { "sym-$it" }) { symbol ->
+                Text(
+                    symbol,
+                    color = MarksyTheme.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.fillMaxWidth().clickable { onSymbolSelected(symbol) }.padding(vertical = 12.dp)
+                )
+            }
+        }
     }
 }
 

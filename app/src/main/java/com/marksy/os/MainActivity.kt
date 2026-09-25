@@ -385,15 +385,22 @@ class MainActivity : ComponentActivity() {
                         }
                         if (stockSearch) {
                             val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-                            fun openStock() { stockQuery.trim().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; keyboard?.hide() } }
+                            fun openStock() { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; stockQuery = it; keyboard?.hide() } }
                             CompactTextField(
                                 value = stockQuery,
-                                onValueChange = { stockQuery = it.uppercase() },
+                                // Rewriting the text (e.g. uppercase) mid-composition makes the IME drop letters; the keyboard capitalises instead.
+                                onValueChange = { stockQuery = it },
                                 modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                                 placeholder = "Search symbol",
                                 leadingIcon = Icons.Default.Search,
-                                height = 36.dp,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                                // Pill a notch shorter than the 36dp round header icons so it sits level with them.
+                                height = 32.dp,
+                                cornerRadius = 16.dp,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
+                                    autoCorrectEnabled = false,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                                ),
                                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { openStock() })
                             )
                         }
@@ -549,7 +556,8 @@ class MainActivity : ComponentActivity() {
                     tabName = marketTabName,
                     onTabSelected = { marketTabName = it },
                     selectedSymbol = marketSymbol,
-                    onSymbolSelected = { marketSymbol = it },
+                    onSymbolSelected = { marketSymbol = it; stockQuery = it ?: "" },
+                    stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     onEventSelected = openEvent
                 )

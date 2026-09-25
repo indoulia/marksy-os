@@ -643,14 +643,21 @@ private fun AttentionCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            result.reasons.take(2).joinToString(" • "),
-            color = MarksyTheme.TextMuted,
-            fontSize = 11.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        val body = EventText.body(event.title, event.body)
+        if (body.isNotBlank()) {
+            Text(body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+        }
+        val reasons = EventText.usefulReasons(result.reasons)
+        if (reasons.isNotEmpty()) {
+            Text(
+                reasons.take(2).joinToString(" • "),
+                color = MarksyTheme.TextMuted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 5.dp)
+            )
+        }
     }
 }
 
@@ -717,6 +724,10 @@ private fun CompactEventCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp)
         )
+        val body = EventText.body(event.title, event.body)
+        if (body.isNotBlank()) {
+            Text(body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        }
     }
 }
 
