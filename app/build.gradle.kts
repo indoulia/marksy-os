@@ -14,6 +14,7 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Non-secret endpoint configuration only. Integration credentials are provisioned
         // at runtime and encrypted with Android Keystore.

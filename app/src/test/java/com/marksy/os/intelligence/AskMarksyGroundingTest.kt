@@ -151,10 +151,10 @@ class AskMarksyGroundingTest {
     @Test
     fun interpretationIsSeparableSoTheScreenCanRouteOnTheModelsIntent() = runBlocking {
         val reply = """{"intent":"BILLS_DUE","range":"default","subject":null,"confidence":0.8}"""
-        val i = AskMarksy.interpret("anything I still owe?", null, modelChain(reply), now, zone)
+        val i = AskMarksy.interpret("anything I haven't cleared yet?", null, modelChain(reply), now, zone)
         assertEquals(Intent.BILLS_DUE, i.query.intent)
         assertEquals("on-device-model", i.interpretedBy)
-        val d = AskMarksy.interpret("anything I still owe?", null, emptyList(), now, zone)
+        val d = AskMarksy.interpret("anything I haven't cleared yet?", null, emptyList(), now, zone)
         assertEquals(Intent.SEARCH, d.query.intent)
         assertEquals("deterministic", d.interpretedBy)
     }

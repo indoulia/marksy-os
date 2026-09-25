@@ -100,6 +100,13 @@ class IntelligenceServiceTest {
         ).forEach { owe ->
             assertEquals(owe, AskMarksy.Intent.BILLS_DUE, ModelQueryInterpreter(service(FakeModel({ owe }))).interpret("do I owe anyone money", null, now, zone)?.intent)
         }
+        // Seen on device: Gemma said HELP for "catch me up", PAYMENTS for "should I buy anything"; an intent with no word
+        // supporting it in the question is not trusted, while a plausible one is.
+        val payments = """{"intent":"PAYMENTS","range":"default","subject":null,"confidence":0.9}"""
+        assertNull(ModelQueryInterpreter(service(FakeModel({ payments }))).interpret("who wished me", null, now, zone))
+        assertEquals(AskMarksy.Intent.PAYMENTS, ModelQueryInterpreter(service(FakeModel({ payments }))).interpret("did the bank take anything from me", null, now, zone)?.intent)
+        val plan = """{"intent":"PLAN","range":"default","subject":"birthday","confidence":0.9}"""
+        assertNull(ModelQueryInterpreter(service(FakeModel({ plan }))).interpret("who wished me happy birthday", null, now, zone))
         val stock = """{"intent":"stock","range":"default","subject":"infosys","confidence":0.9}"""
         val q = ModelQueryInterpreter(service(FakeModel({ stock }))).interpret("what's up with infosys", null, now, zone)!!
         assertEquals(AskMarksy.Intent.STOCK, q.intent)
