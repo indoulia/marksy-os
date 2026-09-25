@@ -74,6 +74,12 @@ interface MetricsDao {
         add(day, scope, metric, delta)
     }
 
+    /** Many increments in one transaction: one commit instead of one per row. */
+    @Transaction
+    suspend fun incrementAll(rows: List<MetricCounterEntity>) {
+        rows.forEach { increment(it.day, it.scope, it.metric, it.value) }
+    }
+
     /** Gauges (a daily snapshot value) overwrite instead of adding. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun set(row: MetricCounterEntity)

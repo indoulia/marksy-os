@@ -130,7 +130,10 @@ class IngestionPipeline(
         data class Failed(val reason: String) : Result()
     }
 
-    suspend fun ingest(input: RawCapture): Result {
+    // A capture makes dozens of counter updates; batching turns them into one transaction.
+    suspend fun ingest(input: RawCapture): Result = metrics.batch { ingestNow(input) }
+
+    private suspend fun ingestNow(input: RawCapture): Result {
         if (input.title.isBlank() && input.body.isBlank()) return Result.Empty
         // An adapter bug must not stop capture: fall back to the unadapted capture.
         val adapter = ConnectorRegistry.adapterFor(input.connectorId, input.sourcePackage)
