@@ -120,9 +120,9 @@ class GeminiNanoModelTest {
         assertNull(interpret(FakeBackend(reply = { delay(1_000); "{}" })))
         assertNull(interpret(FakeBackend(reply = { throw IOException("runtime died") })))
         assertNull(interpret(FakeBackend(PromptBackend.Availability.UNAVAILABLE)))
-        // Valid output is used for wording the deterministic parser cannot place, never against explicit keywords ("bills").
+        // Valid output is used for wording the rules cannot place (if the words support it), never against explicit keywords ("bills").
         assertNull(interpret(FakeBackend()))
-        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend(), "anything come in today")?.intent)
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend(), "did the bank take anything today")?.intent)
     }
 
     @Test

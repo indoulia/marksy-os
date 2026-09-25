@@ -81,6 +81,11 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
             DiagLog.i(TAG, "interpret: model intent ${q.intent} contradicts $deterministic; deterministic fallback")
             return null
         }
+        // Where the rules found nothing, a 1B model often guesses; only an intent the wording supports is used.
+        if (q != null && deterministic == AskMarksy.Intent.SEARCH && !AskMarksy.plausible(q, text)) {
+            DiagLog.i(TAG, "interpret: model intent ${q.intent} has no support in the question; deterministic fallback")
+            return null
+        }
         DiagLog.i(TAG, "interpret: outcome=${outcome.invocation.outcome} latencyMs=${outcome.invocation.latencyMs} intent=${q?.intent}")
         return q
     }

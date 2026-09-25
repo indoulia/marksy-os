@@ -95,26 +95,35 @@ object AskMarksy {
         val stock = STOCK_PATTERNS.firstNotNullOfOrNull { it.find(bare)?.groupValues?.get(1) }?.let(::stockName)
         val opened = Regex("^open (.+)$").find(bare)?.groupValues?.get(1)?.let(::stockName)?.takeIf { it !in CHANNEL_WORDS }
         val planKind = when {
+            // "who wished me happy birthday" is about messages received, not birthdays to come.
+            has(t, *WISHES) -> null
             has(t, "birthday", "birthdays") -> "birthdays"
             has(t, "todo", "to do", "to-do", "task", "tasks") -> "tasks"
-            has(t, "reminder", "reminders", "upcoming", "coming up") -> "all"
+            has(t, "reminder", "reminders", "upcoming", "coming up", "pending", "remind me") -> "all"
             else -> null
         }
 
+        val shown = SHOW_VERB.find(t)?.groupValues?.get(1)?.takeIf { pageAction(it) != null } ?: t.takeIf { pageAction(it) != null }
         val intent = when {
             page != null -> Intent.NAVIGATE
             has(t, "what can you do", "what can i ask", "how do i use", "what do you do") || t == "help" -> Intent.HELP
-            has(t, "bill", "bills", "due", "invoice", "recharge") -> Intent.BILLS_DUE
-            has(t, "payment", "payments", "paid", "spent", "spend", "debited", "credited", "received money", "transactions", "transaction") -> Intent.PAYMENTS
-            has(t, "delivery", "deliveries", "package", "packages", "parcel", "shipment", "order", "orders", "arriving") -> Intent.DELIVERIES
+            has(t, "bill", "bills", "due", "dues", "invoice", "recharge", "owe", "owed", "have to pay", "need to pay", "pending payment", "pending payments",
+                "settle", "outstanding", "payment reminder", "payment reminders") -> Intent.BILLS_DUE
+            has(t, "payment", "payments", "paid", "pay", "spent", "spend", "debited", "credited", "received money", "transactions", "transaction", "money", "salary") -> Intent.PAYMENTS
+            has(t, "delivery", "deliveries", "package", "packages", "parcel", "parcels", "shipment", "shipments", "order", "orders", "arriving") -> Intent.DELIVERIES
             planKind != null -> Intent.PLAN
             stock != null -> Intent.STOCK
-            has(t, "trade", "trades", "trading", "stock", "stocks", "opportunities") -> Intent.TRADING
+            has(t, "trade", "trades", "trading", "stock", "stocks", "opportunities", "should i buy", "what to buy", "buy anything", "sell anything", "invest",
+                "market up", "market down", "how is the market", "market doing", "markets today") -> Intent.TRADING
             has(t, "miss", "missed", "unread") -> Intent.MISSED
             has(t, "important", "urgent", "priority", "happened", "highlights") -> Intent.IMPORTANT
+            // "what's new on outlook" is about Outlook, so these catch-alls only apply when no app is named.
+            channel == null && has(t, "catch me up", "catch up", "should know", "what's new", "whats new", "brief me", "anything new") -> Intent.IMPORTANT
             opened != null -> Intent.STOCK
             person != null -> Intent.FROM_PERSON
-            channel != null || has(t, "how many", "count", "number of") -> Intent.SOURCE
+            channel != null || has(t, "how many", "count", "number of", "which app", "most notifications") -> Intent.SOURCE
+            // "show market news", "calls": a page name with no data question behind it.
+            shown != null -> Intent.NAVIGATE
             // Short follow-ups ("and yesterday?", "what about Amit?") keep the previous intent.
             previous != null && (t.startsWith("and ") || t.startsWith("what about") || t.startsWith("how about") || t.split(' ').size <= 3) -> previous.intent
             else -> Intent.SEARCH
@@ -129,7 +138,7 @@ object AskMarksy {
         }
         val inherit = previous != null && intent == previous.intent
         val direction = when {
-            has(t, "received", "credited", "got paid", "refund", "refunds") -> EventExtractor.Direction.CREDIT
+            has(t, "received", "credited", "got paid", "refund", "refunds", "get any money", "got any money", "get money", "got money", "salary") -> EventExtractor.Direction.CREDIT
             has(t, "paid", "spent", "spend", "debited", "sent money", "i make", "i made", "did i pay") -> EventExtractor.Direction.DEBIT
             inherit -> previous!!.direction
             else -> null
@@ -143,8 +152,11 @@ object AskMarksy {
             else -> null
         }
         val target = when (intent) {
-            Intent.NAVIGATE -> page
+            Intent.NAVIGATE -> page ?: shown
             Intent.STOCK -> stock ?: opened
+            // "when is the ICICI bill due", "where is my amazon order": the name narrows the list.
+            Intent.BILLS_DUE, Intent.PLAN, Intent.DELIVERIES -> bare.split(' ').map { it.removeSuffix("'s") }
+                .filter { it.length >= 3 && it !in STOP_WORDS && it !in FILTER_VOCAB }.joinToString(" ").ifBlank { null }
             else -> null
         }
         return Query(intent, explicitRange ?: if (inherit) previous!!.range else defaultRange, subject, direction, text.trim(),
@@ -310,8 +322,10 @@ object AskMarksy {
                     retriever.events(nowMillis - 14 * DAY, nowMillis + 1, RETRIEVAL_LIMIT)
                         .filter { isOpen(it) && facts(it).times.any { t -> t.epochMillis in query.range.from until query.range.to } }
                 } else canonical.filter(::isOpen)
+                val words = query.target?.split(' ').orEmpty()
                 // Only the latest update of each order is listed.
-                val latest = rows.sortedByDescending { it.postedAt }.distinctBy { EventIntelligence.threadKey(it) }
+                val latest = rows.filter { e -> words.all { w -> e.title.contains(w, true) || e.body.contains(w, true) || e.sourceName.contains(w, true) } }
+                    .sortedByDescending { it.postedAt }.distinctBy { EventIntelligence.threadKey(it) }
                 val phrase = if (byExpectedDate) "expected $r" else "in $r"
                 build(query, latest, interpretedBy,
                     headline = if (latest.isEmpty()) "No open deliveries $phrase." else "${latest.size} open deliver${if (latest.size == 1) "y" else "ies"} $phrase.",
@@ -464,7 +478,11 @@ object AskMarksy {
             "this month" -> Instant.ofEpochMilli(range.from).atZone(zone).toLocalDate().plusMonths(1).let { start(it, zone) }
             else -> now + 30 * DAY
         }
-        val open = items.filter { p -> p.status != "DONE" && p.dueAt != null && p.dueAt in from until to && (kinds == null || p.kind in kinds) }.sortedBy { it.dueAt }
+        val words = query.target?.split(' ').orEmpty()
+        val open = items.filter { p ->
+            p.status != "DONE" && p.dueAt != null && p.dueAt in from until to && (kinds == null || p.kind in kinds) &&
+                words.all { w -> p.title.contains(w, ignoreCase = true) || p.counterparty?.contains(w, ignoreCase = true) == true }
+        }.sortedBy { it.dueAt }
         fun line(p: PlanItemEntity) = listOfNotNull(p.title, PlanText.amount(p.amountMinor)).joinToString(" ") +
             (PlanText.dueLabel(p.dueAt, now, zone)?.let { " ($it)" } ?: "")
         val more = if (open.size > MAX_PLAN_LINES) " and ${open.size - MAX_PLAN_LINES} more" else ""
@@ -549,17 +567,28 @@ object AskMarksy {
     )
     private val CHANNEL_PHRASE = Regex("\\b(?:on|in|via|over|through) (?:the )?(?:${CHANNEL_WORDS.keys.joinToString("|") { Regex.escape(it) }})\\b")
     private val RANGE_PHRASE = Regex("\\b(?:(?:this|last|previous|next) (?:week|month)|today|tonight|yesterday|tomorrow|so far)\\b")
+    private val SHOW_VERB = Regex("^(?:show me|show|see|view)(?: the| my)? (.+?)(?: page| tab)?$")
+    // Words that describe the list itself, so they never become a name filter.
+    private val FILTER_VOCAB = setOf("bill", "bills", "due", "dues", "pay", "owe", "owed", "anyone", "money", "reminder", "reminders", "birthday",
+        "birthdays", "upcoming", "coming", "when", "next", "list", "todo", "task", "tasks", "pending", "need", "delivery", "deliveries", "package",
+        "packages", "parcel", "parcels", "order", "orders", "shipment", "shipments", "arriving", "arrive", "where", "expected", "anything", "any",
+        "soon", "tomorrow", "open", "still", "card", "payment", "payments", "remind", "track", "tracking", "status", "where's")
     private val NAV_VERB = Regex("^(?:please )?(?:open|go to|goto|take me to|navigate to|switch to|jump to)(?: the| my)? (.+)$")
     private val STOCK_PATTERNS = listOf(
         Regex("\\b(?:price|quote|chart|ltp) (?:of|for) (.+)$"),
         Regex("^(?:how is|how's|hows) (.+?) (?:doing|performing|trading)$"),
-        Regex("^(.+?) (?:share|stock)(?: price| quote| chart)?$"),
+        Regex("\\b(?:news|update|updates) (?:on|about|for) (.+?)(?: shares?| stock)?$"),
+        // An unknown name falls back to a search for it, so this can't misfire badly.
+        Regex("^tell me about (.+)$"),
+        Regex("^(.+?) (?:share|shares|stock)(?: price| quote| chart)?$"),
         Regex("^(.+?) (?:price|quote|ltp)$")
     )
     private val STOCK_LEAD = setOf("what", "what's", "whats", "is", "the", "show", "me", "get", "check", "current", "today's", "latest", "live", "any", "a", "my", "best", "top", "which")
     private val MARKET_WORDS = setOf("market", "markets", "nifty", "sensex", "index", "indices")
     private val SOURCE_FILLER = setOf("receive", "received", "get", "got", "come", "came", "many", "count", "number", "notification", "notifications",
-        "new", "any", "summarize", "summarise", "summary", "sent", "there", "been", "anything", "list", "much", "today's")
+        "new", "any", "summarize", "summarise", "summary", "sent", "there", "been", "anything", "list", "much", "today's", "app", "apps", "most",
+        "messaged", "texted", "emailed", "pinged", "wrote", "called",
+        "anyone", "someone", "anybody", "somebody", "reply", "replied", "replies", "what's", "whats")
     private val PLAN_KINDS = mapOf("birthdays" to setOf("BIRTHDAY"), "tasks" to setOf("TASK", "FOLLOW_UP"))
     private val BILL_KINDS = setOf("BILL", "EMI", "CARD_DUE")
     private val PERSON_CATEGORIES = setOf("MESSAGES", "EMAIL", "WORK")
@@ -577,6 +606,7 @@ object AskMarksy {
         "board" to act(Page.PLAN, "Board", "Board"), "kanban" to act(Page.PLAN, "Board", "Board"), "todo" to act(Page.PLAN, "Board", "Board"),
         "to do" to act(Page.PLAN, "Board", "Board"), "to do board" to act(Page.PLAN, "Board", "Board"), "todo board" to act(Page.PLAN, "Board", "Board"),
         "to-do board" to act(Page.PLAN, "Board", "Board"), "tasks" to act(Page.PLAN, "Board", "Board"),
+        "kanban board" to act(Page.PLAN, "Board", "Board"), "task board" to act(Page.PLAN, "Board", "Board"),
         "trading" to act(Page.TRADING), "picks" to act(Page.TRADING, "Marksy picks", "Marksy picks"), "marksy picks" to act(Page.TRADING, "Marksy picks", "Marksy picks"),
         "calls" to act(Page.TRADING, "Calls", "Calls"), "trade calls" to act(Page.TRADING, "Calls", "Calls"), "trading calls" to act(Page.TRADING, "Calls", "Calls"),
         "captured" to act(Page.TRADING, "Captured", "Captured"), "captured trades" to act(Page.TRADING, "Captured", "Captured"),
@@ -588,7 +618,39 @@ object AskMarksy {
         "settings" to act(Page.SETTINGS), "profile" to act(Page.SETTINGS), "more" to act(Page.SETTINGS)
     )
     private const val MAX_PLAN_LINES = 5
-    private val NOT_PEOPLE = setOf("me", "you", "them", "work", "bank", "the bank", "amazon", "whatsapp", "email")
+    private val NOT_PEOPLE = setOf("me", "you", "them", "work", "bank", "the bank", "amazon", "whatsapp", "email",
+        "anyone", "someone", "anybody", "somebody", "everyone", "nobody", "i")
+
+    private val WISHES = arrayOf("wished", "wishes", "wish me", "wishing")
+
+    // Word stems that make an intent believable. A model's pick for a question the rules couldn't read must have one.
+    private val INTENT_HINTS = mapOf(
+        Intent.PAYMENTS to listOf("pay", "paid", "spen", "money", "bank", "debit", "credit", "refund", "cashback", "upi", "transfer", "transaction",
+            "salary", "rupee", "₹", "amount", "cost", "charge", "deduct", "receiv", "how much", "took", "take"),
+        Intent.BILLS_DUE to listOf("bill", "due", "owe", "emi", "loan", "settle", "outstanding", "card", "rent", "pending", "clear"),
+        Intent.DELIVERIES to listOf("deliver", "parcel", "package", "order", "ship", "courier", "arriv", "track"),
+        Intent.PLAN to listOf("remind", "birthday", "task", "todo", "to do", "plan", "upcoming", "coming", "schedule", "pending", "anniversar"),
+        Intent.TRADING to listOf("trad", "stock", "share", "buy", "sell", "invest", "market", "call", "tip", "portfolio", "nifty", "sensex"),
+        Intent.IMPORTANT to listOf("important", "urgent", "priorit", "catch", "know", "new", "highlight", "happen", "summar", "brief"),
+        Intent.MISSED to listOf("miss", "unread", "new", "ignored"),
+        Intent.HELP to listOf("help", "can you", "how do"),
+        Intent.SOURCE to listOf("app", "notification", "how many")
+    )
+
+    /** Whether [q], chosen by a model for [text], has any support in the words the user typed. */
+    fun plausible(q: Query, text: String): Boolean {
+        val t = normalize(text)
+        return when (q.intent) {
+            Intent.SEARCH -> true
+            Intent.FROM_PERSON -> q.subject != null
+            Intent.STOCK, Intent.NAVIGATE -> q.target != null
+            Intent.SOURCE -> q.channel != null || INTENT_HINTS.getValue(Intent.SOURCE).any { t.contains(it) }
+            Intent.PLAN -> !has(t, *WISHES) && INTENT_HINTS.getValue(Intent.PLAN).any { hint -> t.contains(hint) }
+            else -> INTENT_HINTS[q.intent].orEmpty().any { hint ->
+                if (' ' in hint || hint == "₹") t.contains(hint) else t.split(' ').any { it.startsWith(hint) }
+            }
+        }
+    }
     private val COUNTERPARTY_STOP = setOf("last", "this", "today", "yesterday", "tomorrow", "week", "month", "in", "on", "for", "during", "since", "and", "or")
     private val PAYMENT_WORDS = setOf("payment", "payments", "paid", "pay", "spent", "spend", "spending", "debited", "credited", "received", "transaction",
         "transactions", "money", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
@@ -599,7 +661,7 @@ object AskMarksy {
     private val DATE_SPAN = Regex("\\b(?:between|from) $DATE_RX (?:and|to|until|till|-) $DATE_RX\\b")
     private const val MAX_CLARIFY = 4
     private val rangeWords = listOf("today", "yesterday", "tomorrow", "week", "month")
-    private val STOP_WORDS = setOf("what", "whats", "show", "find", "tell", "about", "the", "and", "any", "did", "does", "for", "from", "with", "this", "that", "last", "week", "today", "yesterday", "month", "have", "has", "was", "are", "were", "get", "got", "all", "my", "me", "your", "how", "when", "where", "who", "which")
+    private val STOP_WORDS = setOf("what", "whats", "what's", "show", "find", "tell", "about", "the", "and", "any", "did", "does", "for", "from", "with", "this", "that", "last", "week", "today", "yesterday", "month", "have", "has", "was", "are", "were", "get", "got", "all", "my", "me", "your", "how", "when", "where", "who", "which")
     private const val DAY = 24 * 60 * 60 * 1000L
     private const val RETRIEVAL_LIMIT = 1000
     private const val MAX_ITEMS = 25
