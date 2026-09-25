@@ -37,6 +37,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MarksyOS">
 
+        <!-- Gemma's GPU backend; optional, MediaPipe falls back to CPU without it. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL-pixel.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL-car.so" android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

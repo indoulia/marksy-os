@@ -69,7 +69,7 @@ object MarksyContainer {
     /** No external provider exists, so external processing is hard-off rather than a setting. */
     fun intelligence(context: Context): IntelligenceService =
         IntelligenceService(
-            AiModelRegistry.installed(), allowExternal = { false }, sink = RoomAiInvocationSink(database(context).aiInvocationDao(), metrics(context)),
+            AiModelRegistry.also { it.bind(context) }.installed(), allowExternal = { false }, sink = RoomAiInvocationSink(database(context).aiInvocationDao(), metrics(context)),
             // Gemini Nano's first call after idle includes model load; slower answers fall back to deterministic parsing.
             timeoutMs = 5_000L
         )

@@ -8,7 +8,14 @@ import com.marksy.os.data.local.AiInvocationEntity
  * needs. Models are process singletons so probed state and diagnostics survive across screens.
  */
 object AiModelRegistry {
-    private val models: List<LocalModel> by lazy { listOf(GeminiNanoModel(MlKitPromptBackend())) }
+    @Volatile private var appContext: android.content.Context? = null
+    // Nano first: when AICore has it, it's the faster model.
+    private val models: List<LocalModel> by lazy {
+        listOf(GeminiNanoModel(MlKitPromptBackend()), GeminiNanoModel(MediaPipeGemmaBackend { appContext }, id = MediaPipeGemmaBackend.ID))
+    }
+
+    /** Gemma reads its imported file from app storage, so it needs the application context. */
+    fun bind(context: android.content.Context) { appContext = context.applicationContext }
 
     fun installed(): List<LocalModel> = models
 }

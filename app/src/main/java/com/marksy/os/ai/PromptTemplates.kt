@@ -9,24 +9,42 @@ import java.time.ZoneId
 object PromptTemplates {
     val ASK_INTERPRET = PromptTemplate(
         id = "ask.interpret",
-        version = 3,
+        version = 4,
         task = AiTask.INTERPRET_QUERY,
+        // A 1B model needs each intent's meaning and a few examples, not just the list of names. The previous
+        // intent is left out: Gemma 1B copied it; follow-ups ("and yesterday?") are handled deterministically.
         text = """
             You map a user's question about their own phone notifications to a query. Do not answer it.
-            Reply with JSON only: {"intent": one of ${AskMarksy.Intent.entries.joinToString("|")},
-            "range": one of today|yesterday|tomorrow|this_week|last_week|this_month|last_month|default,
-            "subject": the person, merchant, app or search words named in the question, or null, "direction": DEBIT|CREDIT|null, "confidence": 0..1}.
+            Intents:
+            PAYMENTS = money paid, spent, received or transferred
+            BILLS_DUE = bills, EMIs, card dues, money the user owes
+            DELIVERIES = orders, parcels, shipments
+            FROM_PERSON = messages, emails or calls from a named person
+            SOURCE = notifications from an app such as Gmail, Outlook, Teams, WhatsApp or SMS
+            PLAN = reminders, birthdays, tasks, what is coming up
+            STOCK = one company's share price or performance
+            TRADING = trading calls, tips, stock opportunities
+            IMPORTANT = what is important or urgent
+            MISSED = what the user missed or has not read
+            NAVIGATE = open a page of the app
+            HELP = what the assistant can do
+            SEARCH = anything else
+            Reply with one JSON object only: {"intent": INTENT, "range": today|yesterday|tomorrow|this_week|last_week|this_month|last_month|default,
+            "subject": the person, merchant, company, app or topic words from the question, or null, "direction": DEBIT|CREDIT|null, "confidence": 0..1}.
             Never add names or words that are not in the question.
-            Example: "what did I pay Amazon last month" -> {"intent":"PAYMENTS","range":"last_month","subject":"amazon","direction":"DEBIT","confidence":0.9}
-            Previous query intent: {{previous}}
+            "what did I pay Amazon last month" -> {"intent":"PAYMENTS","range":"last_month","subject":"amazon","direction":"DEBIT","confidence":0.9}
+            "do I owe anyone money" -> {"intent":"BILLS_DUE","range":"default","subject":null,"direction":null,"confidence":0.8}
+            "did Priya message me yesterday" -> {"intent":"FROM_PERSON","range":"yesterday","subject":"priya","direction":null,"confidence":0.9}
+            "how is infosys doing" -> {"intent":"STOCK","range":"default","subject":"infosys","direction":null,"confidence":0.9}
+            "any birthdays soon" -> {"intent":"PLAN","range":"default","subject":"birthdays","direction":null,"confidence":0.8}
             Question: {{question}}
         """.trimIndent(),
         schema = JsonSchema(
             mapOf(
-                "intent" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, enum = AskMarksy.Intent.entries.map { it.name }.toSet()),
-                "range" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, enum = setOf("today", "yesterday", "tomorrow", "this_week", "last_week", "this_month", "last_month", "default")),
+                "intent" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, enum = AskMarksy.Intent.entries.map { it.name }.toSet(), lenient = true),
+                "range" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, enum = setOf("today", "yesterday", "tomorrow", "this_week", "last_week", "this_month", "last_month", "default"), lenient = true),
                 "subject" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, required = false),
-                "direction" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, required = false, enum = setOf("DEBIT", "CREDIT")),
+                "direction" to JsonSchema.FieldSpec(JsonSchema.Type.STRING, required = false, enum = setOf("DEBIT", "CREDIT"), lenient = true),
                 "confidence" to JsonSchema.FieldSpec(JsonSchema.Type.NUMBER, min = 0.0, max = 1.0)
             )
         )
@@ -68,15 +86,15 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
     }
 
     internal fun toQuery(o: JSONObject, text: String, previous: AskMarksy.Query?, nowMillis: Long, zone: ZoneId): AskMarksy.Query {
-        val intent = AskMarksy.Intent.valueOf(o.getString("intent"))
-        val rangeWords = when (o.getString("range")) {
+        val intent = AskMarksy.Intent.valueOf(o.getString("intent").uppercase())
+        val rangeWords = when (o.getString("range").lowercase()) {
             "today" -> "today"; "yesterday" -> "yesterday"; "tomorrow" -> "tomorrow"
             "this_week" -> "this week"; "last_week" -> "last week"; "this_month" -> "this month"; "last_month" -> "last month"
             else -> ""
         }
         // Reuse the deterministic range resolver so a model can't invent a time window.
         val base = AskMarksy.parse("$rangeWords ${intentHint(intent)}".trim(), previous, nowMillis, zone)
-        val direction = o.optString("direction").takeIf { it.isNotBlank() && o.has("direction") && !o.isNull("direction") }
+        val direction = o.optString("direction").uppercase().takeIf { o.has("direction") && !o.isNull("direction") && it in setOf("DEBIT", "CREDIT") }
             ?.let { EventExtractor.Direction.valueOf(it) }
         // A subject the user never typed is dropped: it could only narrow results, but it would misreport what was searched.
         val typed = text.lowercase().split(Regex("[^\\p{L}\\p{N}&'.-]+")).filter { it.isNotBlank() }.toSet()
@@ -93,7 +111,8 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
             subject = if (intent == AskMarksy.Intent.SOURCE) typedQuery?.subject else subject ?: typedQuery?.subject ?: base.subject,
             direction = typedQuery?.direction ?: direction ?: base.direction,
             channel = typedAny.channel ?: subject.takeIf { intent == AskMarksy.Intent.SOURCE },
-            target = typedQuery?.target
+            // When only the model saw a stock or page, its (typed) subject is the target.
+            target = typedQuery?.target ?: subject?.takeIf { intent == AskMarksy.Intent.STOCK || (intent == AskMarksy.Intent.NAVIGATE && AskMarksy.pageAction(it) != null) }
         )
     }
 

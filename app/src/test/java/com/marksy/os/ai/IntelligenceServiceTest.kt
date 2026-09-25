@@ -90,4 +90,19 @@ class IntelligenceServiceTest {
         assertEquals(EventExtractor.Direction.CREDIT, q.direction)
         assertNull(ModelQueryInterpreter(service()).interpret("anything", null, now, zone))
     }
+
+    // Seen on device: Gemma 3 1B answers "bills_due" / "DEFAULT"; the case of a valid value must not void the answer.
+    @Test
+    fun smallModelCaseSlipsAreAcceptedAndStockTargetComesFromTheTypedSubject() = runBlocking {
+        listOf(
+            """{"intent":"bills_due","range":"DEFAULT","subject":null,"confidence":0.8}""",
+            """{"intent":"BILLS_DEDU","range":"default","subject":"null","direction":"null","confidence":0.8}"""
+        ).forEach { owe ->
+            assertEquals(owe, AskMarksy.Intent.BILLS_DUE, ModelQueryInterpreter(service(FakeModel({ owe }))).interpret("do I owe anyone money", null, now, zone)?.intent)
+        }
+        val stock = """{"intent":"stock","range":"default","subject":"infosys","confidence":0.9}"""
+        val q = ModelQueryInterpreter(service(FakeModel({ stock }))).interpret("what's up with infosys", null, now, zone)!!
+        assertEquals(AskMarksy.Intent.STOCK, q.intent)
+        assertEquals("infosys", q.target)
+    }
 }
