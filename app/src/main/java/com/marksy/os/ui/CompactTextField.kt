@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +45,8 @@ fun CompactTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     height: Dp = 40.dp,
     cornerRadius: Dp = 12.dp,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     trailing: (@Composable () -> Unit)? = null
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -56,6 +60,8 @@ fun CompactTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
             interactionSource = interaction,
             visualTransformation = visualTransformation,
             textStyle = TextStyle(color = MarksyTheme.TextPrimary, fontSize = 13.sp),

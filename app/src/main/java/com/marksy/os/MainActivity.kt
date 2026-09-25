@@ -97,6 +97,9 @@ import com.marksy.os.ui.TradingInsightDetailDialog
 import com.marksy.os.ui.TradingIntelligenceScreen
 import com.marksy.os.ui.toTradingInsight
 import com.marksy.os.ui.MarketScreen
+import com.marksy.os.ui.MarketTab
+import com.marksy.os.ui.TradingFilters
+import com.marksy.os.ui.CompactTextField
 import com.marksy.os.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
@@ -187,6 +190,10 @@ class MainActivity : ComponentActivity() {
 
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
+        var tradingFilter by rememberSaveable { mutableStateOf(TradingFilters.first()) }
+        var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
+        var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
+        var stockQuery by rememberSaveable { mutableStateOf("") }
         var showTimeline by rememberSaveable { mutableStateOf(false) }
         var showCalendar by rememberSaveable { mutableStateOf(false) }
         var showInsights by rememberSaveable { mutableStateOf(false) }
@@ -348,7 +355,8 @@ class MainActivity : ComponentActivity() {
                     ) {
                         // Market pages carry a small LIVE mark on the title, only while NSE is in session.
                         val titleLive = (selectedTab == 3 || selectedTab == 4) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
+                        val stockSearch = selectedTab == 4 && !hostOpen && marketTabName == MarketTab.STOCKS.name
+                        Row(if (stockSearch) Modifier else Modifier.weight(1f), verticalAlignment = Alignment.Top) {
                             Text(
                                 screenTitle.orEmpty(),
                                 color = MarksyTheme.TextPrimary,
@@ -358,6 +366,10 @@ class MainActivity : ComponentActivity() {
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
+                            if (selectedTab == 3 && !hostOpen) {
+                                Spacer(Modifier.width(4.dp))
+                                Text(tradingFilter, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            }
                             if (titleLive) {
                                 Spacer(Modifier.width(4.dp))
                                 Text(
@@ -370,6 +382,20 @@ class MainActivity : ComponentActivity() {
                                         .padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
                             }
+                        }
+                        if (stockSearch) {
+                            val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                            fun openStock() { stockQuery.trim().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; keyboard?.hide() } }
+                            CompactTextField(
+                                value = stockQuery,
+                                onValueChange = { stockQuery = it.uppercase() },
+                                modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                                placeholder = "Search symbol",
+                                leadingIcon = Icons.Default.Search,
+                                height = 36.dp,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { openStock() })
+                            )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); selectedTab = 2 }
@@ -513,11 +539,20 @@ class MainActivity : ComponentActivity() {
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
-                        marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
-                        onEventSelected = openEvent
+                        selectedFilter = tradingFilter,
+                        onFilterSelected = { tradingFilter = it }
                     ) { selectedTradingInsight = it }
                 }
-                selectedTab == 4 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
+                selectedTab == 4 -> MarketScreen(
+                    repository = remember { MarksyContainer.marketIntelligence(applicationContext) },
+                    padding = padding,
+                    tabName = marketTabName,
+                    onTabSelected = { marketTabName = it },
+                    selectedSymbol = marketSymbol,
+                    onSymbolSelected = { marketSymbol = it },
+                    marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
+                    onEventSelected = openEvent
+                )
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
                     whatsappAccess = whatsappConnectorEnabled,

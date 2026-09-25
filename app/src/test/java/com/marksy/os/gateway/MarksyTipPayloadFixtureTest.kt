@@ -128,4 +128,24 @@ class MarksyTipPayloadFixtureTest {
         )
         assertEquals("HLEGLAS", MarksyTipPayloadBuilder.from(request)!!.symbol)
     }
+
+    // Regression: the SMS sender name ("KISHAN") was sent as the symbol instead of the called stock.
+    @Test
+    fun smsCallSendsTheCalledInstrumentNotTheSender() {
+        val request = MarksyTradingEventRequest(
+            eventId = 976L,
+            source = "Messages",
+            sourcePackage = "com.google.android.apps.messaging",
+            title = "KISHAN ENTERPRISE",
+            body = "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months",
+            category = "TRADING",
+            priority = 100,
+            confidence = 0.85f,
+            occurredAt = 1_757_650_000_000L,
+            idempotencyKey = "msg-7"
+        )
+        val payload = MarksyTipPayloadBuilder.from(request)!!
+        assertEquals("CROPSTER AGRO", payload.symbol)
+        assertEquals("BUY", payload.direction)
+    }
 }
