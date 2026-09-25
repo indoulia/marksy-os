@@ -63,6 +63,8 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    // EPIC-019: Gemini Nano through Android AICore; runs on-device, no model file ships in the APK.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
 
     testImplementation("junit:junit:4.13.2")
     // Real org.json implementation for local unit tests (the android.jar stub throws "not mocked").

@@ -21,4 +21,12 @@ class AskMarksyRepository(
 
     suspend fun ask(text: String, previous: AskMarksy.Query?): AskMarksy.Answer =
         AskMarksy.ask(text, previous, interpreters, this, clock(), zone())
+
+    /** Interprets once (model first, deterministic fallback) and answers only when the intent is one [intents] handles. */
+    suspend fun askIf(text: String, previous: AskMarksy.Query?, intents: Set<AskMarksy.Intent>): AskMarksy.Answer? {
+        val now = clock()
+        val interpretation = AskMarksy.interpret(text, previous, interpreters, now, zone())
+        if (interpretation.query.intent !in intents) return null
+        return AskMarksy.answer(interpretation.query, this, now, interpretation.interpretedBy)
+    }
 }

@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Ask Marksy voice questions, recognised in-app via SpeechRecognizer. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Opt-in Calendar connector: read-only, requested only when the user connects it. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Posts user-set reminders for captured notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

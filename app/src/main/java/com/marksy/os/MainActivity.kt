@@ -379,6 +379,7 @@ class MainActivity : ComponentActivity() {
                 selectedTab == 2 -> AskMarksyScreen(
                     padding, inboxEvents, market, openEvent, askConversation,
                     askGrounded = { q, prev -> askRepository.ask(q, prev) },
+                    askRouted = { q, prev, intents -> askRepository.askIf(q, prev, intents) },
                     loadEvent = { id -> repository.event(id) }
                 )
                 selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }

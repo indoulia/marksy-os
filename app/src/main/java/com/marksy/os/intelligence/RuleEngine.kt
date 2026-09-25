@@ -224,7 +224,7 @@ object RuleEngine {
 
     private const val HIGHLIGHT_BOOST = 15
     private const val TRADING_PRIORITY_BOOST = 20
-    private const val MAX_DEPTH = 6
-    private const val MAX_CHILDREN = 20
-    private const val MAX_VALUE = 120
+    const val MAX_DEPTH = 6
+    const val MAX_CHILDREN = 20
+    const val MAX_VALUE = 120
 }
