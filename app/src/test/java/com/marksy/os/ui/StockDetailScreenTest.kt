@@ -32,7 +32,7 @@ class StockDetailScreenTest {
 
     @Test
     fun loadedStateShowsCompanyAndPrediction() {
-        compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(instrument()), padding = PaddingValues(), onBack = {}) }
+        compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(instrument()), padding = PaddingValues()) }
 
         compose.onNodeWithText("Reliance Industries").assertExists()
         compose.onNodeWithText("ACTIVE", substring = true).assertExists()
@@ -41,14 +41,14 @@ class StockDetailScreenTest {
     @Test
     fun instrumentWithNoPredictionsShowsEmptyPredictionState() {
         val noPredictions = instrument().copy(predictions = emptyList(), predictionCount = 0, openPredictionCount = 0)
-        compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(noPredictions), padding = PaddingValues(), onBack = {}) }
+        compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(noPredictions), padding = PaddingValues()) }
 
         compose.onNodeWithText("No predictions yet", substring = true).assertExists()
     }
 
     @Test
     fun unavailableStateShowsExplicitMessage() {
-        compose.setContent { StockDetailScreen(state = MarketDataState.Unavailable, padding = PaddingValues(), onBack = {}) }
+        compose.setContent { StockDetailScreen(state = MarketDataState.Unavailable, padding = PaddingValues()) }
 
         compose.onNodeWithText("not configured", substring = true).assertExists()
     }

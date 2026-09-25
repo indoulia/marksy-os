@@ -26,4 +26,12 @@ class UpstoxInstrumentsTest {
         assertEquals("NSE_INDEX|Nifty Ind Defence", map["NIFTY IND DEFENCE"])
         assertNull(map["NIFTY 30 SEP 25000 CE"])
     }
+
+    @Test
+    fun suggestsPrefixMatchesFirstThenContainsIgnoringSpacesAndCase() {
+        val symbols = listOf("TATAMOTORS", "TATASTEEL", "TATA", "RELIANCE", "MOTHERSON", "AUTOTATA")
+        assertEquals(listOf("TATA", "TATASTEEL", "TATAMOTORS", "AUTOTATA"), UpstoxInstruments.suggest(symbols, "tat", 8))
+        assertEquals(listOf("TATAMOTORS"), UpstoxInstruments.suggest(symbols, "tata mot", 8))
+        assertEquals(listOf("TATA", "TATASTEEL"), UpstoxInstruments.suggest(symbols, "TATA", 2))
+    }
 }

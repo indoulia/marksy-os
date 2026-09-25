@@ -267,15 +267,14 @@ private fun InboxNotificationCard(
                         }
                         Text(
                             event.sourceName.ifBlank { "System" },
-                            color = MarksyTheme.TextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
+                            color = MarksyTheme.TextMuted,
+                            fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(Modifier.width(4.dp))
-                        Icon(pillIcon, contentDescription = pillLabel, tint = pillText, modifier = Modifier.size(13.dp))
+                        Icon(pillIcon, contentDescription = pillLabel, tint = pillText, modifier = Modifier.size(12.dp))
                         if (event.kept) {
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.Default.Star, contentDescription = "Kept", tint = MarksyTheme.YellowImportant, modifier = Modifier.size(13.dp))
@@ -295,25 +294,27 @@ private fun InboxNotificationCard(
 
                 Spacer(Modifier.height(2.dp))
 
+                // The sender/subject is what you decide on, so it leads; the app is just a label above.
                 Text(
-                    event.title.ifBlank { "Notification event" },
-                    color = if (!unread) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold,
-                    maxLines = 1,
+                    event.title.ifBlank { event.sourceName.ifBlank { "Notification event" } },
+                    color = MarksyTheme.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = if (!unread) FontWeight.Medium else FontWeight.Bold,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
           }
 
-            if (event.body.isNotBlank()) {
+            val body = EventText.body(event.title, event.body)
+            if (body.isNotBlank()) {
                 Text(
-                    event.body,
-                    color = MarksyTheme.TextMuted,
+                    body,
+                    color = MarksyTheme.TextSecondary,
                     fontSize = 12.sp,
-                    maxLines = 4,
+                    maxLines = 5,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
             val meta = buildList {

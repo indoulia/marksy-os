@@ -39,6 +39,17 @@ object UpstoxInstruments {
         return INDEX_ALIASES[s] ?: map?.get(s)
     }
 
+    /** Symbols for a typed query: prefix matches (shortest first), then ones containing it. */
+    internal fun suggest(symbols: Collection<String>, query: String, limit: Int): List<String> {
+        val q = query.uppercase().filterNot(Char::isWhitespace)
+        if (q.isEmpty()) return emptyList()
+        val prefix = symbols.filter { it.startsWith(q) }.sortedWith(compareBy({ it.length }, { it }))
+        val contains = symbols.filter { !it.startsWith(q) && it.contains(q) }.sorted()
+        return (prefix + contains).take(limit)
+    }
+
+    suspend fun suggest(context: Context, query: String, limit: Int = 8): List<String> = suggest(load(context).keys, query, limit)
+
     suspend fun load(context: Context): Map<String, String> = map ?: mutex.withLock {
         map ?: withContext(Dispatchers.IO) {
             val file = File(context.applicationContext.filesDir, CACHE_FILE)
