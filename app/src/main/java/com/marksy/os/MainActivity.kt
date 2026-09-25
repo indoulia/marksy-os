@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     private fun openWhatsAppConnector() = startActivity(Intent(this, WhatsAppSettingsActivity::class.java))
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun MarksyApp() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
@@ -245,13 +246,40 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
-            "Market" to Icons.Default.QueryStats,
-            "More" to Icons.Default.MoreHoriz
+            "Market" to Icons.Default.QueryStats
         )
+        val moreOpen = selectedTab == tabs.size
 
         Scaffold(
             containerColor = MarksyTheme.Background,
             snackbarHost = { SnackbarHost(snackbar) },
+            topBar = {
+                // Home's own header already carries a profile icon to the same destination
+                // (onOpenProfile below) -- a second bar here would just duplicate it.
+                if (selectedTab != 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MarksyTheme.Surface)
+                            .statusBarsPadding()
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = {
+                            showTimeline = false; showCalendar = false; showInsights = false
+                            showRules = false; showDigest = false; showGatewaySettings = false
+                            showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false
+                            selectedTab = tabs.size
+                        }, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = "Profile & settings",
+                                tint = if (moreOpen) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+                            )
+                        }
+                    }
+                }
+            },
             bottomBar = {
                 NavigationBar(
                     containerColor = MarksyTheme.Surface,

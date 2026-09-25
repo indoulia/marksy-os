@@ -7,11 +7,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +23,9 @@ import com.marksy.os.EmptyState
 import com.marksy.os.market.IpoListItemDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
+
+private fun List<IpoListItemDto>.openedFirst(): List<IpoListItemDto> =
+    sortedByDescending { it.stage?.contains("open", ignoreCase = true) == true }
 
 @Composable
 fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) {
@@ -53,8 +60,8 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) 
                 is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
                 is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                 is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues match this filter right now.") }
-                is MarketDataState.Loaded -> items(s.value) { ipo -> IpoRow(ipo) }
-                is MarketDataState.Stale -> items(s.value) { ipo -> IpoRow(ipo) }
+                is MarketDataState.Loaded -> items(s.value.openedFirst()) { ipo -> IpoRow(ipo) }
+                is MarketDataState.Stale -> items(s.value.openedFirst()) { ipo -> IpoRow(ipo) }
             }
         }
     }
@@ -62,8 +69,32 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues) 
 
 @Composable
 private fun IpoRow(ipo: IpoListItemDto) {
-    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(12.dp)).padding(10.dp)) {
-        Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Text(ipo.stage ?: "Stage not established", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+    val isOpen = ipo.stage?.contains("open", ignoreCase = true) == true
+    val stageTint = if (isOpen) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().border(1.dp, if (isOpen) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                ipo.sector?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
+            }
+            Text(
+                (ipo.stage ?: "Unknown").uppercase(),
+                color = stageTint,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isOpen) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
     }
 }

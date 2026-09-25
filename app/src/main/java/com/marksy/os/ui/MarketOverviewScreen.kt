@@ -6,9 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,6 +20,7 @@ import com.marksy.os.EmptyState
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketMoverDto
 import com.marksy.os.market.MarketSummaryDto
+import java.util.Locale
 
 @Composable
 fun MarketOverviewScreen(
@@ -49,27 +54,39 @@ fun MarketOverviewScreen(
 
 private fun androidx.compose.foundation.lazy.LazyListScope.overviewContent(summary: MarketSummaryDto, freshnessLabel: String) {
     item { Text(summary.marketStatus, color = MarksyTheme.PrimaryEmerald, fontSize = 16.sp, fontWeight = FontWeight.Bold) }
-    items(summary.indexes) { index ->
-        Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(12.dp)).padding(10.dp)) {
-            Text(index.name, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text("${index.value} (${index.changePct}%)", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-        }
-    }
+    items(summary.indexes) { index -> TickerRow(index.name, formatIndexValue(index.value), signedPct(index.changePct)) }
     if (summary.topGainers.isNotEmpty()) {
         item { Text("Gainers", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-        items(summary.topGainers) { mover -> MoverRow(mover) }
+        items(summary.topGainers) { mover -> TickerRow(mover.symbol, mover.name, signedPct(mover.changePercent)) }
     }
     if (summary.topLosers.isNotEmpty()) {
         item { Text("Losers", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-        items(summary.topLosers) { mover -> MoverRow(mover) }
+        items(summary.topLosers) { mover -> TickerRow(mover.symbol, mover.name, signedPct(mover.changePercent)) }
     }
     item { Text(freshnessLabel, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
 }
 
 @Composable
-private fun MoverRow(mover: MarketMoverDto) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(mover.symbol, color = MarksyTheme.TextPrimary, fontSize = 13.sp)
-        Text("${mover.changePercent}%", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+private fun TickerRow(name: String, subtitle: String, change: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(name, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(subtitle, color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            }
+            Text(change, color = changeColor(change), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
+
+private fun changeColor(change: String): Color = if (change.startsWith("-")) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald
+private fun signedPct(value: Double): String = String.format(Locale.US, "%+.2f%%", value)
+private fun formatIndexValue(value: Double): String = String.format(Locale.getDefault(), "%,.2f", value)

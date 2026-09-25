@@ -47,7 +47,7 @@ fun TradingIntelligenceScreen(
     ) {
     Column(Modifier.fillMaxSize()) {
         // Header
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -83,7 +83,7 @@ fun TradingIntelligenceScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
             when (selectedFilter) {
@@ -190,7 +190,7 @@ private fun TradingSignalCard(
             .fillMaxWidth()
             .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -243,7 +243,7 @@ private fun TradingSignalCard(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -256,7 +256,7 @@ private fun TradingSignalCard(
                 Text(headline, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
             // Details Grid
             Row(
@@ -264,7 +264,7 @@ private fun TradingSignalCard(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MarksyTheme.SurfaceRaised)
-                    .padding(12.dp),
+                    .padding(8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
@@ -285,7 +285,7 @@ private fun TradingSignalCard(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
 
             // Alignment Banner
             Box(
@@ -293,7 +293,7 @@ private fun TradingSignalCard(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(MarksyTheme.BadgeTradingBg)
-                    .padding(10.dp)
+                    .padding(8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -329,7 +329,7 @@ private fun TradingTickerCard(
             .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

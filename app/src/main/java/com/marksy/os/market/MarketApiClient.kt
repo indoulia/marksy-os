@@ -139,7 +139,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
-        const val MAX_RESPONSE_CHARS = 200_000
+        const val MAX_RESPONSE_CHARS = 4_000_000
         val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
         fun normalizeBaseUrl(value: String): String {

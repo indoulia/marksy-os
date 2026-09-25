@@ -140,6 +140,7 @@ fun AskMarksyScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .imePadding()
     ) {
         Text(
             "Ask Marksy",
