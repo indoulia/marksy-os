@@ -77,6 +77,6 @@ class DailyBriefingTest {
     fun emptyDataProducesAnHonestEmptyBriefing() {
         val b = DailyBriefing.build(DailyBriefing.Kind.OVERNIGHT, emptyList(), emptyList(), PersonalLearning.Profile.EMPTY, at(24, 6), zone)
         assertTrue(b.sections.isEmpty())
-        assertEquals("0 notifications overnight.", b.headline)
+        assertEquals("0 notifications overnight", b.headline)
     }
 }

@@ -17,6 +17,7 @@ class NotificationRepository(
     companion object {
         /** Enough for ~a week of real traffic; threads/grouping need more than the 50-row recent feed. */
         const val INBOX_LIMIT = 500
+        private const val KEY_CLASSIFIER_VERSION = "classifier_version"
     }
 
     fun observeRecent(limit: Int = 50): Flow<List<NotificationEventEntity>> = dao.observeRecent(limit)
@@ -47,6 +48,25 @@ class NotificationRepository(
             val body = NotificationTextExtractor.stripMarkup(event.body).trim()
             if (title != event.title || body != event.body) dao.updateText(event.id, title, body)
         }
+    }
+
+    /**
+     * Re-runs the classifier over stored non-trading rows when its rules change, so events captured
+     * before a fix (e.g. broker calls that landed in OTHER) move to the right section. Rows already
+     * TRADING are never touched, so delivery history is preserved.
+     */
+    suspend fun reclassifyIfClassifierChanged(prefs: android.content.SharedPreferences) {
+        if (prefs.getInt(KEY_CLASSIFIER_VERSION, 0) >= com.marksy.os.notification.NotificationClassifier.VERSION) return
+        var changed = 0
+        dao.findNonTrading().forEach { event ->
+            val result = com.marksy.os.notification.NotificationClassifier.classify(event.sourcePackage, event.title, event.body)
+            if (result.category.name != event.category) {
+                val trading = result.category == com.marksy.os.notification.NotificationClassifier.Category.TRADING
+                changed += dao.updateClassification(event.id, result.category.name, result.priority, result.confidence, trading)
+            }
+        }
+        com.marksy.os.ai.DiagLog.i("MarksyClassifier", "reclassified $changed stored event(s) for v${com.marksy.os.notification.NotificationClassifier.VERSION}")
+        prefs.edit().putInt(KEY_CLASSIFIER_VERSION, com.marksy.os.notification.NotificationClassifier.VERSION).apply()
     }
 
     suspend fun archive(eventId: Long): Boolean {

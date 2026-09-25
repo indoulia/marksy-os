@@ -120,12 +120,8 @@ object DailyBriefing {
             Section("For you", highlights)
         ).filter { it.lines.isNotEmpty() }
 
-        val headline = buildString {
-            append("${inWindow.size} notification${if (inWindow.size == 1) "" else "s"} ${windowLabel(kind)}")
-            if (important.isNotEmpty()) append(", ${important.size} important")
-            if (pending.isNotEmpty()) append(", ${pending.size} need${if (pending.size == 1) "s" else ""} action")
-            append('.')
-        }
+        // Per-section counts (important, needs action, …) are shown on each section's own heading.
+        val headline = "${inWindow.size} notification${if (inWindow.size == 1) "" else "s"} ${windowLabel(kind)}"
         return Briefing(kind, windowStart, windowEnd, headline, sections, sections.flatMap { s -> s.lines.flatMap { it.eventIds } }.distinct())
     }
 

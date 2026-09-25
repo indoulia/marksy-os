@@ -46,7 +46,7 @@ fun StockDetailScreen(state: MarketDataState<InstrumentLifecycleDto>, padding: P
             TextButton(onClick = onBack) { Text("Back to search", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp) }
         }
         when (state) {
-            is MarketDataState.Loading -> item { Text("Checking instrument...", color = MarksyTheme.TextMuted, fontSize = 13.sp) }
+            is MarketDataState.Loading -> item { MarksyLoader("Checking instrument...") }
             is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
             is MarketDataState.Error -> item { EmptyState("Instrument unavailable", state.message) }
             is MarketDataState.Empty -> item { EmptyState("Not found", "No instrument matches that symbol.") }

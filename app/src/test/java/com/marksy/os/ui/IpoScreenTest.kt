@@ -76,6 +76,6 @@ class IpoScreenTest {
         compose.setContent { IpoScreen(repository = repository, padding = PaddingValues()) }
         compose.waitForIdle()
 
-        compose.onNodeWithText("UPCOMING", substring = true).assertExists()
+        compose.onNodeWithText("Upcoming (2)", substring = true).assertExists()
     }
 }

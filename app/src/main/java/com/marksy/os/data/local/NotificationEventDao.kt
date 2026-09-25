@@ -19,6 +19,13 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET title = :title, body = :body WHERE id = :eventId")
     suspend fun updateText(eventId: Long, title: String, body: String): Int
 
+    @Query("SELECT * FROM notification_events WHERE isTrading = 0")
+    suspend fun findNonTrading(): List<NotificationEventEntity>
+
+    // A newly trading row becomes deliverable; intelligence is recomputed for the new category.
+    @Query("UPDATE notification_events SET category = :category, priority = :priority, confidence = :confidence, isTrading = :isTrading, deliveryState = CASE WHEN :isTrading THEN 'PENDING' ELSE deliveryState END, intelligenceVersion = 0 WHERE id = :eventId AND isTrading = 0")
+    suspend fun updateClassification(eventId: Long, category: String, priority: Int, confidence: Float, isTrading: Boolean): Int
+
     @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
 

@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +62,18 @@ import com.marksy.os.ui.CalendarScreen
 import com.marksy.os.ui.DailyDigestModel
 import com.marksy.os.ui.DailyDigestScreen
 import com.marksy.os.ui.DashboardScreen
+import com.marksy.os.ui.HeaderIconBadge
+import com.marksy.os.ui.collapsingHeader
+import com.marksy.os.ui.rememberCollapsingHeaderState
+import com.marksy.os.ui.MarksyRefreshBox
+import com.marksy.os.ui.UpstoxScreen
+import com.marksy.os.upstox.UpstoxIndices
+import com.marksy.os.upstox.UpstoxFeed
+import com.marksy.os.upstox.UpstoxLiveState
+import com.marksy.os.upstox.UpstoxTokenStore
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
+import com.marksy.os.ui.rememberRefreshState
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.ContextGraph
 import com.marksy.os.ui.EventDetailDialog
@@ -119,6 +133,7 @@ class MainActivity : ComponentActivity() {
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     private fun openWhatsAppConnector() = startActivity(Intent(this, WhatsAppSettingsActivity::class.java))
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun MarksyApp() {
         val repository = remember { MarksyContainer.repository(applicationContext) }
@@ -131,7 +146,12 @@ class MainActivity : ComponentActivity() {
             repository, learning, learningSettings, actionRepository,
             ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
         ))
-        LaunchedEffect(Unit) { repository.stripStoredMarkup() }
+        LaunchedEffect(Unit) {
+            repository.stripStoredMarkup()
+            repository.reclassifyIfClassifierChanged(getSharedPreferences("marksy_classifier", MODE_PRIVATE))
+            // Newly trading rows are PENDING; hand them to delivery now rather than at the next periodic run.
+            TradingDeliveryScheduler.schedule(applicationContext)
+        }
         val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
         val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
         val learningEnabled by vm.learningEnabled.collectAsStateWithLifecycle()
@@ -154,9 +174,11 @@ class MainActivity : ComponentActivity() {
         }
 
         // Marksy snapshot refreshes while the app is open; screens show honest states when it is missing.
-        val market by produceState<MarketState>(MarketState.Loading) {
+        val marketRefresh = rememberRefreshState()
+        val market by produceState<MarketState>(MarketState.Loading, marketRefresh.key) {
             while (true) {
                 value = MarketRepository.fetch().let { fresh -> if (fresh is MarketState.Unavailable && value is MarketState.Loaded) value else fresh }
+                marketRefresh.done()
                 delay(5 * 60 * 1000L)
             }
         }
@@ -179,6 +201,7 @@ class MainActivity : ComponentActivity() {
         var showDigest by rememberSaveable { mutableStateOf(false) }
         var showBriefing by rememberSaveable { mutableStateOf(false) }
         var showGatewaySettings by rememberSaveable { mutableStateOf(false) }
+        var showUpstox by rememberSaveable { mutableStateOf(false) }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
         var selectedTradingInsight by remember { mutableStateOf<TradingInsight?>(null) }
 
@@ -223,7 +246,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
                 showBriefing -> showBriefing = false
@@ -236,6 +259,7 @@ class MainActivity : ComponentActivity() {
                 showInsights -> showInsights = false
                 showRules -> showRules = false
                 showDigest -> showDigest = false
+                showUpstox -> showUpstox = false
                 showGatewaySettings -> showGatewaySettings = false
                 selectedTab != 0 -> selectedTab = 0
             }
@@ -245,13 +269,116 @@ class MainActivity : ComponentActivity() {
             "Inbox" to Icons.Default.Inbox,
             "Ask" to Icons.Default.AutoAwesome,
             "Trading" to Icons.Default.ShowChart,
-            "Market" to Icons.Default.QueryStats,
-            "More" to Icons.Default.MoreHoriz
+            "Market" to Icons.Default.QueryStats
         )
+        // The page title lives in the same bar as the Ask/profile icons -- one header row per
+        // screen, like Home's -- instead of a second title row underneath.
+        val screenTitle = when {
+            showValidation -> "30-day validation"
+            showHealth -> "Marksy Health"
+            showMemory -> "What Marksy remembers"
+            showLearning -> "What Marksy learned"
+            showBriefing -> "Daily Briefing"
+            showTimeline -> "Timeline"
+            showCalendar -> "Calendar"
+            showInsights -> "Insights"
+            showRules -> "Rules & Automation"
+            showDigest -> "Daily Digest"
+            showUpstox -> "Upstox"
+            showGatewaySettings -> "Marksy Account"
+            selectedTab == 1 -> "Smart Inbox"
+            selectedTab == 2 -> "Ask Marksy"
+            selectedTab == 3 -> "Trading Intelligence"
+            selectedTab == 4 -> "Market"
+            selectedTab == tabs.size -> "More & Settings"
+            else -> null
+        }
+        val onHome = selectedTab == 0 && !hostOpen
+
+        // Live prices from the user's own Upstox token over one WebSocket, open only while the app
+        // is in the foreground; screens just watch the keys they show.
+        val upstoxStore = remember { UpstoxTokenStore(applicationContext) }
+        var upstoxVersion by remember { mutableIntStateOf(0) }
+        val upstoxConfigured = remember(upstoxVersion) { upstoxStore.hasToken() }
+        val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+        LaunchedEffect(upstoxConfigured, upstoxVersion) {
+            if (!upstoxConfigured) { UpstoxFeed.clear(); return@LaunchedEffect }
+            UpstoxFeed.watch(UpstoxIndices.HOME.map { it.first })
+            lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { UpstoxFeed.run { upstoxStore.getToken() } }
+        }
+        val feedQuotes by UpstoxFeed.quotes.collectAsStateWithLifecycle()
+        val feedStatus by UpstoxFeed.status.collectAsStateWithLifecycle()
+        val feedTickAt by UpstoxFeed.lastTickAt.collectAsStateWithLifecycle()
+        val feedNseOpen by UpstoxFeed.nseOpen.collectAsStateWithLifecycle()
+        val marketOpen = feedNseOpen ?: UpstoxFeed.isMarketOpen()
+        val upstoxLive: UpstoxLiveState = when {
+            !upstoxConfigured -> UpstoxLiveState.NotConfigured
+            feedStatus is UpstoxFeed.Status.TokenRejected -> UpstoxLiveState.Failed((feedStatus as UpstoxFeed.Status.TokenRejected).reason, tokenRejected = true)
+            feedQuotes.isNotEmpty() -> UpstoxLiveState.Live(feedQuotes, feedTickAt, streaming = feedStatus is UpstoxFeed.Status.Live, marketOpen = marketOpen)
+            feedStatus is UpstoxFeed.Status.Reconnecting -> UpstoxLiveState.Failed((feedStatus as UpstoxFeed.Status.Reconnecting).reason, tokenRejected = false)
+            else -> UpstoxLiveState.Loading
+        }
+
+        val headerState = rememberCollapsingHeaderState()
+        LaunchedEffect(screenTitle) { headerState.reset() }
 
         Scaffold(
+            // Home's header is already the first item of its own list, so it scrolls natively.
+            modifier = if (!onHome) Modifier.nestedScroll(headerState.connection) else Modifier,
             containerColor = MarksyTheme.Background,
             snackbarHost = { SnackbarHost(snackbar) },
+            topBar = {
+                // Home's own header already carries the same icons to the same destinations
+                // (onOpenAsk/onOpenProfile below) -- a second bar here would just duplicate it.
+                if (!onHome) {
+                    fun closeSubScreens() {
+                        showTimeline = false; showCalendar = false; showInsights = false
+                        showRules = false; showDigest = false; showGatewaySettings = false
+                        showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false
+                    }
+                    Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface)) {
+                    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .collapsingHeader(headerState)
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Market pages carry a small LIVE mark on the title, only while NSE is in session.
+                        val titleLive = (selectedTab == 3 || selectedTab == 4) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
+                            Text(
+                                screenTitle.orEmpty(),
+                                color = MarksyTheme.TextPrimary,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (titleLive) {
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "LIVE",
+                                    color = Color.Black,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .background(MarksyTheme.PrimaryEmerald, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); selectedTab = 2 }
+                            HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile & settings") { closeSubScreens(); selectedTab = tabs.size }
+                        }
+                    }
+                    }
+                }
+            },
             bottomBar = {
                 NavigationBar(
                     containerColor = MarksyTheme.Surface,
@@ -264,7 +391,7 @@ class MainActivity : ComponentActivity() {
                                 // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
                                 showTimeline = false; showCalendar = false; showInsights = false
                                 showRules = false; showDigest = false; showGatewaySettings = false
-                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false
+                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false
                                 selectedTab = index
                             },
                             icon = { Icon(icon, contentDescription = label) },
@@ -280,22 +407,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        ) { padding ->
+        ) { scaffoldPadding ->
+            // Every page below the shared top bar starts the same distance from it.
+            val padding = if (onHome) scaffoldPadding
+            else PaddingValues(top = scaffoldPadding.calculateTopPadding() + 10.dp, bottom = scaffoldPadding.calculateBottomPadding())
             when {
                 showValidation -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("30-day validation")
                     ValidationScreen(validationRepository, padding)
                 }
                 showHealth -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("Marksy Health")
                     HealthScreen(padding) { healthRepository.report() }
                 }
                 showMemory -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("What Marksy remembers")
                     MemoryScreen(memoryRepository, padding)
                 }
                 showLearning -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("What Marksy learned")
                     LearningScreen(
                         profile = learningProfile,
                         enabled = learningEnabled,
@@ -308,7 +434,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 showBriefing -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    ScreenHeader("Daily Briefing")
                     BriefingScreen(
                         padding = padding,
                         load = { kind -> briefingRepository.briefing(kind) },
@@ -325,6 +450,7 @@ class MainActivity : ComponentActivity() {
                     onOpenTrading = { showDigest = false; selectedTab = 3 },
                     onEventSelected = openEvent
                 )
+                showUpstox -> UpstoxScreen(upstoxStore, padding) { upstoxVersion++ }
                 showGatewaySettings -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background)) {
                     LoginScreen(
                         authRepository = remember { MarksyContainer.authRepository(applicationContext) },
@@ -333,7 +459,7 @@ class MainActivity : ComponentActivity() {
                         onSignedIn = { showGatewaySettings = false }
                     )
                 }
-                selectedTab == 0 -> DashboardScreen(
+                selectedTab == 0 -> MarksyRefreshBox(marketRefresh, Modifier.fillMaxSize().padding(padding)) { DashboardScreen(
                     snapshot = homeSnapshot,
                     events = homeEvents,
                     onEventSelected = openEvent,
@@ -347,14 +473,16 @@ class MainActivity : ComponentActivity() {
                     weatherAvailable = locationGranted,
                     onRequestWeather = { locationLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                     market = market,
+                    liveIndices = upstoxLive,
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
+                    onOpenAsk = { selectedTab = 2 },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
                     onDelete = deleteNow,
                     onHide = { homeHidden = homeHidden + it.id },
-                    modifier = Modifier.fillMaxSize().padding(padding)
-                )
+                    modifier = Modifier.fillMaxSize()
+                ) }
                 selectedTab == 1 -> SmartInboxScreen(
                     events = inboxEvents.filterNot { it.id in inboxHidden },
                     padding = padding,
@@ -382,7 +510,13 @@ class MainActivity : ComponentActivity() {
                     askRouted = { q, prev, intents -> askRepository.askIf(q, prev, intents) },
                     loadEvent = { id -> repository.event(id) }
                 )
-                selectedTab == 3 -> TradingIntelligenceScreen(tradingInsights, padding, market) { selectedTradingInsight = it }
+                selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
+                    TradingIntelligenceScreen(
+                        tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
+                        marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
+                        onEventSelected = openEvent
+                    ) { selectedTradingInsight = it }
+                }
                 selectedTab == 4 -> MarketScreen(repository = remember { MarksyContainer.marketIntelligence(applicationContext) }, padding = padding)
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
@@ -390,6 +524,9 @@ class MainActivity : ComponentActivity() {
                     openAccess = ::openNotificationAccess,
                     openWhatsAppAccess = ::openWhatsAppConnector,
                     openGatewaySettings = { showGatewaySettings = true },
+                    openUpstox = { showUpstox = true },
+                    upstoxConnected = upstoxLive is UpstoxLiveState.Live,
+                    upstoxConfigured = upstoxLive !is UpstoxLiveState.NotConfigured,
                     openHealth = { showHealth = true },
                     openValidation = { showValidation = true },
                     clearAll = {
@@ -448,16 +585,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Timeline"); TimelineScreen(events, PaddingValues(), onEventSelected) } }
-@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { ScreenHeader("Calendar"); CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
-@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Insights"); InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
-@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Rules & Automation"); Row(Modifier.padding(horizontal = 10.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned", fontSize = 12.sp) }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers", fontSize = 12.sp) } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
-@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { ScreenHeader("Daily Digest"); DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
-
-@Composable private fun ScreenHeader(title: String) {
-    // Same title style as the tab screens (Inbox, Trading); navigation is via the bottom bar and system back.
-    Text(title, color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp))
-}
+@Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { TimelineScreen(events, PaddingValues(), onEventSelected) } }
+@Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
+@Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { val links = rememberCollapsingHeaderState(); Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding()).nestedScroll(links.connection)) { Row(Modifier.collapsingHeader(links).padding(horizontal = 10.dp, vertical = 6.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned", fontSize = 12.sp) }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers", fontSize = 12.sp) } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
 
 @Composable private fun MoreScreen(
     access: Boolean,
@@ -465,6 +597,9 @@ class MainActivity : ComponentActivity() {
     openAccess: () -> Unit,
     openWhatsAppAccess: () -> Unit,
     openGatewaySettings: () -> Unit,
+    openUpstox: () -> Unit,
+    upstoxConnected: Boolean,
+    upstoxConfigured: Boolean,
     openHealth: () -> Unit,
     openValidation: () -> Unit,
     clearAll: suspend () -> Unit,
@@ -480,14 +615,13 @@ class MainActivity : ComponentActivity() {
     var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).let { if (it.isSessionActive()) it.getUserId() else null } }
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
         contentPadding = PaddingValues(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("More & Settings", color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
             Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
         }
         item {
@@ -498,6 +632,7 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
+                    .clickable(onClick = openGatewaySettings)
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -513,8 +648,8 @@ class MainActivity : ComponentActivity() {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Marksy User", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("Premium Member", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp)
+                        Text(signedInUserId ?: "Not signed in", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (signedInUserId != null) "Signed in" else "Tap to sign in", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp)
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted)
                 }
@@ -522,13 +657,23 @@ class MainActivity : ComponentActivity() {
         }
         item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openBriefing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Briefing", color = Color.Black, fontSize = 12.sp) } } }
+        item {
+            SettingsCard(
+                "Upstox market data",
+                when { upstoxConnected -> "LIVE"; upstoxConfigured -> "SAVED"; else -> "OFF" },
+                if (upstoxConfigured) "Live NIFTY / BANK NIFTY on Home from your own Upstox token." else "Add your Upstox Analytics Token to see live index prices on Home."
+            ) {
+                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openUpstox, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) {
+                    Text(if (upstoxConfigured) "Manage Upstox" else "Connect Upstox", color = Color.Black, fontSize = 12.sp)
+                }
+            }
+        }
         item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
         item {
-            val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).let { if (it.isSessionActive()) it.getUserId() else null } }
             SettingsCard(
                 "Marksy Account",
                 if (signedInUserId != null) "SIGNED IN" else "NOT SIGNED IN",

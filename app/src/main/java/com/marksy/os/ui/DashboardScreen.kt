@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +36,8 @@ import com.marksy.os.intelligence.HomePeriod
 import com.marksy.os.intelligence.NotificationTrend
 import com.marksy.os.weather.Weather
 import com.marksy.os.intelligence.dashboardAgeLabel
+import com.marksy.os.upstox.UpstoxIndices
+import com.marksy.os.upstox.UpstoxLiveState
 
 @Composable
 fun DashboardScreen(
@@ -51,8 +54,10 @@ fun DashboardScreen(
     weatherAvailable: Boolean = false,
     onRequestWeather: () -> Unit = {},
     market: MarketState = MarketState.Loading,
+    liveIndices: UpstoxLiveState = UpstoxLiveState.NotConfigured,
     todayDigest: DailyDigest? = null,
     onOpenTrading: () -> Unit = {},
+    onOpenAsk: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
     onArchive: (NotificationEventEntity) -> Unit = {},
     onDelete: (NotificationEventEntity) -> Unit = {},
@@ -128,21 +133,9 @@ fun DashboardScreen(
                             )
                         }
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MarksyTheme.SurfaceRaised)
-                            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
-                            .clickable(onClick = onOpenProfile),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = MarksyTheme.PrimaryEmerald,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy", onClick = onOpenAsk)
+                        HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onOpenProfile)
                     }
                 }
 
@@ -268,12 +261,13 @@ fun DashboardScreen(
                 Spacer(Modifier.height(14.dp))
 
                 // Market Pulse Card
-                MarketPulseCard(market, todayDigest, onOpenTrading)
+                MarketPulseCard(market, todayDigest, onOpenTrading, liveIndices)
 
                 Spacer(Modifier.height(14.dp))
 
                 // AI Summary Card
-                todayDigest?.let { AiSummaryBanner(HomeSummary.text(it, (market as? MarketState.Loaded)?.snapshot)) }
+                val liveNifty = (liveIndices as? UpstoxLiveState.Live)?.quotes?.get(UpstoxIndices.NIFTY_50)?.changePct?.let { "NIFTY 50" to it }
+                todayDigest?.let { AiSummaryBanner(HomeSummary.text(it, (market as? MarketState.Loaded)?.snapshot, liveNifty)) }
             }
         }
 
@@ -419,8 +413,22 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
 }
 
 @Composable
-private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTrading: () -> Unit) {
+private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTrading: () -> Unit, live: UpstoxLiveState = UpstoxLiveState.NotConfigured) {
     val snapshot = (market as? MarketState.Loaded)?.snapshot
+    // Whole-source preference: the user's own Upstox feed when it's answering, else Marksy's snapshot.
+    val liveQuotes = (live as? UpstoxLiveState.Live)?.let { l -> UpstoxIndices.HOME.mapNotNull { (key, name) -> l.quotes[key]?.let { name to it } } }?.takeIf { it.isNotEmpty() }
+    var showSource by remember { mutableStateOf(false) }
+    // A streaming socket needs no explanation; the icon appears only when something needs one.
+    val streaming = (live as? UpstoxLiveState.Live)?.streaming == true && liveQuotes != null
+    val closed = (live as? UpstoxLiveState.Live)?.marketOpen == false && liveQuotes != null
+    val sourceLine = when {
+        streaming || closed -> null
+        liveQuotes != null -> "Upstox reconnecting · last tick ${liveTime.format(java.util.Date((live as UpstoxLiveState.Live).lastTickAt))}"
+        live is UpstoxLiveState.Failed && live.tokenRejected -> "Upstox token rejected — update it in More → Upstox. Showing Marksy data."
+        live is UpstoxLiveState.Failed -> "Upstox unavailable (${live.message}). Showing Marksy data."
+        snapshot != null -> "Marksy market snapshot" + (snapshot.asOf?.let { " · as of $it" } ?: "")
+        else -> null
+    }
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(16.dp),
@@ -441,32 +449,37 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                     Spacer(Modifier.width(8.dp))
                     Text("Market Pulse", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
-                snapshot?.marketStatus?.let { MarketStatusBadge(it) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    when {
+                        closed -> MarketStatusBadge("CLOSED")
+                        liveQuotes != null && streaming -> MarketStatusBadge("LIVE")
+                        liveQuotes == null -> snapshot?.marketStatus?.let { MarketStatusBadge(it) }
+                    }
+                    if (sourceLine != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "Data source",
+                            tint = if (live is UpstoxLiveState.Failed) MarksyTheme.YellowImportant else MarksyTheme.TextMuted,
+                            modifier = Modifier.size(18.dp).clip(CircleShape).clickable { showSource = !showSource }
+                        )
+                    }
+                }
+            }
+            // Source/freshness is one tap away instead of a permanent line.
+            if (showSource && sourceLine != null) {
+                Text(sourceLine, color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
             }
 
             Spacer(Modifier.height(10.dp))
 
             when {
-                snapshot != null && snapshot.indices.isNotEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    snapshot.indices.take(2).forEach { index ->
-                        Column {
-                            Text(index.name, color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(formatIndex(index.value), color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    formatChange(index.changePct),
-                                    color = if (index.changePct < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
+                liveQuotes != null -> IndexGrid(liveQuotes.map { (name, q) -> Triple(name, q.lastPrice, q.changePct) })
+                snapshot != null && snapshot.indices.isNotEmpty() -> IndexGrid(snapshot.indices.take(6).map { Triple(it.name, it.value, it.changePct) })
+                market is MarketState.Loading -> MarksyInlineLoader("Loading market data…")
                 else -> Text(
                     when (market) {
-                        MarketState.Loading -> "Loading market data…"
+                        MarketState.Loading -> ""
                         MarketState.NotConfigured -> "Connect the Marksy gateway in Settings to see live indices."
                         is MarketState.Unavailable -> "Market data unavailable right now."
                         is MarketState.Loaded -> "No index data in the latest Marksy snapshot."
@@ -476,23 +489,51 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                 )
             }
 
-            if (digest != null) {
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider(color = MarksyTheme.BorderGlow)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "${digest.tradingEvents.size} trading alerts • ${digest.totalNotifications - digest.tradingEvents.size} other notifications today",
-                    color = MarksyTheme.TextMuted,
-                    fontSize = 11.sp
-                )
+        }
+    }
+}
+
+/** Two indices per row, each on a single line: name, value, day change. */
+@Composable
+private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.chunked(2).forEach { row ->
+            // A clear gutter between the left column's % and the right column's name.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                row.forEach { (name, value, change) ->
+                    // Name left; price and change in fixed right-aligned columns so they line up row to row.
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(name, color = MarksyTheme.TextSecondary, fontSize = 10.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(46.dp))
+                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(37.dp))
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
 }
 
+/** The one profile/quick-action icon style used on every screen's header, so it never looks
+ * different depending on which tab you're on. */
 @Composable
-private fun MarketStatusBadge(status: String) {
-    val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true)
+fun HeaderIconBadge(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(MarksyTheme.SurfaceRaised)
+            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+internal fun MarketStatusBadge(status: String) {
+    val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true) || status.equals("MARKET_HOURS", ignoreCase = true)
     val tint = if (open) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
     Row(
         modifier = Modifier
@@ -504,11 +545,14 @@ private fun MarketStatusBadge(status: String) {
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
         Spacer(Modifier.width(5.dp))
-        Text(if (open) "LIVE" else status.uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(if (open) "LIVE" else formatMarketStatus(status).uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
-private fun formatIndex(value: Double): String = String.format(java.util.Locale.getDefault(), "%,.0f", value)
+// Small indices (INDIA VIX ~12) need decimals to be meaningful.
+private fun formatIndex(value: Double): String = String.format(java.util.Locale.getDefault(), if (value < 1000) "%,.2f" else "%,.0f", value)
+
+private val liveTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
 
 private fun formatChange(pct: Double): String = String.format(java.util.Locale.US, "%+.2f%%", pct)
 

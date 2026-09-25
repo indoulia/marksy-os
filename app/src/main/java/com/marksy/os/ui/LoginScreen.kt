@@ -30,8 +30,6 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Marksy Account", color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-
         if (signedInUserId != null) {
             Text("Signed in as ${signedInUserId}", color = MarksyTheme.PrimaryEmerald, fontSize = 14.sp)
             OutlinedButton(onClick = {

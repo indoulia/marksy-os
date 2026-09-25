@@ -1,9 +1,12 @@
 package com.marksy.os.notification
 
 object NotificationClassifier {
+    /** Bump when rules change so stored events are reclassified once on next launch. */
+    const val VERSION = 3
+
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
-        WORK, EMAIL, DELIVERY, PROMOTIONS, SYSTEM, OTHER
+        WORK, EMAIL, DELIVERY, PROMOTIONS, SYSTEM, MARKET, OTHER
     }
 
     data class Result(val category: Category, val priority: Int, val confidence: Float)
@@ -24,7 +27,12 @@ object NotificationClassifier {
         "com.nextbillion.groww",
         "com.angelbroking.smartmoney",
         "com.angelbroking.lite",
-        "com.fivepaisa.trade"
+        "com.fivepaisa.trade",
+        // Package ids as actually installed (Play Store builds), verified on-device 2026-09-25.
+        "in.upstox.app",
+        "com.icicidirect.idirectsuper",
+        "com.zerodha.coin",
+        "com.assetgro.stockgro.prod"
     )
 
     // Package identity is a strong fallback signal for apps whose notification text
@@ -101,6 +109,20 @@ object NotificationClassifier {
         ))
     )
 
+    // Market-news apps: not brokers, but their alerts belong with the market, not in OTHER.
+    private val marketPackages = setOf("com.divum.moneycontrol")
+    private val BROKER_UTILITY = setOf(Category.DELIVERY, Category.BANKING, Category.PAYMENTS, Category.BILLS)
+    private val callChannels = listOf("messaging", "mms", "sms", "whatsapp", "telegram")
+    private val brokerPromoTerms = listOf(
+        "apply now", "click to apply", "pre apply", "pre-apply", "discover", "new on", "offer", "discount", "cashback",
+        "refer", "invite", "open account", "open an account", "limited time", "sale", "coupon", "zero brokerage", "download"
+    )
+
+    // Broker tip/call shorthand: "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26", "SELL X @ 120 target 110 stoploss 125".
+    private val callSide = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""")
+    private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
+    private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
+
     fun classify(packageName: String, title: String, body: String): Result {
         val normalizedPackage = packageName.trim().lowercase()
         val notificationText = "$title $body".trim().lowercase()
@@ -114,11 +136,22 @@ object NotificationClassifier {
 
         // A broker package is a source hint, not proof that the notification is
         // a trade. Require an actual trading signal before routing it to Marksy.
-        if (normalizedPackage in tradingPackages) {
-            val tradingRule = rules.first { it.category == Category.TRADING }
-            if (tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }) {
-                return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
-            }
+        val tradingRule = rules.first { it.category == Category.TRADING }
+        // Broker and market-news apps: a call or execution is TRADING, a call-to-action is the app's own
+        // marketing, and everything else (holdings alerts, research views, IPO notices, market moves) is MARKET.
+        if (normalizedPackage in tradingPackages || normalizedPackage in marketPackages) {
+            val execution = normalizedPackage in tradingPackages && tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }
+            if (execution || isTradeCall(notificationText)) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
+            // Explicit utility messages (welcome-kit delivery, funds credited, bills) keep their own category.
+            rules.firstOrNull { it.category in BROKER_UTILITY && it.terms.any { term -> notificationText.containsRuleTerm(term) } }
+                ?.let { return Result(it.category, it.priority, it.confidence) }
+            if (brokerPromoTerms.any { notificationText.containsRuleTerm(it) }) return Result(Category.PROMOTIONS, 20, .85f)
+            return Result(Category.MARKET, 60, .80f)
+        }
+        // Calls also arrive by SMS and chat. Only a fully parsed call (side, symbol, two price levels) counts,
+        // so ordinary messages that say "buy" never become trades.
+        if (callChannels.any { normalizedPackage.contains(it) } && TradeCallParser.parse(title, body) != null) {
+            return Result(tradingRule.category, tradingRule.priority, .85f)
         }
 
         val haystack = "$normalizedPackage $notificationText"

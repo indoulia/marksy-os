@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import com.marksy.os.connector.connectorDisplay
 import com.marksy.os.connector.ConnectorState
 import com.marksy.os.connector.ConnectorSyncWorker
 import com.marksy.os.connector.SyncConnectors
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,6 +58,16 @@ internal fun ConnectorSetupCard() {
         if (granted) connect(CalendarConnector.ID, true) else tick++
     }
     val time = remember { SimpleDateFormat("dd MMM HH:mm", Locale.getDefault()) }
+
+    // Sync runs in a background WorkManager job with no live progress signal (by design); poll the
+    // persisted status while this card is on screen so a just-finished sync doesn't stay stale until
+    // the user leaves and reopens the screen.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(2_000)
+            tick++
+        }
+    }
 
     Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface, RoundedCornerShape(12.dp)).padding(10.dp)) {
         Text("Direct sources", color = MarksyTheme.TextPrimary, fontSize = 13.sp)

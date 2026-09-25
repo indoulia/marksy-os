@@ -27,7 +27,8 @@ class MarketOverviewScreenTest {
     fun loadedStateShowsIndexAndMarketStatus() {
         compose.setContent { MarketOverviewScreen(state = MarketDataState.Loaded(summary()), padding = androidx.compose.foundation.layout.PaddingValues()) }
 
-        compose.onNodeWithText("MARKET_HOURS").assertExists()
+        // Open/live status moved to the page title; the raw API enum must never leak into the page.
+        compose.onNodeWithText("MARKET_HOURS").assertDoesNotExist()
         compose.onNodeWithText("NIFTY 50").assertExists()
     }
 

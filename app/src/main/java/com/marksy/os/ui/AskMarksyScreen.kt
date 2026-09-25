@@ -145,15 +145,8 @@ fun AskMarksyScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding)
+            .imePadding()
     ) {
-        Text(
-            "Ask Marksy",
-            color = MarksyTheme.TextPrimary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
-        )
-
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),

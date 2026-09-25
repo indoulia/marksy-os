@@ -65,7 +65,10 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun ipos(stage: String?, query: String?): List<IpoListItemDto> {
         val params = listOfNotNull(stage?.let { "stage=${encode(it)}" }, query?.let { "q=${encode(it)}" })
         val suffix = if (params.isEmpty()) "" else "?" + params.joinToString("&")
-        return IpoListItemDto.parseList(getDataArray("$base/ipos$suffix"))
+        // The IPO list is far larger than other responses (hundreds of issues with details).
+        val items = execute("$base/ipos$suffix", IPO_MAX_RESPONSE_CHARS).getJSONArray("data")
+        com.marksy.os.ai.DiagLog.i("MarksyMarket", "ipos stage=$stage items=${items.length()}")
+        return IpoListItemDto.parseList(items)
     }
 
     override suspend fun ipoAttention(limit: Int): List<IpoAttentionItemDto> =
@@ -84,7 +87,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
-    private suspend fun execute(url: String): JSONObject {
+    private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS): JSONObject {
         val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy")
         return withContext(Dispatchers.IO) {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -107,7 +110,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
                         val read = reader.read(buffer)
                         if (read < 0) break
                         builder.append(buffer, 0, read)
-                        if (builder.length > MAX_RESPONSE_CHARS) throw IOException("Marksy Market API response exceeded the safety limit")
+                        if (builder.length > maxChars) throw IOException("Marksy Market API response exceeded the safety limit (${maxChars / 1_000_000}M chars)")
                     }
                     builder.toString()
                 }.orEmpty()
@@ -139,7 +142,8 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 20_000
-        const val MAX_RESPONSE_CHARS = 200_000
+        const val MAX_RESPONSE_CHARS = 4_000_000
+        const val IPO_MAX_RESPONSE_CHARS = 16_000_000
         val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
         fun normalizeBaseUrl(value: String): String {

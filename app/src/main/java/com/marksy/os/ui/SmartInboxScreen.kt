@@ -78,22 +78,8 @@ fun SmartInboxScreen(
             .consumeWindowInsets(padding)
     ) {
     Column(Modifier.fillMaxSize()) {
-        // Header
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Smart Inbox",
-                    color = MarksyTheme.TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(if (filter == SmartInboxModel.Filter.ALL) "$shown shown" else "${filter.label} · $shown", color = MarksyTheme.TextMuted, fontSize = 12.sp)
-            }
-        }
+        val shownLabel = if (filter == SmartInboxModel.Filter.ALL) "$shown shown" else "${filter.label} · $shown"
+        val firstBucket = inbox.sections.entries.firstOrNull { it.value.isNotEmpty() }?.key
 
         LazyColumn(
             modifier = Modifier
@@ -113,13 +99,20 @@ fun SmartInboxScreen(
                 inbox.sections.forEach { (bucket, threads) ->
                     if (threads.isEmpty()) return@forEach
                     item(key = "header-${bucket.name}") {
-                        Text(
-                            "${bucket.label} · ${threads.size}",
-                            color = MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "${bucket.label} · ${threads.size}",
+                                color = MarksyTheme.TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            // The overall count shares the first section's row instead of taking its own.
+                            if (bucket == firstBucket) Text(shownLabel, color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                        }
                     }
                     items(threads, key = { "t-" + it.key }) { thread ->
                         SwipeActionsRow(
@@ -241,14 +234,12 @@ private fun InboxNotificationCard(
             .clip(RoundedCornerShape(16.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            // App Icon Circle
+        // Icon spans only the source + title rows; body and meta run the full card width below it.
+        Column(Modifier.padding(14.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(iconBg),
                 contentAlignment = Alignment.Center
@@ -257,11 +248,11 @@ private fun InboxNotificationCard(
                     appIcon,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -302,7 +293,7 @@ private fun InboxNotificationCard(
                     )
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
 
                 Text(
                     event.title.ifBlank { "Notification event" },
@@ -312,32 +303,33 @@ private fun InboxNotificationCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+          }
 
-                if (event.body.isNotBlank()) {
-                    Text(
-                        event.body,
-                        color = MarksyTheme.TextMuted,
-                        fontSize = 11.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-                val meta = buildList {
-                    if (thread.count > 1) add("${thread.count} in thread")
-                    if (thread.duplicates.isNotEmpty()) add("+${thread.duplicates.size} duplicate")
-                    if (thread.sources.size > 1) add(thread.sources.joinToString(" · "))
-                }
-                if (meta.isNotEmpty()) {
-                    Text(
-                        meta.joinToString("  ·  "),
-                        color = MarksyTheme.PrimaryEmerald,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+            if (event.body.isNotBlank()) {
+                Text(
+                    event.body,
+                    color = MarksyTheme.TextMuted,
+                    fontSize = 12.sp,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            val meta = buildList {
+                if (thread.count > 1) add("${thread.count} in thread")
+                if (thread.duplicates.isNotEmpty()) add("+${thread.duplicates.size} duplicate")
+                if (thread.sources.size > 1) add(thread.sources.joinToString(" · "))
+            }
+            if (meta.isNotEmpty()) {
+                Text(
+                    meta.joinToString("  ·  "),
+                    color = MarksyTheme.PrimaryEmerald,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
             }
         }
     }

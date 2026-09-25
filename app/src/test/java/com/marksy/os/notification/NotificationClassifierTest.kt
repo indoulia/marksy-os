@@ -16,6 +16,50 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.OTHER, result.category)
     }
 
+    // Regression: 5paisa "Short term Call" tips (BUY … CMP … SL … TGT) landed in OTHER.
+    @Test fun brokerTipCallWithCmpSlTargetIsTrading() {
+        val result = NotificationClassifier.classify("com.fivepaisa.trade", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
+
+    // Regression: Upstox's Play Store package is in.upstox.app, so its calls were never seen as broker calls.
+    @Test fun upstoxPlayStorePackageCallIsTrading() {
+        val result = NotificationClassifier.classify("in.upstox.app", "📈BUY LCCPROJECT with 20.0% upside potential", "🛠️ Entry : Rs 144.24 🎯 Target : Rs 173.08 🛑 Stoploss : Rs 129.81")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
+
+    @Test fun tipCallTextFromANonBrokerAppIsStillNotTrading() {
+        val result = NotificationClassifier.classify("com.android.shell", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
+        assertTrue(result.category != NotificationClassifier.Category.TRADING)
+    }
+
+    // Regression: broker/market updates (holdings alerts, research, IPO notices, market moves) landed in OTHER.
+    @Test fun brokerAndMarketUpdatesWithoutACallAreMarket() {
+        fun cat(pkg: String, t: String, b: String) = NotificationClassifier.classify(pkg, t, b).category
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.icicidirect.idirectsuper", "ICICI Direct", "Your stock NATSEC has touched 52 week low of 780.0"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.icicidirect.idirectsuper", "MCX Silver December", "Expected to slip towards ₹232,000-₹233,000 levels"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.assetgro.stockgro.prod", "🔴 Markets open in RED", "🔻 Nifty50: 23,035.00 (-0.12%)"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.fivepaisa.trade", "4 IPOs Just Went Live 🚀", "Acevector & Orient Cables IPOs are now open for subscription"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.divum.MoneyControl", "Closing Bell Live:", "Nifty off day's low, reclaims 23,100"))
+    }
+
+    @Test fun brokerCallToActionIsPromotions() {
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, NotificationClassifier.classify("com.fivepaisa.trade", "New on 5paisa: Most Bought MTF Stocks", "Discover Most Bought MTF stocks right inside the 5paisa app.").category)
+        assertEquals(NotificationClassifier.Category.PROMOTIONS, NotificationClassifier.classify("com.icicidirect.idirectsuper", "IPOs of Moneyview Ltd. & A-One Steels", "Click to apply now!").category)
+    }
+
+    // Calls also arrive by SMS and chat; a parsed call (side + symbol + levels) from those apps is TRADING.
+    @Test fun smsAndChatCallsAreTrading() {
+        val sms = "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"
+        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN ENTERPRISE", sms).category)
+        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("com.whatsapp", "Tips Group", "BUY TATASTEEL CMP 152 SL 147 TGT 162").category)
+        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525").category)
+    }
+
+    @Test fun ordinaryChatMentioningBuyIsNotTrading() {
+        assertTrue(NotificationClassifier.classify("com.whatsapp", "Mom", "Buy milk and bread on the way home").category != NotificationClassifier.Category.TRADING)
+    }
+
     @Test fun nonTradingBrokerPromotionIsNotTrading() {
         val result = NotificationClassifier.classify("com.upstox.pro", "Special offer", "Get 50% discount on brokerage")
         assertEquals(NotificationClassifier.Category.PROMOTIONS, result.category)
