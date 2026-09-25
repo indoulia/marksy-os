@@ -20,7 +20,11 @@ import java.util.zip.GZIPInputStream
  */
 object UpstoxInstruments {
     private const val MASTER_URL = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
-    private const val CACHE_FILE = "upstox_nse_instruments.tsv"
+    // BSE-only equities (e.g. CROPSTER) need BSE's master too; NSE is read first so it wins for dual listings.
+    private const val BSE_MASTER_URL = "https://assets.upstox.com/market-quote/instruments/exchange/BSE.json.gz"
+    private const val CACHE_FILE = "upstox_instruments_v2.tsv"
+    // Company-name aliases share the map under this prefix so calls like "CROPSTER AGRO" resolve.
+    private const val NAME_PREFIX = "N:"
     private const val MAX_AGE_MS = 24 * 60 * 60 * 1000L
 
     // Names Marksy's feeds use for indices, which don't match Upstox's trading symbols.
@@ -34,17 +38,23 @@ object UpstoxInstruments {
     @Volatile private var map: Map<String, String>? = null
     private val mutex = Mutex()
 
-    fun keyFor(symbol: String): String? {
+    fun keyFor(symbol: String): String? = map?.let { resolve(it, symbol) } ?: INDEX_ALIASES[symbol.trim().uppercase()]
+
+    internal fun resolve(map: Map<String, String>, symbol: String): String? {
         val s = symbol.trim().uppercase()
-        return INDEX_ALIASES[s] ?: map?.get(s)
+        return INDEX_ALIASES[s] ?: map[s] ?: map[NAME_PREFIX + normalizeName(s)]
     }
+
+    private fun normalizeName(name: String): String =
+        name.uppercase().replace(Regex("""\b(LIMITED|LTD)\b"""), "").filter(Char::isLetterOrDigit)
 
     /** Symbols for a typed query: prefix matches (shortest first), then ones containing it. */
     internal fun suggest(symbols: Collection<String>, query: String, limit: Int): List<String> {
         val q = query.uppercase().filterNot(Char::isWhitespace)
         if (q.isEmpty()) return emptyList()
-        val prefix = symbols.filter { it.startsWith(q) }.sortedWith(compareBy({ it.length }, { it }))
-        val contains = symbols.filter { !it.startsWith(q) && it.contains(q) }.sorted()
+        val tradable = symbols.filterNot { it.startsWith(NAME_PREFIX) }
+        val prefix = tradable.filter { it.startsWith(q) }.sortedWith(compareBy({ it.length }, { it }))
+        val contains = tradable.filter { !it.startsWith(q) && it.contains(q) }.sorted()
         return (prefix + contains).take(limit)
     }
 
@@ -59,8 +69,8 @@ object UpstoxInstruments {
     }
 
     /** Keeps NSE equities (by trading symbol) and NSE indices (by name and trading symbol). */
-    internal fun parse(stream: InputStream): Map<String, String> {
-        val out = HashMap<String, String>(8192)
+    internal fun parse(stream: InputStream, into: Map<String, String> = emptyMap()): Map<String, String> {
+        val out = HashMap<String, String>(into.size + 8192).apply { putAll(into) }
         JsonReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
             reader.beginArray()
             while (reader.hasNext()) {
@@ -78,7 +88,10 @@ object UpstoxInstruments {
                 reader.endObject()
                 val k = key ?: continue
                 when (segment) {
-                    "NSE_EQ" -> symbol?.let { out.putIfAbsent(it.uppercase(), k) }
+                    "NSE_EQ", "BSE_EQ" -> {
+                        symbol?.let { out.putIfAbsent(it.uppercase(), k) }
+                        name?.let { out.putIfAbsent(NAME_PREFIX + normalizeName(it), k) }
+                    }
                     "NSE_INDEX" -> { symbol?.let { out.putIfAbsent(it.uppercase(), k) }; name?.let { out.putIfAbsent(it.uppercase(), k) } }
                 }
             }
@@ -91,13 +104,19 @@ object UpstoxInstruments {
         if (peek() == android.util.JsonToken.NULL) { nextNull(); null } else nextString()
 
     private fun download(): Map<String, String> {
-        val connection = (URL(MASTER_URL).openConnection() as HttpURLConnection).apply {
+        val nse = fetch(MASTER_URL, emptyMap())
+        // BSE is additive: if it fails, NSE-only still works.
+        return runCatching { fetch(BSE_MASTER_URL, nse) }.getOrDefault(nse).also { DiagLog.i("MarksyUpstox", "instruments: ${it.size} symbols") }
+    }
+
+    private fun fetch(url: String, into: Map<String, String>): Map<String, String> {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 30_000
         }
         try {
             if (connection.responseCode !in 200..299) throw java.io.IOException("Upstox instrument list HTTP ${connection.responseCode}")
-            return GZIPInputStream(connection.inputStream.buffered()).use(::parse).also { DiagLog.i("MarksyUpstox", "instruments: ${it.size} symbols") }
+            return GZIPInputStream(connection.inputStream.buffered()).use { parse(it, into) }
         } finally {
             connection.disconnect()
         }

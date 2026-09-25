@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 5
+    const val VERSION = 6
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -116,6 +116,7 @@ object NotificationClassifier {
     // Market-news apps: not brokers, but their alerts belong with the market, not in OTHER.
     private val marketPackages = setOf("com.divum.moneycontrol")
     private val BROKER_UTILITY = setOf(Category.DELIVERY, Category.BANKING, Category.PAYMENTS, Category.BILLS)
+    private val paymentAppTransferTerms = listOf("received ₹", "received rs", "sent ₹", "paid ₹", "paid to", "requested", "refund", "cashback received")
     private val callChannels = listOf("messaging", "mms", "sms", "whatsapp", "telegram")
     private val brokerPromoTerms = listOf(
         "apply now", "click to apply", "pre apply", "pre-apply", "discover", "new on", "offer", "discount", "cashback",
@@ -169,6 +170,10 @@ object NotificationClassifier {
         // Fallback: infer from the source app when the text alone was inconclusive.
         // Modest priority/confidence marks it as a weaker, package-only inference.
         val hinted = packageHints.firstOrNull { (token, _) -> normalizedPackage.contains(token) }?.second
+        // Payment apps mostly push marketing (SIPs, loans, insurance); only money movement is a payment.
+        if (hinted == Category.PAYMENTS && paymentAppTransferTerms.none { notificationText.containsRuleTerm(it) }) {
+            return Result(Category.PROMOTIONS, 20, .70f)
+        }
         if (hinted != null) {
             val hintPriority = (rules.firstOrNull { it.category == hinted }?.priority ?: 25).coerceAtMost(50)
             return Result(hinted, hintPriority, .65f)
