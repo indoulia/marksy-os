@@ -107,10 +107,13 @@ class MainActivity : ComponentActivity() {
     private var whatsappConnectorEnabled by mutableStateOf(false)
     /** Set when a reminder notification is tapped; the event dialog opens for it. */
     private var pendingEventId by mutableStateOf<Long?>(null)
+    /** Set when a plan reminder notification is tapped; the Plan tab opens. */
+    private var openPlanRequest by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingEventId = intent?.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L)?.takeIf { it >= 0 }
+        openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
         RetentionScheduler.schedule(applicationContext)
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L).takeIf { it >= 0 }?.let { pendingEventId = it }
+        if (intent.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false)) openPlanRequest = true
     }
 
     override fun onResume() {
@@ -145,6 +149,9 @@ class MainActivity : ComponentActivity() {
         val actionRepository = remember { MarksyContainer.actions(applicationContext) }
         val askRepository = remember { MarksyContainer.ask(applicationContext) }
         val briefingRepository = remember { MarksyContainer.briefing(applicationContext) }
+        val plan = remember { MarksyContainer.plan(applicationContext) }
+        val planItems by remember { plan.observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
+        var contactsGranted by remember { mutableStateOf(com.marksy.os.plan.BirthdaySync.hasPermission(applicationContext)) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
             repository, learning, learningSettings, actionRepository,
             ContextGraph(MarksyContainer.database(applicationContext).contextGraphDao())
@@ -154,6 +161,12 @@ class MainActivity : ComponentActivity() {
             repository.reclassifyIfClassifierChanged(getSharedPreferences("marksy_classifier", MODE_PRIVATE))
             // Newly trading rows are PENDING; hand them to delivery now rather than at the next periodic run.
             TradingDeliveryScheduler.schedule(applicationContext)
+            // Dues captured before Plan existed (or reclassified just now) become reminders; idempotent by dedupe key.
+            runCatching {
+                plan.backfill(repository.inCategory("REMINDERS"))
+                plan.rescheduleAll()
+                if (contactsGranted) com.marksy.os.plan.BirthdaySync.sync(applicationContext, plan)
+            }
         }
         val actionMessage by vm.actionMessage.collectAsStateWithLifecycle()
         val learningProfile by vm.learningProfile.collectAsStateWithLifecycle(initialValue = PersonalLearning.Profile.EMPTY)
@@ -209,6 +222,15 @@ class MainActivity : ComponentActivity() {
         var showBriefing by rememberSaveable { mutableStateOf(false) }
         var showGatewaySettings by rememberSaveable { mutableStateOf(false) }
         var showUpstox by rememberSaveable { mutableStateOf(false) }
+        // Ask moved off the bottom bar (Plan took its slot); it opens from the ✦ header icon.
+        var showAsk by rememberSaveable { mutableStateOf(false) }
+        var planView by rememberSaveable { mutableStateOf(com.marksy.os.ui.PlanViews.first()) }
+        var addingPlan by remember { mutableStateOf(false) }
+        var editingPlan by remember { mutableStateOf<com.marksy.os.data.local.PlanItemEntity?>(null) }
+        val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            contactsGranted = granted
+            if (granted) lifecycleScope.launch { runCatching { com.marksy.os.plan.BirthdaySync.sync(applicationContext, plan) } }
+        }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
         var selectedTradingInsight by remember { mutableStateOf<TradingInsight?>(null) }
 
@@ -233,6 +255,7 @@ class MainActivity : ComponentActivity() {
         val deleteNow: (NotificationEventEntity) -> Unit = { event ->
             vm.delete(event.id)
             ReminderScheduler.cancel(applicationContext, event.id)
+            lifecycleScope.launch { plan.mirrorFollowUp(event.id, event.title, null) }
             if (selectedEvent?.id == event.id) selectedEvent = null
         }
         // Inbox swipes act on a whole thread; one undo restores every row of it.
@@ -253,9 +276,11 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox || showAsk
+        LaunchedEffect(openPlanRequest) { if (openPlanRequest) { showAsk = false; selectedTab = 2; planView = com.marksy.os.ui.PlanViews.first(); openPlanRequest = false } }
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
+                showAsk -> showAsk = false
                 showBriefing -> showBriefing = false
                 showValidation -> showValidation = false
                 showHealth -> showHealth = false
@@ -274,7 +299,7 @@ class MainActivity : ComponentActivity() {
         val tabs = listOf(
             "Home" to Icons.Default.Home,
             "Inbox" to Icons.Default.Inbox,
-            "Ask" to Icons.Default.AutoAwesome,
+            "Plan" to Icons.Default.EventNote,
             "Trading" to Icons.Default.ShowChart,
             "Market" to Icons.Default.QueryStats
         )
@@ -293,8 +318,9 @@ class MainActivity : ComponentActivity() {
             showDigest -> "Daily Digest"
             showUpstox -> "Upstox"
             showGatewaySettings -> "Marksy Account"
+            showAsk -> "Ask Marksy"
             selectedTab == 1 -> "Smart Inbox"
-            selectedTab == 2 -> "Ask Marksy"
+            selectedTab == 2 -> "Plan"
             selectedTab == 3 -> "Trading Intelligence"
             selectedTab == 4 -> "Market"
             selectedTab == tabs.size -> "More & Settings"
@@ -341,7 +367,7 @@ class MainActivity : ComponentActivity() {
                     fun closeSubScreens() {
                         showTimeline = false; showCalendar = false; showInsights = false
                         showRules = false; showDigest = false; showGatewaySettings = false
-                        showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false
+                        showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false
                     }
                     Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface)) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
@@ -366,9 +392,9 @@ class MainActivity : ComponentActivity() {
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
-                            if (selectedTab == 3 && !hostOpen) {
+                            if ((selectedTab == 3 || selectedTab == 2) && !hostOpen) {
                                 Spacer(Modifier.width(4.dp))
-                                Text(tradingFilter, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(if (selectedTab == 3) tradingFilter else planView, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             }
                             if (titleLive) {
                                 Spacer(Modifier.width(4.dp))
@@ -405,7 +431,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); selectedTab = 2 }
+                            HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); showAsk = true }
                             HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile & settings") { closeSubScreens(); selectedTab = tabs.size }
                         }
                     }
@@ -424,7 +450,7 @@ class MainActivity : ComponentActivity() {
                                 // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
                                 showTimeline = false; showCalendar = false; showInsights = false
                                 showRules = false; showDigest = false; showGatewaySettings = false
-                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false
+                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false
                                 selectedTab = index
                             },
                             icon = { Icon(icon, contentDescription = label) },
@@ -492,6 +518,12 @@ class MainActivity : ComponentActivity() {
                         onSignedIn = { showGatewaySettings = false }
                     )
                 }
+                showAsk -> AskMarksyScreen(
+                    padding, inboxEvents, market, openEvent, askConversation,
+                    askGrounded = { q, prev -> askRepository.ask(q, prev) },
+                    askRouted = { q, prev, intents -> askRepository.askIf(q, prev, intents) },
+                    loadEvent = { id -> repository.event(id) }
+                )
                 selectedTab == 0 -> MarksyRefreshBox(marketRefresh, Modifier.fillMaxSize().padding(padding)) { DashboardScreen(
                     snapshot = homeSnapshot,
                     events = homeEvents,
@@ -509,11 +541,14 @@ class MainActivity : ComponentActivity() {
                     liveIndices = upstoxLive,
                     todayDigest = todayDigest,
                     onOpenTrading = { selectedTab = 3 },
-                    onOpenAsk = { selectedTab = 2 },
+                    onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
                     onDelete = deleteNow,
                     onHide = { homeHidden = homeHidden + it.id },
+                    planItems = planItems,
+                    onOpenPlan = { planView = com.marksy.os.ui.PlanViews.first(); selectedTab = 2 },
+                    onAddReminder = { addingPlan = true },
                     modifier = Modifier.fillMaxSize()
                 ) }
                 selectedTab == 1 -> SmartInboxScreen(
@@ -537,11 +572,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 )
-                selectedTab == 2 -> AskMarksyScreen(
-                    padding, inboxEvents, market, openEvent, askConversation,
-                    askGrounded = { q, prev -> askRepository.ask(q, prev) },
-                    askRouted = { q, prev, intents -> askRepository.askIf(q, prev, intents) },
-                    loadEvent = { id -> repository.event(id) }
+                selectedTab == 2 -> com.marksy.os.ui.PlanScreen(
+                    items = planItems,
+                    padding = padding,
+                    view = planView,
+                    onViewSelected = { planView = it },
+                    onAdd = { addingPlan = true },
+                    onEdit = { editingPlan = it },
+                    onStatus = { item, status -> lifecycleScope.launch { plan.setStatus(item.id, status) } },
+                    contactsAccess = contactsGranted,
+                    onImportBirthdays = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
@@ -609,6 +649,7 @@ class MainActivity : ComponentActivity() {
                 onToggleKeep = { vm.setKept(event.id, !event.kept) },
                 onSetReminder = { at ->
                     vm.setReminder(event.id, at)
+                    lifecycleScope.launch { plan.mirrorFollowUp(event.id, event.title.ifBlank { event.sourceName }, at) }
                     if (at == null) {
                         ReminderScheduler.cancel(applicationContext, event.id)
                     } else {
@@ -619,6 +660,26 @@ class MainActivity : ComponentActivity() {
                     }
                 },
                 onMarkUnread = { vm.setRead(event.id, false) }
+            )
+        }
+
+        if (addingPlan || editingPlan != null) {
+            val editing = editingPlan
+            val close = { addingPlan = false; editingPlan = null }
+            com.marksy.os.ui.PlanItemDialog(
+                initial = editing,
+                onDismiss = close,
+                onSave = { kind, title, counterparty, amount, dueAt, recurrence ->
+                    lifecycleScope.launch {
+                        if (editing == null) plan.add(kind, title, counterparty, amount, dueAt, recurrence)
+                        else plan.update(editing.copy(kind = kind.name, title = title.trim(), counterparty = counterparty, amountMinor = amount, dueAt = dueAt, recurrence = recurrence.name))
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    close()
+                },
+                onDelete = editing?.let { item -> { lifecycleScope.launch { plan.delete(item.id) }; close() } }
             )
         }
 

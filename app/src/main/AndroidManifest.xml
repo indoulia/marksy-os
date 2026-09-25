@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Posts user-set reminders for captured notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Plan: birthdays read from contacts, read-only, requested only when the user taps "Import birthdays". -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -58,6 +60,11 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- "Mark done" on a plan reminder notification. -->
+        <receiver
+            android:name=".notification.PlanDoneReceiver"
+            android:exported="false" />
 
         <service
             android:name=".notification.MarksyNotificationListenerService"

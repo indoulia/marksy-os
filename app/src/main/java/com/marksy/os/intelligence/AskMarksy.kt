@@ -255,7 +255,7 @@ object AskMarksy {
                     followUps = listOf("Deliveries tomorrow", "Deliveries today"))
             }
             Intent.BILLS_DUE -> {
-                val bills = canonical.filter { it.category == "BILLS" && it.lifecycleState != EventLifecycle.State.RESOLVED.name && !it.archived }
+                val bills = canonical.filter { (it.category == "BILLS" || it.category == "REMINDERS") && it.lifecycleState != EventLifecycle.State.RESOLVED.name && !it.archived }
                 build(query, bills.distinctBy { EventIntelligence.threadKey(it) }, interpretedBy,
                     headline = if (bills.isEmpty()) "No open bills in $r." else "${bills.distinctBy { EventIntelligence.threadKey(it) }.size} open bill${s(bills.size)} from $r.",
                     detail = { e -> listOfNotNull(facts(e).primaryAmount?.let { formatMoney(it.amountMinor, it.currency) }, facts(e).times.firstOrNull { it.epochMillis > nowMillis }?.raw?.let { "due \"$it\"" }).joinToString(" · ").ifBlank { null } },

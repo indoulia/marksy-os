@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class],
-    version = 4,
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class],
+    version = 5,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -22,6 +22,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun connectorDao(): ConnectorDao
     abstract fun metricsDao(): MetricsDao
+    abstract fun planItemDao(): PlanItemDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -115,6 +116,26 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        // Reminders & to-do store; existing "Remind me" reminders are carried over as follow-ups.
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `plan_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kind` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, `counterparty` TEXT, `amountMinor` INTEGER, `dueAt` INTEGER, `recurrence` TEXT NOT NULL, " +
+                        "`status` TEXT NOT NULL, `origin` TEXT NOT NULL, `sourceEventId` INTEGER, `dedupeKey` TEXT, `createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, `completedAt` INTEGER)"
+                )
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_plan_items_dedupeKey` ON `plan_items` (`dedupeKey`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_items_status` ON `plan_items` (`status`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_items_dueAt` ON `plan_items` (`dueAt`)")
+                database.execSQL(
+                    "INSERT OR IGNORE INTO plan_items (kind, title, counterparty, dueAt, recurrence, status, origin, sourceEventId, dedupeKey, createdAt, updatedAt) " +
+                        "SELECT 'FOLLOW_UP', CASE WHEN title = '' THEN sourceName ELSE title END, sourceName, remindAt, 'NONE', 'TODO', 'REMIND_ME', id, " +
+                        "'remind|' || id, createdAt, createdAt FROM notification_events WHERE remindAt IS NOT NULL"
+                )
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -124,7 +145,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }

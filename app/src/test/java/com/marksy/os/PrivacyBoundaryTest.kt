@@ -16,8 +16,16 @@ class PrivacyBoundaryTest {
     @Test
     fun manifestHasNoPreciseLocationOrSmsPermissions() {
         val manifest = File(main, "AndroidManifest.xml").readText()
-        listOf("ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "READ_SMS", "RECEIVE_SMS", "SEND_SMS", "READ_CONTACTS", "GET_ACCOUNTS")
+        listOf("ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "READ_SMS", "RECEIVE_SMS", "SEND_SMS", "GET_ACCOUNTS")
             .forEach { assertTrue("$it must not be requested", !manifest.contains(it)) }
+    }
+
+    // READ_CONTACTS is opt-in for Plan's birthday import only; nothing else may read contacts.
+    @Test
+    fun onlyBirthdayImportReadsContacts() {
+        val offenders = File(main, "java").walkTopDown().filter { it.extension == "kt" && it.name != "BirthdaySync.kt" }
+            .filter { it.readText().contains("ContactsContract") }.map { it.name }.toList()
+        assertEquals(emptyList<String>(), offenders)
     }
 
     @Test

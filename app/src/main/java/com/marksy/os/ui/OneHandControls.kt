@@ -73,7 +73,8 @@ fun BoxScope.OneHandControls(
     onFilterSelected: (String) -> Unit,
     searchQuery: String? = null,
     onSearchChange: ((String) -> Unit)? = null,
-    searchPlaceholder: String = "Search..."
+    searchPlaceholder: String = "Search...",
+    actions: List<FloatingAction> = emptyList()
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
@@ -140,8 +141,14 @@ fun BoxScope.OneHandControls(
                 }
             }
         }
+        actions.forEach { action ->
+            FloatingRoundButton(action.icon, action.label, false) { filtersOpen = false; action.onClick() }
+        }
     }
 }
+
+/** A page action on the floating stack (e.g. Add), so pages need no in-content button rows. */
+data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val onClick: () -> Unit)
 
 @Composable
 private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier) {

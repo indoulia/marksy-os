@@ -28,7 +28,7 @@ data class NormalizedEvent(
 
 object EventNormalizer {
     const val REF_THREAD_PREFIX = "ref|"
-    private val MONEY_CATEGORIES = setOf("BANKING", "PAYMENTS", "BILLS")
+    private val MONEY_CATEGORIES = setOf("BANKING", "PAYMENTS", "BILLS", "REMINDERS")
 
     fun normalize(event: NotificationEventEntity, zone: ZoneId = ZoneId.systemDefault()): NormalizedEvent {
         val facts = EventExtractor.extract(

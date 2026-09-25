@@ -117,6 +117,8 @@ class IngestionPipeline(
     private val ruleRunner: RuleRunner?,
     private val intelligence: EventIntelligencePipeline?,
     private val onTradingCaptured: () -> Unit = {},
+    /** Newly stored event (e.g. a bill due becomes a plan reminder); failures never affect capture. */
+    private val onStored: suspend (NotificationEventEntity) -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis
 ) {
     sealed class Result {
@@ -173,6 +175,7 @@ class IngestionPipeline(
             metrics.count(if (result.category == NotificationClassifier.Category.OTHER) Metric.UNCLASSIFIED else Metric.CLASSIFIED, *scopes)
             metrics.count(Metric.DELIVERY_DELAY_MS_SUM, *scopes, delta = (clock() - raw.postedAt).coerceIn(0, MAX_DELAY_MS))
             if (isTrading && !applied.archived) runCatching(onTradingCaptured)
+            runCatching { onStored(applied.event.copy(id = id)) }
             runCatching { ruleRunner?.recordCapture(id, applied.evaluation) }
             if (applied.evaluation.matchedRules.isNotEmpty()) metrics.count(Metric.RULE_EXECUTION, *scopes, delta = applied.evaluation.matchedRules.size.toLong())
             val started = clock()
