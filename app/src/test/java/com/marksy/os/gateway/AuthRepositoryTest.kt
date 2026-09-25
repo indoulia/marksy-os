@@ -57,10 +57,13 @@ class AuthRepositoryTest {
         }
     }
 
-    private fun session(expiresInMs: Long) = SessionResponseDto(
-        sessionToken = "sess_new", userId = "prsingh",
-        issuedAt = "2026-09-25T09:00:00Z", expiresAt = "2026-09-25T17:00:00Z", readOnly = false
-    ).let { it to (System.currentTimeMillis() + expiresInMs) }
+    // Timestamps follow the clock: a fixed expiresAt started failing once the real date reached it.
+    private fun session(expiresInMs: Long) = System.currentTimeMillis().let { now ->
+        SessionResponseDto(
+            sessionToken = "sess_new", userId = "prsingh",
+            issuedAt = java.time.Instant.ofEpochMilli(now).toString(), expiresAt = java.time.Instant.ofEpochMilli(now + expiresInMs).toString(), readOnly = false
+        ) to (now + expiresInMs)
+    }
 
     @Test
     fun neverLoggedInYieldsNullToken() = runBlocking {
