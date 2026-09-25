@@ -14,7 +14,8 @@ class RuleStore(context: Context) {
             val json = JSONArray(raw)
             buildList {
                 for (index in 0 until minOf(json.length(), MAX_RULES)) {
-                    val item = json.getJSONObject(index)
+                    // One malformed entry must not make every user rule fall back to defaults (and be overwritten on next save).
+                    val item = json.optJSONObject(index) ?: continue
                     val name = item.optString("name").trim().take(MAX_NAME)
                     if (name.isBlank()) continue
                     val action = runCatching {
