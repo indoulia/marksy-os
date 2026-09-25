@@ -7,7 +7,7 @@ object SmartInboxModel {
     enum class Filter(val label: String, val category: String? = null, val sourceKeyword: String? = null) {
         ALL("All"), TRADING("Trading", "TRADING"), MARKET("Market", "MARKET"), MESSAGES("Messages", "MESSAGES"),
         EMAIL("Emails", "EMAIL"), PAYMENTS("Payments", "PAYMENTS"), BANKING("Banking", "BANKING"),
-        BILLS("Bills", "BILLS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY"),
+        BILLS("Bills", "BILLS"), REMINDERS("Reminders", "REMINDERS"), WORK("Work", "WORK"), DELIVERY("Delivery", "DELIVERY"),
         TEAMS("Teams", sourceKeyword = "teams");
 
         companion object {
@@ -175,7 +175,7 @@ object SmartInboxModel {
         val actionReason = when {
             open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry"
             latest.category == "BILLS" -> "Bill that may need payment"
-            latest.category == "REMINDERS" -> "Reminder you set"
+            latest.category == "REMINDERS" -> "Due or reminder to act on"
             latest.category == "OTP" && nowMillis - latest.postedAt <= OTP_ACTION_WINDOW_MS -> "Fresh one-time code"
             latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed"
             else -> null

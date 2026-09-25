@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 4
+    const val VERSION = 5
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -78,6 +78,10 @@ object NotificationClassifier {
             "trade confirmation", "position opened", "position closed", "stop loss", "target hit",
             "market alert", "order rejected", "order cancelled", "order canceled", "executed at",
             "filled at", "quantity executed", "average price", "p&l", "profit and loss"
+        )),
+        // Dues and birthdays you must act on; ahead of banking so "ensure funds are credited" stays a reminder.
+        Rule(Category.REMINDERS, 88, .90f, listOf(
+            "due on", "due by", "due date", "bill due", "emi due", "payment due", "amount due", "overdue", "birthday"
         )),
         Rule(Category.BANKING, 80, .92f, listOf(
             "credited", "debited", "account balance", "bank alert", "withdrawn", "deposit",

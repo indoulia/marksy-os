@@ -67,6 +67,17 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525").category)
     }
 
+    // Bills, EMIs, card dues and birthdays are reminders, ahead of generic bills/banking.
+    @Test fun duesAndBirthdaysAreReminders() {
+        fun cat(pkg: String, t: String, b: String) = NotificationClassifier.classify(pkg, t, b).category
+        assertEquals(NotificationClassifier.Category.REMINDERS, cat("com.truecaller", "₹14,917", "•  ICICI Bank  •  Bill due on 6th Oct SMS from ICICI Bank"))
+        assertEquals(NotificationClassifier.Category.REMINDERS, cat("com.google.android.apps.messaging", "HDFC Bank", "Your EMI of Rs.5,432 is due on 05/10/2026. Ensure funds are credited."))
+        assertEquals(NotificationClassifier.Category.REMINDERS, cat("com.google.android.apps.messaging", "ICICI Bank", "Total amount due Rs 14,917, minimum amount due Rs 750"))
+        assertEquals(NotificationClassifier.Category.REMINDERS, cat("com.facebook.katana", "Birthdays", "It's Aisha's birthday today"))
+        assertTrue(NotificationClassifier.classify("com.truecaller", "₹14,917", "Bill due on 6th Oct").priority >= 85)
+        assertEquals(NotificationClassifier.Category.BANKING, cat("com.google.android.apps.messaging", "HDFC Bank", "Your EMI of Rs 5,432 has been debited"))
+    }
+
     @Test fun ordinaryChatMentioningBuyIsNotTrading() {
         assertTrue(NotificationClassifier.classify("com.whatsapp", "Mom", "Buy milk and bread on the way home").category != NotificationClassifier.Category.TRADING)
     }

@@ -43,9 +43,13 @@ object MarksyContainer {
             db.notificationEventDao(), db.connectorDao(), metrics(context), rules = { ruleStore.load() },
             ruleRunner = rules(context),
             intelligence = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao())),
-            onTradingCaptured = onTradingCaptured
+            onTradingCaptured = onTradingCaptured,
+            onStored = { event -> plan(app).captureFromEvent(event) }
         )
     }
+
+    fun plan(context: Context): com.marksy.os.plan.PlanRepository =
+        com.marksy.os.plan.PlanRepository(database(context).planItemDao(), com.marksy.os.notification.PlanAlarmScheduler(context))
 
     fun memory(context: Context): MemoryRepository {
         val db = database(context)

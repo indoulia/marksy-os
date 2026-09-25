@@ -178,7 +178,7 @@ class EventIntelligencePipelineTest {
         }
 
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5)
             .allowMainThreadQueries().build()
         try {
             val rows = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }
@@ -211,12 +211,17 @@ class EventIntelligencePipelineTest {
             raw.version = 3
         }
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5)
             .allowMainThreadQueries().build()
         try {
             val row = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }.single()
             assertTrue(!row.isRead && row.kept && row.remindAt == 99L)
             assertEquals("ACTIVE", row.lifecycleState)
+            // 4->5: the existing "Remind me" carries over as a follow-up.
+            val followUp = runBlocking { migrated.planItemDao().all() }.single()
+            assertEquals("FOLLOW_UP", followUp.kind)
+            assertEquals(99L, followUp.dueAt)
+            assertEquals(row.id, followUp.sourceEventId)
             assertEquals(0, runBlocking { migrated.learningDao().counts(0) }.size)
         } finally {
             migrated.close()

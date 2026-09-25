@@ -28,6 +28,8 @@ class NotificationRepository(
     fun observeCategory(category: String, limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeByCategory(category, limit)
 
+    suspend fun inCategory(category: String): List<NotificationEventEntity> = dao.findByCategory(category)
+
     fun observeImportant(limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeByMinimumPriority(minimumPriority = 65, limit = limit)
 

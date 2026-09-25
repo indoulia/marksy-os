@@ -62,6 +62,9 @@ fun DashboardScreen(
     onArchive: (NotificationEventEntity) -> Unit = {},
     onDelete: (NotificationEventEntity) -> Unit = {},
     onHide: (NotificationEventEntity) -> Unit = {},
+    planItems: List<com.marksy.os.data.local.PlanItemEntity> = emptyList(),
+    onOpenPlan: () -> Unit = {},
+    onAddReminder: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
@@ -262,6 +265,9 @@ fun DashboardScreen(
 
                 // Market Pulse Card
                 MarketPulseCard(market, todayDigest, onOpenTrading, liveIndices)
+
+                Spacer(Modifier.height(14.dp))
+                PlanUpcomingCard(planItems, onOpenPlan, onAddReminder)
 
                 Spacer(Modifier.height(14.dp))
 
