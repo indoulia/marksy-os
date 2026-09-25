@@ -9,12 +9,30 @@ import java.net.URLEncoder
 
 class UpstoxAuthException(message: String) : IOException(message)
 
-/** Read-only Upstox market-data client (LTP only). Never add order endpoints against this token. */
+/** Read-only Upstox market-data client (quotes and candles). Never add order endpoints against this token. */
 class UpstoxApiClient(private val token: () -> String?) {
     suspend fun ltp(instrumentKeys: List<String>): Map<String, UpstoxLtp> = withContext(Dispatchers.IO) {
-        val bearer = token() ?: throw UpstoxAuthException("No Upstox token saved")
         val query = URLEncoder.encode(instrumentKeys.joinToString(","), "UTF-8")
-        val connection = (URL("$BASE_URL/market-quote/ltp?instrument_key=$query").openConnection() as HttpURLConnection).apply {
+        UpstoxLtp.parseResponse(get("$BASE_URL/market-quote/ltp?instrument_key=$query")).also { quotes ->
+            val missing = instrumentKeys.filterNot { it in quotes }
+            if (missing.isNotEmpty()) com.marksy.os.ai.DiagLog.i("MarksyUpstox", "ltp ok ${quotes.size}/${instrumentKeys.size}; missing=$missing")
+        }
+    }
+
+    /** Full quote with OHLC, circuits and five-level depth (v2; v3 has no full quote). */
+    suspend fun quote(instrumentKey: String): UpstoxQuote = withContext(Dispatchers.IO) {
+        UpstoxQuote.parse(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
+    }
+
+    suspend fun candles(instrumentKey: String, range: ChartRange, today: java.time.LocalDate, zone: java.time.ZoneId): List<Candle> = withContext(Dispatchers.IO) {
+        val candles = UpstoxCandles.parse(get("$BASE_URL/${range.path(instrumentKey, today)}"))
+        if (range != ChartRange.D1 || candles.isNotEmpty()) candles
+        else UpstoxCandles.lastSession(UpstoxCandles.parse(get("$BASE_URL/${range.fallbackPath(instrumentKey, today)}")), zone)
+    }
+
+    private fun get(url: String): String {
+        val bearer = token() ?: throw UpstoxAuthException("No Upstox token saved")
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 8_000
             readTimeout = 8_000
@@ -35,10 +53,7 @@ class UpstoxApiClient(private val token: () -> String?) {
                 val detail = runCatching { UpstoxLtp.parseResponse(body) }.exceptionOrNull()?.message ?: "Upstox returned HTTP $code"
                 throw IOException(detail)
             }
-            UpstoxLtp.parseResponse(body).also { quotes ->
-                val missing = instrumentKeys.filterNot { it in quotes }
-                if (missing.isNotEmpty()) com.marksy.os.ai.DiagLog.i("MarksyUpstox", "ltp ok ${quotes.size}/${instrumentKeys.size}; missing=$missing")
-            }
+            return body
         } finally {
             connection.disconnect()
         }
@@ -46,6 +61,8 @@ class UpstoxApiClient(private val token: () -> String?) {
 
     private companion object {
         const val BASE_URL = "https://api.upstox.com/v3"
-        const val MAX_RESPONSE_CHARS = 200_000
+        const val V2_URL = "https://api.upstox.com/v2"
+        // Five years of weekly candles is the largest response (~260 rows); 1W of 30-minute bars is similar.
+        const val MAX_RESPONSE_CHARS = 400_000
     }
 }
