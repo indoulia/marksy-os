@@ -71,12 +71,16 @@ internal object ChartAxis {
 
 /** Close-price line with price and time axes; touching reports the nearest candle to [onSelect], null on release. */
 @Composable
-internal fun PriceChart(candles: List<Candle>, range: ChartRange, color: Color, reference: Double?, selected: Int?, onSelect: (Int?) -> Unit) {
+internal fun PriceChart(
+    candles: List<Candle>, range: ChartRange, color: Color, reference: Double?, selected: Int?, onSelect: (Int?) -> Unit,
+    levels: List<Pair<String, Double>> = emptyList()
+) {
     val measurer = rememberTextMeasurer()
     val select by rememberUpdatedState(onSelect)
     val closes = remember(candles) { candles.map { it.close } }
-    val bounds = remember(closes, reference) {
-        val all = closes + listOfNotNull(reference)
+    // Marksy's levels widen longer ranges so they stay in view; 1D keeps the session's own scale.
+    val bounds = remember(closes, reference, levels, range) {
+        val all = closes + listOfNotNull(reference) + if (range == ChartRange.D1) emptyList() else levels.map { it.second }
         val pad = ((all.max() - all.min()).takeIf { it > 0 } ?: (all.max() * .01)) * .08
         (all.min() - pad) to (all.max() + pad)
     }
@@ -124,6 +128,13 @@ internal fun PriceChart(candles: List<Candle>, range: ChartRange, color: Color, 
         }
         reference?.let { r ->
             drawLine(MarksyTheme.TextMuted, Offset(0f, y(r)), Offset(w, y(r)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
+        }
+        levels.forEach { (name, v) ->
+            if (v < lo || v > hi) return@forEach
+            val tint = when (name) { "Target" -> MarksyTheme.PrimaryEmerald; "Stop" -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextSecondary }
+            drawLine(tint.copy(alpha = .8f), Offset(0f, y(v)), Offset(w, y(v)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
+            val label = measurer.measure("$name ${ChartAxis.price(v, step)}", labelStyle.copy(color = tint))
+            drawText(label, topLeft = Offset(4.dp.toPx(), (y(v) - label.size.height - 1.dp.toPx()).coerceIn(0f, h - label.size.height)))
         }
         val line = Path().apply { closes.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) } }
         val fill = Path().apply { addPath(line); lineTo(w, h); lineTo(0f, h); close() }

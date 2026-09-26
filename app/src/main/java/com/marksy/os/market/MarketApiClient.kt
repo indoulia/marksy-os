@@ -24,6 +24,8 @@ interface MarketApiClient {
     suspend fun ipoStageCounts(): IpoStageCountsDto
     suspend fun ipoDetail(id: String): IpoDetailDto
     suspend fun ipoHistory(id: String): List<IpoHistoryEntryDto>
+    /** Marksy's full analysis behind one recommendation, kept raw so every section can be shown. */
+    suspend fun recommendation(id: Int): JSONObject = JSONObject()
 }
 
 class MarketApiException(message: String) : IOException(message)
@@ -79,6 +81,8 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
 
     override suspend fun ipoDetail(id: String): IpoDetailDto =
         IpoDetailDto.parse(getData("$base/ipos/${encode(id)}"))
+
+    override suspend fun recommendation(id: Int): JSONObject = getData("$base/recommendations/$id")
 
     override suspend fun ipoHistory(id: String): List<IpoHistoryEntryDto> =
         IpoHistoryEntryDto.parseList(getDataArray("$base/ipos/${encode(id)}/history"))

@@ -36,6 +36,7 @@ fun TradingIntelligenceScreen(
     market: MarketState = MarketState.Loading,
     selectedFilter: String = TradingFilters.first(),
     onFilterSelected: (String) -> Unit = {},
+    onOpenStock: (String) -> Unit = {},
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
     val snapshot = (market as? MarketState.Loaded)?.snapshot
@@ -45,6 +46,8 @@ fun TradingIntelligenceScreen(
     val callIds = remember(calls) { calls.map { it.first.eventId }.toSet() }
     val liveSymbols = remember(snapshot, calls) { (snapshot?.opportunities.orEmpty().map { it.symbol } + calls.map { it.second.symbol }).distinct() }
     val live = rememberUpstoxQuotes(liveSymbols)
+    var ticket by remember { mutableStateOf<TradeIntent?>(null) }
+    ticket?.let { TradeTicketSheet(it) { ticket = null } }
 
     Box(
         Modifier
@@ -69,11 +72,12 @@ fun TradingIntelligenceScreen(
                     itemsIndexed(picks, key = { i, it -> "pick-$i-${it.symbol}" }) { _, pick ->
                         val reference = pick.entryPrice ?: pick.price
                         val quote = live[pick.symbol]
-                        TradingSignalCard(
+                        val side = if (reference == null || pick.targetPrice >= reference) TradeSide.BUY else TradeSide.SELL
+                        Box(Modifier.clickable { onOpenStock(pick.symbol) }) { TradingSignalCard(
                             symbol = pick.symbol,
                             price = (quote?.lastPrice ?: pick.price)?.let(::rupees) ?: "—",
                             change = (quote?.changePct ?: pick.changePct)?.let(::signedPct) ?: "",
-                            signalType = if (reference == null || pick.targetPrice >= reference) "BUY" else "SELL",
+                            signalType = side.name,
                             headline = pick.name,
                             entry = pick.entryPrice?.let(::rupees) ?: "—",
                             target = rupees(pick.targetPrice),
@@ -83,8 +87,9 @@ fun TradingIntelligenceScreen(
                                 pick.score?.let { "Score ${it.toInt()}" },
                                 pick.horizonDays?.let { "$it-day horizon" },
                                 pick.upsidePct?.let { "upside ${signedPct(it)}" }
-                            ).joinToString(" · ")
-                        )
+                            ).joinToString(" · "),
+                            onTrade = { ticket = TradeIntent(pick.symbol, side, quote?.lastPrice ?: pick.price ?: pick.entryPrice, pick.targetPrice, pick.stopLoss) }
+                        ) }
                     }
                 }
                 TAB_CALLS -> {
@@ -102,7 +107,8 @@ fun TradingIntelligenceScreen(
                                 target = call.target?.let(::rupees) ?: "—",
                                 stopLoss = call.stopLoss?.let(::rupees) ?: "—",
                                 confidence = insight.marksyConfidence?.let { confidencePct(it.toDouble()) } ?: "—",
-                                alignment = listOfNotNull(insight.marksyVerdict?.let { "Marksy: $it" }, insight.status).joinToString(" · ")
+                                alignment = listOfNotNull(insight.marksyVerdict?.let { "Marksy: $it" }, insight.status).joinToString(" · "),
+                                onTrade = { ticket = TradeIntent(call.symbol, if (call.side.name == "SELL") TradeSide.SELL else TradeSide.BUY, quote?.lastPrice ?: call.entry, call.target, call.stopLoss) }
                             )
                         }
                     }
@@ -177,7 +183,8 @@ private fun TradingSignalCard(
     target: String,
     stopLoss: String,
     confidence: String,
-    alignment: String
+    alignment: String,
+    onTrade: (() -> Unit)? = null
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
@@ -233,6 +240,7 @@ private fun TradingSignalCard(
                                 )
                             )
                         )
+                        .clickable(enabled = onTrade != null, onClickLabel = "Open $signalType ticket") { onTrade?.invoke() }
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(signalType, color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Black)

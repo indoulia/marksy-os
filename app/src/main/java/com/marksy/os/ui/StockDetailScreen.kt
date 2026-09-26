@@ -30,9 +30,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.marksy.os.EmptyState
 import com.marksy.os.market.InstrumentLifecycleDto
-import com.marksy.os.market.InstrumentPredictionEntryDto
+import com.marksy.os.market.MarksyCallView
+import com.marksy.os.market.MarksyCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.ChartRange
@@ -69,7 +69,8 @@ fun StockDetailScreen(
     mentions: List<com.marksy.os.data.local.NotificationEventEntity> = emptyList(),
     onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
     fundamentals: StockFundamentals = StockFundamentals(),
-    onOpenSymbol: (String) -> Unit = {}
+    onOpenSymbol: (String) -> Unit = {},
+    analysis: org.json.JSONObject? = null
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
     // A new symbol (e.g. a tapped peer) opens at its header, not at the previous stock's scroll position.
@@ -81,8 +82,11 @@ fun StockDetailScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { PriceHeader(instrument, symbol, live) }
+        val calls = instrument?.let { MarksyCalls.view(it.predictions) } ?: MarksyCallView.None
+        if (calls != MarksyCallView.None) item { MarksyCallCard(calls, live.quote?.lastPrice, analysis) }
         live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
-        if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected) }
+        val levels = (calls as? MarksyCallView.Active)?.primary?.let { p -> listOfNotNull(p.targetPrice?.let { "Target" to it }, "Entry" to p.entryPrice, p.stopLoss?.let { "Stop" to it }) }.orEmpty()
+        if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels) }
         live.quote?.let { q ->
             item { StatsCard(q, live) }
             item { TechnicalCard(live.daily, q.lastPrice) }
@@ -101,15 +105,6 @@ fun StockDetailScreen(
                     Text("${e.sourceName} · ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(e.postedAt))}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
                 }
             }
-        }
-        item { Text("Marksy", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
-        when (state) {
-            is MarketDataState.Loading -> item { MarksyLoader("Checking instrument...") }
-            is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
-            is MarketDataState.Error -> item { EmptyState("Instrument unavailable", state.message) }
-            is MarketDataState.Empty -> item { EmptyState("Not found", "Marksy doesn't track this symbol yet.") }
-            is MarketDataState.Loaded -> marksyContent(state.value)
-            is MarketDataState.Stale -> marksyContent(state.value)
         }
     }
 }
@@ -146,7 +141,7 @@ private fun PriceHeader(instrument: InstrumentLifecycleDto?, symbol: String?, li
 }
 
 @Composable
-private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (ChartRange) -> Unit) {
+private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (ChartRange) -> Unit, levels: List<Pair<String, Double>> = emptyList()) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         val candles = live.candles
         var selected by remember(candles) { mutableStateOf<Int?>(null) }
@@ -190,7 +185,7 @@ private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (Char
             when {
                 candles == null -> MarksyLoader("Loading chart...")
                 candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
-                else -> PriceChart(candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it })
+                else -> PriceChart(candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it }, levels = levels)
             }
         }
     }
@@ -350,31 +345,6 @@ private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell
                 }
             }
         }
-    }
-}
-
-private fun androidx.compose.foundation.lazy.LazyListScope.marksyContent(instrument: InstrumentLifecycleDto) {
-    item {
-        val market = instrument.market
-        val priceLine = if (market.lastClosePrice != null) "Last close: ${market.lastClosePrice}" else "Last close: unavailable"
-        val freshnessDetails = listOfNotNull(market.asOfSessionDate, market.freshnessState)
-        val line = if (freshnessDetails.isNotEmpty()) "$priceLine (${freshnessDetails.joinToString(", ")})" else priceLine
-        Text(line, color = MarksyTheme.TextSecondary, fontSize = 13.sp)
-    }
-    if (instrument.predictions.isEmpty()) {
-        item { EmptyState("No predictions yet", "Marksy has not published a prediction for this instrument.") }
-    } else {
-        items(instrument.predictions) { prediction -> PredictionHistoryRow(prediction) }
-    }
-}
-
-@Composable
-private fun PredictionHistoryRow(prediction: InstrumentPredictionEntryDto) {
-    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(12.dp)).padding(10.dp)) {
-        Text(prediction.lifecycleState, color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text(prediction.lifecycleDetail, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-        Text("Entry ${prediction.entryPrice} · Target ${prediction.targetPrice ?: "-"} · Stop ${prediction.stopLoss ?: "-"}", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-        Text("${prediction.evidenceItemCount} evidence item(s) recorded", color = MarksyTheme.TextMuted, fontSize = 11.sp)
     }
 }
 

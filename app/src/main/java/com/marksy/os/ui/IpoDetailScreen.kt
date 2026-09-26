@@ -114,7 +114,7 @@ private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
 private fun SectionTitle(text: String) = Text(text, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
 
 @Composable
-private fun DetailRow(row: IpoDetailFormatter.Row) {
+internal fun DetailRow(row: IpoDetailFormatter.Row) {
     val indent = (row.depth * 12).dp
     if (row.paragraph) {
         Text("• ${row.label}", color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = indent, top = 2.dp))
