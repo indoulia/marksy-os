@@ -128,8 +128,9 @@ fun rememberStockFundamentals(key: String?, refreshKey: Any): StockFundamentals 
             launch { part("cash-flow") { UpstoxFundamentals.statement(client.fundamentals(isin, "cash-flow"), "cash_flow") }?.let { value = value.copy(cashFlow = it) } }
             launch { part("share-holdings") { UpstoxFundamentals.shareholding(client.fundamentals(isin, "share-holdings")) }?.let { value = value.copy(shareholding = it) } }
             launch { part("corporate-actions") { UpstoxFundamentals.actions(client.fundamentals(isin, "corporate-actions")) }?.let { value = value.copy(actions = it) } }
+            // Unlike the other fundamentals endpoints, competitors wants the full instrument key, not the ISIN.
             launch {
-                part("competitors") { UpstoxFundamentals.peers(client.fundamentals(isin, "competitors")) }?.let { peers ->
+                part("competitors") { UpstoxFundamentals.peers(client.fundamentals(key, "competitors")) }?.let { peers ->
                     runCatching { UpstoxInstruments.load(context) }
                     value = value.copy(peers = peers.map { UpstoxInstruments.symbolForKey(it.instrumentKey) to it })
                 }

@@ -35,7 +35,7 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxCandles.parse(get("$BASE_URL/historical-candle/${pathKey(instrumentKey)}/months/1/$today/2000-01-01"))
     }
 
-    /** Raw `/v2/fundamentals/{isin}/{part}` body: profile, key-ratios, income-statement, balance-sheet, cash-flow, share-holdings, corporate-actions, competitors. */
+    /** Raw `/v2/fundamentals/{id}/{part}` body; [isin] is the ISIN, except competitors, which takes the instrument key. */
     suspend fun fundamentals(isin: String, part: String, query: String = ""): String = withContext(Dispatchers.IO) {
         get("$V2_URL/fundamentals/${URLEncoder.encode(isin, "UTF-8")}/$part$query")
     }
