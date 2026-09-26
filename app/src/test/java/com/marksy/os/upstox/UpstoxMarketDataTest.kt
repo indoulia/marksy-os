@@ -71,4 +71,10 @@ class UpstoxMarketDataTest {
         assertEquals("historical-candle/NSE_EQ%7CINE009A01021/days/1/2026-09-25/2025-09-25", ChartRange.Y1.path(key, today))
         assertEquals("historical-candle/NSE_EQ%7CINE009A01021/weeks/1/2026-09-25/2021-09-25", ChartRange.Y5.path(key, today))
     }
+
+    @Test fun indexKeysWithSpacesArePathEncoded() {
+        val today = LocalDate.of(2026, 9, 25)
+        assertEquals("historical-candle/NSE_INDEX%7CNifty%2050/days/1/2026-09-25/2025-09-25", ChartRange.Y1.path("NSE_INDEX|Nifty 50", today))
+        assertEquals("historical-candle/NSE_INDEX%7CNifty%2050/minutes/5/2026-09-25/2026-09-18", ChartRange.D1.fallbackPath("NSE_INDEX|Nifty 50", today))
+    }
 }

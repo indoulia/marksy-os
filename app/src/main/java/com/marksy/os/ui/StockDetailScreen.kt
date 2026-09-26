@@ -212,7 +212,8 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         val long = remember(live.monthly, q.lastPrice) { com.marksy.os.upstox.Seasonality.longReturns(live.monthly, q.lastPrice, zone) }
         val returns = listOf("1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "10Y").mapNotNull { k -> (live.returns[k] ?: long[k])?.let { k to it } }
         if (returns.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            returns.forEach { (label, pct) ->
+            returns.forEach { (label, raw) ->
+                val pct = if (kotlin.math.abs(raw) < .05) 0.0 else raw
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp)
                     Text(String.format(Locale.US, "%+.1f%%", pct), color = if (pct >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
