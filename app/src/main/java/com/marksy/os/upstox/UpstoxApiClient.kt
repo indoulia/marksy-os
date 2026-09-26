@@ -30,6 +30,16 @@ class UpstoxApiClient(private val token: () -> String?) {
         else UpstoxCandles.lastSession(UpstoxCandles.parse(get("$BASE_URL/${range.fallbackPath(instrumentKey, today)}")), zone)
     }
 
+    /** Raw `/v2/fundamentals/{isin}/{part}` body: profile, key-ratios, income-statement, balance-sheet, cash-flow, share-holdings, corporate-actions, competitors. */
+    suspend fun fundamentals(isin: String, part: String, query: String = ""): String = withContext(Dispatchers.IO) {
+        get("$V2_URL/fundamentals/${URLEncoder.encode(isin, "UTF-8")}/$part$query")
+    }
+
+    suspend fun news(instrumentKey: String, pageSize: Int = 15): List<NewsItem> = withContext(Dispatchers.IO) {
+        val k = URLEncoder.encode(instrumentKey, "UTF-8")
+        UpstoxFundamentals.news(get("$V2_URL/news?category=instrument_keys&instrument_keys=$k&page_number=1&page_size=$pageSize"), instrumentKey)
+    }
+
     private fun get(url: String): String {
         val bearer = token() ?: throw UpstoxAuthException("No Upstox token saved")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {

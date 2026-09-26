@@ -40,6 +40,9 @@ object UpstoxInstruments {
 
     fun keyFor(symbol: String): String? = map?.let { resolve(it, symbol) } ?: INDEX_ALIASES[symbol.trim().uppercase()]
 
+    /** Trading symbol for an instrument key, once the master is loaded. */
+    fun symbolForKey(key: String): String? = map?.entries?.firstOrNull { it.value == key && !it.key.startsWith(NAME_PREFIX) }?.key
+
     internal fun resolve(map: Map<String, String>, symbol: String): String? {
         val s = symbol.trim().uppercase()
         return INDEX_ALIASES[s] ?: map[s] ?: map[NAME_PREFIX + normalizeName(s)]
