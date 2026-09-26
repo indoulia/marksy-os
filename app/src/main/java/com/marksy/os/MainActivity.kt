@@ -609,7 +609,8 @@ class MainActivity : ComponentActivity() {
                     TradingIntelligenceScreen(
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
-                        onFilterSelected = { tradingFilter = it }
+                        onFilterSelected = { tradingFilter = it },
+                        onOpenStock = { marketTabName = MarketTab.STOCKS.name; marketSymbol = it; stockQuery = it; selectedTab = 4 }
                     ) { selectedTradingInsight = it }
                 }
                 selectedTab == 4 -> MarketScreen(

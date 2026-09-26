@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +50,10 @@ fun MarketScreen(
     val tab = MarketTab.entries.firstOrNull { it.name == tabName } ?: MarketTab.OVERVIEW
 
     BackHandler(enabled = selectedSymbol != null) { onSymbolSelected(null) }
+    // The open stock's trade ticket defaults, refreshed as its price and Marksy call load.
+    var stockTrade by remember { mutableStateOf<TradeIntent?>(null) }
+    var ticket by remember { mutableStateOf<TradeIntent?>(null) }
+    ticket?.let { TradeTicketSheet(it) { ticket = null } }
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
@@ -80,14 +85,26 @@ fun MarketScreen(
                     var range by rememberSaveable(symbol) { mutableStateOf(com.marksy.os.upstox.ChartRange.D1) }
                     val live = rememberStockLive(symbol, range, refresh.key)
                     val fundamentals = rememberStockFundamentals(live.key, refresh.key)
+                    val predictions = when (val st = state) { is com.marksy.os.market.MarketDataState.Loaded -> st.value.predictions; is com.marksy.os.market.MarketDataState.Stale -> st.value.predictions; else -> null }
+                    val analysisId = remember(predictions) { predictions?.let(com.marksy.os.market.MarksyCalls::analysisId) }
+                    val analysis by produceState<org.json.JSONObject?>(null, analysisId, refresh.key) {
+                        value = analysisId?.let { (repository.recommendation(it) as? com.marksy.os.market.MarketDataState.Loaded)?.value }
+                    }
                     val words = remember(symbol, state) {
                         listOfNotNull(symbol, (state as? com.marksy.os.market.MarketDataState.Loaded)?.value?.companyName?.substringBefore(" Limited")?.substringBefore(" Ltd"))
                             .map { Regex("\\b${Regex.escape(it)}\\b", RegexOption.IGNORE_CASE) }
                     }
                     val mentions = remember(stockEvents, words) { stockEvents.filter { e -> words.any { it.containsMatchIn("${e.title} ${e.body}") } } }
+                    val call = (predictions?.let(com.marksy.os.market.MarksyCalls::view) as? com.marksy.os.market.MarksyCallView.Active)?.primary
+                    SideEffect {
+                        stockTrade = TradeIntent(
+                            symbol, if (call?.targetPrice != null && call.targetPrice < call.entryPrice) TradeSide.SELL else TradeSide.BUY,
+                            live.quote?.lastPrice, call?.targetPrice, call?.stopLoss
+                        )
+                    }
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
-                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) })
+                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis)
                     }
                 }
             }
@@ -104,7 +121,11 @@ fun MarketScreen(
         OneHandControls(
             filters = MarketTab.entries.map { it.name to it.label },
             selectedFilter = tab.name,
-            onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) }
+            onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
+            actions = listOfNotNull(
+                stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
+                    ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.SwapVert, "Buy or sell ${t.symbol}") { ticket = t } }
+            )
         )
     }
 }

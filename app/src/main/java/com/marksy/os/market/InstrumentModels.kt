@@ -31,7 +31,10 @@ data class InstrumentPredictionEntryDto(
     val outcomeStatus: String,
     val realizedReturnPct: Double?,
     val hasResolvedOutcome: Boolean,
-    val evidenceItemCount: Int
+    val evidenceItemCount: Int,
+    val recommendationId: Int? = null,
+    val observedDays: Int? = null,
+    val isSupersededByRevision: Boolean = false
 ) {
     companion object {
         fun parse(json: JSONObject) = InstrumentPredictionEntryDto(
@@ -53,7 +56,10 @@ data class InstrumentPredictionEntryDto(
             outcomeStatus = json.textOrNull("outcomeStatus") ?: "PENDING",
             realizedReturnPct = json.doubleOrNull("realizedReturnPct"),
             hasResolvedOutcome = json.boolOrFalse("hasResolvedOutcome"),
-            evidenceItemCount = json.intOrNull("evidenceItemCount") ?: 0
+            evidenceItemCount = json.intOrNull("evidenceItemCount") ?: 0,
+            recommendationId = json.intOrNull("recommendationId"),
+            observedDays = json.intOrNull("observedDays"),
+            isSupersededByRevision = json.boolOrFalse("isSupersededByRevision")
         )
     }
 }

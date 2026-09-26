@@ -31,25 +31,36 @@ class StockDetailScreenTest {
     )
 
     @Test
-    fun loadedStateShowsCompanyAndPrediction() {
+    fun openCallLeadsThePageUnderThePrice() {
         compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(instrument()), padding = PaddingValues()) }
 
         compose.onNodeWithText("Reliance Industries").assertExists()
-        compose.onNodeWithText("ACTIVE", substring = true).assertExists()
+        compose.onNodeWithText("MARKSY CALL").assertExists()
+        compose.onNodeWithText("Tracking toward target").assertExists()
     }
 
     @Test
-    fun instrumentWithNoPredictionsShowsEmptyPredictionState() {
+    fun onlyPastCallsSayThereIsNoActiveCall() {
+        val closed = instrument().predictions.single().copy(isTerminal = true, outcomeStatus = "TARGET_HIT", realizedReturnPct = 3.5)
+        compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(instrument().copy(predictions = listOf(closed))), padding = PaddingValues()) }
+
+        compose.onNodeWithText("No active Marksy call").assertExists()
+        compose.onNodeWithText("1 past call · 1 hit target", substring = true).assertExists()
+    }
+
+    @Test
+    fun noMarksyDataShowsNoMarksySection() {
         val noPredictions = instrument().copy(predictions = emptyList(), predictionCount = 0, openPredictionCount = 0)
         compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(noPredictions), padding = PaddingValues()) }
-
-        compose.onNodeWithText("No predictions yet", substring = true).assertExists()
+        compose.onNodeWithText("MARKSY CALL").assertDoesNotExist()
+        compose.onNodeWithText("No active Marksy call").assertDoesNotExist()
     }
 
     @Test
-    fun unavailableStateShowsExplicitMessage() {
+    fun unconfiguredMarksyIsHidden() {
         compose.setContent { StockDetailScreen(state = MarketDataState.Unavailable, padding = PaddingValues()) }
 
-        compose.onNodeWithText("not configured", substring = true).assertExists()
+        compose.onNodeWithText("not configured", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("MARKSY CALL").assertDoesNotExist()
     }
 }
