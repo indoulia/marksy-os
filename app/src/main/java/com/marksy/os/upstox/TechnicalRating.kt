@@ -159,6 +159,23 @@ object Technicals {
         return sqrt(r.sumOf { (it - mean) * (it - mean) } / (r.size - 1)) * sqrt(252.0) * 100
     }
 
+    /** Slope of the stock's daily returns on the index's, over the sessions both have. */
+    fun beta(stock: List<Candle>, index: List<Candle>, zone: ZoneId): Double? {
+        fun returns(c: List<Candle>) = c.zipWithNext().mapNotNull { (a, b) ->
+            if (a.close > 0) Instant.ofEpochMilli(b.time).atZone(zone).toLocalDate() to (b.close - a.close) / a.close else null
+        }.toMap()
+        val s = returns(stock)
+        val m = returns(index)
+        val days = s.keys.intersect(m.keys)
+        if (days.size < 20) return null
+        val xs = days.map { m.getValue(it) }
+        val ys = days.map { s.getValue(it) }
+        val mx = xs.average()
+        val my = ys.average()
+        val variance = xs.sumOf { (it - mx) * (it - mx) }
+        return if (variance == 0.0) null else xs.indices.sumOf { (xs[it] - mx) * (ys[it] - my) } / variance
+    }
+
     private fun band(v: Double, bullBelow: Double, bearAbove: Double) = when {
         v < bullBelow -> Signal.BULLISH
         v > bearAbove -> Signal.BEARISH

@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,7 +51,9 @@ data class StockLive(
     val note: String? = null,
     val streaming: Boolean = false,
     val daily: List<Candle> = emptyList(),
-    val key: String? = null
+    val key: String? = null,
+    val monthly: List<Candle> = emptyList(),
+    val index: List<Candle> = emptyList()
 )
 
 @Composable
@@ -77,6 +81,7 @@ fun StockDetailScreen(
         live.quote?.let { q ->
             item { StatsCard(q, live) }
             item { TechnicalCard(live.daily, q.lastPrice) }
+            if (live.monthly.size >= 13) item { SeasonalityCard(live.monthly, symbol ?: instrument?.symbol.orEmpty()) }
             if (q.bids.isNotEmpty() || q.asks.isNotEmpty()) item { DepthCard(q) }
         }
         fundamentalsContent(fundamentals, live.quote?.lastPrice, onOpenSymbol)
@@ -199,11 +204,15 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         "Avg. vol. (20D)" to live.averageVolume?.let(::compact),
         "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f×", v.toDouble() / it) } },
         "ATR (14)" to com.marksy.os.upstox.Technicals.atr(live.daily)?.let(::money),
-        "Volatility (1Y)" to com.marksy.os.upstox.Technicals.volatility(live.daily)?.let { String.format(Locale.US, "%.1f%%", it) }
+        "Volatility (1Y)" to com.marksy.os.upstox.Technicals.volatility(live.daily)?.let { String.format(Locale.US, "%.1f%%", it) },
+        "Beta (NIFTY 50)" to com.marksy.os.upstox.Technicals.beta(live.daily, live.index, java.time.ZoneId.of("Asia/Kolkata"))?.let { String.format(Locale.US, "%.2f", it) }
     ).filter { it.second != null }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
-        if (live.returns.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            live.returns.forEach { (label, pct) ->
+        val zone = java.time.ZoneId.of("Asia/Kolkata")
+        val long = remember(live.monthly, q.lastPrice) { com.marksy.os.upstox.Seasonality.longReturns(live.monthly, q.lastPrice, zone) }
+        val returns = listOf("1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "10Y").mapNotNull { k -> (live.returns[k] ?: long[k])?.let { k to it } }
+        if (returns.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            returns.forEach { (label, pct) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp)
                     Text(String.format(Locale.US, "%+.1f%%", pct), color = if (pct >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -223,6 +232,37 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         }
         if (q.low != null && q.high != null) RangeBar("Day range", q.low, q.high, q.lastPrice)
         year?.let { (lo, hi) -> RangeBar("52-week range", lo, hi, q.lastPrice) }
+        com.marksy.os.upstox.Seasonality.allTime(live.monthly)?.let { (lo, hi) ->
+            val month = SimpleDateFormat("MMM yyyy", Locale.getDefault())
+            RangeBar("All-time range (since ${month.format(Date(live.monthly.first().time))})", lo.first, hi.first, q.lastPrice)
+            Text("Low in ${month.format(Date(lo.second))} · high in ${month.format(Date(hi.second))}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+        }
+        VolumeTrend(live.daily, live.averageVolume)
+    }
+}
+
+/** The last seven sessions' volume against the 20-day average. */
+@Composable
+private fun VolumeTrend(daily: List<Candle>, average: Long?) {
+    val days = daily.takeLast(7).takeIf { it.size >= 2 } ?: return
+    val peak = (days.maxOf { it.volume }.toDouble()).coerceAtLeast(average?.toDouble() ?: 0.0).takeIf { it > 0 } ?: return
+    val day = SimpleDateFormat("d MMM", Locale.getDefault())
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row {
+            Text("Volume trend", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            average?.let { Text("20D avg ${compact(it)}", color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+        }
+        Row(Modifier.fillMaxWidth().height(90.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+            days.forEach { c ->
+                val above = average != null && c.volume > average
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
+                    Text(if (c.volume >= 10_000_000) String.format(Locale.US, "%.1fCr", c.volume / 1e7) else if (c.volume >= 100_000) "${c.volume / 100_000}L" else count(c.volume), color = MarksyTheme.TextSecondary, fontSize = 8.sp, maxLines = 1)
+                    Box(Modifier.fillMaxWidth(.7f).fillMaxHeight((c.volume / peak * .6).toFloat().coerceAtLeast(.02f)).clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                        .background(if (above) MarksyTheme.PrimaryEmerald.copy(alpha = .8f) else MarksyTheme.TextMuted.copy(alpha = .5f)))
+                    Text(day.format(Date(c.time)), color = MarksyTheme.TextMuted, fontSize = 8.sp, maxLines = 1)
+                }
+            }
+        }
     }
 }
 

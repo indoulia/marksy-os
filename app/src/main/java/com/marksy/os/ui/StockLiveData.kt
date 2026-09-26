@@ -14,6 +14,7 @@ import com.marksy.os.upstox.KeyRatio
 import com.marksy.os.upstox.NewsItem
 import com.marksy.os.upstox.Peer
 import com.marksy.os.upstox.UpstoxFundamentals
+import com.marksy.os.upstox.UpstoxIndices
 import com.marksy.os.upstox.ChartRange
 import com.marksy.os.upstox.UpstoxApiClient
 import com.marksy.os.upstox.UpstoxAuthException
@@ -59,6 +60,15 @@ fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): Stock
         val k = instrument?.takeIf { hasToken } ?: return@produceState
         value = runCatching { client.candles(k, ChartRange.Y1, LocalDate.now(zone), zone) }.getOrDefault(emptyList())
     }
+    val monthly by produceState(emptyList<Candle>(), instrument, hasToken, refreshKey) {
+        val k = instrument?.takeIf { hasToken } ?: return@produceState
+        value = runCatching { client.monthlyCandles(k, LocalDate.now(zone)) }.getOrDefault(emptyList())
+    }
+    // NIFTY 50 over the same year, for beta.
+    val index by produceState(emptyList<Candle>(), instrument, hasToken, refreshKey) {
+        if (instrument == null || !hasToken || instrument == UpstoxIndices.NIFTY_50) return@produceState
+        value = runCatching { client.candles(UpstoxIndices.NIFTY_50, ChartRange.Y1, LocalDate.now(zone), zone) }.getOrDefault(emptyList())
+    }
     val q = quote?.getOrNull()
     val error = quote?.exceptionOrNull()
     val note = when {
@@ -78,7 +88,9 @@ fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): Stock
         note = note,
         streaming = q != null && UpstoxFeed.isMarketOpen(),
         daily = daily,
-        key = instrument?.takeIf { hasToken }
+        key = instrument?.takeIf { hasToken },
+        monthly = monthly,
+        index = index
     )
 }
 

@@ -341,11 +341,8 @@ Acceptance: metrics are automatically collected; available by day and by source;
 5. Graham Number: √(22.5 × EPS × BVPS), with EPS = price ÷ P/E and BVPS = price ÷ P/B, shown only when both are positive.
 6. DuPont ROE: net margin × asset turnover × equity multiplier, from the yearly income statement and the balance sheet, shown against the sector's ROE. Both value checks are labelled as Marksy calculations.
 
-### Next (buildable from Upstox data)
-- Seasonality: a year × month heat-map from monthly candles going back to 2000, plus a current-month summary (negative years out of all years, best and worst year, averages).
-- All-time range and long-horizon returns (YTD, 3Y, 5Y) from the same monthly candles.
-- Volume trend.
-- Beta against NIFTY 50.
+7. Seasonality: a year × month heat-map from monthly candles going back to 2000, plus a month summary (negative years out of all years, best and worst year, averages). Tapping a month changes the summary.
+8. All-time range, YTD and 3Y/5Y/10Y returns, a seven-session volume trend and beta against NIFTY 50.
 
 ### Parked: data not available through current APIs
 - **Ohlson O-Score:** the size term is calibrated on US data and needs an Indian price-level index. Its current-asset and current-liability inputs depend on `fs=true` line-item names that have not been checked against live responses.
