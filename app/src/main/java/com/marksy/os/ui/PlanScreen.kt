@@ -228,7 +228,7 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
                     Spacer(Modifier.width(8.dp))
                     Text("Upcoming", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
-                TextButton(onClick = onAdd, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("+ Add", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+                Icon(Icons.Default.Add, contentDescription = "Add reminder", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp).clip(CircleShape).clickable(onClick = onAdd))
             }
             if (upcoming.isEmpty()) {
                 Text("No bills, EMIs or birthdays coming up.", color = MarksyTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
