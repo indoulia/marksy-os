@@ -7,19 +7,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
@@ -129,57 +133,49 @@ private fun PriceHeader(instrument: InstrumentLifecycleDto?, symbol: String?, li
 private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (ChartRange) -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         val candles = live.candles
-        val first = candles?.firstOrNull()?.open
-        val last = candles?.lastOrNull()?.close
+        var selected by remember(candles) { mutableStateOf<Int?>(null) }
+        val pick = selected?.let { candles?.getOrNull(it) }
         // 1D is measured from the previous close, as brokers show it; longer ranges from the range's first open.
-        val pct = if (range == ChartRange.D1 && live.quote?.changePct != null) live.quote.changePct
-            else if (first != null && last != null && first > 0) (last - first) / first * 100 else null
+        val base = if (range == ChartRange.D1) live.quote?.prevClose ?: candles?.firstOrNull()?.open else candles?.firstOrNull()?.open
+        val last = candles?.lastOrNull()?.close
+        val pct = if (range == ChartRange.D1 && live.quote?.changePct != null && pick == null) live.quote.changePct
+            else (pick?.close ?: last)?.let { v -> base?.takeIf { it > 0 }?.let { (v - it) / it * 100 } }
         val up = (pct ?: live.quote?.change ?: 0.0) >= 0
+        val tint = if (up) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent
         val day = SimpleDateFormat("d MMM", Locale.getDefault())
         // After hours the intraday feed can be empty and history may lag a session; say which day the chart is.
         val session = candles?.lastOrNull()?.time?.let { day.format(Date(it)) }
         val stale = range == ChartRange.D1 && session != null && live.quote?.lastTradeTime?.let { day.format(Date(it)) } != session
-        pct?.let {
-            Text("${String.format(Locale.US, "%+.2f%%", it)} ${if (range == ChartRange.D1) "today" else "in ${range.label}"}",
-                color = if (up) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val headline = when {
+                pick != null -> "₹${money(pick.close)}  " + (pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "")
+                pct != null -> "${String.format(Locale.US, "%+.2f%%", pct)} ${if (range == ChartRange.D1) "today" else "in ${range.label}"}"
+                else -> ""
+            }
+            Text(headline, color = tint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ChartRange.entries.forEach { r ->
+                    val on = r == range
+                    Box(
+                        Modifier.size(30.dp).clip(CircleShape).background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised).clickable { onRangeSelected(r) },
+                        contentAlignment = Alignment.Center
+                    ) { Text(r.label, color = if (on) Color.Black else MarksyTheme.TextSecondary, fontSize = 10.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
+                }
+            }
         }
-        if (stale) Text("Chart shows the $session session", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-        Box(Modifier.fillMaxWidth().height(180.dp).padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        val detail = when {
+            pick != null -> "${ChartAxis.readout(range, pick.time)} · H ${money(pick.high)} · L ${money(pick.low)} · Vol ${compact(pick.volume)}"
+            !candles.isNullOrEmpty() -> listOfNotNull(if (stale) "$session session" else null, "Low ₹${money(candles.minOf { it.low })} · High ₹${money(candles.maxOf { it.high })}").joinToString(" · ")
+            else -> ""
+        }
+        Text(detail, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.fillMaxWidth().height(200.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when {
                 candles == null -> MarksyLoader("Loading chart...")
                 candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
-                else -> PriceLine(candles, if (up) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent)
+                else -> PriceChart(candles, range, tint, reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it })
             }
         }
-        candles?.takeIf { it.isNotEmpty() }?.let { c ->
-            Text("Range low ₹${money(c.minOf { it.low })} · high ₹${money(c.maxOf { it.high })}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            ChartRange.entries.forEach { r ->
-                val selected = r == range
-                Text(
-                    r.label, color = if (selected) Color.Black else MarksyTheme.TextSecondary, fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
-                        .clickable { onRangeSelected(r) }.padding(horizontal = 14.dp, vertical = 5.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PriceLine(candles: List<Candle>, color: Color) {
-    Canvas(Modifier.fillMaxSize()) {
-        val closes = candles.map { it.close }
-        val lo = closes.min()
-        val span = (closes.max() - lo).takeIf { it > 0 } ?: 1.0
-        val step = size.width / (closes.size - 1)
-        fun y(v: Double) = (size.height * (1 - (v - lo) / span)).toFloat()
-        val line = Path().apply { closes.forEachIndexed { i, v -> if (i == 0) moveTo(0f, y(v)) else lineTo(i * step, y(v)) } }
-        val fill = Path().apply { addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
-        drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = .25f), Color.Transparent)))
-        drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-        drawCircle(color, 3.dp.toPx(), Offset(size.width, y(closes.last())))
     }
 }
 
@@ -187,13 +183,14 @@ private fun PriceLine(candles: List<Candle>, color: Color) {
 private fun StatsCard(q: UpstoxQuote, live: StockLive) {
     val year = live.yearRange
     val stats = listOf(
-        "Open" to q.open?.let(::money), "Prev. close" to q.prevClose?.let(::money),
-        "Day high" to q.high?.let(::money), "Day low" to q.low?.let(::money),
+        "Open" to q.open?.let(::money), "Prev. close" to q.prevClose?.let(::money), "Avg. price" to q.averagePrice?.let(::money),
+        "Day high" to q.high?.let(::money), "Day low" to q.low?.let(::money), "Volume" to q.volume?.let(::compact),
         "52W high" to year?.second?.let(::money), "52W low" to year?.first?.let(::money),
-        "Volume" to q.volume?.let(::count), "Avg. price" to q.averagePrice?.let(::money),
+        "From 52W high" to year?.second?.takeIf { it > 0 }?.let { String.format(Locale.US, "%+.1f%%", (q.lastPrice - it) / it * 100) },
         "Upper circuit" to q.upperCircuit?.let(::money), "Lower circuit" to q.lowerCircuit?.let(::money),
-        "Avg. volume (20D)" to live.averageVolume?.let(::count),
-        "From 52W high" to year?.second?.takeIf { it > 0 }?.let { String.format(Locale.US, "%+.1f%%", (q.lastPrice - it) / it * 100) }
+        "Traded value" to q.volume?.let { v -> q.averagePrice?.let { "₹" + compact(Math.round(v * it)) } },
+        "Avg. vol. (20D)" to live.averageVolume?.let(::compact),
+        "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f×", v.toDouble() / it) } }
     ).filter { it.second != null }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         if (live.returns.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -204,15 +201,15 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
                 }
             }
         }
-        stats.chunked(2).forEach { row ->
+        stats.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 row.forEach { (label, value) ->
                     Column(Modifier.weight(1f)) {
-                        Text(label, color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                        Text(value!!, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(label, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1)
+                        Text(value!!, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         if (q.low != null && q.high != null) RangeBar("Day range", q.low, q.high, q.lastPrice)
@@ -242,40 +239,60 @@ private fun RangeBar(label: String, low: Double, high: Double, price: Double) {
 private fun DepthCard(q: UpstoxQuote) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         Text("Market depth", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        val deepest = (q.bids + q.asks).take(10).maxOfOrNull { it.quantity }?.takeIf { it > 0 } ?: 1L
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            DepthSide("Bid", q.bids, MarksyTheme.PrimaryEmerald, Modifier.weight(1f))
-            Spacer(Modifier.width(12.dp))
-            DepthSide("Ask", q.asks, MarksyTheme.RedUrgent, Modifier.weight(1f))
+            DepthSide("Buy", q.bids, MarksyTheme.PrimaryEmerald, sell = false, deepest, Modifier.weight(1f))
+            Spacer(Modifier.width(10.dp))
+            DepthSide("Sell", q.asks, MarksyTheme.RedUrgent, sell = true, deepest, Modifier.weight(1f))
         }
         val buy = q.totalBuyQty
         val sell = q.totalSellQty
         if (buy != null && sell != null && buy + sell > 0) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text("Total", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(count(buy), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(10.dp))
+                Text(count(sell), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Total", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
             val share = buy.toFloat() / (buy + sell)
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp).height(6.dp).clip(RoundedCornerShape(3.dp))) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(RoundedCornerShape(3.dp))) {
                 Box(Modifier.weight(share.coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.PrimaryEmerald))
                 Box(Modifier.weight((1 - share).coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.RedUrgent))
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Buy ${count(buy)} (${(share * 100).toInt()}%)", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                Text("Sell ${count(sell)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("${Math.round(share * 100)}% buyers", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("${100 - Math.round(share * 100)}% sellers", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
             }
         }
     }
 }
 
+/** One side of the book, mirrored like a broker's: Qty · Orders · Price for buys, Price · Orders · Qty for sells. */
 @Composable
-private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, modifier: Modifier) {
+private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell: Boolean, deepest: Long, modifier: Modifier) {
+    @Composable
+    fun RowScope.cells(qty: String, orders: String, price: String, qtyColor: Color, priceColor: Color, size: Int) {
+        val first = if (sell) price to priceColor else qty to qtyColor
+        val last = if (sell) qty to qtyColor else price to priceColor
+        Text(first.first, color = first.second, fontSize = size.sp, modifier = Modifier.weight(1f))
+        Text(orders, color = MarksyTheme.TextMuted, fontSize = size.sp, modifier = Modifier.weight(.6f), textAlign = TextAlign.Center)
+        Text(last.first, color = last.second, fontSize = size.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+    }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth()) {
-            Text(title, color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))
-            Text("Orders", color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))
-            Text("Qty", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-        }
+        Text(title, color = tint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)) { cells("Qty", "Orders", "Price", MarksyTheme.TextMuted, MarksyTheme.TextMuted, 10) }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(tint.copy(alpha = .5f)))
         levels.take(5).forEach { l ->
-            Row(Modifier.fillMaxWidth().padding(top = 3.dp)) {
-                Text(money(l.price), color = tint, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text(l.orders.toString(), color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text(count(l.quantity), color = MarksyTheme.TextPrimary, fontSize = 12.sp)
+            Box(Modifier.fillMaxWidth().padding(top = 3.dp).height(22.dp), contentAlignment = Alignment.CenterStart) {
+                // The bar grows from the centre of the book, so the two sides read against each other.
+                Box(
+                    Modifier.align(if (sell) Alignment.CenterStart else Alignment.CenterEnd)
+                        .fillMaxWidth((l.quantity.toFloat() / deepest).coerceIn(0f, 1f)).fillMaxHeight().background(tint.copy(alpha = .12f))
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    cells(count(l.quantity), l.orders.toString(), money(l.price), MarksyTheme.TextPrimary, tint, 12)
+                }
             }
         }
     }
@@ -314,6 +331,13 @@ internal fun money(v: Double): String {
 }
 
 internal fun count(v: Long): String = indian(v)
+
+/** Indian units for big counts: 13138735 -> "1.31 Cr", 452000 -> "4.52 L". */
+internal fun compact(v: Long): String = when {
+    v >= 10_000_000 -> String.format(Locale.US, "%.2f Cr", v / 1e7)
+    v >= 100_000 -> String.format(Locale.US, "%.2f L", v / 1e5)
+    else -> indian(v)
+}
 
 private fun indian(n: Long): String {
     val s = n.toString()

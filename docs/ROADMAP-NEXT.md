@@ -321,6 +321,51 @@ Acceptance: metrics are automatically collected; available by day and by source;
 - Tests cover realtime state transitions, stale data, process recreation, navigation and failure recovery.
 - Runtime diagnostics can identify whether a problem originated in the API, stream, client repository or UI.
 
+## EPIC-035 — Stock Details Enhancements
+
+**Goal:** Bring the stock detail page to the depth of Moneycontrol's stock screens (MC Technicals, Stock Vitals, Seasonality, Market Depth), using only real data.
+
+### Built in the app from Upstox price data (fetched live, nothing stored on the device)
+1. Interactive chart: price and time axes, touch-and-drag readout (price, time, high/low, volume), previous-close line on 1D, and round range chips (1D–5Y) at the top right.
+2. Stats in three columns, including traded value and volume against the 20-day average.
+3. Market depth: mirrored Buy/Sell, 5 levels, totals.
+4. Technical rating, as in MC Technicals:
+   - moving averages (price vs SMA 5/10/20/50/100/200);
+   - indicators (RSI, MACD, Stochastic, Williams %R, ROC);
+   - MA crossovers;
+   - overall trend;
+   - weekly historical rating;
+   - pivot levels.
+5. Seasonality: a year × month return heat-map from monthly candles, plus a current-month summary (negative years out of all years, best and worst year, average gain, average loss, overall average).
+6. Company news and corporate events from Marksy `/news` and `/events` filtered by symbol.
+
+### Parked: needs a fundamentals source
+- **Fundamentals:** P/E, market cap, EPS, book value, ROE, margins, debt, shareholding and period history (overlaps EPIC-033).
+- **DuPont ROE:** net profit margin × asset turnover × equity multiplier, each compared with the industry median. Needs the income statement, the balance sheet and a peer set for the medians.
+- **Graham Number:** √(22.5 × EPS × BVPS).
+  - EPS over the trailing twelve months: the sum of the last four quarterly results.
+  - BVPS: shareholders' equity ÷ shares outstanding, from the latest half-yearly balance sheet.
+  - Valid only when both are positive. Show it against the price as a margin of safety.
+- **Ohlson O-Score:** needs these inputs from annual statements:
+  - total assets and total liabilities;
+  - working capital, current assets and current liabilities;
+  - net income for two years, including whether both years were losses;
+  - funds from operations;
+  - a price-level index for the size term.
+
+  Show it as a bankruptcy-probability estimate.
+
+**Source:**
+- Listed companies file results with NSE and BSE under SEBI LODR (quarterly results, balance sheets, shareholding). The filings are XBRL and public.
+- The Marksy backend should ingest these filings and serve a fundamentals contract, for example `/instruments/{symbol}/fundamentals`, with period labels and an as-of time for each figure.
+- A licensed vendor (CMOTS, Accord, Trendlyne and similar) is the alternative.
+
+### Restrictions
+- The app must not scrape exchange websites, Screener or Yahoo. Their terms forbid it and exchange sites block non-browser clients. Aggregation stays in the backend (EPIC-033, item 8).
+- Nothing fetched is stored on the device for now. Everything is held in memory while the page is open.
+- Every figure shows its source and its period or as-of time. Nothing is estimated or made up when data is missing.
+- Derived scores (DuPont, Graham, O-Score, technical rating) are labelled as Marksy calculations, never as provider facts.
+
 ## Market Experience Implementation Order
 
 EPIC-024 → EPIC-025 → EPIC-031 → EPIC-032 → EPIC-033 → EPIC-026 → EPIC-028 → EPIC-034 → EPIC-027 → EPIC-029 → EPIC-030
