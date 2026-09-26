@@ -47,7 +47,8 @@ data class StockLive(
     val averageVolume: Long? = null,
     val isin: String? = null,
     val note: String? = null,
-    val streaming: Boolean = false
+    val streaming: Boolean = false,
+    val daily: List<Candle> = emptyList()
 )
 
 @Composable
@@ -72,6 +73,7 @@ fun StockDetailScreen(
         if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected) }
         live.quote?.let { q ->
             item { StatsCard(q, live) }
+            item { TechnicalCard(live.daily, q.lastPrice) }
             if (q.bids.isNotEmpty() || q.asks.isNotEmpty()) item { DepthCard(q) }
         }
         if (mentions.isNotEmpty()) {
@@ -191,7 +193,9 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         "Upper circuit" to q.upperCircuit?.let(::money), "Lower circuit" to q.lowerCircuit?.let(::money),
         "Traded value" to q.volume?.let { v -> q.averagePrice?.let { "₹" + compact(Math.round(v * it)) } },
         "Avg. vol. (20D)" to live.averageVolume?.let(::compact),
-        "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f×", v.toDouble() / it) } }
+        "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f×", v.toDouble() / it) } },
+        "ATR (14)" to com.marksy.os.upstox.Technicals.atr(live.daily)?.let(::money),
+        "Volatility (1Y)" to com.marksy.os.upstox.Technicals.volatility(live.daily)?.let { String.format(Locale.US, "%.1f%%", it) }
     ).filter { it.second != null }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         if (live.returns.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {

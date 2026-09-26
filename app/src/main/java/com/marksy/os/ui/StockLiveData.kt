@@ -66,7 +66,8 @@ fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): Stock
         averageVolume = UpstoxCandles.averageVolume(daily, 20),
         isin = instrument?.substringAfter('|')?.takeIf { it.startsWith("IN") && it.length == 12 },
         note = note,
-        streaming = q != null && UpstoxFeed.isMarketOpen()
+        streaming = q != null && UpstoxFeed.isMarketOpen(),
+        daily = daily
     )
 }
 
