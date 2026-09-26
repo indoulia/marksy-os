@@ -8,12 +8,13 @@ import org.junit.Test
 class MarksyCallsTest {
     private fun p(
         id: Int, asOf: String, terminal: Boolean, outcome: String = "PENDING", realized: Double? = null,
-        superseded: Boolean = false, recommendation: Int? = id * 10, horizon: Int = 10, observed: Int? = null
+        superseded: Boolean = false, recommendation: Int? = id * 10, horizon: Int = 10, observed: Int? = null,
+        life: String = if (terminal) "CLOSED" else "ACTIVE", resolved: Boolean = terminal
     ) = InstrumentPredictionEntryDto(
         predictionId = id, asOf = asOf, horizonDays = horizon, entryPrice = 100.0, targetPrice = 110.0, stopLoss = 95.0,
-        probabilityAtPublication = .6, confidenceAtPublication = .7, lifecycleState = if (terminal) "CLOSED" else "ACTIVE",
+        probabilityAtPublication = .6, confidenceAtPublication = .7, lifecycleState = life,
         lifecycleDetail = "", isTerminal = terminal, currentPrice = null, currentReturn = null, targetProgress = null, stopProgress = null,
-        outcomeStatus = outcome, realizedReturnPct = realized, hasResolvedOutcome = terminal, evidenceItemCount = 0,
+        outcomeStatus = outcome, realizedReturnPct = realized, hasResolvedOutcome = resolved, evidenceItemCount = 0,
         recommendationId = recommendation, observedDays = observed, isSupersededByRevision = superseded
     )
 
@@ -44,6 +45,20 @@ class MarksyCallsTest {
         assertEquals(1, r.stopped)
         assertEquals(1, r.expired)
         assertEquals(7.0 / 3, r.averageReturn!!, 1e-9)
+    }
+
+    /** Live shape (INVPRECQ, 2026-09-26): the outcome monitor invalidates calls whose outcome is still OPEN. */
+    @Test fun invalidatedCallsCountOnceAndSayInvalidated() {
+        val open = p(1, "a", true, "OPEN", life = "INVALIDATED", resolved = false)
+        val won = p(2, "b", true, "SUCCESS", .1, life = "INVALIDATED")
+        val stopped = p(3, "c", true, "STOP_LOSS_HIT", -4.0, life = "STOP_LOSS_HIT")
+        val r = MarksyCalls.record(listOf(open, won, stopped))
+        assertEquals(1, r.hit)
+        assertEquals(1, r.stopped)
+        assertEquals(1, r.invalidated)
+        assertEquals("INVALIDATED", MarksyCalls.outcome(open))
+        assertEquals("SUCCESS", MarksyCalls.outcome(won))
+        assertEquals("PENDING", MarksyCalls.outcome(p(4, "d", false)))
     }
 
     @Test fun analysisComesFromTheLeadingCallOrTheNewestPastOne() {
