@@ -67,7 +67,8 @@ fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): Stock
     // NIFTY 50 over the same year, for beta.
     val index by produceState(emptyList<Candle>(), instrument, hasToken, refreshKey) {
         if (instrument == null || !hasToken || instrument == UpstoxIndices.NIFTY_50) return@produceState
-        value = runCatching { client.candles(UpstoxIndices.NIFTY_50, ChartRange.Y1, LocalDate.now(zone), zone) }.getOrDefault(emptyList())
+        value = runCatching { client.candles(UpstoxIndices.NIFTY_50, ChartRange.Y1, LocalDate.now(zone), zone) }
+            .onFailure { com.marksy.os.ai.DiagLog.i("MarksyUpstox", "index candles failed: ${it.javaClass.simpleName} ${it.message}") }.getOrDefault(emptyList())
     }
     val q = quote?.getOrNull()
     val error = quote?.exceptionOrNull()
@@ -114,23 +115,26 @@ fun rememberStockFundamentals(key: String?, refreshKey: Any): StockFundamentals 
     val client = remember { UpstoxTokenStore(context).let { store -> UpstoxApiClient { store.getToken() } } }
     val state by produceState(StockFundamentals(), key, refreshKey) {
         val isin = key?.substringAfter('|')?.takeIf { it.startsWith("IN") && it.length == 12 } ?: return@produceState
-        suspend fun <T> part(block: suspend () -> T): T? = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+        suspend fun <T> part(name: String, block: suspend () -> T): T? = try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+            com.marksy.os.ai.DiagLog.i("MarksyUpstox", "fundamentals $name failed: ${e.javaClass.simpleName} ${e.message}")
+            null
+        }
         coroutineScope {
-            launch { part { UpstoxFundamentals.profile(client.fundamentals(isin, "profile")) }?.let { value = value.copy(profile = it) } }
-            launch { part { UpstoxFundamentals.ratios(client.fundamentals(isin, "key-ratios")) }?.let { value = value.copy(ratios = it) } }
-            launch { part { UpstoxFundamentals.statement(client.fundamentals(isin, "income-statement", "?time_period=quarterly"), "income_statement") }?.let { value = value.copy(quarterly = it) } }
-            launch { part { UpstoxFundamentals.statement(client.fundamentals(isin, "income-statement", "?time_period=yearly"), "income_statement") }?.let { value = value.copy(yearly = it) } }
-            launch { part { UpstoxFundamentals.balance(client.fundamentals(isin, "balance-sheet")) }?.let { value = value.copy(balance = it) } }
-            launch { part { UpstoxFundamentals.statement(client.fundamentals(isin, "cash-flow"), "cash_flow") }?.let { value = value.copy(cashFlow = it) } }
-            launch { part { UpstoxFundamentals.shareholding(client.fundamentals(isin, "share-holdings")) }?.let { value = value.copy(shareholding = it) } }
-            launch { part { UpstoxFundamentals.actions(client.fundamentals(isin, "corporate-actions")) }?.let { value = value.copy(actions = it) } }
+            launch { part("profile") { UpstoxFundamentals.profile(client.fundamentals(isin, "profile")) }?.let { value = value.copy(profile = it) } }
+            launch { part("key-ratios") { UpstoxFundamentals.ratios(client.fundamentals(isin, "key-ratios")) }?.let { value = value.copy(ratios = it) } }
+            launch { part("income-quarterly") { UpstoxFundamentals.statement(client.fundamentals(isin, "income-statement", "?time_period=quarterly"), "income_statement") }?.let { value = value.copy(quarterly = it) } }
+            launch { part("income-yearly") { UpstoxFundamentals.statement(client.fundamentals(isin, "income-statement", "?time_period=yearly"), "income_statement") }?.let { value = value.copy(yearly = it) } }
+            launch { part("balance-sheet") { UpstoxFundamentals.balance(client.fundamentals(isin, "balance-sheet")) }?.let { value = value.copy(balance = it) } }
+            launch { part("cash-flow") { UpstoxFundamentals.statement(client.fundamentals(isin, "cash-flow"), "cash_flow") }?.let { value = value.copy(cashFlow = it) } }
+            launch { part("share-holdings") { UpstoxFundamentals.shareholding(client.fundamentals(isin, "share-holdings")) }?.let { value = value.copy(shareholding = it) } }
+            launch { part("corporate-actions") { UpstoxFundamentals.actions(client.fundamentals(isin, "corporate-actions")) }?.let { value = value.copy(actions = it) } }
             launch {
-                part { UpstoxFundamentals.peers(client.fundamentals(isin, "competitors")) }?.let { peers ->
+                part("competitors") { UpstoxFundamentals.peers(client.fundamentals(isin, "competitors")) }?.let { peers ->
                     runCatching { UpstoxInstruments.load(context) }
                     value = value.copy(peers = peers.map { UpstoxInstruments.symbolForKey(it.instrumentKey) to it })
                 }
             }
-            launch { part { client.news(key) }?.let { value = value.copy(news = it) } }
+            launch { part("news") { client.news(key) }?.let { value = value.copy(news = it) } }
         }
     }
     return state

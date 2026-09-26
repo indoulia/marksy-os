@@ -32,7 +32,7 @@ class UpstoxApiClient(private val token: () -> String?) {
 
     /** Monthly candles back to 2000 (Upstox's earliest), for seasonality and all-time figures. */
     suspend fun monthlyCandles(instrumentKey: String, today: java.time.LocalDate): List<Candle> = withContext(Dispatchers.IO) {
-        UpstoxCandles.parse(get("$BASE_URL/historical-candle/${URLEncoder.encode(instrumentKey, "UTF-8")}/months/1/$today/2000-01-01"))
+        UpstoxCandles.parse(get("$BASE_URL/historical-candle/${pathKey(instrumentKey)}/months/1/$today/2000-01-01"))
     }
 
     /** Raw `/v2/fundamentals/{isin}/{part}` body: profile, key-ratios, income-statement, balance-sheet, cash-flow, share-holdings, corporate-actions, competitors. */

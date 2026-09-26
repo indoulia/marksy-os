@@ -105,7 +105,7 @@ enum class ChartRange(val label: String) {
 
     /** Path under the v3 API for this range's candles. */
     fun path(key: String, today: LocalDate): String {
-        val k = URLEncoder.encode(key, "UTF-8")
+        val k = pathKey(key)
         return when (this) {
             D1 -> "historical-candle/intraday/$k/minutes/5"
             W1 -> "historical-candle/$k/minutes/30/$today/${today.minusDays(7)}"
@@ -117,8 +117,11 @@ enum class ChartRange(val label: String) {
 
     /** Before the open and on holidays intraday is empty, so 1D shows the last session from recent history. */
     fun fallbackPath(key: String, today: LocalDate): String =
-        "historical-candle/${URLEncoder.encode(key, "UTF-8")}/minutes/5/$today/${today.minusDays(7)}"
+        "historical-candle/${pathKey(key)}/minutes/5/$today/${today.minusDays(7)}"
 }
+
+/** Instrument key for a URL path segment: index keys carry spaces, which must be %20 there, not '+'. */
+internal fun pathKey(key: String): String = URLEncoder.encode(key, "UTF-8").replace("+", "%20")
 
 private fun JSONObject.num(name: String): Double? = if (has(name) && !isNull(name)) optDouble(name).takeIf { !it.isNaN() } else null
 
