@@ -45,7 +45,7 @@ class StockDetailScreenTest {
         compose.setContent { StockDetailScreen(state = MarketDataState.Loaded(instrument().copy(predictions = listOf(closed))), padding = PaddingValues()) }
 
         compose.onNodeWithText("No active Marksy call").assertExists()
-        compose.onNodeWithText("1 past call · 1 hit target", substring = true).assertExists()
+        compose.onNodeWithText("1 past call · 1 succeeded", substring = true).assertExists()
     }
 
     @Test

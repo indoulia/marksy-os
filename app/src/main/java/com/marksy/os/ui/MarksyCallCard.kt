@@ -144,9 +144,10 @@ private fun HistorySection(history: List<InstrumentPredictionEntryDto>, title: S
     val r = MarksyCalls.record(history)
     val summary = listOfNotNull(
         "${r.total} past call${if (r.total == 1) "" else "s"}",
-        r.hit.takeIf { it > 0 }?.let { "$it hit target" },
-        r.stopped.takeIf { it > 0 }?.let { "$it stopped out" },
+        r.hit.takeIf { it > 0 }?.let { "$it succeeded" },
+        r.stopped.takeIf { it > 0 }?.let { "$it failed" },
         r.expired.takeIf { it > 0 }?.let { "$it expired" },
+        r.invalidated.takeIf { it > 0 }?.let { "$it invalidated" },
         r.averageReturn?.let { "avg ${signed(it)}" }
     ).joinToString(" · ")
     Collapsible(title ?: "Past calls", summary = if (title == null) null else summary) {
@@ -158,7 +159,7 @@ private fun HistorySection(history: List<InstrumentPredictionEntryDto>, title: S
                     Text("₹${money(h.entryPrice)} → ${h.targetPrice?.let { "₹" + money(it) } ?: "–"} · stop ${h.stopLoss?.let { "₹" + money(it) } ?: "–"}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(humanize(h.outcomeStatus), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(humanize(MarksyCalls.outcome(h)), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     h.realizedReturnPct?.let { Text(signed(it), color = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 11.sp) }
                 }
             }
