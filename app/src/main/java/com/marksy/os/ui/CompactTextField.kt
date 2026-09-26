@@ -47,7 +47,8 @@ fun CompactTextField(
     cornerRadius: Dp = 12.dp,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
-    trailing: (@Composable () -> Unit)? = null
+    trailing: (@Composable () -> Unit)? = null,
+    fieldModifier: Modifier = Modifier
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -59,6 +60,7 @@ fun CompactTextField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
+            modifier = fieldModifier,
             singleLine = true,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,

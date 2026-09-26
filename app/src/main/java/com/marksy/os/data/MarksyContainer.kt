@@ -51,6 +51,9 @@ object MarksyContainer {
     fun plan(context: Context): com.marksy.os.plan.PlanRepository =
         com.marksy.os.plan.PlanRepository(database(context).planItemDao(), com.marksy.os.notification.PlanAlarmScheduler(context))
 
+    fun watchlist(context: Context): com.marksy.os.watchlist.WatchlistRepository =
+        com.marksy.os.watchlist.WatchlistRepository(database(context).watchlistDao())
+
     fun memory(context: Context): MemoryRepository {
         val db = database(context)
         return MemoryRepository(db.memoryDao(), db.notificationEventDao(), db.learningDao(), PrefsMemorySettings(context.applicationContext), metrics = metrics(context))

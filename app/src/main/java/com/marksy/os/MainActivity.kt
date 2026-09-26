@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -152,6 +153,9 @@ class MainActivity : ComponentActivity() {
         val briefingRepository = remember { MarksyContainer.briefing(applicationContext) }
         val plan = remember { MarksyContainer.plan(applicationContext) }
         val planItems by remember { plan.observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
+        val watchlist = remember { MarksyContainer.watchlist(applicationContext) }
+        val watchlists by remember { watchlist.observeLists() }.collectAsStateWithLifecycle(initialValue = emptyList())
+        val watchItems by remember { watchlist.observeItems() }.collectAsStateWithLifecycle(initialValue = emptyList())
         var contactsGranted by remember { mutableStateOf(com.marksy.os.plan.BirthdaySync.hasPermission(applicationContext)) }
         val vm: MarksyViewModel = viewModel(factory = MarksyViewModelFactory(
             repository, learning, learningSettings, actionRepository,
@@ -227,6 +231,11 @@ class MainActivity : ComponentActivity() {
         // Ask moved off the bottom bar (Plan took its slot); it opens from the ✦ header icon.
         var showAsk by rememberSaveable { mutableStateOf(false) }
         var planView by rememberSaveable { mutableStateOf(com.marksy.os.ui.PlanViews.first()) }
+        // Plan moved off the bottom bar (Watchlist took its slot); it opens from the header icon.
+        var showPlan by rememberSaveable { mutableStateOf(false) }
+        var watchView by rememberSaveable { mutableStateOf("") }
+        var watchQuery by rememberSaveable { mutableStateOf("") }
+        var headerSearchOpen by rememberSaveable { mutableStateOf(false) }
         var addingPlan by remember { mutableStateOf(false) }
         var editingPlan by remember { mutableStateOf<com.marksy.os.data.local.PlanItemEntity?>(null) }
         val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -278,7 +287,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // System back / swipe: close an open sub-screen, else return to Home, else exit.
-        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox || showAsk
+        val hostOpen = showTimeline || showCalendar || showInsights || showRules || showDigest || showGatewaySettings || showLearning || showMemory || showHealth || showValidation || showBriefing || showUpstox || showAsk || showPlan
         // Loading Gemma takes seconds; start when Ask opens so the first question isn't the one that waits.
         LaunchedEffect(showAsk) {
             val gemma = com.marksy.os.ai.MediaPipeGemmaBackend.ID
@@ -287,10 +296,11 @@ class MainActivity : ComponentActivity() {
                 if (ai.refresh().any { (info, state) -> info.id == gemma && state == com.marksy.os.ai.ModelState.READY }) ai.prepare(gemma)
             }
         }
-        LaunchedEffect(openPlanRequest) { if (openPlanRequest) { showAsk = false; selectedTab = 2; planView = com.marksy.os.ui.PlanViews.first(); openPlanRequest = false } }
+        LaunchedEffect(openPlanRequest) { if (openPlanRequest) { showAsk = false; showPlan = true; planView = com.marksy.os.ui.PlanViews.first(); openPlanRequest = false } }
         BackHandler(enabled = hostOpen || selectedTab != 0) {
             when {
                 showAsk -> showAsk = false
+                showPlan -> showPlan = false
                 showBriefing -> showBriefing = false
                 showValidation -> showValidation = false
                 showHealth -> showHealth = false
@@ -309,33 +319,56 @@ class MainActivity : ComponentActivity() {
         val tabs = listOf(
             "Home" to Icons.Default.Home,
             "Inbox" to Icons.Default.Inbox,
-            "Plan" to Icons.Default.EventNote,
+            "Watchlist" to Icons.Default.Visibility,
             "Trading" to Icons.Default.ShowChart,
             "Market" to Icons.Default.QueryStats
         )
         // The page title lives in the same bar as the Ask/profile icons -- one header row per
         // screen, like Home's -- instead of a second title row underneath.
+        // One word each, so the header keeps room for its icons.
         val screenTitle = when {
-            showValidation -> "30-day validation"
-            showHealth -> "Marksy Health"
-            showMemory -> "What Marksy remembers"
-            showLearning -> "What Marksy learned"
-            showBriefing -> "Daily Briefing"
+            showValidation -> "Validation"
+            showHealth -> "Health"
+            showMemory -> "Memory"
+            showLearning -> "Learning"
+            showBriefing -> "Briefing"
             showTimeline -> "Timeline"
             showCalendar -> "Calendar"
             showInsights -> "Insights"
-            showRules -> "Rules & Automation"
-            showDigest -> "Daily Digest"
+            showRules -> "Rules"
+            showDigest -> "Digest"
             showUpstox -> "Upstox"
-            showGatewaySettings -> "Marksy Account"
-            showAsk -> "Ask Marksy"
-            selectedTab == 1 -> "Smart Inbox"
-            selectedTab == 2 -> "Plan"
-            selectedTab == 3 -> "Trading Intelligence"
+            showGatewaySettings -> "Account"
+            showAsk -> "Ask"
+            showPlan -> "Plan"
+            selectedTab == 1 -> "Inbox"
+            selectedTab == 2 -> "Watchlist"
+            selectedTab == 3 -> "Trading"
             selectedTab == 4 -> "Market"
-            selectedTab == tabs.size -> "More & Settings"
+            selectedTab == tabs.size -> "Settings"
             else -> null
         }
+        val titleNote = when {
+            showPlan -> planView
+            hostOpen -> null
+            selectedTab == 2 -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
+            selectedTab == 3 -> tradingFilter
+            selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
+            else -> null
+        }
+        // Pages whose search sits behind a header icon; the field covers the header while open.
+        val searchPage = when {
+            hostOpen -> null
+            selectedTab == 2 && watchView != com.marksy.os.ui.WATCH_VIEW_PORTFOLIO -> 2
+            selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> 4
+            else -> null
+        }
+        fun closeHeaderSearch() {
+            headerSearchOpen = false
+            watchQuery = ""
+            stockQuery = marketSymbol.orEmpty()
+        }
+        LaunchedEffect(searchPage) { closeHeaderSearch() }
         val onHome = selectedTab == 0 && !hostOpen
 
         // Live prices from the user's own Upstox token over one WebSocket, open only while the app
@@ -377,7 +410,7 @@ class MainActivity : ComponentActivity() {
                     fun closeSubScreens() {
                         showTimeline = false; showCalendar = false; showInsights = false
                         showRules = false; showDigest = false; showGatewaySettings = false
-                        showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false
+                        showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false; showPlan = false
                     }
                     Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface)) {
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
@@ -389,10 +422,39 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (headerSearchOpen && searchPage != null) {
+                            val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+                            val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+                            LaunchedEffect(Unit) { focus.requestFocus() }
+                            val watch = searchPage == 2
+                            fun openStock() { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; stockQuery = it; keyboard?.hide(); headerSearchOpen = false } }
+                            CompactTextField(
+                                value = if (watch) watchQuery else stockQuery,
+                                // Rewriting the text (e.g. uppercase) mid-composition makes the IME drop letters; the keyboard capitalises instead.
+                                onValueChange = { if (watch) watchQuery = it else stockQuery = it },
+                                modifier = Modifier.weight(1f),
+                                fieldModifier = Modifier.focusRequester(focus),
+                                placeholder = if (watch) "Search a stock to add" else "Search symbol",
+                                leadingIcon = Icons.Default.Search,
+                                // Same 36dp height as the round header icons it replaces.
+                                height = 36.dp,
+                                cornerRadius = 18.dp,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
+                                    autoCorrectEnabled = false,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (watch) keyboard?.hide() else openStock() }),
+                                trailing = {
+                                    IconButton(onClick = { keyboard?.hide(); closeHeaderSearch() }, modifier = Modifier.size(32.dp)) {
+                                        Icon(Icons.Default.Close, contentDescription = "Close search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            )
+                        } else {
                         // Market pages carry a small LIVE mark on the title, only while NSE is in session.
                         val titleLive = (selectedTab == 3 || selectedTab == 4) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
-                        val stockSearch = selectedTab == 4 && !hostOpen && marketTabName == MarketTab.STOCKS.name
-                        Row(if (stockSearch) Modifier else Modifier.weight(1f), verticalAlignment = Alignment.Top) {
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
                             Text(
                                 screenTitle.orEmpty(),
                                 color = MarksyTheme.TextPrimary,
@@ -402,9 +464,9 @@ class MainActivity : ComponentActivity() {
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
-                            if ((selectedTab == 3 || selectedTab == 2) && !hostOpen) {
+                            titleNote?.let {
                                 Spacer(Modifier.width(4.dp))
-                                Text(if (selectedTab == 3) tradingFilter else planView, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(it, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             }
                             if (titleLive) {
                                 Spacer(Modifier.width(4.dp))
@@ -419,30 +481,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        if (stockSearch) {
-                            val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-                            fun openStock() { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; stockQuery = it; keyboard?.hide() } }
-                            CompactTextField(
-                                value = stockQuery,
-                                // Rewriting the text (e.g. uppercase) mid-composition makes the IME drop letters; the keyboard capitalises instead.
-                                onValueChange = { stockQuery = it },
-                                modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-                                placeholder = "Search symbol",
-                                leadingIcon = Icons.Default.Search,
-                                // Pill a notch shorter than the 36dp round header icons so it sits level with them.
-                                height = 32.dp,
-                                cornerRadius = 16.dp,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
-                                    autoCorrectEnabled = false,
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                                ),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { openStock() })
-                            )
-                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (searchPage != null) HeaderIconBadge(icon = Icons.Default.Search, contentDescription = "Search") { headerSearchOpen = true }
                             HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); showAsk = true }
+                            HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan") { closeSubScreens(); showPlan = true }
                             HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile & settings") { closeSubScreens(); selectedTab = tabs.size }
+                        }
                         }
                     }
                     }
@@ -460,7 +504,7 @@ class MainActivity : ComponentActivity() {
                                 // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
                                 showTimeline = false; showCalendar = false; showInsights = false
                                 showRules = false; showDigest = false; showGatewaySettings = false
-                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false
+                                showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false; showPlan = false
                                 selectedTab = index
                             },
                             icon = { Icon(icon, contentDescription = label) },
@@ -538,13 +582,24 @@ class MainActivity : ComponentActivity() {
                         when (a.page) {
                             AskMarksy.Page.HOME -> selectedTab = 0
                             AskMarksy.Page.INBOX -> { inboxFilterName = a.arg ?: SmartInboxModel.Filter.ALL.name; selectedTab = 1 }
-                            AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); selectedTab = 2 }
+                            AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); showPlan = true }
                             AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
                             AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.OVERVIEW.name; selectedTab = 4 }
                             AskMarksy.Page.STOCK -> { marketTabName = MarketTab.STOCKS.name; marketSymbol = a.arg; stockQuery = a.arg.orEmpty(); selectedTab = 4 }
                             AskMarksy.Page.SETTINGS -> selectedTab = tabs.size
                         }
                     }
+                )
+                showPlan -> com.marksy.os.ui.PlanScreen(
+                    items = planItems,
+                    padding = padding,
+                    view = planView,
+                    onViewSelected = { planView = it },
+                    onAdd = { addingPlan = true },
+                    onEdit = { editingPlan = it },
+                    onStatus = { item, status -> lifecycleScope.launch { plan.setStatus(item.id, status) } },
+                    contactsAccess = contactsGranted,
+                    onImportBirthdays = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
                 )
                 selectedTab == 0 -> MarksyRefreshBox(marketRefresh, Modifier.fillMaxSize().padding(padding)) { DashboardScreen(
                     snapshot = homeSnapshot,
@@ -569,7 +624,7 @@ class MainActivity : ComponentActivity() {
                     onDelete = deleteNow,
                     onHide = { homeHidden = homeHidden + it.id },
                     planItems = planItems,
-                    onOpenPlan = { planView = com.marksy.os.ui.PlanViews.first(); selectedTab = 2 },
+                    onOpenPlan = { planView = com.marksy.os.ui.PlanViews.first(); showPlan = true },
                     onAddReminder = { addingPlan = true },
                     modifier = Modifier.fillMaxSize()
                 ) }
@@ -594,16 +649,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 )
-                selectedTab == 2 -> com.marksy.os.ui.PlanScreen(
-                    items = planItems,
+                selectedTab == 2 -> com.marksy.os.ui.WatchlistScreen(
+                    repository = watchlist,
+                    lists = watchlists,
+                    items = watchItems,
                     padding = padding,
-                    view = planView,
-                    onViewSelected = { planView = it },
-                    onAdd = { addingPlan = true },
-                    onEdit = { editingPlan = it },
-                    onStatus = { item, status -> lifecycleScope.launch { plan.setStatus(item.id, status) } },
-                    contactsAccess = contactsGranted,
-                    onImportBirthdays = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) }
+                    view = watchView,
+                    onViewSelected = { watchView = it },
+                    query = watchQuery,
+                    onSearchDone = { closeHeaderSearch() },
+                    onOpenStock = { marketTabName = MarketTab.STOCKS.name; marketSymbol = it; stockQuery = it; selectedTab = 4 }
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
@@ -619,7 +674,7 @@ class MainActivity : ComponentActivity() {
                     tabName = marketTabName,
                     onTabSelected = { marketTabName = it },
                     selectedSymbol = marketSymbol,
-                    onSymbolSelected = { marketSymbol = it; stockQuery = it ?: "" },
+                    onSymbolSelected = { marketSymbol = it; stockQuery = it ?: ""; if (it != null) headerSearchOpen = false },
                     stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },

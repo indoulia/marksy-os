@@ -75,7 +75,7 @@ fun MarketScreen(
                 if (query.length >= 3 && !query.equals(symbol, ignoreCase = true)) {
                     StockSuggestions(query, inner, onSymbolSelected)
                 } else if (symbol == null) {
-                    Box(Modifier.padding(18.dp)) { EmptyState("Look up a stock", "Search a symbol in the bar above, e.g. RELIANCE.") }
+                    Box(Modifier.padding(18.dp)) { EmptyState("Look up a stock", "Tap search above and type a symbol, e.g. RELIANCE.") }
                 } else {
                     val refresh = rememberRefreshState()
                     val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol, refresh.key) {
@@ -131,7 +131,12 @@ fun MarketScreen(
 }
 
 @Composable
-private fun StockSuggestions(query: String, padding: PaddingValues, onSymbolSelected: (String) -> Unit) {
+internal fun StockSuggestions(
+    query: String,
+    padding: PaddingValues,
+    onSymbolSelected: (String) -> Unit,
+    emptyHint: String = "Press search on the keyboard to look it up anyway."
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     // null = still loading; the instrument master is public and cached for a day.
     val matches by produceState<List<String>?>(null, query) {
@@ -144,7 +149,7 @@ private fun StockSuggestions(query: String, padding: PaddingValues, onSymbolSele
         val list = matches
         when {
             list == null -> item { MarksyLoader("Searching…") }
-            list.isEmpty() -> item { EmptyState("No NSE symbol matches \"$query\"", "Press search on the keyboard to look it up anyway.") }
+            list.isEmpty() -> item { EmptyState("No NSE symbol matches \"$query\"", emptyHint) }
             else -> items(list, key = { "sym-$it" }) { symbol ->
                 Text(
                     symbol,

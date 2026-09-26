@@ -178,7 +178,7 @@ class EventIntelligencePipelineTest {
         }
 
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6)
             .allowMainThreadQueries().build()
         try {
             val rows = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }
@@ -211,7 +211,7 @@ class EventIntelligencePipelineTest {
             raw.version = 3
         }
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6)
             .allowMainThreadQueries().build()
         try {
             val row = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }.single()
@@ -223,6 +223,8 @@ class EventIntelligencePipelineTest {
             assertEquals(99L, followUp.dueAt)
             assertEquals(row.id, followUp.sourceEventId)
             assertEquals(0, runBlocking { migrated.learningDao().counts(0) }.size)
+            // 5->6: watchlist tables exist and pass Room's schema check.
+            assertEquals(0, runBlocking { migrated.watchlistDao().lists() }.size)
         } finally {
             migrated.close()
             context.deleteDatabase(name)
