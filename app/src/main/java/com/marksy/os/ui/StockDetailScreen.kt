@@ -70,9 +70,13 @@ fun StockDetailScreen(
     onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
     fundamentals: StockFundamentals = StockFundamentals(),
     onOpenSymbol: (String) -> Unit = {},
-    analysis: org.json.JSONObject? = null
+    analysis: org.json.JSONObject? = null,
+    ratingSource: com.marksy.os.rating.RatingSource = com.marksy.os.rating.LocalRatingSource
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
+    val ist = java.time.ZoneId.of("Asia/Kolkata")
+    val ratingInputs = remember(live, fundamentals, instrument) { StockRatingInputs.from(live, fundamentals, instrument?.predictions, java.time.LocalDate.now(ist), ist) }
+    val rating by androidx.compose.runtime.produceState<com.marksy.os.rating.RatingResult?>(null, ratingInputs) { value = ratingSource.rating(symbol.orEmpty(), ratingInputs) }
     // A new symbol (e.g. a tapped peer) opens at its header, not at the previous stock's scroll position.
     val listState = rememberSaveable(symbol, saver = LazyListState.Saver) { LazyListState() }
     LazyColumn(
@@ -84,6 +88,7 @@ fun StockDetailScreen(
         item { PriceHeader(instrument, symbol, live) }
         val calls = instrument?.let { MarksyCalls.view(it.predictions) } ?: MarksyCallView.None
         if (calls != MarksyCallView.None) item { MarksyCallCard(calls, live.quote?.lastPrice, analysis) }
+        rating?.let { r -> item { MarksyRatingCard(r) } }
         live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
         val levels = (calls as? MarksyCallView.Active)?.primary?.let { p -> listOfNotNull(p.targetPrice?.let { "Target" to it }, "Entry" to p.entryPrice, p.stopLoss?.let { "Stop" to it }) }.orEmpty()
         if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels) }

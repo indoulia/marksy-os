@@ -343,6 +343,13 @@ Acceptance: metrics are automatically collected; available by day and by source;
 
 7. Seasonality: a year × month heat-map from monthly candles going back to 2000, plus a month summary (negative years out of all years, best and worst year, averages). Tapping a month changes the summary.
 8. All-time range, YTD and 3Y/5Y/10Y returns, a seven-session volume trend and beta against NIFTY 50.
+9. Marksy call card: the open prediction, a stop-to-target bar at the live price, days left, collapsible analysis (`/recommendations/{id}`) and past calls with a track record. The chart carries the call's levels. Marksy picks open the stock page (#50).
+10. Buy/Sell ticket from picks, calls and the stock page. Placing orders is "coming soon"; nothing is sent (#50).
+11. Marksy rating: Buy, Hold or Sell for the short and the long term, built from 7 weighted factors (trend, Marksy call, valuation, quality, growth, ownership, seasonality), plus risk, which shrinks the score and the confidence.
+    - **Package:** `rating/` is pure Kotlin. Plain `RatingInputs` go in, a serialisable `RatingResult` comes out, and weights and thresholds live in a versioned `RatingConfig`.
+    - **Seam:** `RatingSource` is the only link to the UI. `LocalRatingSource` computes on the device today; a Marksy endpoint returning the same result can replace it.
+    - **Parity:** `RatingEngineTest` holds a sample input with its expected result, which a backend port must reproduce.
+    - **Next step in Marksy:** check the weights against its record of past prediction outcomes.
 
 ### Parked: data not available through current APIs
 - **Ohlson O-Score:** the size term is calibrated on US data and needs an Indian price-level index. Its current-asset and current-liability inputs depend on `fs=true` line-item names that have not been checked against live responses.
