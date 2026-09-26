@@ -48,7 +48,8 @@ data class StockLive(
     val isin: String? = null,
     val note: String? = null,
     val streaming: Boolean = false,
-    val daily: List<Candle> = emptyList()
+    val daily: List<Candle> = emptyList(),
+    val key: String? = null
 )
 
 @Composable
@@ -60,7 +61,9 @@ fun StockDetailScreen(
     range: ChartRange = ChartRange.D1,
     onRangeSelected: (ChartRange) -> Unit = {},
     mentions: List<com.marksy.os.data.local.NotificationEventEntity> = emptyList(),
-    onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {}
+    onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
+    fundamentals: StockFundamentals = StockFundamentals(),
+    onOpenSymbol: (String) -> Unit = {}
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
     LazyColumn(
@@ -76,6 +79,7 @@ fun StockDetailScreen(
             item { TechnicalCard(live.daily, q.lastPrice) }
             if (q.bids.isNotEmpty() || q.asks.isNotEmpty()) item { DepthCard(q) }
         }
+        fundamentalsContent(fundamentals, live.quote?.lastPrice, onOpenSymbol)
         if (mentions.isNotEmpty()) {
             item { Text("In your notifications", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
             items(mentions.take(5), key = { "mention-${it.id}" }) { e ->

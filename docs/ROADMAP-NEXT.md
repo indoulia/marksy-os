@@ -323,48 +323,46 @@ Acceptance: metrics are automatically collected; available by day and by source;
 
 ## EPIC-035 — Stock Details Enhancements
 
-**Goal:** Bring the stock detail page to the depth of Moneycontrol's stock screens (MC Technicals, Stock Vitals, Seasonality, Market Depth), using only real data.
+**Goal:** Bring the stock detail page to the depth of the Moneycontrol and Upstox stock screens, using only real data. Everything is fetched live with the user's Upstox token and held in memory; nothing is stored on the device.
 
-### Built in the app from Upstox price data (fetched live, nothing stored on the device)
-1. Interactive chart: price and time axes, touch-and-drag readout (price, time, high/low, volume), previous-close line on 1D, and round range chips (1D–5Y) at the top right.
-2. Stats in three columns, including traded value and volume against the 20-day average.
-3. Market depth: mirrored Buy/Sell, 5 levels, totals.
-4. Technical rating, as in MC Technicals:
-   - moving averages (price vs SMA 5/10/20/50/100/200);
-   - indicators (RSI, MACD, Stochastic, Williams %R, ROC);
-   - MA crossovers;
-   - overall trend;
-   - weekly historical rating;
-   - pivot levels.
-5. Seasonality: a year × month return heat-map from monthly candles, plus a current-month summary (negative years out of all years, best and worst year, average gain, average loss, overall average).
-6. Company news and corporate events from Marksy `/news` and `/events` filtered by symbol.
+### Done
+1. Interactive chart:
+   - price and time axes;
+   - touch-and-drag readout;
+   - a previous-close line on 1D;
+   - round 1D–5Y chips at the top right.
+2. Stats in three columns, including traded value, volume against the 20-day average, ATR and one-year volatility. Market depth is mirrored Buy/Sell with totals (#42).
+3. Technical rating, computed from a year of daily candles (#43):
+   - moving averages, simple and exponential;
+   - indicators: RSI, MACD, Stochastic, Stoch RSI, Williams %R, ROC, ADX and the Ultimate Oscillator;
+   - MA crossovers, an overall trend and a weekly history;
+   - Classic, Fibonacci and Camarilla pivots.
+4. Upstox Company Fundamentals API (`/v2/fundamentals/{isin}/…`, launched 11 May 2026), including profile, market cap, key ratios against the sector, income statement (quarterly and yearly), balance sheet, cash flow, shareholding, corporate actions and peers. News comes from Upstox `/v2/news`.
+5. Graham Number: √(22.5 × EPS × BVPS), with EPS = price ÷ P/E and BVPS = price ÷ P/B, shown only when both are positive.
+6. DuPont ROE: net margin × asset turnover × equity multiplier, from the yearly income statement and the balance sheet, shown against the sector's ROE. Both value checks are labelled as Marksy calculations.
 
-### Parked: needs a fundamentals source
-- **Fundamentals:** P/E, market cap, EPS, book value, ROE, margins, debt, shareholding and period history (overlaps EPIC-033).
-- **DuPont ROE:** net profit margin × asset turnover × equity multiplier, each compared with the industry median. Needs the income statement, the balance sheet and a peer set for the medians.
-- **Graham Number:** √(22.5 × EPS × BVPS).
-  - EPS over the trailing twelve months: the sum of the last four quarterly results.
-  - BVPS: shareholders' equity ÷ shares outstanding, from the latest half-yearly balance sheet.
-  - Valid only when both are positive. Show it against the price as a margin of safety.
-- **Ohlson O-Score:** needs these inputs from annual statements:
-  - total assets and total liabilities;
-  - working capital, current assets and current liabilities;
-  - net income for two years, including whether both years were losses;
-  - funds from operations;
-  - a price-level index for the size term.
+### Next (buildable from Upstox data)
+- Seasonality: a year × month heat-map from monthly candles going back to 2000, plus a current-month summary (negative years out of all years, best and worst year, averages).
+- All-time range and long-horizon returns (YTD, 3Y, 5Y) from the same monthly candles.
+- Volume trend.
+- Beta against NIFTY 50.
 
-  Show it as a bankruptcy-probability estimate.
-
-**Source:**
-- Listed companies file results with NSE and BSE under SEBI LODR (quarterly results, balance sheets, shareholding). The filings are XBRL and public.
-- The Marksy backend should ingest these filings and serve a fundamentals contract, for example `/instruments/{symbol}/fundamentals`, with period labels and an as-of time for each figure.
-- A licensed vendor (CMOTS, Accord, Trendlyne and similar) is the alternative.
+### Parked: data not available through current APIs
+- **Ohlson O-Score:** the size term is calibrated on US data and needs an Indian price-level index. Its current-asset and current-liability inputs depend on `fs=true` line-item names that have not been checked against live responses.
+- **DuPont industry median:** Upstox gives sector values, not medians.
+- **Delivery %:** Upstox only has volume.
+- **Bulk, block and insider deals.**
+- **Analyst ratings, price targets and forecasts.**
+- **SWOT and vendor scores:** MC Insights, MC Essentials and Upstox's fundamentals summary.
+- **Demand/supply zones:** an Upstox Plus feature.
+- **30-level depth:** Upstox Plus, via the `full_d30` WebSocket feed.
+- **Management and registered address.**
 
 ### Restrictions
-- The app must not scrape exchange websites, Screener or Yahoo. Their terms forbid it and exchange sites block non-browser clients. Aggregation stays in the backend (EPIC-033, item 8).
-- Nothing fetched is stored on the device for now. Everything is held in memory while the page is open.
-- Every figure shows its source and its period or as-of time. Nothing is estimated or made up when data is missing.
-- Derived scores (DuPont, Graham, O-Score, technical rating) are labelled as Marksy calculations, never as provider facts.
+- The app never scrapes exchange websites, Screener or Yahoo. Upstox is the licensed source; its app credits CMOTS for financial data.
+- Nothing fetched is stored on the device for now.
+- Every section names its source and its period. Missing data is hidden, never estimated.
+- Derived scores are labelled as Marksy calculations, never as provider facts.
 
 ## Market Experience Implementation Order
 

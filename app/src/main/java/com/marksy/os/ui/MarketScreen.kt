@@ -79,6 +79,7 @@ fun MarketScreen(
                     }
                     var range by rememberSaveable(symbol) { mutableStateOf(com.marksy.os.upstox.ChartRange.D1) }
                     val live = rememberStockLive(symbol, range, refresh.key)
+                    val fundamentals = rememberStockFundamentals(live.key, refresh.key)
                     val words = remember(symbol, state) {
                         listOfNotNull(symbol, (state as? com.marksy.os.market.MarketDataState.Loaded)?.value?.companyName?.substringBefore(" Limited")?.substringBefore(" Ltd"))
                             .map { Regex("\\b${Regex.escape(it)}\\b", RegexOption.IGNORE_CASE) }
@@ -86,7 +87,7 @@ fun MarketScreen(
                     val mentions = remember(stockEvents, words) { stockEvents.filter { e -> words.any { it.containsMatchIn("${e.title} ${e.body}") } } }
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
-                            mentions = mentions, onEventSelected = onEventSelected)
+                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) })
                     }
                 }
             }
