@@ -77,7 +77,7 @@ fun StockDetailScreen(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = padding.calculateBottomPadding() + 20.dp),
+        contentPadding = PaddingValues(top = 0.dp, bottom = padding.calculateBottomPadding() + 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { PriceHeader(instrument, symbol, live) }
