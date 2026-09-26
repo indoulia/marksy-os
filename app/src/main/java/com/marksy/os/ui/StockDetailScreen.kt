@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +72,10 @@ fun StockDetailScreen(
     onOpenSymbol: (String) -> Unit = {}
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
+    // A new symbol (e.g. a tapped peer) opens at its header, not at the previous stock's scroll position.
+    val listState = rememberSaveable(symbol, saver = LazyListState.Saver) { LazyListState() }
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
         contentPadding = PaddingValues(top = 12.dp, bottom = padding.calculateBottomPadding() + 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
