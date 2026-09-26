@@ -138,10 +138,11 @@ private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (Char
         // 1D is measured from the previous close, as brokers show it; longer ranges from the range's first open.
         val base = if (range == ChartRange.D1) live.quote?.prevClose ?: candles?.firstOrNull()?.open else candles?.firstOrNull()?.open
         val last = candles?.lastOrNull()?.close
-        val pct = if (range == ChartRange.D1 && live.quote?.changePct != null && pick == null) live.quote.changePct
-            else (pick?.close ?: last)?.let { v -> base?.takeIf { it > 0 }?.let { (v - it) / it * 100 } }
-        val up = (pct ?: live.quote?.change ?: 0.0) >= 0
-        val tint = if (up) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent
+        fun change(v: Double?) = v?.let { base?.takeIf { it > 0 }?.let { b -> (v - b) / b * 100 } }
+        val overall = if (range == ChartRange.D1 && live.quote?.changePct != null) live.quote.changePct else change(last)
+        val pct = if (pick != null) change(pick.close) else overall
+        fun tintOf(v: Double?) = if ((v ?: live.quote?.change ?: 0.0) >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent
+        val tint = tintOf(pct)
         val day = SimpleDateFormat("d MMM", Locale.getDefault())
         // After hours the intraday feed can be empty and history may lag a session; say which day the chart is.
         val session = candles?.lastOrNull()?.time?.let { day.format(Date(it)) }
@@ -173,7 +174,7 @@ private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (Char
             when {
                 candles == null -> MarksyLoader("Loading chart...")
                 candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
-                else -> PriceChart(candles, range, tint, reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it })
+                else -> PriceChart(candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it })
             }
         }
     }
@@ -334,8 +335,8 @@ internal fun count(v: Long): String = indian(v)
 
 /** Indian units for big counts: 13138735 -> "1.31 Cr", 452000 -> "4.52 L". */
 internal fun compact(v: Long): String = when {
-    v >= 10_000_000 -> String.format(Locale.US, "%.2f Cr", v / 1e7)
-    v >= 100_000 -> String.format(Locale.US, "%.2f L", v / 1e5)
+    v >= 10_000_000 -> money(v / 1e7) + " Cr"
+    v >= 100_000 -> money(v / 1e5) + " L"
     else -> indian(v)
 }
 
