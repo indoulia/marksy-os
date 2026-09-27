@@ -15,14 +15,19 @@ import com.marksy.os.gateway.AuthRepository
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentUserId: String?, lastUserId: String? = null, onSignedIn: () -> Unit) {
+fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentUserId: String?, onSignedIn: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var userId by rememberSaveable { mutableStateOf(lastUserId.orEmpty()) }
+    var signedInUserId by remember { mutableStateOf(currentUserId) }
+    // Re-read after Sign Out, which keeps the Remember me username and password.
+    val savedUserId = remember(signedInUserId) { authRepository.savedUserId() }
+    val hasSavedPassword = remember(signedInUserId) { authRepository.hasSavedPassword() }
+    var userId by rememberSaveable { mutableStateOf(savedUserId.orEmpty()) }
+    LaunchedEffect(savedUserId) { if (userId.isEmpty() && savedUserId != null) userId = savedUserId }
     var password by rememberSaveable { mutableStateOf("") }
     var remember by rememberSaveable { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var signingIn by remember { mutableStateOf(false) }
-    var signedInUserId by remember { mutableStateOf(currentUserId) }
+    val useSaved = hasSavedPassword && password.isEmpty() && userId.trim() == savedUserId
 
     Column(
         Modifier.fillMaxSize().background(MarksyTheme.Background)
@@ -60,7 +65,7 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
             value = password,
             onValueChange = { password = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = "Password",
+            placeholder = if (useSaved) "Saved password" else "Password",
             visualTransformation = PasswordVisualTransformation()
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -73,7 +78,8 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
                 signingIn = true
                 errorMessage = null
                 scope.launch {
-                    val result = authRepository.login(userId.trim(), password, remember)
+                    val result = if (useSaved) authRepository.loginWithSavedPassword(userId.trim(), remember)
+                        else authRepository.login(userId.trim(), password, remember)
                     signingIn = false
                     result.onSuccess {
                         password = ""
@@ -84,7 +90,7 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
                     }
                 }
             },
-            enabled = userId.isNotBlank() && password.isNotBlank() && !signingIn,
+            enabled = userId.isNotBlank() && (password.isNotBlank() || useSaved) && !signingIn,
             colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
         ) { Text(if (signingIn) "Signing In..." else "Sign In", color = androidx.compose.ui.graphics.Color.Black) }
         errorMessage?.let { Text(it, color = MarksyTheme.RedUrgent, fontSize = 13.sp) }

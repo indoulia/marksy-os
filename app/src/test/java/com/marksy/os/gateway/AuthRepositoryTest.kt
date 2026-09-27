@@ -259,21 +259,36 @@ class AuthRepositoryTest {
         assertNull(store.signedInUserId())
     }
 
+    // Sign Out ends the session and silent sign-in, but the saved password stays for the form.
     @Test
-    fun loginWithoutRememberForgetsSavedCredentialsAndLogoutKeepsOnlyTheUsername() = runBlocking {
+    fun logoutKeepsTheSavedPasswordForTheFormButStopsSilentSignIn() = runBlocking {
+        val store = AuthSessionStore(context)
+        val (fresh, _) = session(8 * 60 * 60 * 1000L)
+        val fake = FakeAuthApiClient(loginResult = fresh)
+        val repository = AuthRepository(fake, store)
+
+        repository.login("prsingh", "pw", remember = true)
+        repository.logout()
+        assertTrue(store.hasCredentials())
+        assertNull(repository.currentToken())
+        assertNull(store.signedInUserId())
+        assertEquals(1, fake.logins.size)
+
+        assertTrue(repository.loginWithSavedPassword("prsingh", remember = true).isSuccess)
+        assertEquals(listOf("prsingh" to "pw", "prsingh" to "pw"), fake.logins)
+        assertEquals("sess_new", repository.currentToken())
+    }
+
+    @Test
+    fun loginWithoutRememberForgetsSavedCredentials() = runBlocking {
         val store = AuthSessionStore(context)
         val (fresh, _) = session(8 * 60 * 60 * 1000L)
         val repository = AuthRepository(FakeAuthApiClient(loginResult = fresh), store)
 
         repository.login("prsingh", "pw", remember = true)
-        assertTrue(store.hasCredentials())
-        repository.logout()
-        assertTrue(!store.hasCredentials())
-        assertEquals("prsingh", store.lastUserId())
-
-        repository.login("prsingh", "pw", remember = true)
         repository.login("prsingh", "pw", remember = false)
         assertTrue(!store.hasCredentials())
         assertNull(store.lastUserId())
+        assertTrue(repository.loginWithSavedPassword("prsingh", remember = true).isFailure)
     }
 }

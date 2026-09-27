@@ -18,7 +18,7 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
         val token = store.getToken()
         val expiresAt = store.getExpiresAtEpochMs()
         if (token == null || expiresAt == null) {
-            if (!store.hasCredentials()) return@withContext null
+            if (!store.canSignInSilently()) return@withContext null
             return@withContext refreshMutex.withLock { store.getToken()?.takeIf { store.isSessionActive() } ?: signInAgain() }
         }
         val now = System.currentTimeMillis()
@@ -75,17 +75,28 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
         }
     }
 
+    fun savedUserId(): String? = store.lastUserId()
+    fun hasSavedPassword(): Boolean = store.hasCredentials()
+
+    /** Sign-in form's "Saved password": the remembered password for [userId], if there is one. */
+    suspend fun loginWithSavedPassword(userId: String, remember: Boolean): Result<Unit> {
+        val saved = store.rememberedCredentials()?.takeIf { it.first == userId }
+            ?: return Result.failure(AuthApiException("No saved password for $userId"))
+        return login(userId, saved.second, remember).onFailure { if (it is AuthApiException) store.forgetPassword() }
+    }
+
     suspend fun logout() = withContext(Dispatchers.IO) {
         val token = store.getToken()
         if (token != null) {
             runCatching { client.logout(token) }
         }
         store.clearSession()
-        store.forgetPassword()
+        store.markSignedOut()
     }
 
     /** Silent sign-in with "Remember me" credentials; call under [refreshMutex]. */
     private suspend fun signInAgain(): String? {
+        if (!store.canSignInSilently()) return null
         val (userId, password) = store.rememberedCredentials() ?: return null
         return try {
             val session = client.login(userId, password)

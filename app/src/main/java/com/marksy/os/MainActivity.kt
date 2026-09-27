@@ -569,7 +569,6 @@ class MainActivity : ComponentActivity() {
                         authRepository = remember { MarksyContainer.authRepository(applicationContext) },
                         padding = padding,
                         currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).signedInUserId() },
-                        lastUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).lastUserId() },
                         onSignedIn = { showGatewaySettings = false }
                     )
                 }

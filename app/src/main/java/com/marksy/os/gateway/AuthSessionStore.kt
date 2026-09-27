@@ -78,10 +78,18 @@ class AuthSessionStore(context: Context) {
     }
 
     /** Signed in now, or able to sign in again silently with remembered credentials. */
-    fun signedInUserId(): String? = if (isSessionActive()) getUserId() else lastUserId()?.takeIf { hasCredentials() }
+    fun signedInUserId(): String? = if (isSessionActive()) getUserId() else lastUserId()?.takeIf { canSignInSilently() }
 
     /** Whether a call could carry a token: a stored session or remembered credentials to get one. */
-    fun canAuthenticate(): Boolean = getToken() != null || hasCredentials()
+    fun canAuthenticate(): Boolean = getToken() != null || canSignInSilently()
+
+    /** Saved credentials that may be used without asking; not after an explicit Sign Out. */
+    fun canSignInSilently(): Boolean = hasCredentials() && !credentials.getBoolean(KEY_SIGNED_OUT, false)
+
+    /** Sign Out keeps the saved password for the form but stops silent sign-in until the next sign-in. */
+    fun markSignedOut() {
+        credentials.edit().putBoolean(KEY_SIGNED_OUT, true).apply()
+    }
 
     // "Remember me" keeps the password (Keystore-encrypted, separate key and file) because marksy-api
     // sessions last 8h and can't be renewed once lapsed; it survives clearSession() for that reason.
@@ -92,6 +100,7 @@ class AuthSessionStore(context: Context) {
             .putString(KEY_LAST_USER_ID, userId)
             .putString(KEY_PASSWORD_CIPHERTEXT, encode(cipher.doFinal(password.toByteArray(StandardCharsets.UTF_8))))
             .putString(KEY_PASSWORD_IV, encode(cipher.iv))
+            .remove(KEY_SIGNED_OUT)
             .apply()
     }
 
@@ -179,6 +188,7 @@ class AuthSessionStore(context: Context) {
         const val KEY_LAST_USER_ID = "last_user_id"
         const val KEY_PASSWORD_CIPHERTEXT = "password"
         const val KEY_PASSWORD_IV = "password_iv"
+        const val KEY_SIGNED_OUT = "signed_out"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
     }
