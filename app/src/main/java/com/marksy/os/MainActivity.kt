@@ -574,7 +574,7 @@ class MainActivity : ComponentActivity() {
                     ValidationScreen(validationRepository, padding)
                 }
                 showHealth -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
-                    HealthScreen(padding) { healthRepository.report() }
+                    HealthScreen(padding, market = remember { MarksyContainer.marketIntelligence(applicationContext) }) { healthRepository.report() }
                 }
                 showMemory -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
                     MemoryScreen(memoryRepository, padding)
