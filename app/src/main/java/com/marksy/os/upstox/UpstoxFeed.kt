@@ -97,12 +97,30 @@ object UpstoxFeed {
 
     /** [owner] shows [keys] now; the socket subscribes what's new and drops what nobody shows any more. */
     fun acquire(owner: Any, keys: Collection<String>) {
-        val (added, removed) = subscriptions.set(owner, keys.toSet())
+        subscriptions.set(owner, keys.toSet())
+        val want = subscriptions.all()
         socket?.let { ws ->
-            if (added.isNotEmpty()) send(ws, "sub", added.toList())
-            if (removed.isNotEmpty()) send(ws, "unsub", removed.toList())
+            val add = synchronized(onSocket) { (want - onSocket).also { onSocket += it } }
+            if (add.isNotEmpty()) send(ws, "sub", add.toList())
         }
-        _stats.update { it.copy(subscribed = subscriptions.all().size) }
+        scheduleUnsub()
+        _stats.update { it.copy(subscribed = want.size) }
+    }
+
+    // What the socket is subscribed to now. Drops wait a moment: switching tabs releases keys the next screen re-acquires.
+    private val onSocket = HashSet<String>()
+    @Volatile private var unsubScheduled = false
+
+    private fun scheduleUnsub() {
+        if (unsubScheduled) return
+        unsubScheduled = true
+        publisher.launch {
+            delay(UNSUB_GRACE_MS)
+            unsubScheduled = false
+            val want = subscriptions.all()
+            val drop = synchronized(onSocket) { (onSocket - want).also { onSocket -= it } }
+            if (drop.isNotEmpty()) socket?.let { send(it, "unsub", drop.toList()) }
+        }
     }
 
     fun release(owner: Any) = acquire(owner, emptySet())
@@ -172,6 +190,7 @@ object UpstoxFeed {
                 _stats.update { it.copy(connects = it.connects + 1, connectedAt = System.currentTimeMillis()) }
                 DiagLog.i(TAG, "feed: connected")
                 val keys = subscriptions.all().toList()
+                synchronized(onSocket) { onSocket.clear(); onSocket += keys }
                 if (keys.isNotEmpty()) send(webSocket, "sub", keys)
             }
 
@@ -191,11 +210,13 @@ object UpstoxFeed {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 socket = null
+                synchronized(onSocket) { onSocket.clear() }
                 if (cont.isActive) cont.resume(Unit)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 socket = null
+                synchronized(onSocket) { onSocket.clear() }
                 val error = if (response?.code == 401 || response?.code == 403) UpstoxAuthException("Upstox rejected the token") else IOException(t.message ?: t.javaClass.simpleName, t)
                 if (cont.isActive) cont.resumeWithException(error)
             }
@@ -229,6 +250,7 @@ object UpstoxFeed {
     }
 
     private const val PUBLISH_MS = 250L
+    private const val UNSUB_GRACE_MS = 3_000L
 
     private const val TAG = "MarksyUpstox"
     private const val AUTHORIZE_URL = "https://api.upstox.com/v3/feed/market-data-feed/authorize"

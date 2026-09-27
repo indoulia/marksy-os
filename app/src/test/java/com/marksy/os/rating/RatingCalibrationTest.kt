@@ -15,13 +15,14 @@ class RatingCalibrationTest {
 
     @Test fun weightMovesToTheFactorThatPredictsAndIsAdoptedOnlyWithAHeldOutGain() {
         val r = Random(7)
-        val samples = (0 until 300).map { val t = r.nextDouble(-1.0, 1.0); val s = r.nextDouble(-1.0, 1.0); sample(t, s, ret = t * .03 + r.nextDouble(-.01, .01)) }
+        // V1 leans on trend; here only seasonality predicts, so tuning must shift weight to it by a clear held-out margin.
+        val samples = (0 until 300).map { val t = r.nextDouble(-1.0, 1.0); val s = r.nextDouble(-1.0, 1.0); sample(t, s, ret = s * .03 + r.nextDouble(-.01, .01)) }
 
         val result = RatingCalibration.calibrate(samples)
 
         assertTrue(result.adopted)
         val w = result.config.weights.getValue(Horizon.SHORT)
-        assertTrue(w.getValue(Factor.TREND) > RatingConfig.V1.weights.getValue(Horizon.SHORT).getValue(Factor.TREND))
+        assertTrue(w.getValue(Factor.SEASONALITY) > RatingConfig.V1.weights.getValue(Horizon.SHORT).getValue(Factor.SEASONALITY))
         assertTrue(result.test > result.baseTest)
         assertEquals(RatingConfig.V1.weights.getValue(Horizon.LONG), result.config.weights.getValue(Horizon.LONG))
     }

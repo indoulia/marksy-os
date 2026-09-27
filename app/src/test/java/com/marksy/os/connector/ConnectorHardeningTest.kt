@@ -99,6 +99,23 @@ class ConnectorHardeningTest {
         assertEquals(ConnectorDisplay.ACTIVE, connectorDisplay(ConnectorState.ACTIVE, s))
     }
 
+    // Seen on device: "Holidays in India" arrives from three regional holiday calendars, one row each.
+    @Test
+    fun theSameEventFromSeveralCalendarsIsOneRowWithoutMachineOrganizers() {
+        syncer.setEnabled(CalendarConnector.ID, true)
+        val day = t0 + 10 * 24 * hour
+        val holidays = listOf("en-gb", "en", "en-in").mapIndexed { i, region ->
+            inst(100L + i, day, title = "First Day of Sharad Navratri", organizer = "$region.indian#holiday@group.v.calendar.google.com", end = day + 24 * hour, allDay = true)
+        }
+        sync(calendar(FakeCalendar(holidays)))
+
+        val row = rows().single()
+        assertTrue(row.body.contains("all day"))
+        assertTrue("Organizer" !in row.body)
+        // Copies stored before collapsing (or after a cursor reset) are retired by the next sync.
+        assertEquals(2, runBlocking { calendar(FakeCalendar(holidays)).sync(null) }.removedKeys.size)
+    }
+
     @Test
     fun calendarMalformedDeclinedDuplicateAndAllDayInstances() {
         syncer.setEnabled(CalendarConnector.ID, true)

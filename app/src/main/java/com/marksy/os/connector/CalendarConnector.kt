@@ -59,7 +59,12 @@ class CalendarConnector(
         } catch (e: IllegalArgumentException) {
             throw ConnectorException(ConnectorException.Kind.UNAVAILABLE, cause = e)
         }
-        val current = all.filter { !it.canceled && !it.declined && it.end >= it.begin }.associateBy { key(it) }
+        // One event subscribed through several calendars (e.g. three regional holiday calendars) is one event.
+        val groups = all.filter { !it.canceled && !it.declined && it.end >= it.begin }
+            .groupBy { listOf(it.title?.trim()?.lowercase(), it.begin, it.end, it.allDay) }.values
+        val current = groups.map { same -> same.minBy { it.eventId } }.associateBy { key(it) }
+        // The copies are reported as removed every time, so rows stored before this rule (or after a cursor reset) are retired.
+        val collapsed = groups.flatMap { same -> same.map(::key) }.filter { it !in current }
         val records = current.mapValues { (_, i) -> record(i, now) }
         val hashes = records.mapValues { (_, r) -> hash(r) }
         // Unchanged instances are re-sent every few days so an upcoming event pruned by retention is restored.
@@ -72,7 +77,7 @@ class CalendarConnector(
         // An instance starting exactly at the horizon may have been cut by the cap too, so it is kept, not deleted.
         val removed = previous.keys.filter { it !in current && (beginOf(it) ?: 0L).let { b -> b >= from && b < horizon } }
         val kept = previous.filterKeys { it !in current && (beginOf(it) ?: 0L) >= horizon }.mapValues { (_, v) -> "${v.first}|${v.second}" }
-        return SyncBatch(upserts, removed, JSONObject((seen + kept) as Map<*, *>).toString())
+        return SyncBatch(upserts, (removed + collapsed).distinct(), JSONObject((seen + kept) as Map<*, *>).toString())
     }
 
     private fun record(i: Instance, now: Long): SourceRecord {
@@ -85,7 +90,8 @@ class CalendarConnector(
         val body = buildList {
             add(whenText)
             i.location?.trim()?.takeIf { it.isNotEmpty() }?.let { add("Location: ${it.take(120)}") }
-            i.organizer?.trim()?.takeIf { it.isNotEmpty() }?.let { add("Organizer: ${it.take(80)}") }
+            // Subscribed calendars "organize" their own events under a machine address; that's noise, not a person.
+            i.organizer?.trim()?.takeIf { it.isNotEmpty() && !it.endsWith("calendar.google.com") }?.let { add("Organizer: ${it.take(80)}") }
             i.calendarName?.trim()?.takeIf { it.isNotEmpty() }?.let { add("Calendar: ${it.take(60)}") }
         }.joinToString("\n")
         // First-seen time, never the future start: Marksy orders and retains events by when they reached it.
