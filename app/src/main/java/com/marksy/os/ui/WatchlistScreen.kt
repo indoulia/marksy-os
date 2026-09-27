@@ -116,8 +116,9 @@ fun WatchlistScreen(
             )
         }
         OneHandControls(
-            filters = lists.map { it.id.toString() to it.name } + (WATCH_VIEW_PORTFOLIO to "Portfolio"),
-            selectedFilter = list?.id?.toString() ?: view,
+            // With no lists yet, "" stands for the empty Watchlists page so the filter button isn't in its reset (X) state.
+            filters = (if (lists.isEmpty()) listOf("" to "Watchlists") else lists.map { it.id.toString() to it.name }) + (WATCH_VIEW_PORTFOLIO to "Portfolio"),
+            selectedFilter = list?.id?.toString() ?: if (view == WATCH_VIEW_PORTFOLIO) view else "",
             onFilterSelected = onViewSelected,
             actions = listOfNotNull(
                 list?.let { l -> FloatingAction(Icons.Default.Delete, "Delete ${l.name}") { deleting = l } },
@@ -152,7 +153,10 @@ fun WatchlistScreen(
             onDismissRequest = { deleting = null },
             containerColor = MarksyTheme.SurfaceRaised,
             title = { Text("Delete ${l.name}?", color = MarksyTheme.TextPrimary) },
-            text = { Text("Its ${counts[l.id] ?: 0} stocks are removed from this list only.", color = MarksyTheme.TextSecondary) },
+            text = {
+                val n = counts[l.id] ?: 0
+                Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary)
+            },
             confirmButton = {
                 TextButton(onClick = { deleting = null; scope.launch { repository.deleteList(l.id) }; onViewSelected("") }) {
                     Text("Delete", color = MarksyTheme.RedUrgent)
