@@ -18,3 +18,7 @@ local.properties
 
 # Local git worktrees for isolated feature work
 .worktrees/
+
+# Local screenshots from device/offscreen checks
+.claude_screenshot_*.png
+.scratch_*.png

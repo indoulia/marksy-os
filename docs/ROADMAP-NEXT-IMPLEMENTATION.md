@@ -1,6 +1,6 @@
 # Roadmap Next: implementation notes
 
-Status and contracts for the work on `feat/roadmap-next` against `docs/ROADMAP-NEXT.md`. Validation so far is unit/Robolectric tests plus `assembleDebug`. Nothing here has been checked on a device yet.
+Contracts for the EPIC-010 to EPIC-023 work in `docs/ROADMAP-NEXT.md`. Per-epic status lives in that file under "Status". Ask Marksy and Gemma have been verified on device. The other gaps are listed below.
 
 ## Pipeline
 
