@@ -30,7 +30,8 @@ import java.util.Locale
 fun MarketOverviewScreen(
     state: MarketDataState<MarketSummaryDto>,
     padding: PaddingValues,
-    health: MarketDataState<com.marksy.os.market.LiveFeedHealthDto> = MarketDataState.Unavailable
+    health: MarketDataState<com.marksy.os.market.LiveFeedHealthDto> = MarketDataState.Unavailable,
+    onOpenStock: ((String) -> Unit)? = null
 ) {
     // The footer's source/freshness wording comes from the feed's own reported state
     // (`/market/live/health`), never a client-invented threshold on `summary.asOf`.
@@ -40,6 +41,7 @@ fun MarketOverviewScreen(
             UpstoxIndices.HOME.map { it.second } + Nifty50.SYMBOLS).distinct()
     }
     val live = rememberUpstoxQuotes(symbols)
+    val active = rememberMostActive(Nifty50.SYMBOLS)
     val streaming = upstoxStreaming() && live.isNotEmpty()
     val freshnessLabel = when {
         streaming -> "Prices: your Upstox live feed"
@@ -59,28 +61,43 @@ fun MarketOverviewScreen(
             is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
             is MarketDataState.Error -> item { EmptyState("Market data unavailable", state.message) }
             is MarketDataState.Empty -> item { EmptyState("No market data", "Nothing to show right now.") }
-            is MarketDataState.Loaded -> overviewContent(state.value, freshnessLabel, live, streaming)
-            is MarketDataState.Stale -> overviewContent(state.value, freshnessLabel, live, streaming)
+            is MarketDataState.Loaded -> overviewContent(state.value, freshnessLabel, live, active, onOpenStock)
+            is MarketDataState.Stale -> overviewContent(state.value, freshnessLabel, live, active, onOpenStock)
         }
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.overviewContent(summary: MarketSummaryDto, freshnessLabel: String, live: Map<String, UpstoxLtp>, streaming: Boolean) {
+private fun androidx.compose.foundation.lazy.LazyListScope.overviewContent(
+    summary: MarketSummaryDto, freshnessLabel: String, live: Map<String, UpstoxLtp>,
+    active: List<Pair<String, com.marksy.os.upstox.UpstoxQuote>>?, onOpenStock: ((String) -> Unit)?
+) {
     // Open/live state is shown on the page title, not repeated here.
     // Marksy's indices plus the Home set; each ticks live when the user's Upstox feed has it.
     val names = (summary.indexes.map { it.name } + UpstoxIndices.HOME.map { it.second }).distinctBy { UpstoxInstruments.keyFor(it) ?: it }
     val marksy = summary.indexes.associateBy { it.name }
     val indices = names.mapNotNull { n -> live[n]?.let { Triple(n, formatIndexValue(it.lastPrice), it.changePct) } ?: marksy[n]?.let { Triple(n, formatIndexValue(it.value), it.changePct) } }
-    if (indices.isNotEmpty()) item(key = "g-indices") { QuoteGridCard("Indices", indices) }
     // Upstox has no movers endpoint, so rank NIFTY 50 constituents by their live change instead.
     val ranked = Nifty50.SYMBOLS.mapNotNull { s -> live[s]?.takeIf { it.changePct != null }?.let { s to it } }.sortedByDescending { it.second.changePct }
+    val breadth = com.marksy.os.market.MarketBreadth.of(ranked.map { it.second.changePct })
+    if (indices.isNotEmpty()) item(key = "g-indices") {
+        QuoteGridCard("Indices", indices, footer = if (breadth.total >= 12) { { BreadthBar(breadth, "NIFTY 50 breadth") } } else null)
+    }
     if (ranked.size >= 12) {
-        item(key = "g-gainers") { QuoteGridCard("Top gainers · NIFTY 50", ranked.take(6).map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true) }
-        item(key = "g-losers") { QuoteGridCard("Top losers · NIFTY 50", ranked.takeLast(6).reversed().map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true) }
+        item(key = "g-gainers") { QuoteGridCard("Top gainers · NIFTY 50", ranked.take(6).map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true, onOpen = onOpenStock) }
+        item(key = "g-losers") { QuoteGridCard("Top losers · NIFTY 50", ranked.takeLast(6).reversed().map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true, onOpen = onOpenStock) }
     } else {
         fun movers(list: List<MarketMoverDto>) = list.map { m -> val q = live[m.symbol]; Triple(m.symbol, (q?.lastPrice ?: m.price)?.let { "₹" + formatIndexValue(it) } ?: "—", q?.changePct ?: m.changePercent) }
-        if (summary.topGainers.isNotEmpty()) item(key = "g-gainers") { QuoteGridCard("Gainers · Marksy", movers(summary.topGainers), watchable = true) }
-        if (summary.topLosers.isNotEmpty()) item(key = "g-losers") { QuoteGridCard("Losers · Marksy", movers(summary.topLosers), watchable = true) }
+        if (summary.topGainers.isNotEmpty()) item(key = "g-gainers") { QuoteGridCard("Gainers · Marksy", movers(summary.topGainers), watchable = true, onOpen = onOpenStock) }
+        if (summary.topLosers.isNotEmpty()) item(key = "g-losers") { QuoteGridCard("Losers · Marksy", movers(summary.topLosers), watchable = true, onOpen = onOpenStock) }
+    }
+    active?.takeIf { it.isNotEmpty() }?.let { list ->
+        item(key = "g-active") {
+            QuoteGridCard(
+                "Most active · by value",
+                list.map { (s, q) -> val l = live[s]; Triple(s, "₹" + formatIndexValue(l?.lastPrice ?: q.lastPrice), l?.changePct ?: q.changePct) },
+                watchable = true, onOpen = onOpenStock
+            )
+        }
     }
     item { Text(freshnessLabel, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
 }

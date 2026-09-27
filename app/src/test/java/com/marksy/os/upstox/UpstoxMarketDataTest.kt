@@ -35,6 +35,17 @@ class UpstoxMarketDataTest {
     }
 
     // Upstox returns candles newest first; charts and ranges need oldest first.
+    @Test fun multiQuoteResponseIsKeyedByInstrumentToken() {
+        val body = """{"status":"success","data":{
+            "NSE_EQ:INFY":{"instrument_token":"NSE_EQ|INE009A01021","last_price":1500.0,"net_change":15.0,"volume":2000000,"average_price":1498.5},
+            "NSE_EQ:TCS":{"instrument_token":"NSE_EQ|INE467B01029","last_price":3500.0,"volume":800000},
+            "NSE_EQ:BAD":{"last_price":1.0}}}"""
+        val quotes = UpstoxQuote.parseAll(body)
+        assertEquals(setOf("NSE_EQ|INE009A01021", "NSE_EQ|INE467B01029"), quotes.keys)
+        assertEquals(2_000_000L, quotes.getValue("NSE_EQ|INE009A01021").volume)
+        assertEquals(1485.0, quotes.getValue("NSE_EQ|INE009A01021").prevClose!!, 1e-9)
+    }
+
     @Test fun candlesAreOldestFirstAndGiveRangesAndTheLastSession() {
         val body = """{"status":"success","data":{"candles":[
             ["2026-09-25T15:25:00+05:30",1015,1016,1014,1014.5,1200,0],
