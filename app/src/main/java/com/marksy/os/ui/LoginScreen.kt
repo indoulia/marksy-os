@@ -15,9 +15,9 @@ import com.marksy.os.gateway.AuthRepository
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentUserId: String?, onSignedIn: () -> Unit) {
+fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentUserId: String?, lastUserId: String? = null, onSignedIn: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var userId by rememberSaveable { mutableStateOf("") }
+    var userId by rememberSaveable { mutableStateOf(lastUserId.orEmpty()) }
     var password by rememberSaveable { mutableStateOf("") }
     var remember by rememberSaveable { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }

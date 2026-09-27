@@ -568,7 +568,8 @@ class MainActivity : ComponentActivity() {
                     LoginScreen(
                         authRepository = remember { MarksyContainer.authRepository(applicationContext) },
                         padding = padding,
-                        currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).let { if (it.isSessionActive()) it.getUserId() else null } },
+                        currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).signedInUserId() },
+                        lastUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).lastUserId() },
                         onSignedIn = { showGatewaySettings = false }
                     )
                 }
@@ -798,7 +799,7 @@ class MainActivity : ComponentActivity() {
     var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).let { if (it.isSessionActive()) it.getUserId() else null } }
+    val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).signedInUserId() }
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
         contentPadding = PaddingValues(18.dp),

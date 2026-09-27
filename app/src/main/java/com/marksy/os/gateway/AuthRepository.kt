@@ -15,8 +15,12 @@ import java.time.format.DateTimeParseException
  * late means a hard sign-out instead of a silent renewal. */
 class AuthRepository(private val client: AuthApiClient, private val store: AuthSessionStore) {
     suspend fun currentToken(): String? = withContext(Dispatchers.IO) {
-        val token = store.getToken() ?: return@withContext null
-        val expiresAt = store.getExpiresAtEpochMs() ?: return@withContext null
+        val token = store.getToken()
+        val expiresAt = store.getExpiresAtEpochMs()
+        if (token == null || expiresAt == null) {
+            if (!store.hasCredentials()) return@withContext null
+            return@withContext refreshMutex.withLock { store.getToken()?.takeIf { store.isSessionActive() } ?: signInAgain() }
+        }
         val now = System.currentTimeMillis()
         if (expiresAt - now > REFRESH_BUFFER_MS) return@withContext token
 
@@ -28,8 +32,8 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
         refreshMutex.withLock {
             // Re-read after acquiring the lock: another caller may have already refreshed
             // this exact session while this one was waiting.
-            val lockedToken = store.getToken() ?: return@withLock null
-            val lockedExpiresAt = store.getExpiresAtEpochMs() ?: return@withLock null
+            val lockedToken = store.getToken() ?: return@withLock signInAgain()
+            val lockedExpiresAt = store.getExpiresAtEpochMs() ?: return@withLock signInAgain()
             val lockedNow = System.currentTimeMillis()
             if (lockedExpiresAt - lockedNow > REFRESH_BUFFER_MS) return@withLock lockedToken
 
@@ -44,13 +48,13 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
                 // The only case `POST /auth/refresh` fails deterministically: the token is
                 // truly dead server-side (MRA_SESSION_EXPIRED, revoked, etc.) -- terminal.
                 store.clearSession()
-                null
+                signInAgain()
             } catch (error: Exception) {
                 // Network blip, 5xx, a JSON-parse failure, or a Keystore/crypto error saving
                 // the new session -- none of these mean the *existing* token is invalid. Never
                 // destroy a session that might still be genuinely valid, and never let a
                 // non-IOException (e.g. GeneralSecurityException) crash the caller.
-                if (lockedExpiresAt > lockedNow) lockedToken else null
+                if (lockedExpiresAt > lockedNow) lockedToken else signInAgain()
             }
         }
     }
@@ -60,6 +64,7 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
             val session = client.login(userId, password)
             val expiresAtMs = parseEpochMs(session.expiresAt) ?: (System.currentTimeMillis() + FALLBACK_TTL_MS)
             store.saveSession(session.sessionToken, session.userId, expiresAtMs, remember)
+            if (remember) store.saveCredentials(userId, password) else store.forgetCredentials()
             Result.success(Unit)
         } catch (cancellation: CancellationException) {
             throw cancellation
@@ -76,6 +81,26 @@ class AuthRepository(private val client: AuthApiClient, private val store: AuthS
             runCatching { client.logout(token) }
         }
         store.clearSession()
+        store.forgetPassword()
+    }
+
+    /** Silent sign-in with "Remember me" credentials; call under [refreshMutex]. */
+    private suspend fun signInAgain(): String? {
+        val (userId, password) = store.rememberedCredentials() ?: return null
+        return try {
+            val session = client.login(userId, password)
+            val expiresAtMs = parseEpochMs(session.expiresAt) ?: (System.currentTimeMillis() + FALLBACK_TTL_MS)
+            store.saveSession(session.sessionToken, session.userId, expiresAtMs, remember = true)
+            session.sessionToken
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: AuthApiException) {
+            // Rejected (password changed or account revoked): stop retrying it.
+            store.forgetPassword()
+            null
+        } catch (error: Exception) {
+            null
+        }
     }
 
     private fun parseEpochMs(iso: String): Long? =

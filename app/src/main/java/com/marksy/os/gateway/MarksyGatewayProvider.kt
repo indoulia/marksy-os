@@ -13,7 +13,7 @@ object MarksyGatewayProvider {
 
     fun client(): MarksyGatewayClient {
         val baseUrl = (SecureCredentialStore(AppContext.get()).getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
-        if (AuthSessionStore(AppContext.get()).getToken() == null) return UnconfiguredMarksyGatewayClient()
+        if (!AuthSessionStore(AppContext.get()).canAuthenticate()) return UnconfiguredMarksyGatewayClient()
         return runCatching { MarksyTipsApiClient(authRepository(), baseUrl) as MarksyGatewayClient }
             .getOrElse { UnconfiguredMarksyGatewayClient() }
     }
@@ -22,17 +22,17 @@ object MarksyGatewayProvider {
     fun marketClient(): MarksyTipsApiClient? = client() as? MarksyTipsApiClient
 
     /** Whether a call made right now would actually carry a usable session token --
-     * unlike the synchronous `getToken() != null` checks above (which only mean "has
+     * unlike the synchronous `canAuthenticate()` checks above (which only mean "has
      * ever signed in"), this proactively refreshes, so a lapsed remembered session is
      * correctly reported as unusable. Lets background work skip a whole batch upfront
      * instead of claiming-then-failing every item one at a time. */
     suspend fun currentAuthToken(): String? =
-        if (AuthSessionStore(AppContext.get()).getToken() == null) null else authRepository().currentToken()
+        if (!AuthSessionStore(AppContext.get()).canAuthenticate()) null else authRepository().currentToken()
 
     /** Null until the user is signed in; every Market screen must degrade to
      * its own Unavailable state rather than crash when this is null. */
     fun marketIntelligenceClient(): com.marksy.os.market.MarketApiClient? {
-        if (AuthSessionStore(AppContext.get()).getToken() == null) return null
+        if (!AuthSessionStore(AppContext.get()).canAuthenticate()) return null
         val baseUrl = (SecureCredentialStore(AppContext.get()).getBaseUrl() ?: BuildConfig.MARKSY_API_BASE_URL).trimEnd('/')
         return runCatching { com.marksy.os.market.RealMarketApiClient(authRepository(), baseUrl) as com.marksy.os.market.MarketApiClient }.getOrNull()
     }
