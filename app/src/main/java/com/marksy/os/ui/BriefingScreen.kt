@@ -26,8 +26,10 @@ import com.marksy.os.intelligence.DailyBriefing
 fun BriefingScreen(
     padding: PaddingValues,
     load: suspend (DailyBriefing.Kind?) -> DailyBriefing.Briefing,
-    onOpenEvent: (Long) -> Unit
+    onOpenEvent: (Long) -> Unit,
+    onOpenStock: (String) -> Unit = {}
 ) {
+    val isSymbol = rememberSymbolCheck()
     var kindName by rememberSaveable { mutableStateOf<String?>(null) }
     val kind = kindName?.let { DailyBriefing.Kind.valueOf(it) }
     val briefing by produceState<DailyBriefing.Briefing?>(null, kindName) { value = runCatching { load(kind) }.getOrNull() }
@@ -75,6 +77,10 @@ fun BriefingScreen(
                     Column(Modifier.padding(10.dp)) {
                         Text(line.text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, maxLines = 2)
                         Text("Why: ${line.why}", color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 2)
+                        if (section.title == com.marksy.os.intelligence.DailyBriefing.MARKETS_SECTION) {
+                            val stocks = remember(line.text, isSymbol) { com.marksy.os.market.StockMentions.find(line.text, isSymbol) }
+                            StockLinkPills(stocks, onOpenStock, Modifier.padding(top = 4.dp))
+                        }
                     }
                 }
             }

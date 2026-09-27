@@ -37,6 +37,7 @@ fun TradingIntelligenceScreen(
     selectedFilter: String = TradingFilters.first(),
     onFilterSelected: (String) -> Unit = {},
     onOpenStock: (String) -> Unit = {},
+    marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
     val snapshot = (market as? MarketState.Loaded)?.snapshot
@@ -57,6 +58,7 @@ fun TradingIntelligenceScreen(
             .consumeWindowInsets(padding)
     ) {
     Column(Modifier.fillMaxSize()) {
+        if (selectedFilter == TAB_PREDICTIONS && marketRepository != null) PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock) else
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -140,9 +142,10 @@ fun TradingIntelligenceScreen(
 }
 
 private const val TAB_PICKS = "Marksy picks"
+private const val TAB_PREDICTIONS = "Predictions"
 private const val TAB_CALLS = "Calls"
 private const val TAB_CAPTURED = "Captured"
-val TradingFilters = listOf(TAB_PICKS, TAB_CALLS, TAB_CAPTURED)
+val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_CALLS, TAB_CAPTURED)
 
 internal fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
     if (postedAt <= 0) return null

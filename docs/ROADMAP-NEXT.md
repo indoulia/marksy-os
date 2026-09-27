@@ -23,6 +23,7 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-018 Rules 2.0: nested AND/OR/NOT editor (#27). Done in tests.
 - EPIC-033 Fundamentals & News: Upstox fundamentals, financials, shareholding, corporate actions, peers and news (#44).
 - EPIC-035 Stock Details: items 1–11 (#42–#52). The items under "Parked" stay parked.
+- EPIC-029 Market & IPO Surfaces: market overview, quotes, stock search (#31), stock watchlist, stock page, IPOs, Ask → stock deep links (#34) and a Tradsy placeholder ticket (#50). Trading → Predictions lists open Marksy calls, with price placed between stop and target and invalidated calls collapsed, plus closed calls with their outcome and the 30-day track record (`/predictions/active`, `/tracking/predictions`, `/performance/summary`). Market and trading notifications link their tickers to the stock page from the event popup, and the Daily Briefing has a Markets section with ticker links. Verified on device. The IPO watchlist ships with EPIC-027. Market data still comes partly from Upstox directly (see EPIC-024).
 
 **Partial**
 - EPIC-019 On-Device AI: Gemma 3 1B runs on device (#36). Gemini Nano is untested because no AICore device is available.
@@ -34,7 +35,6 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Pending: calibrating the rating weights against past outcomes (#51).
 - EPIC-027 IPO Intelligence: IPO list and detail, with prediction history and the risk engine (#25, #39). Pending: IPO watchlist.
 - EPIC-028 Daily Setups: Marksy picks and trade calls link to the stock page. Pending: a morning Daily Setups view, intraday updates, a prediction history view and the `marksy-tips/v1` DAILY_SETUPS contract.
-- EPIC-029 Market & IPO Surfaces: market overview, quotes, stock search (#31), stock watchlist (`feat/watchlist`), stock page, IPOs, Ask → stock deep links (#34), and a Tradsy placeholder ticket (#50). Pending: IPO watchlist, a predictions list screen (removed in #29), and deep links from notifications and the Briefing.
 - EPIC-031 Live Market Home: the Home Market Pulse shows indices, and gainers and losers are on Market overview. Pending: market breadth and Most Active.
 - EPIC-032 Instrument Workspace: header, interactive 1D–5Y chart, stats, depth, technical rating and watchlist action. Pending: candlestick mode, indicator overlays on the chart (EMA, VWAP, Bollinger, Supertrend), intraday intervals, alerts, and a Derivatives tab.
 - EPIC-034 Realtime Hardening: the quote polls only while NSE is open, and the feed reconnects. Pending: a unified realtime state model, subscriptions based on visible instruments, stream observability, and end-to-end tests for stream loss and recovery.

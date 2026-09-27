@@ -112,11 +112,18 @@ object DailyBriefing {
         }.distinctBy { EventIntelligence.threadKey(it) }.take(MAX_LINES)
             .map { Line(title(it), "You marked ${it.sourceName.ifBlank { it.sourcePackage }} or this sender as important", listOf(it.id)) }
 
+        // Markets: open market/trading events in the window, newest first; the UI links tickers to stock pages.
+        val markets = inWindow.filter { isOpen(it) && it.category in MARKETS }
+            .sortedWith(compareByDescending<NotificationEventEntity> { it.postedAt }.thenBy { it.id })
+            .distinctBy { EventIntelligence.threadKey(it) }.take(MAX_LINES)
+            .map { Line(title(it), if (it.category == "TRADING") "Trading update" else "Market update", listOf(it.id)) }
+
         val sections = listOf(
             Section("Important", important),
             Section("Needs your action", pending),
             Section(if (kind == Kind.EVENING) "Tomorrow" else "Today", upcoming),
             Section("Money", financial),
+            Section(MARKETS_SECTION, markets),
             Section("For you", highlights)
         ).filter { it.lines.isNotEmpty() }
 
@@ -136,6 +143,8 @@ object DailyBriefing {
 
     private val STABLE = compareByDescending<NotificationEventEntity> { it.postedAt }.thenBy { it.id }
     private val MONEY = setOf("PAYMENTS", "BANKING", "BILLS")
+    private val MARKETS = setOf("MARKET", "TRADING")
+    const val MARKETS_SECTION = "Markets"
     private const val IMPORTANT = 70
     private const val MAX_LINES = 5
     private const val WEEK = 7 * 24 * 60 * 60 * 1000L

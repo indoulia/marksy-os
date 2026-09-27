@@ -326,15 +326,16 @@ private fun WatchDialog(
 
 /** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */
 @Composable
-private fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
+    val fill by androidx.compose.animation.animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
     Text(
         text,
         color = when { selected -> Color.Black; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
         fontSize = 12.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         modifier = Modifier.clip(shape)
-            .background(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+            .background(fill)
             .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
