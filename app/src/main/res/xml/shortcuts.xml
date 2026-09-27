@@ -1,0 +1,20 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="ask" android:enabled="true" android:icon="@drawable/ic_marksy_ask"
+        android:shortcutShortLabel="@string/ask_marksy" android:shortcutLongLabel="@string/ask_marksy">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.marksy.os" android:targetClass="com.marksy.os.MainActivity">
+            <extra android:name="com.marksy.os.OPEN" android:value="ask" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="briefing" android:enabled="true" android:icon="@drawable/ic_marksy_ask"
+        android:shortcutShortLabel="@string/shortcut_briefing" android:shortcutLongLabel="@string/shortcut_briefing_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.marksy.os" android:targetClass="com.marksy.os.MainActivity">
+            <extra android:name="com.marksy.os.OPEN" android:value="briefing" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="setups" android:enabled="true" android:icon="@drawable/ic_marksy_ask"
+        android:shortcutShortLabel="@string/shortcut_setups" android:shortcutLongLabel="@string/shortcut_setups_long">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.marksy.os" android:targetClass="com.marksy.os.MainActivity">
+            <extra android:name="com.marksy.os.OPEN" android:value="setups" />
+        </intent>
+    </shortcut>
+</shortcuts>
