@@ -113,7 +113,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     }
 }
 
-private inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<R> = when (this) {
+internal inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<R> = when (this) {
     is MarketDataState.Loaded -> MarketDataState.Loaded(f(value))
     is MarketDataState.Stale -> MarketDataState.Loaded(f(value))
     is MarketDataState.Error -> this
@@ -147,7 +147,7 @@ private fun Stat(label: String, value: String?, tint: Color) {
 }
 
 @Composable
-private fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, onClick: () -> Unit) {
+internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: String? = null, onClick: () -> Unit) {
     val price = livePrice ?: p.price
     val buy = p.targetPrice >= p.entryPrice
     val shape = RoundedCornerShape(12.dp)
@@ -176,7 +176,7 @@ private fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, onClick: () 
                 p.remainingTradingDays?.let { "$it day${if (it == 1) "" else "s"} left" } ?: "${p.horizon}-day call",
                 "conf ${(if (p.confidence <= 1) p.confidence * 100 else p.confidence).toInt()}%",
                 p.lifecycleState.takeIf { it != "UNAVAILABLE" }?.let(::words),
-                p.lifecycleDetail
+                note ?: p.lifecycleDetail
             ).joinToString(" · "),
             color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp)
         )
@@ -228,9 +228,9 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
     }
 }
 
-private val INVALIDATED = setOf("INVALIDATED", "DATA_UNRESOLVED")
+internal val INVALIDATED = setOf("INVALIDATED", "DATA_UNRESOLVED")
 private fun words(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 private fun share(f: Double) = "${(f * 100).toInt()}%"
 // Returns arrive as fractions (0.032 = 3.2%).
 private fun returnPct(f: Double) = String.format(Locale.US, "%+.1f%%", f * 100)
-private fun callRupees(v: Double) = "₹" + String.format(Locale.getDefault(), "%,.2f", v)
+internal fun callRupees(v: Double) = "₹" + String.format(Locale.getDefault(), "%,.2f", v)

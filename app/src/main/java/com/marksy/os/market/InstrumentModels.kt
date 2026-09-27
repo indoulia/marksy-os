@@ -110,7 +110,8 @@ data class ActivePredictionDto(
     val isActionableNow: Boolean,
     val lifecycleDetail: String?,
     val entryPrice: Double,
-    val compositeOpportunityScore: Double?
+    val compositeOpportunityScore: Double?,
+    val lastPriceAt: String? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = ActivePredictionDto(
@@ -133,7 +134,8 @@ data class ActivePredictionDto(
             isActionableNow = json.boolOrFalse("isActionableNow"),
             lifecycleDetail = json.textOrNull("lifecycleDetail"),
             entryPrice = json.doubleOrNull("entryPrice") ?: 0.0,
-            compositeOpportunityScore = json.doubleOrNull("compositeOpportunityScore")
+            compositeOpportunityScore = json.doubleOrNull("compositeOpportunityScore"),
+            lastPriceAt = json.textOrNull("lastPriceAt")
         )
     }
 }
