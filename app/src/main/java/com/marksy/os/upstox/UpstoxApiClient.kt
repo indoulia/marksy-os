@@ -24,6 +24,11 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxQuote.parse(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
     }
 
+    /** Full quotes for up to 500 instruments in one call (volume, average price, OHLC). */
+    suspend fun quotes(instrumentKeys: List<String>): Map<String, UpstoxQuote> = withContext(Dispatchers.IO) {
+        UpstoxQuote.parseAll(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKeys.take(500).joinToString(","), "UTF-8")}"))
+    }
+
     /** Option expiries for an underlying; empty when it isn't in F&O. */
     suspend fun optionExpiries(instrumentKey: String): List<String> = withContext(Dispatchers.IO) {
         UpstoxDerivatives.expiries(get("$V2_URL/option/contract?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))

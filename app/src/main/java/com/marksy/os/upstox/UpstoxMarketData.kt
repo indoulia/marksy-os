@@ -34,11 +34,23 @@ data class UpstoxQuote(
 
     companion object {
         fun parse(body: String): UpstoxQuote = upstoxData(body) { data ->
-            val q = data.keys().asSequence().firstOrNull()?.let(data::getJSONObject) ?: throw IOException("Upstox returned no quote")
+            entry(data.keys().asSequence().firstOrNull()?.let(data::getJSONObject) ?: throw IOException("Upstox returned no quote"))
+        }
+
+        /** Every entry of a multi-instrument quotes response, keyed by instrument key (`NSE_EQ|INE…`). */
+        fun parseAll(body: String): Map<String, UpstoxQuote> = upstoxData(body) { data ->
+            data.keys().asSequence().mapNotNull { k ->
+                val q = data.optJSONObject(k) ?: return@mapNotNull null
+                val key = q.optString("instrument_token").takeIf { it.contains('|') } ?: return@mapNotNull null
+                runCatching { key to entry(q) }.getOrNull()
+            }.toMap()
+        }
+
+        private fun entry(q: JSONObject): UpstoxQuote {
             val last = q.getDouble("last_price")
             val ohlc = q.optJSONObject("ohlc")
             val depth = q.optJSONObject("depth")
-            UpstoxQuote(
+            return UpstoxQuote(
                 lastPrice = last,
                 // net_change is measured from the previous close; ohlc.close is only a fallback.
                 prevClose = q.num("net_change")?.let { last - it } ?: ohlc?.num("close"),

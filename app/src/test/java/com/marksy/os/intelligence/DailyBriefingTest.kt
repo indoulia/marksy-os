@@ -65,6 +65,16 @@ class DailyBriefingTest {
     }
 
     @Test
+    fun marketAndTradingEventsGetTheirOwnSectionNewestFirst() {
+        val call = event("TRADING", "BUY INFY", "Target 1600", at(24, 7), "com.zerodha")
+        val move = event("MARKET", "NIFTY up 1%", "Markets open higher", at(24, 7, 30), "com.moneycontrol")
+        val b = DailyBriefing.build(DailyBriefing.Kind.MORNING, fixture + listOf(call, move), emptyList(), PersonalLearning.Profile.EMPTY, morning, zone)
+        val markets = b.sections.single { it.title == "Markets" }.lines
+        assertEquals(listOf(move.id, call.id), markets.map { it.eventIds.single() })
+        assertEquals("Trading update", markets.last().why)
+    }
+
+    @Test
     fun sameInputGivesIdenticalBriefingRegardlessOfInputOrder() {
         val a = DailyBriefing.build(DailyBriefing.Kind.MORNING, fixture, emptyList(), profileRahulImportant(), morning, zone)
         val b = DailyBriefing.build(DailyBriefing.Kind.MORNING, fixture.reversed(), emptyList(), profileRahulImportant(), morning, zone)

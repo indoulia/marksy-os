@@ -37,14 +37,15 @@ fun TradingIntelligenceScreen(
     selectedFilter: String = TradingFilters.first(),
     onFilterSelected: (String) -> Unit = {},
     onOpenStock: (String) -> Unit = {},
+    marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
+    setupReports: List<SetupReport> = emptyList(),
     onInsightSelected: (TradingInsight) -> Unit = {}
 ) {
-    val snapshot = (market as? MarketState.Loaded)?.snapshot
     // Marksy supplies what to show (picks, movers, targets); prices tick live from the user's Upstox feed.
     // External calls (broker apps, SMS, chat) parsed into side / symbol / levels, shown immediately.
     val calls = remember(insights) { insights.mapNotNull { i -> com.marksy.os.notification.TradeCallParser.parse(i.title, i.body)?.let { i to it } } }
     val callIds = remember(calls) { calls.map { it.first.eventId }.toSet() }
-    val liveSymbols = remember(snapshot, calls) { (snapshot?.opportunities.orEmpty().map { it.symbol } + calls.map { it.second.symbol }).distinct() }
+    val liveSymbols = remember(calls) { calls.map { it.second.symbol }.distinct() }
     val live = rememberUpstoxQuotes(liveSymbols)
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
@@ -57,6 +58,8 @@ fun TradingIntelligenceScreen(
             .consumeWindowInsets(padding)
     ) {
     Column(Modifier.fillMaxSize()) {
+        if (selectedFilter == TAB_PREDICTIONS && marketRepository != null) PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock) else
+        if (selectedFilter == TAB_PICKS) SetupsView(marketRepository, setupReports, OneHandListBottomPadding, onOpenStock) else
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -65,33 +68,6 @@ fun TradingIntelligenceScreen(
             contentPadding = PaddingValues(top = 10.dp, bottom = OneHandListBottomPadding)
         ) {
             when (selectedFilter) {
-                TAB_PICKS -> {
-                    val picks = snapshot?.opportunities.orEmpty()
-                    if (picks.isEmpty()) item { if (market is MarketState.Loading) MarksyLoader("Loading market data…") else EmptyState("No Marksy picks right now.", marketMessage(market, "Top opportunities from Marksy will appear here.")) }
-                    // The feed can repeat a symbol (two predictions for one stock), so keys carry the position.
-                    itemsIndexed(picks, key = { i, it -> "pick-$i-${it.symbol}" }) { _, pick ->
-                        val reference = pick.entryPrice ?: pick.price
-                        val quote = live[pick.symbol]
-                        val side = if (reference == null || pick.targetPrice >= reference) TradeSide.BUY else TradeSide.SELL
-                        Box(Modifier.clickable { onOpenStock(pick.symbol) }) { TradingSignalCard(
-                            symbol = pick.symbol,
-                            price = (quote?.lastPrice ?: pick.price)?.let(::rupees) ?: "—",
-                            change = (quote?.changePct ?: pick.changePct)?.let(::signedPct) ?: "",
-                            signalType = side.name,
-                            headline = pick.name,
-                            entry = pick.entryPrice?.let(::rupees) ?: "—",
-                            target = rupees(pick.targetPrice),
-                            stopLoss = rupees(pick.stopLoss),
-                            confidence = confidencePct(pick.confidence),
-                            alignment = listOfNotNull(
-                                pick.score?.let { "Score ${it.toInt()}" },
-                                pick.horizonDays?.let { "$it-day horizon" },
-                                pick.upsidePct?.let { "upside ${signedPct(it)}" }
-                            ).joinToString(" · "),
-                            onTrade = { ticket = TradeIntent(pick.symbol, side, quote?.lastPrice ?: pick.price ?: pick.entryPrice, pick.targetPrice, pick.stopLoss) }
-                        ) }
-                    }
-                }
                 TAB_CALLS -> {
                     if (calls.isEmpty()) item { EmptyState("No calls captured yet.", "Buy/sell calls from your broker apps, SMS and chats appear here the moment they arrive.") }
                     itemsIndexed(calls, key = { _, (i, _) -> "call-${i.eventId}" }) { _, (insight, call) ->
@@ -139,10 +115,11 @@ fun TradingIntelligenceScreen(
     }
 }
 
-private const val TAB_PICKS = "Marksy picks"
+private const val TAB_PICKS = "Setups"
+private const val TAB_PREDICTIONS = "Predictions"
 private const val TAB_CALLS = "Calls"
 private const val TAB_CAPTURED = "Captured"
-val TradingFilters = listOf(TAB_PICKS, TAB_CALLS, TAB_CAPTURED)
+val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_CALLS, TAB_CAPTURED)
 
 internal fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
     if (postedAt <= 0) return null

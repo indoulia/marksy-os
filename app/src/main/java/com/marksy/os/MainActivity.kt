@@ -379,12 +379,14 @@ class MainActivity : ComponentActivity() {
             stockQuery = marketSymbol.orEmpty()
         }
         LaunchedEffect(searchPage) { closeHeaderSearch() }
-        // origin: a tab index, or "ask".
+        // origin: a tab index, "ask" or "briefing".
         fun openStockFrom(symbol: String, origin: String) {
             stockReturn = origin; stockReturnMarketTab = marketTabName; stockTrail = emptyList()
-            showAsk = false; marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
+            showAsk = false; showBriefing = false; showTimeline = false; showCalendar = false; showInsights = false; showDigest = false
+            marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
         }
-        LaunchedEffect(pendingSymbol) { pendingSymbol?.let { openStockFrom(it, selectedTab.toString()); pendingSymbol = null } }
+        fun stockOrigin() = when { showAsk -> "ask"; showBriefing -> "briefing"; else -> selectedTab.toString() }
+        LaunchedEffect(pendingSymbol) { pendingSymbol?.let { openStockFrom(it, stockOrigin()); pendingSymbol = null } }
         fun stockBack() {
             val previous = stockTrail.lastOrNull()
             val origin = stockReturn
@@ -393,7 +395,7 @@ class MainActivity : ComponentActivity() {
                 origin != null -> {
                     stockReturn = null; marketSymbol = null; stockQuery = ""
                     marketTabName = stockReturnMarketTab ?: MarketTab.OVERVIEW.name
-                    if (origin == "ask") showAsk = true else selectedTab = origin.toInt()
+                    when (origin) { "ask" -> showAsk = true; "briefing" -> showBriefing = true; else -> selectedTab = origin.toInt() }
                 }
                 else -> { marketSymbol = null; stockQuery = "" }
             }
@@ -592,7 +594,8 @@ class MainActivity : ComponentActivity() {
                     BriefingScreen(
                         padding = padding,
                         load = { kind -> briefingRepository.briefing(kind) },
-                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let(openEvent) } }
+                        onOpenEvent = { id -> lifecycleScope.launch { repository.event(id)?.let(openEvent) } },
+                        onOpenStock = { openStockFrom(it, "briefing") }
                     )
                 }
                 showTimeline -> TimelineHost(timelineEvents, padding, openEvent)
@@ -659,7 +662,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     liveIndices = upstoxLive,
                     todayDigest = todayDigest,
-                    onOpenTrading = { selectedTab = 3 },
+                    onOpenTrading = { marketTabName = MarketTab.OVERVIEW.name; selectedTab = 4 },
                     onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
@@ -706,7 +709,13 @@ class MainActivity : ComponentActivity() {
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
                         onFilterSelected = { tradingFilter = it },
-                        onOpenStock = { openStockFrom(it, "3") }
+                        onOpenStock = { openStockFrom(it, "3") },
+                        marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
+                        setupReports = remember(inboxEvents) {
+                            inboxEvents.filter { "marksy-tips/" in it.body }.sortedByDescending { it.postedAt }
+                                .mapNotNull { e -> com.marksy.os.market.DailySetups.parse(e.body)?.takeIf { it.setups.isNotEmpty() }?.let { com.marksy.os.ui.SetupReport(e.id, e.postedAt, it) } }
+                                .take(3)
+                        }
                     ) { selectedTradingInsight = it }
                 }
                 selectedTab == 4 -> MarketScreen(
@@ -724,7 +733,8 @@ class MainActivity : ComponentActivity() {
                     stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
-                    onEventSelected = openEvent
+                    onEventSelected = openEvent,
+                    onOpenStock = { openStockFrom(it, "4") }
                 )
                 else -> MoreScreen(
                     access = notificationAccessEnabled,
@@ -785,7 +795,8 @@ class MainActivity : ComponentActivity() {
                         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 },
-                onMarkUnread = { vm.setRead(event.id, false) }
+                onMarkUnread = { vm.setRead(event.id, false) },
+                onOpenStock = { symbol -> selectedEvent = null; openStockFrom(symbol, stockOrigin()) }
             )
         }
 
