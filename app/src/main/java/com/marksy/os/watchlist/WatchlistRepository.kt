@@ -70,7 +70,7 @@ object WatchlistNames {
     private fun key(name: String) = name.lowercase().filter(Char::isLetterOrDigit)
 }
 
-/** Which list a stock most likely belongs in: a sector-named list, then a market-cap list, then the one being viewed. */
+/** Which list a stock most likely belongs in: sector, index, then market-cap list, then the one being viewed; else none. */
 object WatchlistPicker {
     private val GROUPS = listOf(
         setOf("defence", "defense", "aerospace", "military", "shipbuilding"),
@@ -93,13 +93,15 @@ object WatchlistPicker {
     private const val LARGE_CAP_CR = 100_000.0
     private const val MID_CAP_CR = 30_000.0
 
-    fun pick(lists: List<WatchlistEntity>, counts: Map<Long, Int>, sector: String?, marketCapCr: Double?, current: Long?): Long? {
+    /** [indices]: index names the stock belongs to (e.g. "Nifty 50"), matched against list names after the sector. */
+    fun pick(lists: List<WatchlistEntity>, counts: Map<Long, Int>, sector: String?, marketCapCr: Double?, current: Long?, indices: List<String> = emptyList()): Long? {
         val open = lists.filter { (counts[it.id] ?: 0) < WatchlistRepository.MAX_STOCKS }
         val sectorTerms = sector?.let(::terms).orEmpty()
         if (sectorTerms.isNotEmpty()) open.firstOrNull { list -> terms(list.name).any { it in sectorTerms } }?.let { return it.id }
+        indices.firstNotNullOfOrNull { index -> open.firstOrNull { compact(it.name).contains(compact(index)) } }?.let { return it.id }
         val band = marketCapCr?.let { if (it >= LARGE_CAP_CR) "large" else if (it >= MID_CAP_CR) "mid" else "small" }
         if (band != null) open.firstOrNull { capBand(it.name) == band }?.let { return it.id }
-        return open.firstOrNull { it.id == current }?.id ?: open.firstOrNull()?.id
+        return open.firstOrNull { it.id == current }?.id
     }
 
     /** Words of a name, each mapped to its synonym group so "Defence" meets "Aerospace & Defense". */
@@ -109,6 +111,8 @@ object WatchlistPicker {
             .filter { it.length >= 2 && it !in STOP }
             .map { word -> GROUPS.indexOfFirst { word in it }.takeIf { it >= 0 }?.let { "#$it" } ?: word }
             .toSet()
+
+    private fun compact(name: String) = name.lowercase().filter(Char::isLetterOrDigit)
 
     private fun capBand(name: String): String? {
         val n = name.lowercase().filter(Char::isLetter)

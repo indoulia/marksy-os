@@ -377,7 +377,7 @@ private fun AddToWatchlistDialog(
     var error by remember(symbol) { mutableStateOf<String?>(null) }
     LaunchedEffect(traits) {
         val t = traits ?: return@LaunchedEffect
-        if (!userPicked) chosen = WatchlistPicker.pick(open, counts, t.sector, t.marketCapCr, current)
+        if (!userPicked) chosen = WatchlistPicker.pick(open, counts, t.sector, t.marketCapCr, current, indices = listOfNotNull("Nifty 50".takeIf { symbol in Nifty50.SYMBOLS }))
     }
     val valid = newName.isNotBlank() || chosen != null
     WatchDialog(

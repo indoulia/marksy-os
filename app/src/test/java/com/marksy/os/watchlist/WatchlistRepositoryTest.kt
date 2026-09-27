@@ -88,6 +88,12 @@ class WatchlistRepositoryTest {
         assertEquals(4L, WatchlistPicker.pick(lists, emptyMap(), sector = "Pharmaceuticals", marketCapCr = 150_000.0, current = 2))
         assertEquals(1L, WatchlistPicker.pick(lists, emptyMap(), sector = null, marketCapCr = 4_000.0, current = 2))
         assertEquals(2L, WatchlistPicker.pick(lists, emptyMap(), sector = "Pharmaceuticals", marketCapCr = null, current = 2))
+        // Index membership beats the market-cap band and the open list, but not a sector match.
+        val withIndex = lists + WatchlistEntity(5, "Nifty 50", 0)
+        assertEquals(5L, WatchlistPicker.pick(withIndex, emptyMap(), sector = "Paints", marketCapCr = 400_000.0, current = 2, indices = listOf("Nifty 50")))
+        // Nothing fits and no list is open: pre-select none rather than an unrelated list.
+        assertNull(WatchlistPicker.pick(lists, emptyMap(), sector = "Paints", marketCapCr = null, current = null))
+        assertEquals(3L, WatchlistPicker.pick(withIndex, emptyMap(), sector = "Banking", marketCapCr = null, current = 2, indices = listOf("Nifty 50")))
         // A full list is skipped.
         assertEquals(1L, WatchlistPicker.pick(lists, mapOf(2L to WatchlistRepository.MAX_STOCKS), sector = "Defence", marketCapCr = null, current = 1))
     }
