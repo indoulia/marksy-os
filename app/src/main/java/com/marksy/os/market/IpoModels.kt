@@ -24,7 +24,7 @@ fun IpoValueDto?.display(prefix: String = ""): String? {
         is String -> runCatching { java.time.LocalDate.parse(v).format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH)) }.getOrDefault(v)
         is JSONObject -> {
             val bounds = listOf("min" to "max", "low" to "high", "lower" to "upper", "from" to "to").firstOrNull { (a, b) -> v.opt(a) is Number && v.opt(b) is Number }
-            bounds?.let { (a, b) -> "$prefix${n(v.opt(a))}–${n(v.opt(b))}" } ?: v.keys().asSequence().mapNotNull { k -> n(v.opt(k)) ?: v.optString(k).takeIf { it.isNotBlank() } }.joinToString(" / ").ifBlank { null }
+            bounds?.let { (a, b) -> "$prefix${n(v.opt(a))}–${n(v.opt(b))}" } ?: v.keys().asSequence().mapNotNull { k -> n(v.opt(k)) ?: v.optString(k).takeIf { !v.isNull(k) && it.isNotBlank() } }.joinToString(" / ").ifBlank { null }
         }
         is JSONArray -> (0 until v.length()).joinToString(", ") { v.opt(it).toString() }.ifBlank { null }
         else -> v.toString()
@@ -135,5 +135,25 @@ data class IpoStageCountsDto(val byStage: Map<String, Int>, val total: Int) {
             val map = byStage?.keys()?.asSequence()?.associateWith { byStage.optInt(it) } ?: emptyMap()
             return IpoStageCountsDto(byStage = map, total = json.intOrNull("total") ?: 0)
         }
+    }
+}
+
+/** One IPO the signed-in reader watches (`GET /ipos/tracked`); [stage] is the reader's, [issueStage] the issue's. */
+data class IpoTrackedItemDto(val ipoId: String, val companyName: String, val stage: String?, val issueStage: String?) {
+    companion object {
+        fun parse(json: JSONObject) = IpoTrackedItemDto(
+            ipoId = json.textOrNull("ipoId") ?: "",
+            companyName = json.textOrNull("companyName") ?: "",
+            stage = json.textOrNull("stage"),
+            issueStage = json.textOrNull("issueStage")
+        )
+        fun parseList(array: JSONArray?) = array.objects().map(::parse).filter { it.ipoId.isNotBlank() }
+    }
+}
+
+/** The answer to both watch and unwatch; idempotent, so a retried toggle reads [tracking]. */
+data class IpoTrackingStateDto(val ipoId: String, val tracking: Boolean) {
+    companion object {
+        fun parse(json: JSONObject) = IpoTrackingStateDto(json.textOrNull("ipoId") ?: "", json.boolOrFalse("tracking"))
     }
 }

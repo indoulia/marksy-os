@@ -6,10 +6,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkAdded
+import androidx.compose.material.icons.outlined.BookmarkAdd
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -26,7 +33,7 @@ import com.marksy.os.market.display
 
 /** Everything Marksy knows about one IPO, fetched on open and kept only while the page is shown. */
 @Composable
-fun IpoDetailScreen(repository: MarketIntelligenceRepository, ipo: IpoListItemDto, padding: PaddingValues) {
+fun IpoDetailScreen(repository: MarketIntelligenceRepository, ipo: IpoListItemDto, padding: PaddingValues, watched: Boolean = false, onToggleWatch: (() -> Unit)? = null) {
     val detail by produceState(MarketDataState.Loading as MarketDataState<IpoDetailDto>, ipo.id) { value = repository.ipoDetail(ipo.id) }
     val history by produceState(MarketDataState.Loading as MarketDataState<List<IpoHistoryEntryDto>>, ipo.id) { value = repository.ipoHistory(ipo.id) }
     val loaded = (detail as? MarketDataState.Loaded)?.value
@@ -36,7 +43,7 @@ fun IpoDetailScreen(repository: MarketIntelligenceRepository, ipo: IpoListItemDt
         contentPadding = PaddingValues(top = 12.dp, bottom = padding.calculateBottomPadding() + 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { IpoHeader(summary) }
+        item { IpoHeader(summary, watched, onToggleWatch) }
         item { KeyFacts(summary) }
         (history as? MarketDataState.Loaded)?.value?.takeIf { it.isNotEmpty() }?.let { entries ->
             item { SectionTitle("Marksy predictions") }
@@ -63,9 +70,19 @@ fun IpoDetailScreen(repository: MarketIntelligenceRepository, ipo: IpoListItemDt
 }
 
 @Composable
-private fun IpoHeader(ipo: IpoListItemDto) {
+private fun IpoHeader(ipo: IpoListItemDto, watched: Boolean, onToggleWatch: (() -> Unit)?) {
     Column {
-        Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+            onToggleWatch?.let { toggle ->
+                Icon(
+                    if (watched) Icons.Filled.BookmarkAdded else Icons.Outlined.BookmarkAdd,
+                    contentDescription = if (watched) "Stop watching ${ipo.companyName}" else "Watch ${ipo.companyName}",
+                    tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+                    modifier = Modifier.padding(start = 4.dp).size(30.dp).clip(CircleShape).clickable(onClick = toggle).padding(5.dp)
+                )
+            }
+        }
         Text(listOfNotNull(ipo.issueName?.takeIf { it != ipo.companyName }, ipo.sector, if (ipo.isSme) "SME" else "Mainboard", ipo.stage?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() })
             .joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp)
     }
