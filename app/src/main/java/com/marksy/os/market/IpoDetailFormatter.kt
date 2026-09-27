@@ -43,7 +43,7 @@ object IpoDetailFormatter {
 
     private fun field(key: String, raw: Any?, depth: Int, zone: ZoneId, label: String = label(key)): List<Row> {
         // {value, explanation|note}: the value means little without the reason, so they share a line.
-        val why = (raw as? JSONObject)?.let { o -> NOTE_KEYS.firstOrNull { o.optString(it).isNotBlank() } }
+        val why = (raw as? JSONObject)?.let { o -> NOTE_KEYS.firstOrNull { !o.isNull(it) && o.optString(it).isNotBlank() } }
         if (raw is JSONObject && why != null && raw.opt("value").let { it != null && it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } &&
             meaningful(raw).all { it in ENVELOPE || it in NOTE_KEYS }) {
             return listOf(Row(depth, label, "${scalar(key, raw.get("value"), zone)} — ${raw.getString(why)}"))

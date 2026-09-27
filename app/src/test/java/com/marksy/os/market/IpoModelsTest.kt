@@ -92,4 +92,16 @@ class IpoModelsTest {
         assertEquals(setOf("UPCOMING", "OPEN", "CLOSED", "LISTED"), counts.byStage.keys)
         assertEquals(23, counts.total)
     }
+
+    @Test
+    fun parsesTrackedIposAndTrackingState() {
+        val tracked = IpoTrackedItemDto.parseList(org.json.JSONArray(
+            """[{"ipoId": "ipo-42", "companyName": "Acme Robotics", "stage": "WATCHING", "issueStage": "OPEN"}, {"ipoId": "", "companyName": "No id"}]"""
+        ))
+        assertEquals(listOf("ipo-42"), tracked.map { it.ipoId })
+        assertEquals("OPEN", tracked.single().issueStage)
+
+        val state = IpoTrackingStateDto.parse(JSONObject("""{"ipoId": "ipo-42", "tracking": false, "stage": null}"""))
+        assertEquals(IpoTrackingStateDto("ipo-42", false), state)
+    }
 }

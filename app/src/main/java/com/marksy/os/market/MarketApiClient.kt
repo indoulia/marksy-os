@@ -26,6 +26,9 @@ interface MarketApiClient {
     suspend fun ipoHistory(id: String): List<IpoHistoryEntryDto>
     /** Marksy's full analysis behind one recommendation, kept raw so every section can be shown. */
     suspend fun recommendation(id: Int): JSONObject = JSONObject()
+    /** The signed-in reader's watched IPOs; watching is server-side so it follows the account. */
+    suspend fun trackedIpos(): List<IpoTrackedItemDto> = emptyList()
+    suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto = throw MarketApiException("IPO watching is not supported")
 }
 
 class MarketApiException(message: String) : IOException(message)
@@ -87,21 +90,28 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun ipoHistory(id: String): List<IpoHistoryEntryDto> =
         IpoHistoryEntryDto.parseList(getDataArray("$base/ipos/${encode(id)}/history"))
 
+    override suspend fun trackedIpos(): List<IpoTrackedItemDto> =
+        IpoTrackedItemDto.parseList(getDataArray("$base/ipos/tracked"))
+
+    override suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto =
+        IpoTrackingStateDto.parse(execute("$base/ipos/${encode(id)}/tracking", method = if (tracking) "POST" else "DELETE").getJSONObject("data"))
+
     private suspend fun getEnvelope(url: String): JSONObject = execute(url)
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
-    private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS): JSONObject {
+    private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS, method: String = "GET"): JSONObject {
         val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy")
         return withContext(Dispatchers.IO) {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
+                requestMethod = method
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
                 instanceFollowRedirects = false
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("Authorization", "Bearer $token")
                 doInput = true
+                if (method == "POST") { doOutput = true; setFixedLengthStreamingMode(0) }
             }
             try {
                 val code = connection.responseCode

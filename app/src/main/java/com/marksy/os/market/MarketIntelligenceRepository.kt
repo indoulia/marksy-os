@@ -31,6 +31,10 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     suspend fun recommendation(id: Int): MarketDataState<org.json.JSONObject> = fetch(emptyCheck = { it.length() == 0 }) { it.recommendation(id) }
 
+    suspend fun trackedIpos(): MarketDataState<List<IpoTrackedItemDto>> = fetch(emptyCheck = { it.isEmpty() }) { it.trackedIpos() }
+
+    suspend fun setIpoTracking(id: String, tracking: Boolean): MarketDataState<IpoTrackingStateDto> = fetch { it.setIpoTracking(id, tracking) }
+
     suspend fun ipoHistory(id: String): MarketDataState<List<IpoHistoryEntryDto>> = fetch { it.ipoHistory(id) }
 
     /** The Overview freshness footer's source. `Stale` here means the feed's own reported
