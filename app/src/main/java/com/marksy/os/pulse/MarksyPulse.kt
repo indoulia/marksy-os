@@ -26,14 +26,15 @@ import java.util.concurrent.TimeUnit
 /** What the Pulse says; [publicText] is the lock-screen version and never names a sender, merchant or amount. */
 data class PulseText(val title: String, val text: String, val publicText: String) {
     companion object {
-        fun build(total: Int, attention: Int, busiest: List<Pair<String, Int>>, next: String?, index: Pair<String, Double>?): PulseText {
+        /** [due] already carries its label ("Overdue: …" or "Next: …"). */
+        fun build(total: Int, attention: Int, busiest: List<Pair<String, Int>>, due: String?, index: Pair<String, Double>?): PulseText {
             val market = index?.let { (name, pct) -> "$name ${String.format(Locale.US, "%+.2f%%", pct)}" }
             val need = when (attention) { 0 -> null; 1 -> "1 needs your attention"; else -> "$attention need your attention" }
             val title = listOfNotNull(need ?: if (total == 0) "All clear" else "Nothing needs you", market).joinToString(" · ").ifBlank { "All clear" }
             val text = if (total == 0) "No notifications captured yet today." else listOfNotNull(
                 "$total notifications today.",
                 busiest.takeIf { it.isNotEmpty() }?.take(2)?.joinToString(prefix = "Busiest: ", postfix = ".") { (n, c) -> "$n ($c)" },
-                next?.let { "Next: $it" }
+                due
             ).joinToString(" ")
             val publicText = listOfNotNull("$total notifications today" + if (attention > 0) ", $attention need attention" else "", market).joinToString(" · ")
             return PulseText(title, text, publicText)
@@ -69,12 +70,16 @@ object MarksyPulse {
         val dayStart = java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
         val db = MarksyContainer.database(context)
         val digest = DailyDigestModel.build(db.notificationEventDao().findInRange(dayStart, now, 5_000), now)
-        val next = db.planItemDao().all().filter { it.completedAt == null && (it.dueAt ?: 0) >= dayStart }.minByOrNull { it.dueAt!! }?.let { p ->
+        val open = db.planItemDao().all().filter { it.completedAt == null && it.dueAt != null }
+        fun describe(p: com.marksy.os.data.local.PlanItemEntity) =
             listOfNotNull(p.title, p.amountMinor?.let { "₹" + String.format(Locale.getDefault(), "%,d", it / 100) }, SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(p.dueAt!!))).joinToString(" · ")
-        }
-        // Only a price the live feed has now; an old one would pass for today's move.
-        val index = UpstoxFeed.quotes.value[UpstoxIndices.NIFTY_50]?.changePct?.takeIf { UpstoxFeed.lastTickAt.value > dayStart }?.let { "NIFTY 50" to it }
-        post(context, PulseText.build(digest.totalNotifications, digest.attentionEvents.size, digest.topSources, next, index))
+        // An overdue item matters more than the next one coming up.
+        val due = open.filter { it.dueAt!! < dayStart }.minByOrNull { it.dueAt!! }?.let { "Overdue: " + describe(it) }
+            ?: open.filter { it.dueAt!! >= dayStart }.minByOrNull { it.dueAt!! }?.let { "Next: " + describe(it) }
+        // Only in session: on a weekend the last change is Friday's, which would read as today's move.
+        val index = if (!UpstoxFeed.isMarketOpen()) null
+            else UpstoxFeed.quotes.value[UpstoxIndices.NIFTY_50]?.changePct?.takeIf { UpstoxFeed.lastTickAt.value > dayStart }?.let { "NIFTY 50" to it }
+        post(context, PulseText.build(digest.totalNotifications, digest.attentionEvents.size, digest.topSources, due, index))
     }
 
     private fun post(context: Context, p: PulseText) {

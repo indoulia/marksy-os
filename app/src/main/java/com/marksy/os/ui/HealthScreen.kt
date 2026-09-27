@@ -57,13 +57,13 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         }
         // Data sources first, then prediction quality, so a data outage is never read as a bad call.
         item { Text("Markets", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
-        item { FeedStatsCard() }
-        item { SilentInstrumentsLine() }
-        item { UpstoxRestCard() }
+        item(key = "feed") { FeedStatsCard() }
+        item(key = "silent") { SilentInstrumentsLine() }
+        item(key = "rest") { UpstoxRestCard() }
         market?.let { m ->
-            item { MarksyFeedCard(m) }
-            item { PredictionValidationCard(m) }
-            item { RatingCalibrationCard(m) }
+            item(key = "marksy-feed") { MarksyFeedCard(m) }
+            item(key = "validation") { PredictionValidationCard(m) }
+            item(key = "calibration") { RatingCalibrationCard(m) }
         }
         item { Text("Runtime", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
         items(r.metrics) { m ->

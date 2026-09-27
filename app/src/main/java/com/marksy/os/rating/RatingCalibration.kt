@@ -40,7 +40,9 @@ object RatingCalibration {
         }
         val baseTest = metric(test, base)
         val bestTest = metric(test, best)
-        val adopted = best != base && test.size >= MIN_TEST && bestTest > baseTest + MIN_GAIN
+        // A gain inside the noise of the held-out sample (about 1/√n for a rank correlation) is not evidence.
+        val needed = maxOf(MIN_GAIN, 1.0 / kotlin.math.sqrt(test.size.toDouble()))
+        val adopted = best != base && test.size >= MIN_TEST && bestTest > 0 && bestTest > baseTest + needed
         return Result(if (adopted) best else base, adopted, bestTrain, bestTest, baseTest, samples.size, test.size)
     }
 

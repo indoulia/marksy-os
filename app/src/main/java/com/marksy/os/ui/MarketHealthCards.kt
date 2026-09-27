@@ -98,7 +98,7 @@ internal fun PredictionValidationCard(repo: MarketIntelligenceRepository) {
         }
         horizons?.items?.sortedBy { it.key.filter(Char::isDigit).toIntOrNull() ?: 99 }?.takeIf { it.isNotEmpty() }?.let { items ->
             Text("By horizon", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
-            items.forEach { i -> Line("${i.key}-day: ${i.closedCount} closed · target ${pct(i.targetHitRate)} · avg ${ret(i.avgRealizedReturn)}${if (i.smallSample) " · small sample" else ""}") }
+            items.forEach { i -> Line("${i.key.filter(Char::isDigit).ifEmpty { i.key }}-day: ${i.closedCount} closed · target ${pct(i.targetHitRate)} · avg ${ret(i.avgRealizedReturn)}${if (i.smallSample) " · small sample" else ""}") }
         }
     }
 }
@@ -107,11 +107,10 @@ internal fun PredictionValidationCard(repo: MarketIntelligenceRepository) {
 @Composable
 internal fun RatingCalibrationCard(repo: MarketIntelligenceRepository) {
     val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    var saved by remember { mutableStateOf(RatingCalibrator.read(context)) }
-    var running by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val s = saved
+    val latest by RatingCalibrator.latest.collectAsStateWithLifecycle()
+    val running by RatingCalibrator.progress.collectAsStateWithLifecycle()
+    val error by RatingCalibrator.error.collectAsStateWithLifecycle()
+    val s = latest ?: remember(latest) { RatingCalibrator.read(context) }
     HealthCard(
         when {
             s == null -> "Marksy rating · V1 weights (not calibrated)"
@@ -127,16 +126,7 @@ internal fun RatingCalibrationCard(repo: MarketIntelligenceRepository) {
         }
         error?.let { Text(it, color = MarksyTheme.YellowImportant, fontSize = 11.sp) }
         Row(Modifier.padding(top = 6.dp)) {
-            running?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp) } ?: Pill("Calibrate now") {
-                error = null
-                scope.launch {
-                    running = "Starting…"
-                    try { saved = RatingCalibrator.run(context, repo) { running = it } }
-                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                    catch (e: Exception) { error = e.message ?: e.javaClass.simpleName }
-                    finally { running = null }
-                }
-            }
+            running?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp) } ?: Pill("Calibrate now") { RatingCalibrator.start(context, repo) }
         }
     }
 }

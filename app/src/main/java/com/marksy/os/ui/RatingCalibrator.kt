@@ -16,6 +16,7 @@ import com.marksy.os.upstox.UpstoxIndices
 import com.marksy.os.upstox.UpstoxInstruments
 import com.marksy.os.upstox.UpstoxTokenStore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
@@ -25,6 +26,25 @@ import java.time.ZoneId
 /** Runs the rating calibration on this device from Marksy's closed calls and Upstox history; keeps the result. */
 object RatingCalibrator {
     data class Saved(val version: String, val adopted: Boolean, val samples: Int, val testSamples: Int, val baseTest: Double, val test: Double, val ranAt: Long, val trend: Double, val seasonality: Double)
+
+    // The run outlives the screen: scrolling Health or leaving it must not cancel a two-minute backtest.
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    private var job: kotlinx.coroutines.Job? = null
+    val progress = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val latest = kotlinx.coroutines.flow.MutableStateFlow<Saved?>(null)
+
+    fun start(context: Context, market: MarketIntelligenceRepository) {
+        if (job?.isActive == true) return
+        error.value = null
+        progress.value = "Starting…"
+        job = scope.launch {
+            try { latest.value = run(context, market) { progress.value = it } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { error.value = e.message ?: e.javaClass.simpleName }
+            finally { progress.value = null }
+        }
+    }
 
     private const val PREFS = "marksy_rating_calibration"
     private const val MAX_CALLS = 400

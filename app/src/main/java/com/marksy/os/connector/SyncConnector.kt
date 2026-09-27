@@ -1,5 +1,6 @@
 package com.marksy.os.connector
 
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import com.marksy.os.ai.DiagLog
 import org.json.JSONObject
@@ -112,7 +113,12 @@ class ConnectorSyncer(
         data class Failed(val kind: ConnectorException.Kind) : Outcome() { val retryable get() = kind.retryable }
     }
 
-    suspend fun sync(connector: SyncConnector): Outcome {
+    // The periodic and the "sync now" work can start together; one connector syncs one batch at a time.
+    suspend fun sync(connector: SyncConnector): Outcome = LOCKS.getOrPut(connector.descriptor.id) { kotlinx.coroutines.sync.Mutex() }.let { lock ->
+        lock.withLock { syncOnce(connector) }
+    }
+
+    private suspend fun syncOnce(connector: SyncConnector): Outcome {
         val id = connector.descriptor.id
         val status = store.load(id)
         if (!status.enabled) return Outcome.Skipped(ConnectorState.DISCONNECTED)
@@ -173,6 +179,7 @@ class ConnectorSyncer(
     fun status(connectorId: String) = store.load(connectorId)
 
     companion object {
+        private val LOCKS = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
         private const val TAG = "MarksyConnector"
         fun key(connectorId: String, sourceKey: String) = "$connectorId:$sourceKey"
         private const val MAX_TITLE = 200
