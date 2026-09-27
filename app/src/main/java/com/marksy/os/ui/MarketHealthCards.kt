@@ -19,6 +19,7 @@ import com.marksy.os.upstox.UpstoxFeed
 import com.marksy.os.upstox.UpstoxInstruments
 import com.marksy.os.upstox.UpstoxRestStats
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 private fun HealthCard(title: String, tone: Color, source: String, content: @Composable ColumnScope.() -> Unit) {
@@ -98,6 +99,44 @@ internal fun PredictionValidationCard(repo: MarketIntelligenceRepository) {
         horizons?.items?.sortedBy { it.key.filter(Char::isDigit).toIntOrNull() ?: 99 }?.takeIf { it.isNotEmpty() }?.let { items ->
             Text("By horizon", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
             items.forEach { i -> Line("${i.key}-day: ${i.closedCount} closed · target ${pct(i.targetHitRate)} · avg ${ret(i.avgRealizedReturn)}${if (i.smallSample) " · small sample" else ""}") }
+        }
+    }
+}
+
+/** Tune the Marksy rating on this device against how past calls actually did; adopted only if it wins on held-out calls. */
+@Composable
+internal fun RatingCalibrationCard(repo: MarketIntelligenceRepository) {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var saved by remember { mutableStateOf(RatingCalibrator.read(context)) }
+    var running by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val s = saved
+    HealthCard(
+        when {
+            s == null -> "Marksy rating · V1 weights (not calibrated)"
+            s.adopted -> "Marksy rating · calibrated on ${s.samples} calls"
+            else -> "Marksy rating · V1 kept (calibration didn't beat it)"
+        },
+        if (s?.adopted == true) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+        "point-in-time Upstox history + marksy-api closed calls · short-term weights only"
+    ) {
+        s?.let {
+            Line(String.format(Locale.US, "Held-out %d calls: rank correlation V1 %.2f → tuned %.2f · trend %.2f, seasonality %.2f", it.testSamples, it.baseTest, it.test, it.trend, it.seasonality))
+            Line("Run ${java.text.SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(java.util.Date(it.ranAt))}")
+        }
+        error?.let { Text(it, color = MarksyTheme.YellowImportant, fontSize = 11.sp) }
+        Row(Modifier.padding(top = 6.dp)) {
+            running?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp) } ?: Pill("Calibrate now") {
+                error = null
+                scope.launch {
+                    running = "Starting…"
+                    try { saved = RatingCalibrator.run(context, repo) { running = it } }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) { error = e.message ?: e.javaClass.simpleName }
+                    finally { running = null }
+                }
+            }
         }
     }
 }
