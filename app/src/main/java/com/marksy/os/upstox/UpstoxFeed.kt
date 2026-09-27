@@ -90,7 +90,10 @@ object UpstoxFeed {
     private val pinned = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
 
     /** Keys kept live whatever is on screen (the Home indices); screens use [acquire]/[release]. */
-    fun watch(keys: Collection<String>) { pinned += keys; acquire(pinned, synchronized(pinned) { pinned.toSet() }) }
+    fun watch(keys: Collection<String>) { pinned += keys; acquire(PINNED_OWNER, synchronized(pinned) { pinned.toSet() }) }
+
+    // A fixed owner: the pinned set itself can't be a map key, its hash changes as it grows.
+    private val PINNED_OWNER = Any()
 
     /** [owner] shows [keys] now; the socket subscribes what's new and drops what nobody shows any more. */
     fun acquire(owner: Any, keys: Collection<String>) {
