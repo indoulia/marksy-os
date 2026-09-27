@@ -31,7 +31,7 @@ import java.time.ZoneId
 
 /** Everything Upstox knows about [symbol], fetched live and held only in memory while the page is open. */
 @Composable
-fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): StockLive {
+fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any, minutes: Int? = null): StockLive {
     val context = LocalContext.current.applicationContext
     val store = remember { UpstoxTokenStore(context) }
     val client = remember { UpstoxApiClient { store.getToken() } }
@@ -50,10 +50,10 @@ fun rememberStockLive(symbol: String, range: ChartRange, refreshKey: Any): Stock
             delay(QUOTE_REFRESH_MS)
         }
     }
-    val candles by produceState<List<Candle>?>(null, instrument, range, hasToken, refreshKey) {
+    val candles by produceState<List<Candle>?>(null, instrument, range, minutes, hasToken, refreshKey) {
         value = null
         val k = instrument?.takeIf { hasToken } ?: return@produceState
-        value = runCatching { client.candles(k, range, LocalDate.now(zone), zone) }.getOrDefault(emptyList())
+        value = runCatching { client.candles(k, range, LocalDate.now(zone), zone, minutes) }.getOrDefault(emptyList())
     }
     // A year of daily candles gives the 52-week range, period returns and average volume.
     val daily by produceState(emptyList<Candle>(), instrument, hasToken, refreshKey) {

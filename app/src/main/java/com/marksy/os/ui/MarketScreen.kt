@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,6 +56,7 @@ fun MarketScreen(
     // The open stock's trade ticket defaults, refreshed as its price and Marksy call load.
     var stockTrade by remember { mutableStateOf<TradeIntent?>(null) }
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
+    var alerting by remember { mutableStateOf<TradeIntent?>(null) }
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
@@ -85,7 +87,8 @@ fun MarketScreen(
                         refresh.done()
                     }
                     var range by rememberSaveable(symbol) { mutableStateOf(com.marksy.os.upstox.ChartRange.D1) }
-                    val live = rememberStockLive(symbol, range, refresh.key)
+                    var minutes by rememberSaveable(symbol, range) { mutableStateOf<Int?>(null) }
+                    val live = rememberStockLive(symbol, range, refresh.key, minutes)
                     val fundamentals = rememberStockFundamentals(live.key, refresh.key)
                     val predictions = when (val st = state) { is com.marksy.os.market.MarketDataState.Loaded -> st.value.predictions; is com.marksy.os.market.MarketDataState.Stale -> st.value.predictions; else -> null }
                     val analysisId = remember(predictions) { predictions?.let(com.marksy.os.market.MarksyCalls::analysisId) }
@@ -106,6 +109,7 @@ fun MarketScreen(
                     }
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
+                            minutes = minutes, onMinutesSelected = { minutes = it },
                             mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis)
                     }
                 }
@@ -126,9 +130,12 @@ fun MarketScreen(
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
             actions = listOfNotNull(
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
+                    ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.NotificationsActive, "Price alert for ${t.symbol}") { alerting = t } },
+                stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
                     ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.SwapVert, "Buy or sell ${t.symbol}") { ticket = t } }
             )
         )
+        alerting?.let { t -> PriceAlertDialog(t.symbol, t.price) { alerting = null } }
     }
 }
 

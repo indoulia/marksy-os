@@ -1,5 +1,6 @@
 package com.marksy.os
 
+import androidx.lifecycle.repeatOnLifecycle
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
@@ -111,12 +112,16 @@ class MainActivity : ComponentActivity() {
     private var pendingEventId by mutableStateOf<Long?>(null)
     /** Set when a plan reminder notification is tapped; the Plan tab opens. */
     private var openPlanRequest by mutableStateOf(false)
+    /** Set when a price alert notification is tapped; that stock's page opens. */
+    private var pendingSymbol by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingEventId = intent?.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L)?.takeIf { it >= 0 }
         openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
+        pendingSymbol = intent?.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)
         RetentionScheduler.schedule(applicationContext)
+        lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
         lifecycleScope.launch { runCatching { MarksyContainer.actions(applicationContext).recover() } }
@@ -129,6 +134,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         intent.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L).takeIf { it >= 0 }?.let { pendingEventId = it }
         if (intent.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false)) openPlanRequest = true
+        intent.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)?.let { pendingSymbol = it }
     }
 
     override fun onResume() {
@@ -380,6 +386,7 @@ class MainActivity : ComponentActivity() {
             marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
         }
         fun stockOrigin() = when { showAsk -> "ask"; showBriefing -> "briefing"; else -> selectedTab.toString() }
+        LaunchedEffect(pendingSymbol) { pendingSymbol?.let { openStockFrom(it, stockOrigin()); pendingSymbol = null } }
         fun stockBack() {
             val previous = stockTrail.lastOrNull()
             val origin = stockReturn
