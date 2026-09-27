@@ -925,7 +925,7 @@ class MainActivity : ComponentActivity() {
             val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
                 scope.launch { com.marksy.os.pulse.MarksyPulse.update(context) }
             }
-            SettingsCard("Marksy Pulse", if (pulseOn) "ON" else "OFF", "A quiet notification with today's summary and next due item, readable on the lock screen. While locked it shows only counts and the market.") {
+            SettingsCard("Marksy Pulse", if (pulseOn) "ON" else "OFF", "A quiet notification with today's summary and next due item, readable on the lock screen. While locked it shows only counts and the market.", trailing = {
                 androidx.compose.material3.Switch(
                     checked = pulseOn,
                     onCheckedChange = { on ->
@@ -933,9 +933,10 @@ class MainActivity : ComponentActivity() {
                         scope.launch { com.marksy.os.pulse.MarksyPulse.setEnabled(context, on) }
                         if (on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     },
-                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised)
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised),
+                    modifier = Modifier.height(24.dp)
                 )
-            }
+            })
         }
         item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openBriefing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Briefing", color = Color.Black, fontSize = 12.sp) } } }
         item {
@@ -980,7 +981,7 @@ class MainActivity : ComponentActivity() {
     if (showClear) com.marksy.os.ui.MarksyDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } })
 }
 
-@Composable private fun SettingsCard(title: String, status: String, description: String, action: (@Composable () -> Unit)? = null) {
+@Composable private fun SettingsCard(title: String, status: String, description: String, trailing: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(14.dp),
@@ -989,7 +990,7 @@ class MainActivity : ComponentActivity() {
         Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(status, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
             Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
