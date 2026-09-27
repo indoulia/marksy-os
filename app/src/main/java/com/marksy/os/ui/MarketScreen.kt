@@ -84,7 +84,8 @@ fun MarketScreen(
                         refresh.done()
                     }
                     var range by rememberSaveable(symbol) { mutableStateOf(com.marksy.os.upstox.ChartRange.D1) }
-                    val live = rememberStockLive(symbol, range, refresh.key)
+                    var minutes by rememberSaveable(symbol, range) { mutableStateOf<Int?>(null) }
+                    val live = rememberStockLive(symbol, range, refresh.key, minutes)
                     val fundamentals = rememberStockFundamentals(live.key, refresh.key)
                     val predictions = when (val st = state) { is com.marksy.os.market.MarketDataState.Loaded -> st.value.predictions; is com.marksy.os.market.MarketDataState.Stale -> st.value.predictions; else -> null }
                     val analysisId = remember(predictions) { predictions?.let(com.marksy.os.market.MarksyCalls::analysisId) }
@@ -105,6 +106,7 @@ fun MarketScreen(
                     }
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
+                            minutes = minutes, onMinutesSelected = { minutes = it },
                             mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis)
                     }
                 }

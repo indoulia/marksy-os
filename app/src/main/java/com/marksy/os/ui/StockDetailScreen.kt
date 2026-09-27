@@ -12,6 +12,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CandlestickChart
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -66,6 +71,8 @@ fun StockDetailScreen(
     live: StockLive = StockLive(),
     range: ChartRange = ChartRange.D1,
     onRangeSelected: (ChartRange) -> Unit = {},
+    minutes: Int? = null,
+    onMinutesSelected: (Int?) -> Unit = {},
     mentions: List<com.marksy.os.data.local.NotificationEventEntity> = emptyList(),
     onEventSelected: (com.marksy.os.data.local.NotificationEventEntity) -> Unit = {},
     fundamentals: StockFundamentals = StockFundamentals(),
@@ -91,7 +98,7 @@ fun StockDetailScreen(
         rating?.let { r -> item { MarksyRatingCard(r) } }
         live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
         val levels = (calls as? MarksyCallView.Active)?.primary?.let { p -> listOfNotNull(p.targetPrice?.let { "Target" to it }, "Entry" to p.entryPrice, p.stopLoss?.let { "Stop" to it }) }.orEmpty()
-        if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels) }
+        if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels, minutes, onMinutesSelected) }
         live.quote?.let { q ->
             item { StatsCard(q, live) }
             item { TechnicalCard(live.daily, q.lastPrice) }
@@ -149,7 +156,13 @@ private fun PriceHeader(instrument: InstrumentLifecycleDto?, symbol: String?, li
 }
 
 @Composable
-private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (ChartRange) -> Unit, levels: List<Pair<String, Double>> = emptyList()) {
+private fun ChartCard(
+    live: StockLive, range: ChartRange, onRangeSelected: (ChartRange) -> Unit, levels: List<Pair<String, Double>> = emptyList(),
+    minutes: Int? = null, onMinutesSelected: (Int?) -> Unit = {}
+) {
+    val prefs = rememberChartPrefs()
+    var tuning by remember { mutableStateOf(false) }
+    if (tuning) ChartSettingsDialog(prefs, range, minutes ?: range.defaultMinutes, onMinutesSelected) { tuning = false }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
         val candles = live.candles
         var selected by remember(candles) { mutableStateOf<Int?>(null) }
@@ -169,34 +182,56 @@ private fun ChartCard(live: StockLive, range: ChartRange, onRangeSelected: (Char
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val headline = when {
                 pick != null -> "₹${money(pick.close)}  " + (pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "")
-                pct != null -> "${String.format(Locale.US, "%+.2f%%", pct)} ${if (range == ChartRange.D1) "today" else "in ${range.label}"}"
+                pct != null -> "${String.format(Locale.US, "%+.2f%%", pct)} ${when (range) { ChartRange.D1 -> "today"; ChartRange.MAX -> "all time"; else -> "in ${range.label}" }}"
                 else -> ""
             }
             Text(headline, color = tint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                ChartRange.entries.forEach { r ->
-                    val on = r == range
-                    Box(
-                        Modifier.size(30.dp).clip(CircleShape).background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised).clickable { onRangeSelected(r) },
-                        contentAlignment = Alignment.Center
-                    ) { Text(r.label, color = if (on) Color.Black else MarksyTheme.TextSecondary, fontSize = 10.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
-                }
-            }
+            ChartIconButton(if (prefs.candles) Icons.Default.CandlestickChart else Icons.Default.ShowChart, if (prefs.candles) "Show line" else "Show candles") { prefs.candles = !prefs.candles }
+            Spacer(Modifier.width(6.dp))
+            ChartIconButton(Icons.Default.Tune, "Indicators and interval", active = prefs.overlays.isNotEmpty()) { tuning = true }
         }
         val detail = when {
+            pick != null && prefs.candles -> "${ChartAxis.readout(range, pick.time)} · O ${money(pick.open)} H ${money(pick.high)} L ${money(pick.low)} C ${money(pick.close)} · Vol ${compact(pick.volume)}"
             pick != null -> "${ChartAxis.readout(range, pick.time)} · H ${money(pick.high)} · L ${money(pick.low)} · Vol ${compact(pick.volume)}"
             !candles.isNullOrEmpty() -> listOfNotNull(if (stale) "$session session" else null, "Low ₹${money(candles.minOf { it.low })} · High ₹${money(candles.maxOf { it.high })}").joinToString(" · ")
             else -> ""
         }
         Text(detail, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Box(Modifier.fillMaxWidth().height(200.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
+        val overlays = remember(candles, prefs.overlays, range) { candles?.let { chartOverlays(it, prefs.overlays, range) }.orEmpty() }
+        if (overlays.isNotEmpty()) Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            overlays.distinctBy { it.label }.forEach { o -> Text(o.label, color = o.color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+        }
+        Box(Modifier.fillMaxWidth().height(if (prefs.volume) 224.dp else 200.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when {
                 candles == null -> MarksyLoader("Loading chart...")
                 candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
-                else -> PriceChart(candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it }, levels = levels)
+                else -> PriceChart(
+                    candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it },
+                    levels = levels, candleMode = prefs.candles, overlays = overlays, showVolume = prefs.volume
+                )
+            }
+        }
+        // Ranges sit under the chart, as on Upstox and Groww, so the header keeps room for the move.
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            ChartRange.entries.forEach { r ->
+                val on = r == range
+                val fill by androidx.compose.animation.animateColorAsState(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent, label = "range")
+                Box(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(fill).clickable { onRangeSelected(r) }.padding(horizontal = 7.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text(r.label, color = if (on) Color.Black else MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
             }
         }
     }
+}
+
+@Composable
+private fun ChartIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+    Icon(
+        icon, contentDescription = label, tint = if (active) Color.Black else MarksyTheme.PrimaryEmerald,
+        modifier = Modifier.size(28.dp).clip(CircleShape).background(if (active) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+            .border(1.dp, MarksyTheme.BorderGlow, CircleShape).clickable(onClick = onClick).padding(5.dp)
+    )
 }
 
 @Composable

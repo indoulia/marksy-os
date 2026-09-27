@@ -100,24 +100,31 @@ object UpstoxCandles {
     }
 }
 
-enum class ChartRange(val label: String) {
-    D1("1D"), W1("1W"), M1("1M"), Y1("1Y"), Y5("5Y");
+enum class ChartRange(val label: String, val intervals: List<Int> = emptyList()) {
+    D1("1D", listOf(1, 3, 5, 15, 30)), W1("1W", listOf(15, 30, 60)), M1("1M"), M3("3M"), M6("6M"), Y1("1Y"), Y5("5Y"), MAX("MAX");
 
-    /** Path under the v3 API for this range's candles. */
-    fun path(key: String, today: LocalDate): String {
+    /** Candle size in minutes for the intraday ranges, when the user hasn't picked one. */
+    val defaultMinutes: Int? get() = when (this) { D1 -> 5; W1 -> 30; else -> null }
+
+    /** Path under the v3 API for this range's candles; [minutes] only applies to 1D and 1W. */
+    fun path(key: String, today: LocalDate, minutes: Int? = null): String {
         val k = pathKey(key)
+        val m = minutes?.takeIf { it in intervals } ?: defaultMinutes
         return when (this) {
-            D1 -> "historical-candle/intraday/$k/minutes/5"
-            W1 -> "historical-candle/$k/minutes/30/$today/${today.minusDays(7)}"
+            D1 -> "historical-candle/intraday/$k/minutes/$m"
+            W1 -> "historical-candle/$k/minutes/$m/$today/${today.minusDays(7)}"
             M1 -> "historical-candle/$k/days/1/$today/${today.minusMonths(1)}"
+            M3 -> "historical-candle/$k/days/1/$today/${today.minusMonths(3)}"
+            M6 -> "historical-candle/$k/days/1/$today/${today.minusMonths(6)}"
             Y1 -> "historical-candle/$k/days/1/$today/${today.minusYears(1)}"
             Y5 -> "historical-candle/$k/weeks/1/$today/${today.minusYears(5)}"
+            MAX -> "historical-candle/$k/months/1/$today/2000-01-01"
         }
     }
 
     /** Before the open and on holidays intraday is empty, so 1D shows the last session from recent history. */
-    fun fallbackPath(key: String, today: LocalDate): String =
-        "historical-candle/${pathKey(key)}/minutes/5/$today/${today.minusDays(7)}"
+    fun fallbackPath(key: String, today: LocalDate, minutes: Int? = null): String =
+        "historical-candle/${pathKey(key)}/minutes/${minutes?.takeIf { it in intervals } ?: defaultMinutes}/$today/${today.minusDays(7)}"
 }
 
 /** Instrument key for a URL path segment: index keys carry spaces, which must be %20 there, not '+'. */

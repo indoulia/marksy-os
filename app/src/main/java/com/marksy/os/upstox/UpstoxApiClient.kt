@@ -24,10 +24,10 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxQuote.parse(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
     }
 
-    suspend fun candles(instrumentKey: String, range: ChartRange, today: java.time.LocalDate, zone: java.time.ZoneId): List<Candle> = withContext(Dispatchers.IO) {
-        val candles = UpstoxCandles.parse(get("$BASE_URL/${range.path(instrumentKey, today)}"))
+    suspend fun candles(instrumentKey: String, range: ChartRange, today: java.time.LocalDate, zone: java.time.ZoneId, minutes: Int? = null): List<Candle> = withContext(Dispatchers.IO) {
+        val candles = UpstoxCandles.parse(get("$BASE_URL/${range.path(instrumentKey, today, minutes)}"))
         if (range != ChartRange.D1 || candles.isNotEmpty()) candles
-        else UpstoxCandles.lastSession(UpstoxCandles.parse(get("$BASE_URL/${range.fallbackPath(instrumentKey, today)}")), zone)
+        else UpstoxCandles.lastSession(UpstoxCandles.parse(get("$BASE_URL/${range.fallbackPath(instrumentKey, today, minutes)}")), zone)
     }
 
     /** Monthly candles back to 2000 (Upstox's earliest), for seasonality and all-time figures. */
