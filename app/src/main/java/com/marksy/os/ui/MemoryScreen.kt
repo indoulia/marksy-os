@@ -72,7 +72,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
     }
 
     if (confirmErase) {
-        AlertDialog(
+        MarksyDialog(
             onDismissRequest = { confirmErase = false },
             title = { Text("Erase learned memory?") },
             text = { Text("Everything Marksy learned is deleted and cannot be rebuilt from notifications that have already expired. Entries you corrected or set stay.") },
@@ -83,7 +83,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
 
     renaming?.let { e ->
         var text by remember(e.id) { mutableStateOf(e.label) }
-        AlertDialog(
+        MarksyDialog(
             onDismissRequest = { renaming = null },
             title = { Text("Correct memory") },
             text = { OutlinedTextField(value = text, onValueChange = { text = it.take(60) }, singleLine = true) },

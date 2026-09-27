@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -154,9 +153,8 @@ fun TimeZoneConverterDialog(secondZone: ZoneId, onDismiss: () -> Unit) {
     var seed by remember { mutableStateOf(ZonedDateTime.now(secondZone).truncatedTo(ChronoUnit.HOURS).plusHours(1)) }
     val toZone = if (fromZone == secondZone) WorldClock.HOME_ZONE else secondZone
 
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.SurfaceRaised,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Time zone converter", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -260,9 +258,8 @@ private fun ZoneLabel(time: ZonedDateTime, zone: ZoneId) {
 fun SecondZonePickerDialog(onDismiss: () -> Unit) {
     val current by WorldClockSettings.secondZone
     val now = remember { ZonedDateTime.now() }
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.SurfaceRaised,
         title = { Text("Second clock", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold) },
         text = {
             LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {

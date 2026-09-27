@@ -7,11 +7,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.BookmarkAdded
 import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
@@ -303,8 +300,7 @@ private suspend fun loadTraits(context: Context, symbol: String): StockTraits = 
     StockTraits(dto?.companyName, dto?.sector ?: profile?.sector, profile?.marketCapCr)
 }
 
-/** Marksy-styled popup, same look as the notification detail dialog. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Watchlist popups on the shared [MarksyDialog]; content scrolls so pills and the keyboard fit. */
 @Composable
 private fun WatchDialog(
     title: String,
@@ -315,20 +311,17 @@ private fun WatchDialog(
     confirmColor: Color = MarksyTheme.PrimaryEmerald,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    BasicAlertDialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MarksyTheme.Surface, border = BorderStroke(1.dp, MarksyTheme.BorderGlow)) {
-            Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(title, color = MarksyTheme.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                content()
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) }
-                    TextButton(enabled = confirmEnabled, onClick = onConfirm) {
-                        Text(confirmLabel, color = if (confirmEnabled) confirmColor else MarksyTheme.TextMuted, fontWeight = FontWeight.Bold)
-                    }
-                }
+    MarksyDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
+        confirmButton = {
+            TextButton(enabled = confirmEnabled, onClick = onConfirm) {
+                Text(confirmLabel, color = if (confirmEnabled) confirmColor else MarksyTheme.TextMuted, fontWeight = FontWeight.Bold)
             }
         }
-    }
+    )
 }
 
 /** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */

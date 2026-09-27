@@ -50,7 +50,7 @@ class WhatsAppSettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         refreshState()
         setContent {
-            MaterialTheme {
+            com.marksy.os.ui.MarksyMaterialTheme { androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = com.marksy.os.ui.MarksyTheme.Background) {
                 WhatsAppSettingsScreen(
                     isEnabled = accessibilityEnabled,
                     senders = watchedSenders,
@@ -65,7 +65,7 @@ class WhatsAppSettingsActivity : ComponentActivity() {
                     },
                     onBack = { finish() }
                 )
-            }
+            } }
         }
     }
 

@@ -157,7 +157,7 @@ fun RulesScreen(padding: PaddingValues) {
     testing?.let { rule -> RuleTestDialog(rule, runner, onDismiss = { testing = null }) }
 
     deleteRule?.let { rule ->
-        AlertDialog(
+        MarksyDialog(
             onDismissRequest = { deleteRule = null },
             title = { Text("Delete rule?", color = MarksyTheme.TextPrimary) },
             text = { Text("\"${rule.name}\" will stop applying to newly captured events.", color = MarksyTheme.TextSecondary) },
@@ -168,8 +168,7 @@ fun RulesScreen(padding: PaddingValues) {
                     deleteRule = null
                 }) { Text("Delete", color = MarksyTheme.RedUrgent) }
             },
-            dismissButton = { TextButton(onClick = { deleteRule = null }) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
-            containerColor = MarksyTheme.SurfaceRaised
+            dismissButton = { TextButton(onClick = { deleteRule = null }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
         )
     }
 }
@@ -241,7 +240,7 @@ private fun RuleEditorDialog(
     val cleanText = containsText.trim().take(120).ifBlank { null }
     val valid = cleanName.isNotBlank() && treeValid && (cleanCategory != null || cleanSource != null || cleanText != null || editedCondition != null)
 
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Add Custom Rule" else "Edit Rule", color = MarksyTheme.TextPrimary) },
         text = {
@@ -291,8 +290,7 @@ private fun RuleEditorDialog(
                 }
             ) { Text("Save", color = MarksyTheme.PrimaryEmerald) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
-        containerColor = MarksyTheme.SurfaceRaised
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
     )
 }
 
@@ -303,7 +301,7 @@ private fun RuleTestDialog(rule: RuleEngine.Rule, runner: RuleRunner, onDismiss:
     var applied by remember { mutableStateOf<Int?>(null) }
     val result by produceState<Pair<Int, List<RuleEngine.SimulationHit>>?>(null, refresh) { value = runCatching { runner.simulate(rule) }.getOrNull() }
     val executions by produceState(0, refresh) { value = runCatching { runner.executionCount(rule.id) }.getOrDefault(0) }
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Test \"${rule.name}\" (v${rule.version})", color = MarksyTheme.TextPrimary) },
         text = {
@@ -327,8 +325,7 @@ private fun RuleTestDialog(rule: RuleEngine.Rule, runner: RuleRunner, onDismiss:
                 onClick = { scope.launch { applied = runCatching { runner.applyToHistory(rule) }.getOrNull(); refresh++ } }
             ) { Text("Apply to these", color = MarksyTheme.PrimaryEmerald) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } },
-        containerColor = MarksyTheme.SurfaceRaised
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } }
     )
 }
 
