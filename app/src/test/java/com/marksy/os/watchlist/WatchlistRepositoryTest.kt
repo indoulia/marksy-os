@@ -39,6 +39,25 @@ class WatchlistRepositoryTest {
         assertEquals(16, repo.observeItems().first().size)
     }
 
+    @Test fun movingKeepsTheStockWhenTheTargetIsFullAndMergesWhenItIsAlreadyThere() = runBlocking {
+        val from = repo.createList("Defence")!!
+        val full = repo.createList("Full")!!
+        repeat(WatchlistRepository.MAX_STOCKS) { repo.add(full, "S$it", null) }
+        repo.add(from, "HAL", "Hindustan Aeronautics")
+        assertEquals(WatchAdd.FULL, repo.move(from, full, "HAL"))
+        assertEquals(listOf(from), repo.observeItems().first().filter { it.symbol == "HAL" }.map { it.watchlistId })
+
+        val psu = repo.createList("PSU")!!
+        assertEquals(WatchAdd.ADDED, repo.move(from, psu, "HAL"))
+        val moved = repo.observeItems().first().single { it.symbol == "HAL" }
+        assertEquals(psu, moved.watchlistId)
+        assertEquals("Hindustan Aeronautics", moved.name)
+
+        repo.add(from, "HAL", null)
+        assertEquals(WatchAdd.ALREADY_THERE, repo.move(from, psu, "HAL"))
+        assertEquals(listOf(psu), repo.observeItems().first().filter { it.symbol == "HAL" }.map { it.watchlistId })
+    }
+
     @Test fun listNamesAreUniqueIgnoringCaseAndDeletingAListDropsItsStocks() = runBlocking {
         val id = repo.createList(" SmallCap ")!!
         assertNull(repo.createList("smallcap"))

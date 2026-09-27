@@ -24,6 +24,9 @@ class WatchlistRepository(private val dao: WatchlistDao, private val clock: () -
 
     suspend fun remove(listId: Long, symbol: String) { dao.removeItem(listId, symbol) }
 
+    suspend fun move(fromListId: Long, toListId: Long, symbol: String): WatchAdd =
+        dao.moveCapped(fromListId, symbol, toListId, clock(), MAX_STOCKS)
+
     companion object {
         const val MAX_STOCKS = 15
     }

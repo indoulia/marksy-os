@@ -55,8 +55,25 @@ fun SwipeActionsRow(
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
+) = SwipeActionsRow(
+    listOf(
+        SwipeTrayAction(Icons.Default.Delete, "Delete", MarksyTheme.RedUrgent, onDelete),
+        SwipeTrayAction(Icons.Default.Archive, "Archive", MarksyTheme.PrimaryEmerald, onArchive),
+        SwipeTrayAction(Icons.Default.VisibilityOff, "Hide", MarksyTheme.TextSecondary, onHide)
+    ),
+    modifier, content
+)
+
+data class SwipeTrayAction(val icon: ImageVector, val label: String, val tint: Color, val onClick: () -> Unit)
+
+/** Swipe either way to reveal [actions]; nothing happens until one is tapped. */
+@Composable
+fun SwipeActionsRow(
+    actions: List<SwipeTrayAction>,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
 ) {
-    val trayPx = with(LocalDensity.current) { (ActionWidth * 3).toPx() }
+    val trayPx = with(LocalDensity.current) { (ActionWidth * actions.size).toPx() }
     val density = LocalDensity.current
     val nudgePx = with(density) { NudgeThreshold.toPx() }
     val openPx = with(density) { OpenThreshold.toPx() }
@@ -78,9 +95,7 @@ fun SwipeActionsRow(
                 horizontalArrangement = if (offset.value > 0) Arrangement.Start else Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SwipeAction(Icons.Default.Delete, "Delete", MarksyTheme.RedUrgent) { act(onDelete) }
-                SwipeAction(Icons.Default.Archive, "Archive", MarksyTheme.PrimaryEmerald) { act(onArchive) }
-                SwipeAction(Icons.Default.VisibilityOff, "Hide", MarksyTheme.TextSecondary) { act(onHide) }
+                actions.forEach { a -> SwipeAction(a.icon, a.label, a.tint) { act(a.onClick) } }
             }
         }
         Box(

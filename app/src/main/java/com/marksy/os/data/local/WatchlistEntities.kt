@@ -69,6 +69,17 @@ interface WatchlistDao {
         return WatchAdd.ADDED
     }
 
+    @Query("SELECT name FROM watchlist_items WHERE watchlistId = :listId AND symbol = :symbol")
+    suspend fun nameOf(listId: Long, symbol: String): String?
+
+    /** Moves only if the target has room; a stock already in the target just leaves the source. */
+    @Transaction
+    suspend fun moveCapped(fromListId: Long, symbol: String, toListId: Long, addedAt: Long, max: Int): WatchAdd {
+        val result = addCapped(WatchlistItemEntity(toListId, symbol, nameOf(fromListId, symbol), addedAt), max)
+        if (result != WatchAdd.FULL) removeItem(fromListId, symbol)
+        return result
+    }
+
     @Transaction
     suspend fun deleteList(listId: Long) {
         clearList(listId)

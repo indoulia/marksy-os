@@ -42,6 +42,7 @@ fun MarketScreen(
     onTabSelected: (String) -> Unit,
     selectedSymbol: String?,
     onSymbolSelected: (String?) -> Unit,
+    onSymbolBack: () -> Unit = { onSymbolSelected(null) },
     stockQuery: String = "",
     marketEvents: List<NotificationEventEntity> = emptyList(),
     stockEvents: List<NotificationEventEntity> = emptyList(),
@@ -49,7 +50,7 @@ fun MarketScreen(
 ) {
     val tab = MarketTab.entries.firstOrNull { it.name == tabName } ?: MarketTab.OVERVIEW
 
-    BackHandler(enabled = selectedSymbol != null) { onSymbolSelected(null) }
+    BackHandler(enabled = selectedSymbol != null) { onSymbolBack() }
     // The open stock's trade ticket defaults, refreshed as its price and Marksy call load.
     var stockTrade by remember { mutableStateOf<TradeIntent?>(null) }
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
@@ -151,13 +152,16 @@ internal fun StockSuggestions(
             list == null -> item { MarksyLoader("Searching…") }
             list.isEmpty() -> item { EmptyState("No NSE symbol matches \"$query\"", emptyHint) }
             else -> items(list, key = { "sym-$it" }) { symbol ->
-                Text(
-                    symbol,
-                    color = MarksyTheme.TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.fillMaxWidth().clickable { onSymbolSelected(symbol) }.padding(vertical = 12.dp)
-                )
+                Row(Modifier.fillMaxWidth().clickable { onSymbolSelected(symbol) }, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(
+                        symbol,
+                        color = MarksyTheme.TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f).padding(vertical = 12.dp)
+                    )
+                    WatchlistButton(symbol)
+                }
             }
         }
     }

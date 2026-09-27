@@ -217,6 +217,7 @@ private fun TradingSignalCard(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        WatchlistButton(symbol, Modifier.padding(start = 2.dp))
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

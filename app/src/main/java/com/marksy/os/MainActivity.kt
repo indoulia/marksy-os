@@ -213,6 +213,10 @@ class MainActivity : ComponentActivity() {
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
+        // Back from a stock returns to where it was opened: earlier stocks (peers), then the page it came from.
+        var stockTrail by rememberSaveable { mutableStateOf(listOf<String>()) }
+        var stockReturn by rememberSaveable { mutableStateOf<String?>(null) }
+        var stockReturnMarketTab by rememberSaveable { mutableStateOf<String?>(null) }
         var showTimeline by rememberSaveable { mutableStateOf(false) }
         var showCalendar by rememberSaveable { mutableStateOf(false) }
         var showInsights by rememberSaveable { mutableStateOf(false) }
@@ -369,6 +373,24 @@ class MainActivity : ComponentActivity() {
             stockQuery = marketSymbol.orEmpty()
         }
         LaunchedEffect(searchPage) { closeHeaderSearch() }
+        // origin: a tab index, or "ask".
+        fun openStockFrom(symbol: String, origin: String) {
+            stockReturn = origin; stockReturnMarketTab = marketTabName; stockTrail = emptyList()
+            showAsk = false; marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
+        }
+        fun stockBack() {
+            val previous = stockTrail.lastOrNull()
+            val origin = stockReturn
+            when {
+                previous != null -> { stockTrail = stockTrail.dropLast(1); marketSymbol = previous; stockQuery = previous }
+                origin != null -> {
+                    stockReturn = null; marketSymbol = null; stockQuery = ""
+                    marketTabName = stockReturnMarketTab ?: MarketTab.OVERVIEW.name
+                    if (origin == "ask") showAsk = true else selectedTab = origin.toInt()
+                }
+                else -> { marketSymbol = null; stockQuery = "" }
+            }
+        }
         val onHome = selectedTab == 0 && !hostOpen
 
         // Live prices from the user's own Upstox token over one WebSocket, open only while the app
@@ -398,6 +420,16 @@ class MainActivity : ComponentActivity() {
         val headerState = rememberCollapsingHeaderState()
         LaunchedEffect(screenTitle) { headerState.reset() }
 
+        com.marksy.os.ui.WatchlistAddHost(
+            repository = watchlist,
+            lists = watchlists,
+            items = watchItems,
+            currentListId = if (selectedTab == 2 && !hostOpen) com.marksy.os.ui.watchlistCurrentId(watchView, watchlists) else null,
+            onAdded = { listId, message ->
+                if (selectedTab == 2 && !hostOpen) { watchView = listId.toString(); closeHeaderSearch() }
+                else scope.launch { snackbar.showSnackbar(message, duration = SnackbarDuration.Short) }
+            }
+        ) {
         Scaffold(
             // Home's header is already the first item of its own list, so it scrolls natively.
             modifier = if (!onHome) Modifier.nestedScroll(headerState.connection) else Modifier,
@@ -498,17 +530,20 @@ class MainActivity : ComponentActivity() {
                     contentColor = MarksyTheme.TextSecondary
                 ) {
                     tabs.forEachIndexed { index, (label, icon) ->
+                        // A header page (Plan, Ask, Timeline…) covers the tab, so no tab shows as current.
+                        val current = selectedTab == index && !hostOpen
                         NavigationBarItem(
-                            selected = selectedTab == index,
+                            selected = current,
                             onClick = {
                                 // Tapping a tab also closes any open sub-screen (Timeline, Calendar, …).
                                 showTimeline = false; showCalendar = false; showInsights = false
                                 showRules = false; showDigest = false; showGatewaySettings = false
                                 showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false; showPlan = false
+                                stockReturn = null; stockTrail = emptyList()
                                 selectedTab = index
                             },
                             icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label, fontSize = 11.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium) },
+                            label = { Text(label, fontSize = 11.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Color.Black,
                                 selectedTextColor = MarksyTheme.PrimaryEmerald,
@@ -585,7 +620,7 @@ class MainActivity : ComponentActivity() {
                             AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); showPlan = true }
                             AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
                             AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.OVERVIEW.name; selectedTab = 4 }
-                            AskMarksy.Page.STOCK -> { marketTabName = MarketTab.STOCKS.name; marketSymbol = a.arg; stockQuery = a.arg.orEmpty(); selectedTab = 4 }
+                            AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.STOCKS.name; selectedTab = 4 }
                             AskMarksy.Page.SETTINGS -> selectedTab = tabs.size
                         }
                     }
@@ -657,24 +692,28 @@ class MainActivity : ComponentActivity() {
                     view = watchView,
                     onViewSelected = { watchView = it },
                     query = watchQuery,
-                    onSearchDone = { closeHeaderSearch() },
-                    onOpenStock = { marketTabName = MarketTab.STOCKS.name; marketSymbol = it; stockQuery = it; selectedTab = 4 }
+                    onOpenStock = { openStockFrom(it, "2") }
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
                         onFilterSelected = { tradingFilter = it },
-                        onOpenStock = { marketTabName = MarketTab.STOCKS.name; marketSymbol = it; stockQuery = it; selectedTab = 4 }
+                        onOpenStock = { openStockFrom(it, "3") }
                     ) { selectedTradingInsight = it }
                 }
                 selectedTab == 4 -> MarketScreen(
                     repository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                     padding = padding,
                     tabName = marketTabName,
-                    onTabSelected = { marketTabName = it },
+                    onTabSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null },
                     selectedSymbol = marketSymbol,
-                    onSymbolSelected = { marketSymbol = it; stockQuery = it ?: ""; if (it != null) headerSearchOpen = false },
+                    onSymbolSelected = {
+                        val from = marketSymbol
+                        if (it != null && from != null && it != from) stockTrail = stockTrail + from
+                        marketSymbol = it; stockQuery = it ?: ""; if (it != null) headerSearchOpen = false
+                    },
+                    onSymbolBack = ::stockBack,
                     stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
@@ -705,6 +744,7 @@ class MainActivity : ComponentActivity() {
                     padding = padding
                 )
             }
+        }
         }
 
         selectedEvent?.let { opened ->

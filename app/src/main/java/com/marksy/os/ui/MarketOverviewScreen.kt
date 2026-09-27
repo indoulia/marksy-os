@@ -75,12 +75,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.overviewContent(summa
     // Upstox has no movers endpoint, so rank NIFTY 50 constituents by their live change instead.
     val ranked = Nifty50.SYMBOLS.mapNotNull { s -> live[s]?.takeIf { it.changePct != null }?.let { s to it } }.sortedByDescending { it.second.changePct }
     if (ranked.size >= 12) {
-        item(key = "g-gainers") { QuoteGridCard("Top gainers · NIFTY 50", ranked.take(6).map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }) }
-        item(key = "g-losers") { QuoteGridCard("Top losers · NIFTY 50", ranked.takeLast(6).reversed().map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }) }
+        item(key = "g-gainers") { QuoteGridCard("Top gainers · NIFTY 50", ranked.take(6).map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true) }
+        item(key = "g-losers") { QuoteGridCard("Top losers · NIFTY 50", ranked.takeLast(6).reversed().map { (s, q) -> Triple(s, "₹" + formatIndexValue(q.lastPrice), q.changePct) }, watchable = true) }
     } else {
         fun movers(list: List<MarketMoverDto>) = list.map { m -> val q = live[m.symbol]; Triple(m.symbol, (q?.lastPrice ?: m.price)?.let { "₹" + formatIndexValue(it) } ?: "—", q?.changePct ?: m.changePercent) }
-        if (summary.topGainers.isNotEmpty()) item(key = "g-gainers") { QuoteGridCard("Gainers · Marksy", movers(summary.topGainers)) }
-        if (summary.topLosers.isNotEmpty()) item(key = "g-losers") { QuoteGridCard("Losers · Marksy", movers(summary.topLosers)) }
+        if (summary.topGainers.isNotEmpty()) item(key = "g-gainers") { QuoteGridCard("Gainers · Marksy", movers(summary.topGainers), watchable = true) }
+        if (summary.topLosers.isNotEmpty()) item(key = "g-losers") { QuoteGridCard("Losers · Marksy", movers(summary.topLosers), watchable = true) }
     }
     item { Text(freshnessLabel, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
 }

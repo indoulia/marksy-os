@@ -2,6 +2,11 @@ package com.marksy.os.ui
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.BookmarkAdded
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ColumnScope
@@ -30,13 +35,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,6 +79,61 @@ const val WATCH_VIEW_PORTFOLIO = "portfolio"
 private fun currentList(view: String, lists: List<WatchlistEntity>): WatchlistEntity? =
     if (view == WATCH_VIEW_PORTFOLIO) null else lists.firstOrNull { it.id.toString() == view } ?: lists.firstOrNull()
 
+fun watchlistCurrentId(view: String, lists: List<WatchlistEntity>): Long? = currentList(view, lists)?.id
+
+/** What stock rows need to show and open the add popup; a CompositionLocal so rows deep in any screen reach it. */
+class WatchlistAdder(val watched: Set<String>, val open: (String) -> Unit)
+
+val LocalWatchlistAdder = compositionLocalOf<WatchlistAdder?> { null }
+
+/** Small bookmark on any stock row: filled once the stock is in a watchlist; opens the add popup. */
+@Composable
+fun WatchlistButton(symbol: String, modifier: Modifier = Modifier) {
+    val adder = LocalWatchlistAdder.current ?: return
+    val s = symbol.trim().uppercase()
+    val watched = s in adder.watched
+    Icon(
+        if (watched) Icons.Filled.BookmarkAdded else Icons.Outlined.BookmarkAdd,
+        contentDescription = if (watched) "$s is in a watchlist" else "Add $s to a watchlist",
+        tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
+        modifier = modifier.size(30.dp).clip(CircleShape).clickable { adder.open(s) }.padding(5.dp)
+    )
+}
+
+/** The app's one add-to-watchlist popup; [onAdded] gets the list id and a confirmation line. */
+@Composable
+fun WatchlistAddHost(
+    repository: WatchlistRepository,
+    lists: List<WatchlistEntity>,
+    items: List<WatchlistItemEntity>,
+    currentListId: Long?,
+    onAdded: (Long, String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    var adding by rememberSaveable { mutableStateOf<String?>(null) }
+    val watched = remember(items) { items.mapTo(HashSet()) { it.symbol } }
+    val adder = remember(watched) { WatchlistAdder(watched) { adding = it.trim().uppercase() } }
+    CompositionLocalProvider(LocalWatchlistAdder provides adder, content = content)
+    adding?.let { symbol ->
+        AddToWatchlistDialog(
+            symbol = symbol,
+            lists = lists,
+            counts = items.groupingBy { it.watchlistId }.eachCount(),
+            holding = items.filter { it.symbol == symbol }.mapTo(HashSet()) { it.watchlistId },
+            current = currentListId,
+            onDismiss = { adding = null },
+            onAdd = { listId, newName, name ->
+                val id = listId ?: newName?.let { repository.createList(it) } ?: return@AddToWatchlistDialog "A list with that name already exists"
+                when (repository.add(id, symbol, name)) {
+                    WatchAdd.ADDED -> { adding = null; onAdded(id, "Added $symbol to ${lists.firstOrNull { it.id == id }?.name ?: newName?.trim()}"); null }
+                    WatchAdd.ALREADY_THERE -> "$symbol is already in that list"
+                    WatchAdd.FULL -> "That list already has ${WatchlistRepository.MAX_STOCKS} stocks"
+                }
+            }
+        )
+    }
+}
+
 /** Title superscript: the open list and how full it is, or Portfolio. */
 fun watchlistLabel(view: String, lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): String? {
     if (view == WATCH_VIEW_PORTFOLIO) return "Portfolio"
@@ -93,21 +151,21 @@ fun WatchlistScreen(
     view: String,
     onViewSelected: (String) -> Unit,
     query: String,
-    onSearchDone: () -> Unit,
     onOpenStock: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val list = currentList(view, lists)
     val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
-    var adding by rememberSaveable { mutableStateOf<String?>(null) }
+    val adder = LocalWatchlistAdder.current
     var creating by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<WatchlistEntity?>(null) }
+    var moving by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         val q = query.trim()
         when {
-            q.length >= 2 -> StockSuggestions(q, inner, onSymbolSelected = { adding = it }, emptyHint = "Try the company's NSE symbol, e.g. HAL.")
+            q.length >= 2 -> StockSuggestions(q, inner, onSymbolSelected = { adder?.open(it) }, emptyHint = "Try the company's NSE symbol, e.g. HAL.")
             view == WATCH_VIEW_PORTFOLIO -> Box(Modifier.padding(18.dp)) {
                 EmptyState("Portfolio — coming soon", "Your holdings and their performance will show here.")
             }
@@ -119,7 +177,8 @@ fun WatchlistScreen(
                 emptyName = list.name,
                 padding = inner,
                 onOpen = onOpenStock,
-                onRemove = { symbol -> scope.launch { repository.remove(list.id, symbol) } }
+                onRemove = { symbol -> scope.launch { repository.remove(list.id, symbol) } },
+                onMove = { moving = it }
             )
         }
         OneHandControls(
@@ -134,19 +193,22 @@ fun WatchlistScreen(
         )
     }
 
-    adding?.let { symbol ->
+    val from = list
+    moving?.takeIf { from != null }?.let { symbol ->
         AddToWatchlistDialog(
             symbol = symbol,
             lists = lists,
             counts = counts,
-            current = list?.id,
-            onDismiss = { adding = null },
-            onAdd = { listId, newName, name ->
+            holding = items.filter { it.symbol == symbol }.mapTo(HashSet()) { it.watchlistId },
+            current = null,
+            title = "Move $symbol",
+            confirmLabel = "Move",
+            onDismiss = { moving = null },
+            onAdd = { listId, newName, _ ->
                 val id = listId ?: newName?.let { repository.createList(it) } ?: return@AddToWatchlistDialog "A list with that name already exists"
-                when (repository.add(id, symbol, name)) {
-                    WatchAdd.ADDED -> { adding = null; onViewSelected(id.toString()); onSearchDone(); null }
-                    WatchAdd.ALREADY_THERE -> "$symbol is already in that list"
+                when (repository.move(from!!.id, id, symbol)) {
                     WatchAdd.FULL -> "That list already has ${WatchlistRepository.MAX_STOCKS} stocks"
+                    else -> { moving = null; null }
                 }
             }
         )
@@ -171,9 +233,8 @@ fun WatchlistScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit) {
+private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit) {
     val quotes = rememberUpstoxQuotes(remember(rows) { rows.map { it.symbol } })
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
@@ -182,17 +243,12 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
     ) {
         if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Tap search above to add up to ${WatchlistRepository.MAX_STOCKS} stocks.") }
         items(rows, key = { "w-${it.watchlistId}-${it.symbol}" }) { row ->
-            val swipe = rememberSwipeToDismissBoxState()
-            LaunchedEffect(swipe.currentValue) { if (swipe.currentValue == SwipeToDismissBoxValue.EndToStart) onRemove(row.symbol) }
-            SwipeToDismissBox(
-                state = swipe,
-                enableDismissFromStartToEnd = false,
-                backgroundContent = {
-                    Box(
-                        Modifier.fillMaxSize().background(MarksyTheme.RedUrgent, RoundedCornerShape(14.dp)).padding(end = 16.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) { Icon(Icons.Default.Delete, contentDescription = "Remove ${row.symbol}", tint = MarksyTheme.TextPrimary) }
-                }
+            // Same swipe tray as Home: actions show first and only run when tapped.
+            SwipeActionsRow(
+                listOf(
+                    SwipeTrayAction(Icons.Default.Delete, "Remove ${row.symbol}", MarksyTheme.RedUrgent) { onRemove(row.symbol) },
+                    SwipeTrayAction(Icons.Default.SwapHoriz, "Move ${row.symbol} to another list", MarksyTheme.PrimaryEmerald) { onMove(row.symbol) }
+                )
             ) { WatchRow(row, quotes[row.symbol]) { onOpen(row.symbol) } }
         }
     }
@@ -200,7 +256,7 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
 
 @Composable
 private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         Modifier.fillMaxWidth().background(MarksyTheme.Surface, shape).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -304,25 +360,29 @@ private fun AddToWatchlistDialog(
     symbol: String,
     lists: List<WatchlistEntity>,
     counts: Map<Long, Int>,
+    holding: Set<Long>,
     current: Long?,
     onDismiss: () -> Unit,
+    title: String = "Add $symbol",
+    confirmLabel: String = "Add",
     onAdd: suspend (listId: Long?, newName: String?, name: String?) -> String?
 ) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val traits by produceState<StockTraits?>(null, symbol) { value = loadTraits(context, symbol) }
-    var chosen by remember(symbol) { mutableStateOf(WatchlistPicker.pick(lists, counts, null, null, current)) }
+    val open = remember(lists, holding) { lists.filterNot { it.id in holding } }
+    var chosen by remember(symbol) { mutableStateOf(WatchlistPicker.pick(open, counts, null, null, current)) }
     var userPicked by remember(symbol) { mutableStateOf(false) }
     var newName by remember(symbol) { mutableStateOf("") }
     var error by remember(symbol) { mutableStateOf<String?>(null) }
     LaunchedEffect(traits) {
         val t = traits ?: return@LaunchedEffect
-        if (!userPicked) chosen = WatchlistPicker.pick(lists, counts, t.sector, t.marketCapCr, current)
+        if (!userPicked) chosen = WatchlistPicker.pick(open, counts, t.sector, t.marketCapCr, current)
     }
     val valid = newName.isNotBlank() || chosen != null
     WatchDialog(
-        title = "Add $symbol",
-        confirmLabel = "Add",
+        title = title,
+        confirmLabel = confirmLabel,
         confirmEnabled = valid,
         onConfirm = { scope.launch { error = onAdd(chosen.takeIf { newName.isBlank() }, newName.takeIf { it.isNotBlank() }, traits?.name) } },
         onDismiss = onDismiss
@@ -335,7 +395,8 @@ private fun AddToWatchlistDialog(
         if (lists.isNotEmpty()) PillRow {
             lists.forEach { l ->
                 val n = counts[l.id] ?: 0
-                Pill("${l.name} $n/${WatchlistRepository.MAX_STOCKS}", selected = chosen == l.id && newName.isBlank(), enabled = n < WatchlistRepository.MAX_STOCKS) {
+                val has = l.id in holding
+                Pill(if (has) "${l.name} ✓" else "${l.name} $n/${WatchlistRepository.MAX_STOCKS}", selected = chosen == l.id && newName.isBlank(), enabled = !has && n < WatchlistRepository.MAX_STOCKS) {
                     chosen = l.id; userPicked = true; newName = ""
                 }
             }
