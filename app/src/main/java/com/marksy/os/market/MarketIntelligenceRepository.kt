@@ -22,6 +22,12 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun activePredictions(cursor: String? = null): MarketDataState<ActivePredictionPageDto> =
         fetch(emptyCheck = { it.items.isEmpty() }) { it.activePredictions(cursor) }
 
+    suspend fun closedPredictions(cursor: String? = null): MarketDataState<ClosedPredictionPageDto> =
+        fetch(emptyCheck = { it.items.isEmpty() }) { it.closedPredictions(cursor) }
+
+    suspend fun performanceSummary(range: String = "30d"): MarketDataState<PerformanceSummaryDto> =
+        fetch { it.performanceSummary(range) ?: throw java.io.IOException("Track record unavailable") }
+
     suspend fun ipos(stage: String? = null, query: String? = null): MarketDataState<List<IpoListItemDto>> =
         fetch(emptyCheck = { it.isEmpty() }) { it.ipos(stage, query) }
 

@@ -44,9 +44,9 @@ class MarksyTipsApiClient(
         val data = execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data")
         val comparison = data.optJSONObject("comparison")
         val marksyView = data.optJSONObject("marksyView")
-        val verdict = comparison?.optString("verdict")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
+        val verdict = comparison?.str("verdict")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
         val reasons = comparison?.stringList("verdictReasons").orEmpty()
-        val recommendation = marksyView?.optString("recommendation")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() }
+        val recommendation = marksyView?.str("recommendation")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() }
         val summary = buildString {
             append(verdict)
             if (reasons.isNotEmpty()) append(" — ").append(reasons.joinToString("; "))
@@ -65,21 +65,21 @@ class MarksyTipsApiClient(
             probability = marksyView?.finiteDouble("probability"),
             opportunityScore = marksyView?.finiteDouble("opportunityScore"),
             trustScore = marksyView?.finiteDouble("trustScore"),
-            trustQuality = marksyView?.optString("trustQuality")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            uncertaintyLevel = marksyView?.optString("uncertaintyLevel")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            trustQuality = marksyView?.str("trustQuality")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            uncertaintyLevel = marksyView?.str("uncertaintyLevel")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             entryPrice = marksyView?.finiteDouble("entryPrice"),
             targetPrice = marksyView?.finiteDouble("targetPrice"),
             stopLoss = marksyView?.finiteDouble("stopLoss"),
             upsidePct = marksyView?.finiteDouble("upsidePct"),
             horizonDays = marksyView?.optInt("horizonDays")?.takeIf { it > 0 },
-            levelState = marksyView?.optString("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            modelVersion = marksyView?.optString("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            asOf = marksyView?.optString("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            levelState = marksyView?.str("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            modelVersion = marksyView?.str("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            asOf = marksyView?.str("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             failedCriteria = marksyView?.stringList("failedCriteria").orEmpty(),
-            decisionOutcome = marksyView?.optString("decisionOutcome")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            decisionOutcome = marksyView?.str("decisionOutcome")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             evidence = marksyView?.stringList("evidence").orEmpty(),
-            marksySource = comparison?.optString("marksySource")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            marksyView = comparison?.optString("marksyView")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            marksySource = comparison?.str("marksySource")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
+            marksyView = comparison?.str("marksyView")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() },
             tipId = tipId.boundedText(MAX_SHORT_TEXT_CHARS),
             rawResponseJson = data.toString().take(MAX_RESPONSE_CHARS)
         )
@@ -179,3 +179,6 @@ private fun JSONObject.stringList(name: String): List<String> = optJSONArray(nam
 }.orEmpty()
 
 private fun String.boundedText(maxChars: Int): String = take(maxChars)
+
+// Android's optString turns a JSON null into the text "null".
+private fun JSONObject.str(name: String): String = if (isNull(name)) "" else optString(name)
