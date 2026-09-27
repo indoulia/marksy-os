@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -59,9 +60,17 @@ object UpstoxFeed {
         return weekday && !t.isBefore(java.time.LocalTime.of(9, 15)) && t.isBefore(java.time.LocalTime.of(15, 30))
     }
 
-    private val wanted = linkedSetOf<String>()
+    private val subscriptions = FeedSubscriptions()
     @Volatile private var socket: WebSocket? = null
     private var guid = 0
+
+    private val _stats = MutableStateFlow(FeedStats())
+    val stats: StateFlow<FeedStats> = _stats.asStateFlow()
+
+    // Ticks land in [pending] and reach [quotes] at most every PUBLISH_MS, so a busy session can't recompose every frame.
+    private val publisher = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default)
+    private val pending = HashMap<String, UpstoxLtp>()
+    @Volatile private var publishScheduled = false
 
     private val http = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
@@ -72,16 +81,28 @@ object UpstoxFeed {
     fun clear() {
         socket?.cancel()
         socket = null
+        synchronized(pending) { pending.clear() }
         _quotes.value = emptyMap()
         _lastTickAt.value = 0L
         _status.value = Status.Idle
     }
 
-    /** Adds keys to the live subscription; safe to call on every recomposition. */
-    fun watch(keys: Collection<String>) {
-        val added = synchronized(wanted) { keys.filter { wanted.add(it) } }
-        if (added.isNotEmpty()) socket?.let { subscribe(it, added) }
+    private val pinned = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
+
+    /** Keys kept live whatever is on screen (the Home indices); screens use [acquire]/[release]. */
+    fun watch(keys: Collection<String>) { pinned += keys; acquire(pinned, synchronized(pinned) { pinned.toSet() }) }
+
+    /** [owner] shows [keys] now; the socket subscribes what's new and drops what nobody shows any more. */
+    fun acquire(owner: Any, keys: Collection<String>) {
+        val (added, removed) = subscriptions.set(owner, keys.toSet())
+        socket?.let { ws ->
+            if (added.isNotEmpty()) send(ws, "sub", added.toList())
+            if (removed.isNotEmpty()) send(ws, "unsub", removed.toList())
+        }
+        _stats.update { it.copy(subscribed = subscriptions.all().size) }
     }
+
+    fun release(owner: Any) = acquire(owner, emptySet())
 
     /** Keeps a socket open until cancelled. Returns early (no retry) if Upstox rejects the token. */
     suspend fun run(token: () -> String?) {
@@ -92,8 +113,11 @@ object UpstoxFeed {
             _status.value = Status.Connecting
             try {
                 val url = authorize(bearer)
+                val openedAt = System.currentTimeMillis()
                 connectAndStream(url, bearer)
-                backoffMs = 2_000L
+                // Only a connection that held for a while resets the backoff; one that drops at once keeps backing off.
+                if (System.currentTimeMillis() - openedAt > 30_000L) backoffMs = 2_000L
+                _stats.update { it.copy(drops = it.drops + 1, lastError = "connection closed") }
                 _status.value = Status.Reconnecting("connection closed")
             } catch (e: CancellationException) {
                 _status.value = Status.Idle
@@ -104,6 +128,7 @@ object UpstoxFeed {
                 return
             } catch (e: Exception) {
                 DiagLog.w(TAG, "feed: ${e.javaClass.simpleName}; retry in ${backoffMs}ms")
+                _stats.update { it.copy(drops = it.drops + 1, lastError = e.message ?: e.javaClass.simpleName) }
                 _status.value = Status.Reconnecting(e.message ?: e.javaClass.simpleName)
             }
             delay(backoffMs)
@@ -139,20 +164,23 @@ object UpstoxFeed {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 socket = webSocket
                 _status.value = Status.Live
+                _stats.update { it.copy(connects = it.connects + 1, connectedAt = System.currentTimeMillis()) }
                 DiagLog.i(TAG, "feed: connected")
-                val keys = synchronized(wanted) { wanted.toList() }
-                if (keys.isNotEmpty()) subscribe(webSocket, keys)
+                val keys = subscriptions.all().toList()
+                if (keys.isNotEmpty()) send(webSocket, "sub", keys)
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 val frame = runCatching { UpstoxFeedDecoder.decodeFrame(bytes.toByteArray()) }.getOrElse {
                     DiagLog.w(TAG, "feed: undecodable frame ${it.javaClass.simpleName}")
+                    _stats.update { s -> s.copy(undecodable = s.undecodable + 1) }
                     return
                 }
                 frame.nseOpen?.let { if (_nseOpen.value != it) DiagLog.i(TAG, "feed: NSE ${if (it) "open" else "closed"}"); _nseOpen.value = it }
                 if (frame.quotes.isNotEmpty()) {
-                    _quotes.update { it + frame.quotes }
+                    synchronized(pending) { pending.putAll(FeedMerge.merge(pending, frame.quotes)) }
                     _lastTickAt.value = System.currentTimeMillis()
+                    schedulePublish()
                 }
             }
 
@@ -170,15 +198,32 @@ object UpstoxFeed {
         cont.invokeOnCancellation { ws.cancel(); socket = null }
     }
 
+    private fun schedulePublish() {
+        if (publishScheduled) return
+        publishScheduled = true
+        publisher.launch {
+            delay(PUBLISH_MS)
+            publishScheduled = false
+            val batch = synchronized(pending) { HashMap(pending).also { pending.clear() } }
+            if (batch.isEmpty()) return@launch
+            val before = _quotes.value
+            val merged = FeedMerge.merge(before, batch)
+            _quotes.value = merged
+            _stats.update { it.copy(ticks = it.ticks + batch.size, outOfOrder = it.outOfOrder + batch.count { (k, q) -> merged[k] !== q }) }
+        }
+    }
+
     // Upstox V3 expects the subscription request as a binary frame of JSON.
-    private fun subscribe(ws: WebSocket, keys: List<String>) {
+    private fun send(ws: WebSocket, method: String, keys: List<String>) {
         val message = JSONObject()
             .put("guid", "marksy-${++guid}")
-            .put("method", "sub")
+            .put("method", method)
             .put("data", JSONObject().put("mode", "ltpc").put("instrumentKeys", JSONArray(keys)))
         ws.send(message.toString().toByteArray(Charsets.UTF_8).toByteString())
-        DiagLog.i(TAG, "feed: subscribed ${keys.size} key(s)")
+        DiagLog.i(TAG, "feed: $method ${keys.size} key(s)")
     }
+
+    private const val PUBLISH_MS = 250L
 
     private const val TAG = "MarksyUpstox"
     private const val AUTHORIZE_URL = "https://api.upstox.com/v3/feed/market-data-feed/authorize"

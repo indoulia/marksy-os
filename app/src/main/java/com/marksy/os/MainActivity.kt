@@ -418,10 +418,11 @@ class MainActivity : ComponentActivity() {
         val feedTickAt by UpstoxFeed.lastTickAt.collectAsStateWithLifecycle()
         val feedNseOpen by UpstoxFeed.nseOpen.collectAsStateWithLifecycle()
         val marketOpen = feedNseOpen ?: UpstoxFeed.isMarketOpen()
+        val feedFreshness = com.marksy.os.ui.rememberFeedFreshness()
         val upstoxLive: UpstoxLiveState = when {
             !upstoxConfigured -> UpstoxLiveState.NotConfigured
             feedStatus is UpstoxFeed.Status.TokenRejected -> UpstoxLiveState.Failed((feedStatus as UpstoxFeed.Status.TokenRejected).reason, tokenRejected = true)
-            feedQuotes.isNotEmpty() -> UpstoxLiveState.Live(feedQuotes, feedTickAt, streaming = feedStatus is UpstoxFeed.Status.Live, marketOpen = marketOpen)
+            feedQuotes.isNotEmpty() -> UpstoxLiveState.Live(feedQuotes, feedTickAt, streaming = feedFreshness == com.marksy.os.upstox.FeedFreshness.LIVE, marketOpen = marketOpen)
             feedStatus is UpstoxFeed.Status.Reconnecting -> UpstoxLiveState.Failed((feedStatus as UpstoxFeed.Status.Reconnecting).reason, tokenRejected = false)
             else -> UpstoxLiveState.Loading
         }
