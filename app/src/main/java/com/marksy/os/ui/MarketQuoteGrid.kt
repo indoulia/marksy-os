@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 
 /** One boxed section, two entries per row: name on top, price and day change beneath. */
 @Composable
-internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Double?>>) {
+internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Double?>>, watchable: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(16.dp),
@@ -28,7 +28,10 @@ internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Dou
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     row.forEach { (name, price, change) ->
                         Column(Modifier.weight(1f)) {
-                            Text(name, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(name, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                if (watchable) WatchlistButton(name, Modifier.size(24.dp))
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(price, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 change?.let { pct ->

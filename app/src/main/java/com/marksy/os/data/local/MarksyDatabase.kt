@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class],
-    version = 5,
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
+    version = 6,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -23,6 +23,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun connectorDao(): ConnectorDao
     abstract fun metricsDao(): MetricsDao
     abstract fun planItemDao(): PlanItemDao
+    abstract fun watchlistDao(): WatchlistDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -136,6 +137,17 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS `watchlists` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)")
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `watchlist_items` (`watchlistId` INTEGER NOT NULL, `symbol` TEXT NOT NULL, `name` TEXT, " +
+                        "`addedAt` INTEGER NOT NULL, PRIMARY KEY(`watchlistId`, `symbol`))"
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_watchlist_items_symbol` ON `watchlist_items` (`symbol`)")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -145,7 +157,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { INSTANCE = it }
             }

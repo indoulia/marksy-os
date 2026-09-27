@@ -117,7 +117,10 @@ fun StockDetailScreen(
 @Composable
 private fun PriceHeader(instrument: InstrumentLifecycleDto?, symbol: String?, live: StockLive) {
     Column {
-        Text(instrument?.companyName ?: symbol ?: instrument?.symbol.orEmpty(), color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(instrument?.companyName ?: symbol ?: instrument?.symbol.orEmpty(), color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+            (instrument?.symbol ?: symbol)?.let { WatchlistButton(it, Modifier.padding(start = 4.dp)) }
+        }
         Text(listOfNotNull(instrument?.symbol ?: symbol, instrument?.exchange?.ifBlank { null }, instrument?.sector, live.isin?.let { "ISIN $it" }).joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp)
         val q = live.quote
         val price = q?.lastPrice ?: instrument?.market?.lastClosePrice

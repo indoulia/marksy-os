@@ -178,10 +178,9 @@ private fun ThreadActionsDialog(
 ) {
     fun run(block: () -> Unit) { block(); onDismiss() }
     val ids = thread.allIds
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.Surface,
-        title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, color = MarksyTheme.TextPrimary, fontSize = 16.sp, maxLines = 2) },
+        title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, color = MarksyTheme.TextPrimary, maxLines = 2) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)

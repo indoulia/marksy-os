@@ -271,9 +271,8 @@ fun PlanItemDialog(
     var recurrence by remember { mutableStateOf(initial?.recurrence?.let(Recurrence::valueOf) ?: Recurrence.MONTHLY) }
     var picking by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    MarksyDialog(
         onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.SurfaceRaised,
         title = { Text(if (initial == null) "Add reminder" else "Edit", color = MarksyTheme.TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

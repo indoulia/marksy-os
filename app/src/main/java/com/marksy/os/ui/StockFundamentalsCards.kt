@@ -263,6 +263,7 @@ private fun PeersCard(f: StockFundamentals, onOpenSymbol: (String) -> Unit) {
                     p.sector?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
                 }
                 p.marketCapCr?.let { Text("₹${crore(it)} Cr", color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                symbol?.let { WatchlistButton(it, Modifier.padding(start = 4.dp)) }
             }
         }
     }

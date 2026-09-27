@@ -11,6 +11,38 @@ V6 — Personal Intelligence
 
 The objective is to strengthen the existing Marksy architecture and intelligence pipeline rather than continuously creating unrelated UI surfaces.
 
+## Status (2026-09-27)
+
+This covers the Android app (this repo) only. Backend work in `marksy-api` is tracked there. 559 unit tests pass.
+
+**V1, EPIC-001 to EPIC-009:** all done. The GitHub issues are closed. EPIC-004's HTTP transport is `MarksyTipsApiClient` (`POST /tips`) with session auth (#26), and the Android → Marksy → Android round trip ran on device (#30).
+
+**Done**
+- EPIC-010 to EPIC-015, EPIC-017, EPIC-022: done in tests (#22, #27, #28).
+- EPIC-016 Ask Marksy: verified on device (#34, #35). The eval set passes 85/85, and Gemma on device passes 24/24 (#37).
+- EPIC-018 Rules 2.0: nested AND/OR/NOT editor (#27). Done in tests.
+- EPIC-033 Fundamentals & News: Upstox fundamentals, financials, shareholding, corporate actions, peers and news (#44).
+- EPIC-035 Stock Details: items 1–11 (#42–#52). The items under "Parked" stay parked.
+
+**Partial**
+- EPIC-019 On-Device AI: Gemma 3 1B runs on device (#36). Gemini Nano is untested because no AICore device is available.
+- EPIC-020 Personal Memory: place learning has only unit and Robolectric tests.
+- EPIC-021 Connectors: Gmail API waits for an OAuth token provider, SMS is notification-only, and Calendar has not run on a device.
+- EPIC-023 30-Day Validation: metrics collection is in. The 30-day run and its report are pending.
+- EPIC-024 Market Gateway: the app reads market, prediction and IPO data from Marksy (#25). Quotes, candles, depth, fundamentals and news come directly from Upstox with the user's own token (#29, #38, #44), which departs from the "Marksy APIs only" rule. Pending: moving these reads behind Marksy (backend).
+- EPIC-025 Real-Time Stream: the Upstox WebSocket feed runs in the app (`UpstoxFeed`, #29). Pending: Marksy WS/SSE delivery and server-side subscriptions with REST gap reconciliation.
+- EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Pending: calibrating the rating weights against past outcomes (#51).
+- EPIC-027 IPO Intelligence: IPO list and detail, with prediction history and the risk engine (#25, #39). Pending: IPO watchlist.
+- EPIC-028 Daily Setups: Marksy picks and trade calls link to the stock page. Pending: a morning Daily Setups view, intraday updates, a prediction history view and the `marksy-tips/v1` DAILY_SETUPS contract.
+- EPIC-029 Market & IPO Surfaces: market overview, quotes, stock search (#31), stock watchlist (`feat/watchlist`), stock page, IPOs, Ask → stock deep links (#34), and a Tradsy placeholder ticket (#50). Pending: IPO watchlist, a predictions list screen (removed in #29), and deep links from notifications and the Briefing.
+- EPIC-031 Live Market Home: the Home Market Pulse shows indices, and gainers and losers are on Market overview. Pending: market breadth and Most Active.
+- EPIC-032 Instrument Workspace: header, interactive 1D–5Y chart, stats, depth, technical rating and watchlist action. Pending: candlestick mode, indicator overlays on the chart (EMA, VWAP, Bollinger, Supertrend), intraday intervals, alerts, and a Derivatives tab.
+- EPIC-034 Realtime Hardening: the quote polls only while NSE is open, and the feed reconnects. Pending: a unified realtime state model, subscriptions based on visible instruments, stream observability, and end-to-end tests for stream loss and recovery.
+
+**Not started**
+- EPIC-030 Market Health & Validation: Marksy Health has no market, stream or prediction metrics.
+- Old V2 phases 11–13: Floating Assistant, Lock Screen/Pulse, cross-app intelligence.
+
 ## EPIC-010 — Unified Event Intelligence
 Build a normalized intelligence layer over captured notifications/events.
 Requirements: normalize captured notifications/events; extract entities (person, company, merchant, bank, delivery, stock, app); extract amount, currency, date/time, reference/order/transaction IDs; calculate confidence score and importance score; cross-source deduplication; event threading; event lifecycle NEW → ACTIVE → RESOLVED → ARCHIVED.

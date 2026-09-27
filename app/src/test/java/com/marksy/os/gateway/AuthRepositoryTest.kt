@@ -26,7 +26,11 @@ private class FakeAuthApiClient(
     private val refreshDelayMs: Long = 0
 ) : AuthApiClient {
     var refreshCallCount = 0
-    override suspend fun login(userId: String, password: String): SessionResponseDto = loginError?.let { throw it } ?: loginResult!!
+    val logins = mutableListOf<Pair<String, String>>()
+    override suspend fun login(userId: String, password: String): SessionResponseDto {
+        logins += userId to password
+        return loginError?.let { throw it } ?: loginResult!!
+    }
     override suspend fun refresh(currentToken: String): SessionResponseDto {
         refreshCallCount++
         if (refreshDelayMs > 0) delay(refreshDelayMs)
@@ -213,5 +217,78 @@ class AuthRepositoryTest {
         repository.logout()
 
         assertNull(store.getToken())
+    }
+
+    // marksy-api sessions last 8h and can only be renewed while still valid, so "Remember me"
+    // keeps the password (Keystore-encrypted) and signs in again once the session is gone.
+    @Test
+    fun rememberedLoginSignsInAgainWhenTheSessionIsRejected() = runBlocking {
+        val store = AuthSessionStore(context)
+        val (fresh, _) = session(8 * 60 * 60 * 1000L)
+        val fake = FakeAuthApiClient(loginResult = fresh, refreshError = AuthApiException("HTTP 401"))
+        val repository = AuthRepository(fake, store)
+        repository.login("prsingh", "pw", remember = true)
+        store.saveSession("sess_old", "prsingh", System.currentTimeMillis() - 1_000L, remember = true)
+
+        assertEquals("sess_new", repository.currentToken())
+        assertEquals(listOf("prsingh" to "pw", "prsingh" to "pw"), fake.logins)
+    }
+
+    @Test
+    fun rememberedLoginSignsInAgainWhenNoSessionIsStored() = runBlocking {
+        val store = AuthSessionStore(context)
+        val (fresh, _) = session(8 * 60 * 60 * 1000L)
+        val repository = AuthRepository(FakeAuthApiClient(loginResult = fresh), store)
+        repository.login("prsingh", "pw", remember = true)
+        store.clearSession()
+
+        assertEquals("sess_new", repository.currentToken())
+        assertEquals("prsingh", store.signedInUserId())
+    }
+
+    // A changed password must not be retried forever; the username stays to prefill the form.
+    @Test
+    fun rejectedSavedPasswordIsForgottenButUsernameIsKept() = runBlocking {
+        val store = AuthSessionStore(context)
+        store.saveCredentials("prsingh", "old-pw")
+        val repository = AuthRepository(FakeAuthApiClient(loginError = AuthApiException("HTTP 401: Invalid credentials.")), store)
+
+        assertNull(repository.currentToken())
+        assertTrue(!store.hasCredentials())
+        assertEquals("prsingh", store.lastUserId())
+        assertNull(store.signedInUserId())
+    }
+
+    // Sign Out ends the session and silent sign-in, but the saved password stays for the form.
+    @Test
+    fun logoutKeepsTheSavedPasswordForTheFormButStopsSilentSignIn() = runBlocking {
+        val store = AuthSessionStore(context)
+        val (fresh, _) = session(8 * 60 * 60 * 1000L)
+        val fake = FakeAuthApiClient(loginResult = fresh)
+        val repository = AuthRepository(fake, store)
+
+        repository.login("prsingh", "pw", remember = true)
+        repository.logout()
+        assertTrue(store.hasCredentials())
+        assertNull(repository.currentToken())
+        assertNull(store.signedInUserId())
+        assertEquals(1, fake.logins.size)
+
+        assertTrue(repository.loginWithSavedPassword("prsingh", remember = true).isSuccess)
+        assertEquals(listOf("prsingh" to "pw", "prsingh" to "pw"), fake.logins)
+        assertEquals("sess_new", repository.currentToken())
+    }
+
+    @Test
+    fun loginWithoutRememberForgetsSavedCredentials() = runBlocking {
+        val store = AuthSessionStore(context)
+        val (fresh, _) = session(8 * 60 * 60 * 1000L)
+        val repository = AuthRepository(FakeAuthApiClient(loginResult = fresh), store)
+
+        repository.login("prsingh", "pw", remember = true)
+        repository.login("prsingh", "pw", remember = false)
+        assertTrue(!store.hasCredentials())
+        assertNull(store.lastUserId())
+        assertTrue(repository.loginWithSavedPassword("prsingh", remember = true).isFailure)
     }
 }
