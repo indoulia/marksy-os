@@ -46,7 +46,7 @@ object UpstoxFeedDecoder {
 
     private fun feedEntry(entry: Reader): UpstoxLtp? {
         var key: String? = null
-        var ltpc: Pair<Double, Double?>? = null
+        var ltpc: Ltpc? = null
         entry.forEachField { field, r ->
             when (field) {
                 1 -> key = r.string()
@@ -55,12 +55,14 @@ object UpstoxFeedDecoder {
             }
         }
         val k = key ?: return null
-        val (ltp, cp) = ltpc ?: return null
-        return UpstoxLtp(k, ltp, cp)
+        val l = ltpc ?: return null
+        return UpstoxLtp(k, l.ltp, l.cp, l.ltt)
     }
 
-    private fun feed(feed: Reader): Pair<Double, Double?>? {
-        var result: Pair<Double, Double?>? = null
+    private class Ltpc(val ltp: Double, val cp: Double?, val ltt: Long?)
+
+    private fun feed(feed: Reader): Ltpc? {
+        var result: Ltpc? = null
         feed.forEachField { field, r ->
             when (field) {
                 1 -> result = ltpc(r.message())
@@ -72,8 +74,8 @@ object UpstoxFeedDecoder {
     }
 
     /** FullFeed wraps marketFF/indexFF, each with ltpc at field 1; FirstLevelWithGreeks has ltpc at field 1 directly. */
-    private fun firstLtpc(msg: Reader, nested: Boolean): Pair<Double, Double?>? {
-        var result: Pair<Double, Double?>? = null
+    private fun firstLtpc(msg: Reader, nested: Boolean): Ltpc? {
+        var result: Ltpc? = null
         msg.forEachField { field, r ->
             if (field == 1 && !nested) result = ltpc(r.message())
             else if (nested && (field == 1 || field == 2)) result = firstLtpc(r.message(), nested = false) ?: result
@@ -82,17 +84,19 @@ object UpstoxFeedDecoder {
         return result
     }
 
-    private fun ltpc(msg: Reader): Pair<Double, Double?>? {
+    private fun ltpc(msg: Reader): Ltpc? {
         var ltp: Double? = null
         var cp: Double? = null
+        var ltt: Long? = null
         msg.forEachField { field, r ->
             when (field) {
                 1 -> ltp = r.double()
+                2 -> ltt = r.varint().takeIf { it > 0 }
                 4 -> cp = r.double()
                 else -> r.skip()
             }
         }
-        return ltp?.let { it to cp?.takeIf { c -> c > 0 } }
+        return ltp?.let { Ltpc(it, cp?.takeIf { c -> c > 0 }, ltt) }
     }
 
     private class Reader(private val buf: ByteArray, private var pos: Int, private val end: Int) {

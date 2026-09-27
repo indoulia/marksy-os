@@ -10,7 +10,11 @@ import java.io.IOException
  * "not configured" / network / server-error handling lives in one place. Separate from the
  * existing `MarketRepository` (Trading tab's ad-hoc `/dashboard/snapshot` client) by design. */
 class MarketIntelligenceRepository(private val client: MarketApiClient?) {
-    suspend fun overview(): MarketDataState<MarketSummaryDto> = fetch { it.marketSummary() }
+    /** Last good overview, so coming back to Market shows it at once while a fresh one loads. */
+    @Volatile var lastOverview: MarketSummaryDto? = null
+        private set
+
+    suspend fun overview(): MarketDataState<MarketSummaryDto> = fetch { it.marketSummary() }.also { if (it is MarketDataState.Loaded) lastOverview = it.value }
 
     suspend fun liveQuotes(symbols: List<String>? = null): MarketDataState<LiveQuotesResponseDto> =
         fetch { it.liveQuotes(symbols) }

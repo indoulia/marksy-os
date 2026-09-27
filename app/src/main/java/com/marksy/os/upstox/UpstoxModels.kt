@@ -21,7 +21,7 @@ object UpstoxIndices {
 }
 
 /** One `GET /v3/market-quote/ltp` entry. `previousClose` is Upstox's `cp`. */
-data class UpstoxLtp(val instrumentKey: String, val lastPrice: Double, val previousClose: Double?) {
+data class UpstoxLtp(val instrumentKey: String, val lastPrice: Double, val previousClose: Double?, val tradeTime: Long? = null) {
     val changePct: Double? get() = previousClose?.takeIf { it > 0 }?.let { (lastPrice - it) / it * 100 }
 
     companion object {

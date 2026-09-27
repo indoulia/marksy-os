@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +55,8 @@ fun HealthScreen(padding: PaddingValues, load: suspend () -> MarksyHealth.Report
                 )
             }
         }
+        item { Text("Market stream", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
+        item { FeedStatsCard() }
         item { Text("Runtime", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
         items(r.metrics) { m ->
             Row(Modifier.fillMaxWidth()) {
@@ -68,4 +71,28 @@ private fun color(level: MarksyHealth.Level): Color = when (level) {
     MarksyHealth.Level.OK -> MarksyTheme.PrimaryEmerald
     MarksyHealth.Level.WARNING -> MarksyTheme.YellowImportant
     MarksyHealth.Level.CRITICAL -> MarksyTheme.RedUrgent
+}
+
+/** Where a market-data problem sits: socket (connects/drops), stream (tick age), or decoding. */
+@Composable
+private fun FeedStatsCard() {
+    val stats by com.marksy.os.upstox.UpstoxFeed.stats.collectAsStateWithLifecycle()
+    val lastTick by com.marksy.os.upstox.UpstoxFeed.lastTickAt.collectAsStateWithLifecycle()
+    val freshness = rememberFeedFreshness()
+    val now = System.currentTimeMillis()
+    val tone = when (freshness) {
+        com.marksy.os.upstox.FeedFreshness.LIVE, com.marksy.os.upstox.FeedFreshness.CLOSED -> MarksyTheme.PrimaryEmerald
+        com.marksy.os.upstox.FeedFreshness.OFF -> MarksyTheme.TextSecondary
+        else -> MarksyTheme.YellowImportant
+    }
+    fun ago(t: Long) = if (t <= 0) "never" else ((now - t) / 1000).let { if (it < 90) "${it}s ago" else "${it / 60}m ago" }
+    Column(Modifier.fillMaxWidth().background(MarksyTheme.Surface, RoundedCornerShape(12.dp)).padding(10.dp)) {
+        Text("Upstox feed · ${freshness.name.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }}", color = tone, fontSize = 13.sp)
+        Text(
+            "Last tick ${ago(lastTick)} · ${stats.subscribed} instruments · ${stats.ticks} updates · connects ${stats.connects}, drops ${stats.drops}" +
+                (if (stats.undecodable + stats.outOfOrder > 0) " · ${stats.undecodable} undecodable, ${stats.outOfOrder} out of order" else "") +
+                (stats.lastError?.let { " · last error: $it" } ?: ""),
+            color = MarksyTheme.TextMuted, fontSize = 11.sp
+        )
+    }
 }

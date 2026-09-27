@@ -65,8 +65,14 @@ fun MarketScreen(
         when (tab) {
             MarketTab.OVERVIEW -> {
                 val refresh = rememberRefreshState()
-                val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.MarketSummaryDto>, refresh.key) {
-                    while (true) { value = repository.overview(); refresh.done(); kotlinx.coroutines.delay(60_000) }
+                val cached = repository.lastOverview
+                val state by produceState(cached?.let { com.marksy.os.market.MarketDataState.Stale(it, ageSeconds = null) } ?: com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.MarketSummaryDto>, refresh.key) {
+                    while (true) {
+                        val fresh = repository.overview()
+                        // A failed refresh keeps the last good overview on screen, marked stale, instead of an error page.
+                        value = if (fresh !is com.marksy.os.market.MarketDataState.Loaded && cached != null) com.marksy.os.market.MarketDataState.Stale(repository.lastOverview ?: cached, ageSeconds = null) else fresh
+                        refresh.done(); kotlinx.coroutines.delay(60_000)
+                    }
                 }
                 val health by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.LiveFeedHealthDto>, refresh.key) {
                     while (true) { value = repository.liveFeedHealth(); kotlinx.coroutines.delay(60_000) }
