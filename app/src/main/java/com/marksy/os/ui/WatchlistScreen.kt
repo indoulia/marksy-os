@@ -2,9 +2,15 @@ package com.marksy.os.ui
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.BasicAlertDialog
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,11 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -154,21 +157,17 @@ fun WatchlistScreen(
         onCreate = { name -> repository.createList(name)?.also { creating = false; onViewSelected(it.toString()) } }
     )
     deleting?.let { l ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            containerColor = MarksyTheme.SurfaceRaised,
-            title = { Text("Delete ${l.name}?", color = MarksyTheme.TextPrimary) },
-            text = {
-                val n = counts[l.id] ?: 0
-                Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary)
-            },
-            confirmButton = {
-                TextButton(onClick = { deleting = null; scope.launch { repository.deleteList(l.id) }; onViewSelected("") }) {
-                    Text("Delete", color = MarksyTheme.RedUrgent)
-                }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
-        )
+        WatchDialog(
+            title = "Delete ${l.name}?",
+            confirmLabel = "Delete",
+            confirmEnabled = true,
+            confirmColor = MarksyTheme.RedUrgent,
+            onConfirm = { deleting = null; scope.launch { repository.deleteList(l.id) }; onViewSelected("") },
+            onDismiss = { deleting = null }
+        ) {
+            val n = counts[l.id] ?: 0
+            Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+        }
     }
 }
 
@@ -248,8 +247,58 @@ private suspend fun loadTraits(context: Context, symbol: String): StockTraits = 
     StockTraits(dto?.companyName, dto?.sector ?: profile?.sector, profile?.marketCapCr)
 }
 
-/** [onAdd] returns an error to show, or null once added. */
+/** Marksy-styled popup, same look as the notification detail dialog. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WatchDialog(
+    title: String,
+    confirmLabel: String,
+    confirmEnabled: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    confirmColor: Color = MarksyTheme.PrimaryEmerald,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), color = MarksyTheme.Surface, border = BorderStroke(1.dp, MarksyTheme.BorderGlow)) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(title, color = MarksyTheme.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                content()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) }
+                    TextButton(enabled = confirmEnabled, onClick = onConfirm) {
+                        Text(confirmLabel, color = if (confirmEnabled) confirmColor else MarksyTheme.TextMuted, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */
+@Composable
+private fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Text(
+        text,
+        color = when { selected -> Color.Black; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        modifier = Modifier.clip(shape)
+            .background(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+            .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PillRow(content: @Composable () -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+}
+
+/** [onAdd] returns an error to show, or null once added. */
 @Composable
 private fun AddToWatchlistDialog(
     symbol: String,
@@ -270,59 +319,58 @@ private fun AddToWatchlistDialog(
         val t = traits ?: return@LaunchedEffect
         if (!userPicked) chosen = WatchlistPicker.pick(lists, counts, t.sector, t.marketCapCr, current)
     }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.SurfaceRaised,
-        title = { Text("Add $symbol", color = MarksyTheme.TextPrimary) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val t = traits
-                Text(
-                    if (t == null) "Finding the right list…" else listOfNotNull(t.name, t.sector).joinToString(" · ").ifEmpty { "Pick a list" },
-                    color = MarksyTheme.TextSecondary, fontSize = 12.sp
-                )
-                if (lists.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    lists.forEach { l ->
-                        val n = counts[l.id] ?: 0
-                        FilterChip(
-                            selected = chosen == l.id && newName.isBlank(),
-                            enabled = n < WatchlistRepository.MAX_STOCKS,
-                            onClick = { chosen = l.id; userPicked = true; newName = "" },
-                            label = { Text("${l.name} $n/${WatchlistRepository.MAX_STOCKS}", fontSize = 12.sp) }
-                        )
-                    }
+    val valid = newName.isNotBlank() || chosen != null
+    WatchDialog(
+        title = "Add $symbol",
+        confirmLabel = "Add",
+        confirmEnabled = valid,
+        onConfirm = { scope.launch { error = onAdd(chosen.takeIf { newName.isBlank() }, newName.takeIf { it.isNotBlank() }, traits?.name) } },
+        onDismiss = onDismiss
+    ) {
+        val t = traits
+        Text(
+            if (t == null) "Finding the right list…" else listOfNotNull(t.name, t.sector).joinToString(" · ").ifEmpty { "Pick a list" },
+            color = MarksyTheme.TextSecondary, fontSize = 12.sp
+        )
+        if (lists.isNotEmpty()) PillRow {
+            lists.forEach { l ->
+                val n = counts[l.id] ?: 0
+                Pill("${l.name} $n/${WatchlistRepository.MAX_STOCKS}", selected = chosen == l.id && newName.isBlank(), enabled = n < WatchlistRepository.MAX_STOCKS) {
+                    chosen = l.id; userPicked = true; newName = ""
                 }
-                ListNameField(
-                    newName, { newName = it; error = null }, lists.map { it.name }, listOfNotNull(t?.sector),
-                    label = if (lists.isEmpty()) "New list" else "Or a new list",
-                    placeholder = t?.sector?.let { "e.g. $it" } ?: "e.g. Defence"
-                )
-                error?.let { Text(it, color = MarksyTheme.RedUrgent, fontSize = 12.sp) }
             }
-        },
-        confirmButton = {
-            val valid = newName.isNotBlank() || chosen != null
-            TextButton(enabled = valid, onClick = {
-                scope.launch { error = onAdd(chosen.takeIf { newName.isBlank() }, newName.takeIf { it.isNotBlank() }, traits?.name) }
-            }) { Text("Add", color = if (valid) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
-    )
+        }
+        ListNameField(
+            newName, { newName = it; error = null }, lists.map { it.name }, listOfNotNull(t?.sector),
+            label = if (lists.isEmpty()) "New list" else "Or a new list",
+            placeholder = t?.sector?.let { "e.g. $it" } ?: "e.g. Defence"
+        )
+        error?.let { Text(it, color = MarksyTheme.RedUrgent, fontSize = 12.sp) }
+    }
 }
 
-/** List-name field with proposal pills under it; from 3 typed chars the pills narrow to matches. */
+/** List-name field: from 3 typed chars, suggested names under it; proposal pills below, unaffected by typing. */
 @Composable
 private fun ListNameField(name: String, onNameChange: (String) -> Unit, existing: List<String>, preferred: List<String>, label: String?, placeholder: String) {
     val context = LocalContext.current.applicationContext
     val sectors by produceState(emptyList<String>()) {
         value = quietly { (MarksyContainer.marketIntelligence(context).sectors() as? MarketDataState.Loaded)?.value?.map { it.name } }.orEmpty()
     }
-    val pills = remember(name, existing, preferred, sectors) { WatchlistNames.suggest(name, existing, preferred, sectors) }
+    val suggestions = remember(name, existing, sectors) { WatchlistNames.suggest(name, existing, sectors) }
+    val pills = remember(existing, preferred) { WatchlistNames.proposals(existing, preferred) }
     CompactTextField(name, onNameChange, Modifier.fillMaxWidth(), label = label, placeholder = placeholder)
-    if (pills.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        pills.forEach { pill -> SuggestionChip(onClick = { onNameChange(pill) }, label = { Text(pill, fontSize = 12.sp) }) }
+    if (suggestions.isNotEmpty()) {
+        val shape = RoundedCornerShape(12.dp)
+        Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.SurfaceRaised).border(1.dp, MarksyTheme.BorderGlow, shape)) {
+            suggestions.forEach { s ->
+                Text(
+                    s, color = MarksyTheme.TextPrimary, fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { onNameChange(s) }.padding(horizontal = 12.dp, vertical = 9.dp)
+                )
+            }
+        }
     }
+    if (pills.isNotEmpty()) PillRow { pills.forEach { p -> Pill(p, selected = p.equals(name.trim(), ignoreCase = true)) { onNameChange(p) } } }
 }
 
 @Composable
@@ -330,21 +378,14 @@ private fun NewWatchlistDialog(existing: List<String>, onDismiss: () -> Unit, on
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var taken by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MarksyTheme.SurfaceRaised,
-        title = { Text("New watchlist", color = MarksyTheme.TextPrimary) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ListNameField(name, { name = it; taken = false }, existing, emptyList(), label = null, placeholder = "e.g. Defence, SmallCap")
-                if (taken) Text("A list with that name already exists", color = MarksyTheme.RedUrgent, fontSize = 12.sp)
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = name.isNotBlank(), onClick = { scope.launch { taken = onCreate(name) == null } }) {
-                Text("Create", color = if (name.isNotBlank()) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
-    )
+    WatchDialog(
+        title = "New watchlist",
+        confirmLabel = "Create",
+        confirmEnabled = name.isNotBlank(),
+        onConfirm = { scope.launch { taken = onCreate(name) == null } },
+        onDismiss = onDismiss
+    ) {
+        ListNameField(name, { name = it; taken = false }, existing, emptyList(), label = null, placeholder = "e.g. Defence, SmallCap")
+        if (taken) Text("A list with that name already exists", color = MarksyTheme.RedUrgent, fontSize = 12.sp)
+    }
 }

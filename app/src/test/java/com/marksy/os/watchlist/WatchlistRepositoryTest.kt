@@ -49,14 +49,16 @@ class WatchlistRepositoryTest {
         assertEquals(0, repo.observeItems().first().size)
     }
 
-    @Test fun namePillsSkipListsInUseAndNarrowFromThreeChars() {
-        val all = WatchlistNames.suggest("", existing = listOf("defence"), preferred = listOf("Aerospace & Defense"))
-        assertEquals("Aerospace & Defense", all.first())
-        assertEquals(false, "Defence" in all)
-        assertEquals(all, WatchlistNames.suggest("Ae", existing = listOf("defence"), preferred = listOf("Aerospace & Defense")))
-        assertEquals(listOf("Defence"), WatchlistNames.suggest("def", existing = emptyList()))
-        assertEquals(listOf("SmallCap", "MidCap", "LargeCap"), WatchlistNames.suggest("cap", existing = emptyList()))
-        assertEquals(listOf("Capital Goods"), WatchlistNames.suggest("capi", existing = emptyList(), sectors = listOf("Capital Goods", "capital goods")))
+    @Test fun namePillsSkipListsInUseAndTypingSuggestsFromAWiderVocabulary() {
+        val pills = WatchlistNames.proposals(existing = listOf("defence"), preferred = listOf("Aerospace & Defense"))
+        assertEquals("Aerospace & Defense", pills.first())
+        assertEquals(false, "Defence" in pills)
+        assertEquals(emptyList<String>(), WatchlistNames.suggest("sm", existing = emptyList()))
+        // Suggestions go beyond the pills: "sma" also offers the Smallcap 250 index theme.
+        assertEquals(listOf("SmallCap", "Smallcap 250"), WatchlistNames.suggest("sma", existing = emptyList()))
+        assertEquals(listOf("Smallcap 250"), WatchlistNames.suggest("sma", existing = listOf("SmallCap")))
+        assertEquals(listOf("Capital Goods", "Capital Markets"), WatchlistNames.suggest("capi", emptyList(), sectors = listOf("capital goods")))
+        assertEquals(listOf("Textile Machinery"), WatchlistNames.suggest("machin", emptyList(), sectors = listOf("Textile Machinery")))
         assertEquals(emptyList<String>(), WatchlistNames.suggest("zzz", existing = emptyList()))
     }
 

@@ -29,22 +29,39 @@ class WatchlistRepository(private val dao: WatchlistDao, private val clock: () -
     }
 }
 
-/** Name proposals for a new list, shown as pills under the name field. */
+/** Names for a new list: fixed proposal pills, plus suggestions for what's being typed. */
 object WatchlistNames {
     val COMMON = listOf(
         "Defence", "SmallCap", "MidCap", "LargeCap", "Banks", "IT", "Pharma", "Auto", "Energy", "Metals",
         "FMCG", "Realty", "Infra", "PSU", "Railways", "Chemicals", "Momentum", "Dividend", "Long term"
     )
+    private val THEMES = listOf(
+        "Smallcap 250", "Midcap 150", "Nifty 50", "Nifty Next 50", "Microcap", "Bluechip", "PSU Banks", "Private Banks",
+        "NBFC", "Insurance", "Fintech", "Capital Goods", "Capital Markets", "EV", "Semiconductors", "Electronics",
+        "Green Energy", "Renewables", "Solar", "Power", "Oil & Gas", "Cement", "Steel", "Mining", "Aerospace",
+        "Shipbuilding", "Aviation", "Logistics", "Telecom", "Media", "Hospitals", "Healthcare", "Diagnostics",
+        "Consumption", "Retail", "Textiles", "Paints", "Jewellery", "Hotels", "Tourism", "Agri", "Fertilisers",
+        "Sugar", "Real Estate", "Housing Finance", "Digital", "Data Centres", "AI", "Exports", "Manufacturing",
+        "Value", "Growth", "Turnaround", "Breakout", "Swing", "Short term", "IPO", "SME", "High dividend", "Multibagger"
+    )
     private const val MIN_QUERY = 3
+    private const val MAX_SUGGESTIONS = 6
 
-    /** [preferred] first, then common and sector names, minus lists in use; from 3 typed chars only matches, prefix matches first. */
-    fun suggest(typed: String, existing: Collection<String>, preferred: List<String> = emptyList(), sectors: List<String> = emptyList()): List<String> {
-        val used = existing.map(::key).toSet()
-        val candidates = (preferred + COMMON + sectors).filter { it.isNotBlank() }.distinctBy(::key).filter { key(it) !in used }
+    /** Pills: [preferred] first, then the common names, minus lists in use. Not affected by typing. */
+    fun proposals(existing: Collection<String>, preferred: List<String> = emptyList()): List<String> =
+        unused(preferred + COMMON, existing)
+
+    /** From 3 typed chars, names containing the text from a wider vocabulary and [sectors]; prefix matches first. */
+    fun suggest(typed: String, existing: Collection<String>, sectors: List<String> = emptyList()): List<String> {
+        if (typed.trim().length < MIN_QUERY) return emptyList()
         val q = key(typed)
-        if (typed.trim().length < MIN_QUERY) return candidates
-        val matches = candidates.filter { key(it) != q && q in key(it) }
-        return matches.filter { key(it).startsWith(q) } + matches.filterNot { key(it).startsWith(q) }
+        val matches = unused(COMMON + THEMES + sectors, existing).filter { key(it) != q && q in key(it) }
+        return (matches.filter { key(it).startsWith(q) } + matches.filterNot { key(it).startsWith(q) }).take(MAX_SUGGESTIONS)
+    }
+
+    private fun unused(names: List<String>, existing: Collection<String>): List<String> {
+        val used = existing.map(::key).toSet()
+        return names.filter { it.isNotBlank() }.distinctBy(::key).filter { key(it) !in used }
     }
 
     private fun key(name: String) = name.lowercase().filter(Char::isLetterOrDigit)
