@@ -6,5 +6,10 @@ fun interface RatingSource {
 }
 
 object LocalRatingSource : RatingSource {
-    override suspend fun rating(symbol: String, inputs: RatingInputs): RatingResult = RatingEngine.rate(inputs)
+    override suspend fun rating(symbol: String, inputs: RatingInputs): RatingResult = RatingEngine.rate(inputs, ActiveRating.config)
+}
+
+/** The weights in use: V1 until a calibration against past calls wins on held-out calls. */
+object ActiveRating {
+    @Volatile var config: RatingConfig = RatingConfig.V1
 }

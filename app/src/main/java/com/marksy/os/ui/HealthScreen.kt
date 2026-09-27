@@ -63,6 +63,7 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         market?.let { m ->
             item { MarksyFeedCard(m) }
             item { PredictionValidationCard(m) }
+            item { RatingCalibrationCard(m) }
         }
         item { Text("Runtime", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
         items(r.metrics) { m ->

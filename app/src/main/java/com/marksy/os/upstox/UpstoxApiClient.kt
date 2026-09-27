@@ -44,6 +44,11 @@ class UpstoxApiClient(private val token: () -> String?) {
         else UpstoxCandles.lastSession(UpstoxCandles.parse(get("$BASE_URL/${range.fallbackPath(instrumentKey, today, minutes)}")), zone)
     }
 
+    /** Daily candles between two dates, for rebuilding what a stock looked like on a past day. */
+    suspend fun dailyCandles(instrumentKey: String, from: java.time.LocalDate, to: java.time.LocalDate): List<Candle> = withContext(Dispatchers.IO) {
+        UpstoxCandles.parse(get("$BASE_URL/historical-candle/${pathKey(instrumentKey)}/days/1/$to/$from"))
+    }
+
     /** Monthly candles back to 2000 (Upstox's earliest), for seasonality and all-time figures. */
     suspend fun monthlyCandles(instrumentKey: String, today: java.time.LocalDate): List<Candle> = withContext(Dispatchers.IO) {
         UpstoxCandles.parse(get("$BASE_URL/historical-candle/${pathKey(instrumentKey)}/months/1/$today/2000-01-01"))

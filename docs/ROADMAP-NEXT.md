@@ -38,7 +38,7 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-023 30-Day Validation: metrics collection is in. The 30-day run and its report are pending.
 - EPIC-024 Market Gateway: the app reads market, prediction and IPO data from Marksy (#25). Quotes, candles, depth, fundamentals and news come directly from Upstox with the user's own token (#29, #38, #44), which departs from the "Marksy APIs only" rule. Pending: moving these reads behind Marksy (backend).
 - EPIC-025 Real-Time Stream: the Upstox WebSocket feed runs in the app (`UpstoxFeed`, #29). Pending: Marksy WS/SSE delivery and server-side subscriptions with REST gap reconciliation.
-- EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Pending: calibrating the rating weights against past outcomes (#51).
+- EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Rating calibration (Marksy Health → Markets → Calibrate now): it rebuilds each closed call's short-term inputs from Upstox candles up to that call's date (no look-ahead; fundamentals are excluded because they have no history), tunes the trend and seasonality weights on the older 70% of calls, and adopts them only if rank correlation with realized returns beats V1 by at least 0.02 on the newest 30%. Otherwise V1 stays. Pending: the first on-device run.
 
 **Not started**
 - Old V2 phases 11–13: Floating Assistant, Lock Screen/Pulse, cross-app intelligence.
