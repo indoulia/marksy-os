@@ -2,6 +2,7 @@ package com.marksy.os.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -23,7 +24,11 @@ private class FixtureAuthApiClient(
     private val loginResult: SessionResponseDto? = null,
     private val loginError: Throwable? = null
 ) : AuthApiClient {
-    override suspend fun login(userId: String, password: String): SessionResponseDto = loginError?.let { throw it } ?: loginResult!!
+    val passwords = mutableListOf<String>()
+    override suspend fun login(userId: String, password: String): SessionResponseDto {
+        passwords += password
+        return loginError?.let { throw it } ?: loginResult!!
+    }
     override suspend fun refresh(currentToken: String) = throw NotImplementedError()
     override suspend fun logout(currentToken: String) = throw NotImplementedError()
 }
@@ -79,6 +84,27 @@ class LoginScreenTest {
         compose.waitUntil(timeoutMillis = 5_000) { signedIn }
 
         assert(signedIn)
+    }
+
+    // Reported on device: after Sign Out the password field looked empty despite Remember me.
+    @Test
+    fun rememberedPasswordFillsTheFormAfterSignOutAndSignsInWithOneTap() {
+        val store = AuthSessionStore(ApplicationProvider.getApplicationContext<Context>())
+        store.saveCredentials("prsingh", "saved-pw")
+        store.markSignedOut()
+        var signedIn = false
+        val client = FixtureAuthApiClient(loginResult = SessionResponseDto("sess_abc", "prsingh", "2026-09-25T09:00:00Z", "2099-09-25T17:00:00Z", false))
+        compose.setContent {
+            LoginScreen(authRepository = repository(client), padding = PaddingValues(), currentUserId = null, onSignedIn = { signedIn = true })
+        }
+
+        compose.onNodeWithText("prsingh").assertExists()
+        val filled = SemanticsMatcher("has text") { (it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.EditableText)?.text?.length ?: 0) > 0 }
+        compose.onAllNodes(hasSetTextAction())[1].assert(filled)
+        compose.onNodeWithText("Sign In").assertIsEnabled().performClick()
+        compose.waitUntil(timeoutMillis = 5_000) { signedIn }
+
+        assert(client.passwords == listOf("saved-pw"))
     }
 
     @Test
