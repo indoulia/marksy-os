@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -115,12 +116,15 @@ fun EventDetailDialog(
     onAction: (ActionEngine.Type, Long?, String?) -> Unit = { _, _, _ -> },
     related: List<ContextEntity> = emptyList(),
     onUnlinkEntity: (Long) -> Unit = {},
+    onOpenStock: ((String) -> Unit)? = null,
 ) {
     var showReminderOptions by remember { mutableStateOf(false) }
     var reporting by remember(event.id) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val actions = OriginalAppLauncher.actionsFor(event.sourcePackage, event.sourceKey)
+    val isSymbol = rememberSymbolCheck()
+    val stocks = remember(event.id, isSymbol) { if (onOpenStock == null) emptyList() else stocksIn(event, isSymbol) }
     val details = buildList {
         add("Category" to event.category.lowercase().replaceFirstChar { it.uppercase() })
         add("Priority" to event.priority.toString())
@@ -195,8 +199,9 @@ fun EventDetailDialog(
                         }
                     }
                     if (event.isTrading) {
-                        event.insightSummary?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
-                        event.insightAction?.takeIf { it.isNotBlank() }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
+                        // Rows stored before the tips client stopped writing JSON nulls as "null".
+                        event.insightSummary?.removeSuffix(" | null")?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
+                        event.insightAction?.takeIf { it.isNotBlank() && it != "null" }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
                         ActionChip(
@@ -212,6 +217,7 @@ fun EventDetailDialog(
                             onClick = { showReminderOptions = !showReminderOptions }
                         )
                         ActionChip(Icons.Default.MarkEmailUnread, "Mark unread", selected = false) { onMarkUnread(); onDismiss() }
+                        stocks.forEach { symbol -> ActionChip(Icons.Default.ShowChart, symbol, selected = false) { onOpenStock?.invoke(symbol) } }
                     }
                     if (showReminderOptions) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
