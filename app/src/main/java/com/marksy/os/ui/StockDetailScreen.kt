@@ -105,6 +105,7 @@ fun StockDetailScreen(
             if (live.monthly.size >= 13) item { SeasonalityCard(live.monthly, symbol ?: instrument?.symbol.orEmpty()) }
             if (q.bids.isNotEmpty() || q.asks.isNotEmpty()) item { DepthCard(q) }
         }
+        live.key?.let { k -> item(key = "fno-$k") { DerivativesCard(k) } }
         fundamentalsContent(fundamentals, live.quote?.lastPrice, onOpenSymbol)
         if (mentions.isNotEmpty()) {
             item { Text("In your notifications", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }

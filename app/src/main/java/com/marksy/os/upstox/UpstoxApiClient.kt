@@ -24,6 +24,15 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxQuote.parse(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
     }
 
+    /** Option expiries for an underlying; empty when it isn't in F&O. */
+    suspend fun optionExpiries(instrumentKey: String): List<String> = withContext(Dispatchers.IO) {
+        UpstoxDerivatives.expiries(get("$V2_URL/option/contract?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
+    }
+
+    suspend fun optionChain(instrumentKey: String, expiry: String): UpstoxDerivatives.Chain = withContext(Dispatchers.IO) {
+        UpstoxDerivatives.chain(get("$V2_URL/option/chain?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}&expiry_date=$expiry"))
+    }
+
     suspend fun candles(instrumentKey: String, range: ChartRange, today: java.time.LocalDate, zone: java.time.ZoneId, minutes: Int? = null): List<Candle> = withContext(Dispatchers.IO) {
         val candles = UpstoxCandles.parse(get("$BASE_URL/${range.path(instrumentKey, today, minutes)}"))
         if (range != ChartRange.D1 || candles.isNotEmpty()) candles
