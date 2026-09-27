@@ -46,7 +46,8 @@ fun MarketScreen(
     stockQuery: String = "",
     marketEvents: List<NotificationEventEntity> = emptyList(),
     stockEvents: List<NotificationEventEntity> = emptyList(),
-    onEventSelected: (NotificationEventEntity) -> Unit = {}
+    onEventSelected: (NotificationEventEntity) -> Unit = {},
+    onOpenStock: ((String) -> Unit)? = null
 ) {
     val tab = MarketTab.entries.firstOrNull { it.name == tabName } ?: MarketTab.OVERVIEW
 
@@ -68,7 +69,7 @@ fun MarketScreen(
                 val health by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.LiveFeedHealthDto>, refresh.key) {
                     while (true) { value = repository.liveFeedHealth(); kotlinx.coroutines.delay(60_000) }
                 }
-                MarksyRefreshBox(refresh) { MarketOverviewScreen(state = state, padding = inner, health = health) }
+                MarksyRefreshBox(refresh) { MarketOverviewScreen(state = state, padding = inner, health = health, onOpenStock = onOpenStock) }
             }
             MarketTab.STOCKS -> {
                 val symbol = selectedSymbol

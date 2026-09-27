@@ -652,7 +652,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     liveIndices = upstoxLive,
                     todayDigest = todayDigest,
-                    onOpenTrading = { selectedTab = 3 },
+                    onOpenTrading = { marketTabName = MarketTab.OVERVIEW.name; selectedTab = 4 },
                     onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
@@ -717,7 +717,8 @@ class MainActivity : ComponentActivity() {
                     stockQuery = stockQuery,
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
-                    onEventSelected = openEvent
+                    onEventSelected = openEvent,
+                    onOpenStock = { openStockFrom(it, "4") }
                 )
                 else -> MoreScreen(
                     access = notificationAccessEnabled,

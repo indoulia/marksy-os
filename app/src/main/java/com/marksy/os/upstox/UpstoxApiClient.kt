@@ -24,6 +24,11 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxQuote.parse(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKey, "UTF-8")}"))
     }
 
+    /** Full quotes for up to 500 instruments in one call (volume, average price, OHLC). */
+    suspend fun quotes(instrumentKeys: List<String>): Map<String, UpstoxQuote> = withContext(Dispatchers.IO) {
+        UpstoxQuote.parseAll(get("$V2_URL/market-quote/quotes?instrument_key=${URLEncoder.encode(instrumentKeys.take(500).joinToString(","), "UTF-8")}"))
+    }
+
     suspend fun candles(instrumentKey: String, range: ChartRange, today: java.time.LocalDate, zone: java.time.ZoneId): List<Candle> = withContext(Dispatchers.IO) {
         val candles = UpstoxCandles.parse(get("$BASE_URL/${range.path(instrumentKey, today)}"))
         if (range != ChartRange.D1 || candles.isNotEmpty()) candles

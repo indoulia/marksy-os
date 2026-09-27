@@ -481,7 +481,12 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
             Spacer(Modifier.height(10.dp))
 
             when {
-                liveQuotes != null -> IndexGrid(liveQuotes.map { (name, q) -> Triple(name, q.lastPrice, q.changePct) })
+                liveQuotes != null -> {
+                    IndexGrid(liveQuotes.map { (name, q) -> Triple(name, q.lastPrice, q.changePct) })
+                    val nifty = rememberUpstoxQuotes(Nifty50.SYMBOLS)
+                    val breadth = remember(nifty) { com.marksy.os.market.MarketBreadth.of(nifty.values.map { it.changePct }) }
+                    if (breadth.total >= 12) BreadthBar(breadth, "NIFTY 50 breadth", Modifier.padding(top = 10.dp))
+                }
                 snapshot != null && snapshot.indices.isNotEmpty() -> IndexGrid(snapshot.indices.take(6).map { Triple(it.name, it.value, it.changePct) })
                 market is MarketState.Loading -> MarksyInlineLoader("Loading market data…")
                 else -> Text(
