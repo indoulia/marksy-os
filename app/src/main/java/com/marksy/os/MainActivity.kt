@@ -114,12 +114,23 @@ class MainActivity : ComponentActivity() {
     private var openPlanRequest by mutableStateOf(false)
     /** Set when a price alert notification is tapped; that stock's page opens. */
     private var pendingSymbol by mutableStateOf<String?>(null)
+    /** Set by the Ask tile, launcher shortcuts and the Pulse action: which surface to open. */
+    private var pendingOpen by mutableStateOf<String?>(null)
+
+    companion object {
+        const val EXTRA_OPEN = "com.marksy.os.OPEN"
+        const val OPEN_ASK = "ask"
+        const val OPEN_BRIEFING = "briefing"
+        const val OPEN_SETUPS = "setups"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingEventId = intent?.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L)?.takeIf { it >= 0 }
         openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
         pendingSymbol = intent?.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)
+        pendingOpen = intent?.getStringExtra(EXTRA_OPEN)
+        lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
         com.marksy.os.ui.RatingCalibrator.load(applicationContext)
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
@@ -136,6 +147,7 @@ class MainActivity : ComponentActivity() {
         intent.getLongExtra(ReminderScheduler.EXTRA_EVENT_ID, -1L).takeIf { it >= 0 }?.let { pendingEventId = it }
         if (intent.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false)) openPlanRequest = true
         intent.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)?.let { pendingSymbol = it }
+        intent.getStringExtra(EXTRA_OPEN)?.let { pendingOpen = it }
     }
 
     override fun onResume() {
@@ -387,6 +399,14 @@ class MainActivity : ComponentActivity() {
             marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
         }
         fun stockOrigin() = when { showAsk -> "ask"; showBriefing -> "briefing"; else -> selectedTab.toString() }
+        LaunchedEffect(pendingOpen) {
+            when (pendingOpen) {
+                OPEN_ASK -> showAsk = true
+                OPEN_BRIEFING -> { showAsk = false; showBriefing = true }
+                OPEN_SETUPS -> { showAsk = false; showBriefing = false; tradingFilter = TradingFilters.first(); selectedTab = 3 }
+            }
+            pendingOpen = null
+        }
         LaunchedEffect(pendingSymbol) { pendingSymbol?.let { openStockFrom(it, stockOrigin()); pendingSymbol = null } }
         fun stockBack() {
             val previous = stockTrail.lastOrNull()
@@ -899,6 +919,24 @@ class MainActivity : ComponentActivity() {
             }
         }
         item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black, fontSize = 12.sp) } } }
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+            var pulseOn by remember { mutableStateOf(com.marksy.os.pulse.MarksyPulse.enabled(context)) }
+            val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
+                scope.launch { com.marksy.os.pulse.MarksyPulse.update(context) }
+            }
+            SettingsCard("Marksy Pulse", if (pulseOn) "ON" else "OFF", "A quiet notification with today's summary and next due item, readable on the lock screen. While locked it shows only counts and the market.") {
+                androidx.compose.material3.Switch(
+                    checked = pulseOn,
+                    onCheckedChange = { on ->
+                        pulseOn = on
+                        scope.launch { com.marksy.os.pulse.MarksyPulse.setEnabled(context, on) }
+                        if (on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised)
+                )
+            }
+        }
         item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openBriefing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Briefing", color = Color.Black, fontSize = 12.sp) } } }
         item {
             SettingsCard(

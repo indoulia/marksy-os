@@ -222,4 +222,6 @@ Verified against source on 2026-09-24 — Phases 0–10 are implemented:
 - **Phase 9 (Rules & Automation):** `RuleEngine`/`RuleStore`/`RulesScreen`.
 - **Phase 10 (Daily Digest):** `DigestModel`/`DailyDigestScreen`.
 
-**Pending:** Phase 11 (Floating Assistant), Phase 12 (Lock Screen / Pulse), Phase 13 (Cross-app intelligence) have no implementation yet.
+- **Phase 11 (Floating Assistant):** Ask Marksy is reachable from anywhere without an overlay permission. There is a Quick Settings tile (`AskMarksyTileService`), launcher shortcuts (Ask Marksy, Briefing, Setups) and an "Ask Marksy" action on the Pulse notification. Inside the app it is the header's Ask button.
+- **Phase 12 (Lock Screen / Pulse):** Marksy Pulse is opt-in (More → Marksy Pulse). It is a silent, ongoing notification refreshed every 30 min and on app open, carrying today's count, how many need attention, the busiest sources, the next due plan item, and NIFTY while the feed is live. Its public version shows only counts and the market while the phone is locked (`PulseText`, `MarksyPulse`).
+- **Phase 13 (Cross-app intelligence):** delivered by EPIC-010 (normalized events, threading, cross-source dedup) and EPIC-015 (context graph with entities, relationships and corrections, shown as "Related" in the event popup).

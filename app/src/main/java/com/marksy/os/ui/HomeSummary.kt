@@ -31,9 +31,6 @@ object HomeSummary {
             }
             parts += if (direction == "flat") "$name is flat." else "$name is $direction ${pct(abs(change))}."
         }
-        market?.opportunities?.firstOrNull()?.let { pick ->
-            parts += "Top Marksy pick: ${pick.symbol}, target ₹${String.format(Locale.getDefault(), "%,.0f", pick.targetPrice)}."
-        }
         return parts.joinToString(" ")
     }
 

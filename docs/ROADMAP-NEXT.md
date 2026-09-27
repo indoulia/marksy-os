@@ -41,7 +41,7 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Rating calibration (Marksy Health → Markets → Calibrate now): it rebuilds each closed call's short-term inputs from Upstox candles up to that call's date (no look-ahead; fundamentals are excluded because they have no history), tunes the trend and seasonality weights on the older 70% of calls, and adopts them only if rank correlation with realized returns beats V1 by at least 0.02 on the newest 30%. Otherwise V1 stays. Pending: the first on-device run.
 
 **Not started**
-- Old V2 phases 11–13: Floating Assistant, Lock Screen/Pulse, cross-app intelligence.
+- None. Old V2 phases 11–13 are recorded in `MARKSY_OS_V2_ARCHITECTURE.md`: the Ask tile and shortcuts, Marksy Pulse, and cross-app intelligence through EPIC-010/015.
 
 ## EPIC-010 — Unified Event Intelligence
 Build a normalized intelligence layer over captured notifications/events.

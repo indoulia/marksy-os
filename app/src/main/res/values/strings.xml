@@ -2,4 +2,9 @@
 <resources>
     <string name="app_name">Marksy OS</string>
     <string name="whatsapp_accessibility_description">Reads visible WhatsApp accessibility text only for sender names on your Marksy OS allow-list.</string>
+    <string name="ask_marksy">Ask Marksy</string>
+    <string name="shortcut_briefing">Briefing</string>
+    <string name="shortcut_briefing_long">Today’s briefing</string>
+    <string name="shortcut_setups">Setups</string>
+    <string name="shortcut_setups_long">Today’s trading setups</string>
 </resources>
