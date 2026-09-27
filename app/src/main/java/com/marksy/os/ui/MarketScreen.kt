@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +55,7 @@ fun MarketScreen(
     // The open stock's trade ticket defaults, refreshed as its price and Marksy call load.
     var stockTrade by remember { mutableStateOf<TradeIntent?>(null) }
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
+    var alerting by remember { mutableStateOf<TradeIntent?>(null) }
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
@@ -127,9 +129,12 @@ fun MarketScreen(
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
             actions = listOfNotNull(
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
+                    ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.NotificationsActive, "Price alert for ${t.symbol}") { alerting = t } },
+                stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
                     ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.SwapVert, "Buy or sell ${t.symbol}") { ticket = t } }
             )
         )
+        alerting?.let { t -> PriceAlertDialog(t.symbol, t.price) { alerting = null } }
     }
 }
 

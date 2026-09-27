@@ -1,0 +1,81 @@
+package com.marksy.os.ui
+
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.marksy.os.alerts.PriceAlertRules
+import com.marksy.os.alerts.PriceAlertStore
+import java.util.Locale
+
+/** Set a one-time alert when [symbol] crosses a price; lists and removes its existing alerts. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val all by PriceAlertStore.alerts(context).collectAsStateWithLifecycle()
+    val mine = all.orEmpty().filter { it.symbol == symbol }
+    var text by remember { mutableStateOf(lastPrice?.let { String.format(Locale.US, "%.2f", it) }.orEmpty()) }
+    val target = text.replace(",", "").toDoubleOrNull()?.takeIf { it > 0 }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    fun rupees(v: Double) = "₹" + String.format(Locale.getDefault(), "%,.2f", v)
+
+    MarksyDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Price alert · $symbol", color = MarksyTheme.TextPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                lastPrice?.let { Text("Now ${rupees(it)}", color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                CompactTextField(text, { text = it.filter { c -> c.isDigit() || c == '.' } }, Modifier.fillMaxWidth(), placeholder = "Alert price",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                lastPrice?.let { p ->
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(-5, -2, 2, 5).forEach { pct -> Pill(String.format(Locale.US, "%+d%%", pct)) { text = String.format(Locale.US, "%.2f", p * (1 + pct / 100.0)) } }
+                    }
+                }
+                if (target != null && lastPrice != null) {
+                    Text(
+                        "Alerts once when $symbol ${if (PriceAlertRules.above(target, lastPrice)) "rises to" else "falls to"} ${rupees(target)}",
+                        color = MarksyTheme.TextMuted, fontSize = 11.sp
+                    )
+                }
+                if (mine.isNotEmpty()) {
+                    Text("Active", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                    mine.forEach { a ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${if (a.above) "Above" else "Below"} ${rupees(a.price)}", color = MarksyTheme.TextPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.Close, "Remove alert", tint = MarksyTheme.TextSecondary,
+                                modifier = Modifier.size(28.dp).clip(CircleShape).clickable { PriceAlertStore.remove(context, listOf(a.id)) }.padding(5.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = target != null && lastPrice != null, onClick = {
+                PriceAlertStore.add(context, symbol, target!!, lastPrice!!)
+                if (Build.VERSION.SDK_INT >= 33) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                onDismiss()
+            }) { Text("Set alert", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } }
+    )
+}
