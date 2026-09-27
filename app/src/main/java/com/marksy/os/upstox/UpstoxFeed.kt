@@ -104,6 +104,8 @@ object UpstoxFeed {
 
     fun release(owner: Any) = acquire(owner, emptySet())
 
+    fun subscribedKeys(): Set<String> = subscriptions.all()
+
     /** Keeps a socket open until cancelled. Returns early (no retry) if Upstox rejects the token. */
     suspend fun run(token: () -> String?) {
         var backoffMs = 2_000L

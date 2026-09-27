@@ -28,6 +28,7 @@ interface MarketApiClient {
     suspend fun recommendation(id: Int): JSONObject = JSONObject()
     suspend fun closedPredictions(cursor: String? = null): ClosedPredictionPageDto = ClosedPredictionPageDto(emptyList(), null)
     suspend fun performanceSummary(range: String = "30d"): PerformanceSummaryDto? = null
+    suspend fun performanceBreakdown(dimension: String): PerformanceBreakdownDto? = null
     /** The signed-in reader's watched IPOs; watching is server-side so it follows the account. */
     suspend fun trackedIpos(): List<IpoTrackedItemDto> = emptyList()
     suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto = throw MarketApiException("IPO watching is not supported")
@@ -68,6 +69,9 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
 
     override suspend fun closedPredictions(cursor: String?): ClosedPredictionPageDto =
         ClosedPredictionPageDto.parse(getEnvelope("$base/tracking/predictions?status=closed&pageSize=50" + (cursor?.let { "&cursor=${encode(it)}" } ?: "")))
+
+    override suspend fun performanceBreakdown(dimension: String): PerformanceBreakdownDto =
+        PerformanceBreakdownDto.parse(getData("$base/performance/breakdown?dimension=${encode(dimension)}"))
 
     override suspend fun performanceSummary(range: String): PerformanceSummaryDto =
         PerformanceSummaryDto.parse(getData("$base/performance/summary?range=${encode(range)}"))

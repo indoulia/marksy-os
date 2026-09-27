@@ -69,6 +69,8 @@ class UpstoxApiClient(private val token: () -> String?) {
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Authorization", "Bearer $bearer")
         }
+        val started = System.currentTimeMillis()
+        var failure: String? = "no response"
         try {
             val code = connection.responseCode
             val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
@@ -80,10 +82,16 @@ class UpstoxApiClient(private val token: () -> String?) {
             if (code == 401) throw UpstoxAuthException("Upstox rejected the token (expired or revoked)")
             if (code !in 200..299) {
                 val detail = runCatching { UpstoxLtp.parseResponse(body) }.exceptionOrNull()?.message ?: "Upstox returned HTTP $code"
+                failure = detail
                 throw IOException(detail)
             }
+            failure = null
             return body
+        } catch (e: IOException) {
+            if (failure == "no response") failure = e.message ?: e.javaClass.simpleName
+            throw e
         } finally {
+            UpstoxRestStats.record(url, ok = failure == null, ms = System.currentTimeMillis() - started, error = failure)
             connection.disconnect()
         }
     }

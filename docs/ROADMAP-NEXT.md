@@ -31,6 +31,7 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-034 Realtime Hardening: one freshness model (LIVE only while ticks arrive in session, then STALE, CLOSED or RECONNECTING) drives every live badge. Subscriptions are reference-counted per visible screen, and Upstox gets an `unsub` once no screen needs a key. Out-of-order ticks are dropped using the trade time, rendering is capped at 4 updates a second, and backoff resets only after a stable connection. The last Market overview stays on screen, marked stale, during refresh or failure. Marksy Health shows stream stats (tick age, subscriptions, connects and drops, undecodable and out-of-order frames). Unit-tested; the phone check is pending.
 
 **Partial**
+- EPIC-030 Market Health & Validation: Marksy Health has a Markets section, with data sources shown before prediction quality so a data outage is never read as a bad call. It covers Upstox stream freshness and stats, subscribed instruments that never ticked, Upstox REST calls, failures and latency by endpoint this session, Marksy's server-side feed state, and prediction validation for 7 and 30 days plus per-horizon outcomes (`/performance/summary`, `/performance/breakdown?dimension=horizon`), scored only after each call's horizon. Pending, backend: prediction-generation latency and failure rate, IPO data freshness, and no-look-ahead checks.
 - EPIC-019 On-Device AI: Gemma 3 1B runs on device (#36). Gemini Nano is untested because no AICore device is available.
 - EPIC-020 Personal Memory: place learning has only unit and Robolectric tests.
 - EPIC-021 Connectors: Gmail API waits for an OAuth token provider, SMS is notification-only, and Calendar has not run on a device.
@@ -40,7 +41,6 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 - EPIC-026 Prediction Pipeline: the stock page shows Marksy calls, their lifecycle, outcomes and track record (#50, #52). The pipeline itself is backend work. Pending: calibrating the rating weights against past outcomes (#51).
 
 **Not started**
-- EPIC-030 Market Health & Validation: Marksy Health has no market, stream or prediction metrics.
 - Old V2 phases 11–13: Floating Assistant, Lock Screen/Pulse, cross-app intelligence.
 
 ## EPIC-010 — Unified Event Intelligence

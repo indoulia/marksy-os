@@ -18,7 +18,7 @@ import com.marksy.os.intelligence.MarksyHealth
 
 /** EPIC-022: live runtime health from real counters and system state; refreshes every 30 s while open. */
 @Composable
-fun HealthScreen(padding: PaddingValues, load: suspend () -> MarksyHealth.Report) {
+fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketIntelligenceRepository? = null, load: suspend () -> MarksyHealth.Report) {
     val report by produceState<MarksyHealth.Report?>(null) {
         while (true) {
             value = runCatching { load() }.getOrNull() ?: value
@@ -55,8 +55,15 @@ fun HealthScreen(padding: PaddingValues, load: suspend () -> MarksyHealth.Report
                 )
             }
         }
-        item { Text("Market stream", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
+        // Data sources first, then prediction quality, so a data outage is never read as a bad call.
+        item { Text("Markets", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
         item { FeedStatsCard() }
+        item { SilentInstrumentsLine() }
+        item { UpstoxRestCard() }
+        market?.let { m ->
+            item { MarksyFeedCard(m) }
+            item { PredictionValidationCard(m) }
+        }
         item { Text("Runtime", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp)) }
         items(r.metrics) { m ->
             Row(Modifier.fillMaxWidth()) {

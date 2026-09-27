@@ -32,6 +32,9 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun performanceSummary(range: String = "30d"): MarketDataState<PerformanceSummaryDto> =
         fetch { it.performanceSummary(range) ?: throw java.io.IOException("Track record unavailable") }
 
+    suspend fun performanceBreakdown(dimension: String): MarketDataState<PerformanceBreakdownDto> =
+        fetch(emptyCheck = { it.items.isEmpty() }) { it.performanceBreakdown(dimension) ?: throw java.io.IOException("Breakdown unavailable") }
+
     suspend fun ipos(stage: String? = null, query: String? = null): MarketDataState<List<IpoListItemDto>> =
         fetch(emptyCheck = { it.isEmpty() }) { it.ipos(stage, query) }
 

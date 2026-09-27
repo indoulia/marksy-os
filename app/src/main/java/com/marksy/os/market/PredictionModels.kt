@@ -61,3 +61,17 @@ data class PerformanceSummaryDto(
         )
     }
 }
+
+/** Outcomes split by one dimension (`GET /performance/breakdown?dimension=horizon`). */
+data class PerformanceBreakdownDto(val dimension: String, val items: List<Item>) {
+    data class Item(val key: String, val closedCount: Int, val targetHitRate: Double?, val avgRealizedReturn: Double?, val smallSample: Boolean)
+
+    companion object {
+        fun parse(json: JSONObject) = PerformanceBreakdownDto(
+            dimension = json.textOrNull("dimension") ?: "",
+            items = json.optJSONArray("items").objects().map { o ->
+                Item(o.textOrNull("key") ?: "", o.intOrNull("closedCount") ?: 0, o.doubleOrNull("targetHitRate"), o.doubleOrNull("avgRealizedReturn"), o.boolOrFalse("smallSample"))
+            }
+        )
+    }
+}
