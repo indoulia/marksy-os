@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -57,6 +60,7 @@ import com.marksy.os.upstox.UpstoxApiClient
 import com.marksy.os.upstox.UpstoxFundamentals
 import com.marksy.os.upstox.UpstoxInstruments
 import com.marksy.os.upstox.UpstoxTokenStore
+import com.marksy.os.watchlist.WatchlistNames
 import com.marksy.os.watchlist.WatchlistPicker
 import com.marksy.os.watchlist.WatchlistRepository
 import kotlinx.coroutines.CancellationException
@@ -145,6 +149,7 @@ fun WatchlistScreen(
         )
     }
     if (creating) NewWatchlistDialog(
+        existing = lists.map { it.name },
         onDismiss = { creating = false },
         onCreate = { name -> repository.createList(name)?.also { creating = false; onViewSelected(it.toString()) } }
     )
@@ -288,8 +293,8 @@ private fun AddToWatchlistDialog(
                         )
                     }
                 }
-                CompactTextField(
-                    newName, { newName = it; error = null }, Modifier.fillMaxWidth(),
+                ListNameField(
+                    newName, { newName = it; error = null }, lists.map { it.name }, listOfNotNull(t?.sector),
                     label = if (lists.isEmpty()) "New list" else "Or a new list",
                     placeholder = t?.sector?.let { "e.g. $it" } ?: "e.g. Defence"
                 )
@@ -306,8 +311,22 @@ private fun AddToWatchlistDialog(
     )
 }
 
+/** List-name field with proposal pills under it; from 3 typed chars the pills narrow to matches. */
 @Composable
-private fun NewWatchlistDialog(onDismiss: () -> Unit, onCreate: suspend (String) -> Long?) {
+private fun ListNameField(name: String, onNameChange: (String) -> Unit, existing: List<String>, preferred: List<String>, label: String?, placeholder: String) {
+    val context = LocalContext.current.applicationContext
+    val sectors by produceState(emptyList<String>()) {
+        value = quietly { (MarksyContainer.marketIntelligence(context).sectors() as? MarketDataState.Loaded)?.value?.map { it.name } }.orEmpty()
+    }
+    val pills = remember(name, existing, preferred, sectors) { WatchlistNames.suggest(name, existing, preferred, sectors) }
+    CompactTextField(name, onNameChange, Modifier.fillMaxWidth(), label = label, placeholder = placeholder)
+    if (pills.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        pills.forEach { pill -> SuggestionChip(onClick = { onNameChange(pill) }, label = { Text(pill, fontSize = 12.sp) }) }
+    }
+}
+
+@Composable
+private fun NewWatchlistDialog(existing: List<String>, onDismiss: () -> Unit, onCreate: suspend (String) -> Long?) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var taken by remember { mutableStateOf(false) }
@@ -317,7 +336,7 @@ private fun NewWatchlistDialog(onDismiss: () -> Unit, onCreate: suspend (String)
         title = { Text("New watchlist", color = MarksyTheme.TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactTextField(name, { name = it; taken = false }, Modifier.fillMaxWidth(), placeholder = "e.g. Defence, SmallCap")
+                ListNameField(name, { name = it; taken = false }, existing, emptyList(), label = null, placeholder = "e.g. Defence, SmallCap")
                 if (taken) Text("A list with that name already exists", color = MarksyTheme.RedUrgent, fontSize = 12.sp)
             }
         },

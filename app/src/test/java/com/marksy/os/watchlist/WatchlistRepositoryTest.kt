@@ -49,6 +49,17 @@ class WatchlistRepositoryTest {
         assertEquals(0, repo.observeItems().first().size)
     }
 
+    @Test fun namePillsSkipListsInUseAndNarrowFromThreeChars() {
+        val all = WatchlistNames.suggest("", existing = listOf("defence"), preferred = listOf("Aerospace & Defense"))
+        assertEquals("Aerospace & Defense", all.first())
+        assertEquals(false, "Defence" in all)
+        assertEquals(all, WatchlistNames.suggest("Ae", existing = listOf("defence"), preferred = listOf("Aerospace & Defense")))
+        assertEquals(listOf("Defence"), WatchlistNames.suggest("def", existing = emptyList()))
+        assertEquals(listOf("SmallCap", "MidCap", "LargeCap"), WatchlistNames.suggest("cap", existing = emptyList()))
+        assertEquals(listOf("Capital Goods"), WatchlistNames.suggest("capi", existing = emptyList(), sectors = listOf("Capital Goods", "capital goods")))
+        assertEquals(emptyList<String>(), WatchlistNames.suggest("zzz", existing = emptyList()))
+    }
+
     @Test fun pickPrefersSectorThenCapBandThenCurrentList() {
         val lists = listOf(WatchlistEntity(1, "SmallCap", 0), WatchlistEntity(2, "Defence", 0), WatchlistEntity(3, "PSUBanks", 0), WatchlistEntity(4, "Large caps", 0))
         assertEquals(2L, WatchlistPicker.pick(lists, emptyMap(), sector = "Aerospace & Defense", marketCapCr = 300_000.0, current = 1))

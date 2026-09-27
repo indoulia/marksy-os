@@ -29,6 +29,27 @@ class WatchlistRepository(private val dao: WatchlistDao, private val clock: () -
     }
 }
 
+/** Name proposals for a new list, shown as pills under the name field. */
+object WatchlistNames {
+    val COMMON = listOf(
+        "Defence", "SmallCap", "MidCap", "LargeCap", "Banks", "IT", "Pharma", "Auto", "Energy", "Metals",
+        "FMCG", "Realty", "Infra", "PSU", "Railways", "Chemicals", "Momentum", "Dividend", "Long term"
+    )
+    private const val MIN_QUERY = 3
+
+    /** [preferred] first, then common and sector names, minus lists in use; from 3 typed chars only matches, prefix matches first. */
+    fun suggest(typed: String, existing: Collection<String>, preferred: List<String> = emptyList(), sectors: List<String> = emptyList()): List<String> {
+        val used = existing.map(::key).toSet()
+        val candidates = (preferred + COMMON + sectors).filter { it.isNotBlank() }.distinctBy(::key).filter { key(it) !in used }
+        val q = key(typed)
+        if (typed.trim().length < MIN_QUERY) return candidates
+        val matches = candidates.filter { key(it) != q && q in key(it) }
+        return matches.filter { key(it).startsWith(q) } + matches.filterNot { key(it).startsWith(q) }
+    }
+
+    private fun key(name: String) = name.lowercase().filter(Char::isLetterOrDigit)
+}
+
 /** Which list a stock most likely belongs in: a sector-named list, then a market-cap list, then the one being viewed. */
 object WatchlistPicker {
     private val GROUPS = listOf(
