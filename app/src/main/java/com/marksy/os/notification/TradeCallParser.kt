@@ -12,13 +12,15 @@ object TradeCallParser {
 
     // "short" is a SELL only on its own: "Short term Call" is a horizon, not a side.
     private val side = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""", RegexOption.IGNORE_CASE)
-    // Where the instrument name ends: a separator, a level label, or a price.
-    private val symbolEnd = Regex("""[|\n]|\b(cmp|ltp|entry|sl|tgt|target|targets|stop|stoploss|with|at|above|below|near|around)\b|@|₹|\brs\b|\d""", RegexOption.IGNORE_CASE)
+    // Where the instrument name ends: a separator, a level label, or a standalone price. Digits inside a
+    // name (360ONE) or an option strike ("NIFTY 24500 PE") are part of the instrument.
+    private val symbolEnd = Regex("""[|\n]|\b(cmp|ltp|entry|sl|tgt|target|targets|stop|stoploss|with|at|above|below|near|around|in|range|between)\b|@|₹|\brs\b|(?<!\w)\d[\d,]*(?:\.\d+)?(?!\w)(?!\s*(?:ce|pe)\b)""", RegexOption.IGNORE_CASE)
     private const val PRICE = """\s*[:\-=]?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)"""
     // "around"/"target price of" are ICICI Direct research calls: "Buy JSL around Rs 750 … target price of Rs 915".
-    private val entry = Regex("""\b(?:cmp|ltp|entry|buy\s+at|sell\s+at|around)$PRICE""", RegexOption.IGNORE_CASE)
+    private val entry = Regex("""(?:\b(?:cmp|ltp|entry|buy\s+at|sell\s+at|around|range\s+of|between)|@)$PRICE""", RegexOption.IGNORE_CASE)
     private val stop = Regex("""\b(?:sl|stop\s*loss|stoploss|stop-loss)$PRICE""", RegexOption.IGNORE_CASE)
-    private val target = Regex("""\b(?:tgt|targets?)(?:\s+price)?(?:\s+of)?$PRICE""", RegexOption.IGNORE_CASE)
+    // "Target 1: 150": the 1 numbers the target, it is not the price.
+    private val target = Regex("""\b(?:tgt|targets?)(?:\s*\d\s*[:\-=)])?(?:\s+price)?(?:\s+of)?$PRICE""", RegexOption.IGNORE_CASE)
     private val horizonPhrase = Regex("""\b(short[\s-]term|long[\s-]term|intraday|btst|positional|swing)\b""", RegexOption.IGNORE_CASE)
     private val horizonField = Regex("""\b(?:time|duration|horizon)\s*[:\-]\s*([^|\n]+)""", RegexOption.IGNORE_CASE)
 

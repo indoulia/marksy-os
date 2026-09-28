@@ -196,4 +196,16 @@ class NotificationClassifierTest {
         val result = NotificationClassifier.classify("com.myntra.android", "OTP", "Your verification code is 4321")
         assertEquals(NotificationClassifier.Category.OTP, result.category)
     }
+
+    // Regression: a broker's P&L statement was routed to Marksy as a trade.
+    @Test fun brokerPnlStatementIsNotTrading() {
+        val result = NotificationClassifier.classify("com.zerodha.kite3", "Kite", "Your P&L statement for September is ready")
+        assertTrue(result.category != NotificationClassifier.Category.TRADING)
+    }
+
+    // Regression: a tip SMS with a "never share your OTP" footer was filed as an OTP.
+    @Test fun tradeSmsWithOtpWarningIsTrading() {
+        val result = NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26. Never share your OTP with anyone.")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
 }
