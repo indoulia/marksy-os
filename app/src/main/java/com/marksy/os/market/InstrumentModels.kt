@@ -111,7 +111,10 @@ data class ActivePredictionDto(
     val lifecycleDetail: String?,
     val entryPrice: Double,
     val compositeOpportunityScore: Double?,
-    val lastPriceAt: String? = null
+    val lastPriceAt: String? = null,
+    val scanSessionDate: String? = null,
+    val publishedAt: String? = null,
+    val dataBasis: String? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = ActivePredictionDto(
@@ -135,17 +138,33 @@ data class ActivePredictionDto(
             lifecycleDetail = json.textOrNull("lifecycleDetail"),
             entryPrice = json.doubleOrNull("entryPrice") ?: 0.0,
             compositeOpportunityScore = json.doubleOrNull("compositeOpportunityScore"),
-            lastPriceAt = json.textOrNull("lastPriceAt")
+            lastPriceAt = json.textOrNull("lastPriceAt"),
+            scanSessionDate = json.textOrNull("scanSessionDate"),
+            publishedAt = json.textOrNull("publishedAt"),
+            dataBasis = json.textOrNull("dataBasis")
         )
     }
 }
 
-data class ActivePredictionPageDto(val items: List<ActivePredictionDto>, val nextCursor: String?) {
+/** The discovery scan behind Marksy's picks: which session's close, when published, PROVISIONAL or FINAL. */
+data class LatestScanDto(val scanSessionDate: String?, val publishedAt: String?, val dataBasis: String?, val nextScanAt: String?) {
+    companion object {
+        fun parse(json: JSONObject) = LatestScanDto(
+            json.textOrNull("scanSessionDate"), json.textOrNull("publishedAt"), json.textOrNull("dataBasis"), json.textOrNull("nextScanAt")
+        )
+    }
+}
+
+data class ActivePredictionPageDto(val items: List<ActivePredictionDto>, val nextCursor: String?, val latestScan: LatestScanDto? = null) {
     companion object {
         fun parse(envelope: JSONObject): ActivePredictionPageDto {
             val items = envelope.optJSONArray("data").objects().map(ActivePredictionDto::parse)
-            val nextCursor = envelope.optJSONObject("meta")?.textOrNull("nextCursor")
-            return ActivePredictionPageDto(items, nextCursor)
+            val meta = envelope.optJSONObject("meta")
+            // Older backends send no meta.latestScan; the newest call's own scan is the next best answer.
+            val latestScan = meta?.optJSONObject("latestScan")?.let(LatestScanDto::parse)
+                ?: items.filter { it.scanSessionDate != null }.maxWithOrNull(compareBy({ it.scanSessionDate }, { it.publishedAt }))
+                    ?.let { LatestScanDto(it.scanSessionDate, it.publishedAt, it.dataBasis, null) }
+            return ActivePredictionPageDto(items, meta?.textOrNull("nextCursor"), latestScan)
         }
     }
 }

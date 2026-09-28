@@ -378,11 +378,12 @@ class MainActivity : ComponentActivity() {
             selectedTab == tabs.size -> "Settings"
             else -> null
         }
+        val picksScan by com.marksy.os.market.MarketIntelligenceRepository.latestScan.collectAsState()
         val titleNote = when {
             showPlan -> planView
             hostOpen -> null
             selectedTab == 2 -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
-            selectedTab == 3 -> tradingFilter
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan)
             selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             else -> null
         }

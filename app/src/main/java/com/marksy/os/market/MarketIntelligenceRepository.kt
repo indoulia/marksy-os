@@ -2,6 +2,8 @@ package com.marksy.os.market
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONException
 import java.io.IOException
@@ -24,7 +26,7 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun sectors(): MarketDataState<List<SectorOptionDto>> = fetch(emptyCheck = { it.isEmpty() }) { it.sectors() }
 
     suspend fun activePredictions(cursor: String? = null): MarketDataState<ActivePredictionPageDto> =
-        fetch(emptyCheck = { it.items.isEmpty() }) { it.activePredictions(cursor) }
+        fetch(emptyCheck = { it.items.isEmpty() }) { c -> c.activePredictions(cursor).also { p -> p.latestScan?.let { _latestScan.value = it } } }
 
     suspend fun closedPredictions(cursor: String? = null): MarketDataState<ClosedPredictionPageDto> =
         fetch(emptyCheck = { it.items.isEmpty() }) { it.closedPredictions(cursor) }
@@ -86,5 +88,12 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
                 MarketDataState.Error(error.message ?: "Market data unavailable")
             }
         }
+    }
+
+    companion object {
+        // Shared across instances (screens each build their own) and kept even when the page is Empty.
+        private val _latestScan = MutableStateFlow<LatestScanDto?>(null)
+        /** The newest discovery scan seen behind Marksy's picks, for the Trading title note. */
+        val latestScan: StateFlow<LatestScanDto?> = _latestScan
     }
 }

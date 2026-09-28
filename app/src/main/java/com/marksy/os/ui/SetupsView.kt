@@ -22,6 +22,7 @@ import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.DailySetups
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
+import com.marksy.os.market.PicksBasis
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -44,6 +45,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, reports: List
     }
     val quotes = rememberUpstoxQuotes(remember(live, reports) { (live.map { it.symbol } + reports.flatMap { r -> r.report.setups.map { it.symbol } }).distinct() })
     val today = remember { LocalDate.now() }
+    val scan by MarketIntelligenceRepository.latestScan.collectAsState()
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
@@ -57,12 +59,14 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, reports: List
             else -> if (live.isEmpty()) item {
                 EmptyState(
                     "No live Marksy setups right now",
-                    if (all.isNotEmpty()) "All ${all.size} open calls are invalidated. See Predictions for their history." else "Marksy's new calls appear here each morning."
+                    if (all.isNotEmpty()) "All ${all.size} open calls are invalidated. See Predictions for their history."
+                    else "Marksy's new calls appear here after each market close." + scan?.let(PicksBasis::label)?.let { " Last scan: $it." }.orEmpty()
                 )
             }
         }
         items(live, key = { "m-${it.predictionId}" }) { p ->
-            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = "Marksy${p.lastPriceAt?.let { " · as of ${asOf(it)}" }.orEmpty()}") { onOpenStock(p.symbol) }
+            val basis = PicksBasis.label(p) ?: p.lastPriceAt?.let { "as of ${asOf(it)}" }
+            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = "Marksy${basis?.let { " · $it" }.orEmpty()}") { onOpenStock(p.symbol) }
         }
         reports.forEach { r ->
             val stale = r.report.reportDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.isBefore(today) ?: false

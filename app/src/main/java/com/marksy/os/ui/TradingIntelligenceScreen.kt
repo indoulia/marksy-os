@@ -121,6 +121,10 @@ private const val TAB_CALLS = "Calls"
 private const val TAB_CAPTURED = "Captured"
 val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_CALLS, TAB_CAPTURED)
 
+/** Title superscript: the tab, plus on Marksy's tabs the session its latest picks come from. */
+fun tradingTitleNote(filter: String, scan: com.marksy.os.market.LatestScanDto?): String =
+    filter + (if (filter == TAB_PICKS || filter == TAB_PREDICTIONS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
+
 
 private fun marketMessage(market: MarketState, loaded: String): String = when (market) {
     MarketState.Loading -> "Loading market data…"

@@ -94,6 +94,23 @@ class InstrumentModelsTest {
     }
 
     @Test
+    fun pageCarriesLatestScanFromMetaElseNewestItem() {
+        val item = """{"predictionId": 1, "symbol": "A", "targetPrice": 10.0, "stopLoss": 8.0, "entryPrice": 9.0, "scanSessionDate": "%s", "publishedAt": "%s", "dataBasis": "%s"}"""
+        val withMeta = ActivePredictionPageDto.parse(JSONObject(
+            """{"data": [${item.format("2026-09-25", "2026-09-26T10:32:00Z", "FINAL")}],
+               "meta": {"latestScan": {"scanSessionDate": "2026-09-28", "publishedAt": "2026-09-28T10:47:00Z", "dataBasis": "PROVISIONAL", "nextScanAt": "2026-09-29T03:00:00Z"}}}"""
+        ))
+        val derived = ActivePredictionPageDto.parse(JSONObject(
+            """{"data": [${item.format("2026-09-24", "2026-09-25T10:31:00Z", "FINAL")}, ${item.format("2026-09-25", "2026-09-26T10:32:00Z", "FINAL")}], "meta": {}}"""
+        ))
+
+        assertEquals(LatestScanDto("2026-09-28", "2026-09-28T10:47:00Z", "PROVISIONAL", "2026-09-29T03:00:00Z"), withMeta.latestScan)
+        assertEquals("2026-09-25", withMeta.items.single().scanSessionDate)
+        assertEquals(LatestScanDto("2026-09-25", "2026-09-26T10:32:00Z", "FINAL", null), derived.latestScan)
+        assertNull(ActivePredictionPageDto.parse(JSONObject("""{"data": [], "meta": {}}""")).latestScan)
+    }
+
+    @Test
     fun missingNextCursorMeansLastPage() {
         val envelope = JSONObject("""{"data": [], "meta": {"requestId": "r1", "timestamp": "2026-09-24T00:00:00Z", "pageSize": 25}}""")
 
