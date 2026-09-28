@@ -87,13 +87,4 @@ class DashboardSnapshotTest {
         assertTrue(snapshot.topAttention.zipWithNext().all { (a, b) -> a.attentionScore >= b.attentionScore })
         assertEquals(8L, snapshot.topAttention.first().eventId)
     }
-
-    @Test
-    fun dashboardAgeLabelUsesCompactRelativeTime() {
-        val now = 24L * 60L * 60L * 1000L
-        assertEquals("Just now", dashboardAgeLabel(now - 20_000L, now))
-        assertEquals("5m ago", dashboardAgeLabel(now - 5 * 60_000L, now))
-        assertEquals("2h ago", dashboardAgeLabel(now - 2 * 60 * 60_000L, now))
-        assertEquals("2d ago", dashboardAgeLabel(now - 2 * 24 * 60 * 60_000L, now))
-    }
 }

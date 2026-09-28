@@ -191,7 +191,7 @@ private fun MarketUpdateCard(event: NotificationEventEntity, onClick: () -> Unit
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(event.sourceName, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                relativeTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+                compactTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
             }
             Text(event.title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
