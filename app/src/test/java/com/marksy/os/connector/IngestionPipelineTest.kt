@@ -144,7 +144,7 @@ class IngestionPipelineTest {
             emptyList()
         }, null, null)
 
-        listOf("Good morning all", "See you at noon").map { body ->
+        listOf("Good morning all", "Good morning all\nSee you at noon").map { body ->
             async(Dispatchers.IO) { racing.ingest(raw("org.telegram.messenger", "chat", "Group", body)) }
         }.awaitAll()
 
@@ -157,5 +157,14 @@ class IngestionPipelineTest {
         pipeline.ingest(RawCapture(ConnectorRegistry.NOTIFICATIONS, "com.snapwork.hdfc", "hdfc", "k1", "Debited", "Rs 500 debited", t0 - 120_000))
         pipeline.ingest(raw("com.snapwork.hdfc", "k2", "Credited", "Rs 900 credited"))
         assertEquals(1L, count(Metric.LATE_CAPTURE))
+    }
+
+    // Regression: Dainik Bhaskar and SMS senders reuse one slot; new headlines were buried under a days-old row.
+    @Test
+    fun repostWithEntirelyNewContentIsItsOwnNotification() = runBlocking {
+        val first = pipeline.ingest(raw("com.ak.ta.dainikbhaskar.activity", "slot", "Dainik Bhaskar", "Headline one")) as IngestionPipeline.Result.Stored
+        val second = pipeline.ingest(raw("com.ak.ta.dainikbhaskar.activity", "slot", "Dainik Bhaskar", "Headline two"))
+        assertTrue(second is IngestionPipeline.Result.Stored && second.eventId != first.eventId)
+        assertEquals("Headline one", db.notificationEventDao().getById(first.eventId)!!.body)
     }
 }

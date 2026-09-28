@@ -150,6 +150,11 @@ class IngestionPipeline(
             // Apps re-post the same key with new messages: fold new lines into the stored event (and
             // re-derive it) instead of dropping them as a duplicate.
             dao.findBySourceKey(raw.sourcePackage, raw.sourceKey)?.let { existing ->
+                // News apps and SMS senders reuse one slot: a re-post sharing no line is a new item with its own row and time.
+                if (!raw.replaceOnUpdate && raw.body.isNotBlank() && !NotificationTextExtractor.sharesLines(existing.body, raw.body)) {
+                    val item = raw.copy(sourceKey = "${raw.sourceKey}#${Integer.toHexString((raw.title + raw.body).hashCode())}")
+                    return ingestNow(item, adapted = true)
+                }
                 val body = if (raw.replaceOnUpdate) raw.body else NotificationTextExtractor.merge(existing.body, raw.body)
                 val title = raw.title.ifBlank { existing.title }
                 if (body == existing.body && title == existing.title) {

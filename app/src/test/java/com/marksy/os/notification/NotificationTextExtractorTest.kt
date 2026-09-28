@@ -154,8 +154,8 @@ class NotificationTextExtractorTest {
     }
 
     @Test
-    fun mergeKeepsEarlierLinesAndAppendsOnlyNewOnes() {
-        assertEquals("A\nB\nC", NotificationTextExtractor.merge("A\nB", "B\nC"))
+    fun mergeKeepsEarlierLinesAndPutsNewOnesFirst() {
+        assertEquals("C\nA\nB", NotificationTextExtractor.merge("A\nB", "B\nC"))
         assertEquals("A\nB", NotificationTextExtractor.merge("A\nB", "A"))
     }
 
