@@ -158,4 +158,19 @@ class NotificationTextExtractorTest {
         assertEquals("A\nB\nC", NotificationTextExtractor.merge("A\nB", "B\nC"))
         assertEquals("A\nB", NotificationTextExtractor.merge("A\nB", "A"))
     }
+
+    // Regression: long chat history kept the oldest 4000 chars, so the newest call was cut off.
+    @Test
+    fun longChatHistoryKeepsTheNewestMessage() {
+        val older = Array(20) { i -> Bundle().apply { putCharSequence("sender", "Desk"); putCharSequence("text", "note $i " + "x".repeat(300)) } }
+        val newest = Bundle().apply { putCharSequence("sender", "Desk"); putCharSequence("text", "BUY RENUKA CMP 23.62 SL 22.25") }
+        val extras = Bundle().apply {
+            putCharSequence("android.title", "Tips Group")
+            putParcelableArray("android.messages", older + newest)
+        }
+
+        val result = NotificationTextExtractor.extract(extras)
+        assertTrue(result.endsWith("Desk: BUY RENUKA CMP 23.62 SL 22.25"))
+        assertEquals(NotificationTextExtractor.MAX_BODY_LENGTH, result.length)
+    }
 }

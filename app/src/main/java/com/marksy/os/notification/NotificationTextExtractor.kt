@@ -43,12 +43,13 @@ object NotificationTextExtractor {
         // Preserve useful secondary text that some banking/broker notifications
         // place in android.subText. Duplicate fragments (e.g. android.text repeated
         // inside android.textLines) are removed at the fragment level before truncation.
-        return (headers + content + listOf(subText, summaryText, infoText))
+        val body = (headers + content + listOf(subText, summaryText, infoText))
             .map { stripMarkup(it).trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString("\n")
-            .take(MAX_BODY_LENGTH)
+        // Chat history is oldest-first; over the limit the newest messages win.
+        return if (messages.isNotEmpty()) body.takeLast(MAX_BODY_LENGTH) else body.take(MAX_BODY_LENGTH)
     }
 
     // Only well-known formatting tags, so text like "price < 500 > 400" survives.
@@ -69,6 +70,12 @@ object NotificationTextExtractor {
      * Earlier lines are kept (apps often re-post only the newest message once dismissed)
      * and only unseen lines are appended; when over the limit the newest content wins.
      */
+    /** Lines of [incoming] not already in [existing]: what a re-post actually adds. */
+    fun added(existing: String, incoming: String): String {
+        val known = existing.lines().filter { it.isNotBlank() }.toSet()
+        return incoming.lines().filter { it.isNotBlank() && it !in known }.joinToString("\n")
+    }
+
     fun merge(existing: String, incoming: String): String {
         val known = existing.lines().filter { it.isNotBlank() }
         val added = incoming.lines().filter { it.isNotBlank() && it !in known }
