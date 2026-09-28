@@ -15,9 +15,10 @@ object TradeCallParser {
     // Where the instrument name ends: a separator, a level label, or a price.
     private val symbolEnd = Regex("""[|\n]|\b(cmp|ltp|entry|sl|tgt|target|targets|stop|stoploss|with|at|above|below|near|around)\b|@|₹|\brs\b|\d""", RegexOption.IGNORE_CASE)
     private const val PRICE = """\s*[:\-=]?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)"""
-    private val entry = Regex("""\b(?:cmp|ltp|entry|buy\s+at|sell\s+at)$PRICE""", RegexOption.IGNORE_CASE)
+    // "around"/"target price of" are ICICI Direct research calls: "Buy JSL around Rs 750 … target price of Rs 915".
+    private val entry = Regex("""\b(?:cmp|ltp|entry|buy\s+at|sell\s+at|around)$PRICE""", RegexOption.IGNORE_CASE)
     private val stop = Regex("""\b(?:sl|stop\s*loss|stoploss|stop-loss)$PRICE""", RegexOption.IGNORE_CASE)
-    private val target = Regex("""\b(?:tgt|targets?)$PRICE""", RegexOption.IGNORE_CASE)
+    private val target = Regex("""\b(?:tgt|targets?)(?:\s+price)?(?:\s+of)?$PRICE""", RegexOption.IGNORE_CASE)
     private val horizonPhrase = Regex("""\b(short[\s-]term|long[\s-]term|intraday|btst|positional|swing)\b""", RegexOption.IGNORE_CASE)
     private val horizonField = Regex("""\b(?:time|duration|horizon)\s*[:\-]\s*([^|\n]+)""", RegexOption.IGNORE_CASE)
 
