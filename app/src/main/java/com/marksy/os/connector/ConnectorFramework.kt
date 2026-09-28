@@ -191,6 +191,7 @@ class IngestionPipeline(
             metrics.count(Metric.CAPTURED, *scopes, MetricsRecorder.category(result.category.name))
             metrics.count(if (result.category == NotificationClassifier.Category.OTHER) Metric.UNCLASSIFIED else Metric.CLASSIFIED, *scopes)
             metrics.count(Metric.DELIVERY_DELAY_MS_SUM, *scopes, delta = (clock() - raw.postedAt).coerceIn(0, MAX_DELAY_MS))
+            if (clock() - raw.postedAt > LATE_CAPTURE_MS) metrics.count(Metric.LATE_CAPTURE, *scopes)
             if (isTrading && !applied.archived) runCatching(onTradingCaptured)
             runCatching { onStored(applied.event.copy(id = id)) }
             runCatching { ruleRunner?.recordCapture(id, applied.evaluation) }
@@ -236,5 +237,6 @@ class IngestionPipeline(
         val ingestLock = Mutex()
         const val IMPORTANT_SCORE = 70
         const val MAX_DELAY_MS = 10 * 60 * 1000L
+        const val LATE_CAPTURE_MS = 60_000L
     }
 }

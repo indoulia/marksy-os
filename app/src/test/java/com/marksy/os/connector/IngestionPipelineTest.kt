@@ -151,4 +151,11 @@ class IngestionPipelineTest {
         val body = db.notificationEventDao().findBySourceKey("org.telegram.messenger", "chat")!!.body
         assertTrue(body, "Good morning all" in body && "See you at noon" in body)
     }
+
+    @Test
+    fun captureArrivingOverAMinuteLateIsCounted() = runBlocking {
+        pipeline.ingest(RawCapture(ConnectorRegistry.NOTIFICATIONS, "com.snapwork.hdfc", "hdfc", "k1", "Debited", "Rs 500 debited", t0 - 120_000))
+        pipeline.ingest(raw("com.snapwork.hdfc", "k2", "Credited", "Rs 900 credited"))
+        assertEquals(1L, count(Metric.LATE_CAPTURE))
+    }
 }

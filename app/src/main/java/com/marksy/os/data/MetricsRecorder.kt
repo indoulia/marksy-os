@@ -24,6 +24,7 @@ object Metric {
     const val PROCESSING_MS_SUM = "processing_ms_sum"
     const val PROCESSING_COUNT = "processing_count"
     const val DELIVERY_DELAY_MS_SUM = "delivery_delay_ms_sum"
+    const val LATE_CAPTURE = "late_capture"
     const val USER_INTERACTION = "user_interaction"
     const val CORRECTION = "correction"
     const val RULE_EXECUTION = "rule_execution"

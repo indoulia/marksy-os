@@ -65,4 +65,11 @@ class MarksyHealthTest {
         assertEquals(Level.WARNING, misc.level)
         assertEquals(3, misc.diagnostics.size)
     }
+
+    // ColorOS froze Marksy in the background: 31% of captures arrived over a minute late, none of it visible in Health.
+    @Test
+    fun manyLateCapturesWarnWithTheBatterySettingsToChange() {
+        val r = MarksyHealth.evaluate(inputs().copy(lateCaptures7d = 20))
+        assertTrue(r.diagnostics.any { "late" in it.title && it.action.orEmpty().contains("Auto launch") })
+    }
 }
