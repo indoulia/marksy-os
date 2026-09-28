@@ -20,20 +20,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.market.InstrumentPredictionEntryDto
-import com.marksy.os.market.IpoDetailFormatter
+import com.marksy.os.market.MarksyAnalysis
 import com.marksy.os.market.MarksyCallView
 import com.marksy.os.market.MarksyCalls
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
-// Fields the card already shows; the rest of the recommendation is Marksy's analysis.
-private val SHOWN = setOf("id", "symbol", "companyName", "exchange", "market", "entryPrice", "targetPrice", "stopLoss", "horizonDays", "asOf", "createdAt", "updatedAt", "price", "currentPrice")
 
 private fun pct(v: Double) = "${Math.round(if (v <= 1.0) v * 100 else v)}%"
 private fun signed(v: Double) = String.format(Locale.US, "%+.1f%%", v)
@@ -118,7 +116,7 @@ private fun ProgressBar(stop: Double, entry: Double, target: Double, price: Doub
 }
 
 @Composable
-private fun Collapsible(title: String, summary: String?, content: @Composable ColumnScope.() -> Unit) {
+private fun Collapsible(title: String, summary: String?, preview: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     var open by rememberSaveable(title) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -128,15 +126,58 @@ private fun Collapsible(title: String, summary: String?, content: @Composable Co
             }
             Icon(if (open) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp))
         }
+        preview?.let { Column(content = it) }
         if (open) Column(Modifier.padding(bottom = 8.dp), content = content)
     }
 }
 
+/** Gauges stay visible; facts, signals and reasons open on tap. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AnalysisSection(analysis: JSONObject?, title: String = "Marksy analysis") {
-    val rows = remember(analysis) { analysis?.let { IpoDetailFormatter.rows(it, skip = SHOWN) }.orEmpty() }
-    if (rows.isEmpty()) return
-    Collapsible(title, summary = null) { rows.forEach { DetailRow(it) } }
+    val a = remember(analysis) { analysis?.let(MarksyAnalysis::from) } ?: return
+    if (a.gauges.isEmpty() && a.facts.isEmpty() && a.signals.isEmpty()) return
+    Collapsible(title, summary = null, preview = { a.gauges.forEach { Gauge(it) } }) {
+        if (a.facts.isNotEmpty()) FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            a.facts.forEach { (label, value) -> FactPill(label, value) }
+        }
+        a.signals.forEach { (label, text) ->
+            Column(Modifier.padding(top = 8.dp)) {
+                Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                Text(text, color = MarksyTheme.TextPrimary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (a.reasons.isNotEmpty()) Text(a.reasons.joinToString(" · "), color = MarksyTheme.YellowImportant, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        a.basedOn?.let { Text("Based on $it", color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp)) }
+    }
+}
+
+/** A 0–100% reading drawn like the day range: label, bar, value. */
+@Composable
+private fun Gauge(g: MarksyAnalysis.Gauge) {
+    val tint = when {
+        g.fraction >= .66f -> MarksyTheme.PrimaryEmerald
+        g.fraction >= .4f -> MarksyTheme.YellowImportant
+        else -> MarksyTheme.RedUrgent
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(g.label, color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.width(78.dp))
+        Canvas(Modifier.weight(1f).height(10.dp)) {
+            val mid = size.height / 2
+            drawLine(Color(0x33FFFFFF), Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
+            drawLine(tint, Offset(0f, mid), Offset(size.width * g.fraction.coerceIn(.02f, 1f), mid), 4.dp.toPx(), StrokeCap.Round)
+        }
+        Text(g.value, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+    }
+    g.note?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(start = 78.dp)) }
+}
+
+@Composable
+private fun FactPill(label: String, value: String) {
+    Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MarksyTheme.SurfaceRaised).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("$label ", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+        Text(value, color = if (value.startsWith("+")) MarksyTheme.PrimaryEmerald else if (value.startsWith("-")) MarksyTheme.RedUrgent else MarksyTheme.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 @Composable
