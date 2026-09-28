@@ -148,4 +148,36 @@ class MarksyTipPayloadFixtureTest {
         assertEquals("CROPSTER AGRO", payload.symbol)
         assertEquals("BUY", payload.direction)
     }
+
+    private fun tip(title: String, body: String, source: String = "5paisa") = MarksyTipPayloadBuilder.from(MarksyTradingEventRequest(
+        eventId = 1L, source = source, sourcePackage = "com.fivepaisa.trade", title = title, body = body, category = "TRADING",
+        priority = 10, confidence = 0.9f, occurredAt = 1_757_650_000_000L, idempotencyKey = "k"
+    ))!!
+
+    // Regression: only the stop-loss reached Marksy; CMP and TGT were not recognised as entry and target.
+    @Test
+    fun shortCallSendsItsCmpStopAndTargetLevels() {
+        val payload = tip("Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
+        assertEquals(23.62, payload.entryPrice!!, 0.001)
+        assertEquals(22.25, payload.stopLoss!!, 0.001)
+        assertEquals(26.0, payload.targetPrice!!, 0.001)
+    }
+
+    // Regression: "1,450.50" was sent as 1.
+    @Test
+    fun pricesWithThousandsSeparatorsAreSentWhole() {
+        assertEquals(1450.50, tip("Order update", "Symbol: RELIANCE BUY order executed at 1,450.50", "Upstox").entryPrice!!, 0.001)
+    }
+
+    // Regression: ICICI "Accumulate" calls went out with no direction.
+    @Test
+    fun accumulateCallIsSentAsBuy() {
+        assertEquals("BUY", tip("Pro Opinion", "Accumulate JSL around Rs 750, target price of Rs 915", "ICICI Direct").direction)
+    }
+
+    // Regression: the title "Stock Alert" made the symbol ALERT.
+    @Test
+    fun stockAlertTitleIsNotTakenAsTheSymbol() {
+        assertEquals("RENUKA", tip("Stock Alert", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26").symbol)
+    }
 }

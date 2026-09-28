@@ -46,4 +46,12 @@ class TradingDeliveryPolicyTest {
     fun batchSizeRemainsBounded() {
         assertEquals(10, TradingDeliveryPolicy.BATCH_SIZE)
     }
+
+    // Regression: an expired session (401) or a rate limit (429) failed every queued tip for good.
+    @Test
+    fun authAndRateLimitHttpFailuresRetryButBadRequestDoesNot() {
+        assertTrue(TradingDeliveryPolicy.shouldRetry(httpFailure(401)))
+        assertTrue(TradingDeliveryPolicy.shouldRetry(httpFailure(429)))
+        assertFalse(TradingDeliveryPolicy.shouldRetry(httpFailure(400)))
+    }
 }

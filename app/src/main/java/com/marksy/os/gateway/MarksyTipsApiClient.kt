@@ -121,11 +121,7 @@ class MarksyTipsApiClient(
                 }
                 builder.toString()
             }.orEmpty()
-            if (code !in 200..299) {
-                val detail = errorDetail(response)
-                if (code in 400..499) throw MarksyTerminalException("Marksy Tips API returned HTTP $code$detail")
-                throw IOException("Marksy Tips API returned HTTP $code$detail")
-            }
+            if (code !in 200..299) throw httpFailure(code, errorDetail(response))
             return JSONObject(response).also { envelope ->
                 if (!envelope.has("data") || !envelope.has("meta")) throw IOException("Marksy Tips API returned an invalid response envelope")
             }
@@ -158,6 +154,14 @@ private const val MAX_SUMMARY_CHARS = 2_000
 private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
 class MarksyTerminalException(message: String) : IOException(message)
+
+internal fun httpFailure(code: Int, detail: String = ""): IOException {
+    val message = "Marksy Tips API returned HTTP $code$detail"
+    return if (code in 400..499 && code !in RETRYABLE_CLIENT_CODES) MarksyTerminalException(message) else IOException(message)
+}
+
+// Session, timeout and rate-limit failures are about the account, not the tip; retry once they clear.
+private val RETRYABLE_CLIENT_CODES = setOf(401, 403, 408, 425, 429)
 
 private const val DEFAULT_MARKSY_API_BASE_URL = "https://marksy.indoulia.com/api/v1"
 
