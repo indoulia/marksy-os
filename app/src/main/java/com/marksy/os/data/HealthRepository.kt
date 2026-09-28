@@ -77,7 +77,8 @@ class HealthRepository(private val context: Context, private val clock: () -> Lo
             batteryPercent = if (level >= 0 && scale > 0) level * 100 / scale else null,
             charging = if (status == -1) null else status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL,
             batteryOptimizationExempt = power?.isIgnoringBatteryOptimizations(context.packageName),
-            connectors = connectors
+            connectors = connectors,
+            lateCaptures7d = sum(Metric.LATE_CAPTURE)
         )
     }
 

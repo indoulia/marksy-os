@@ -49,7 +49,8 @@ object MarksyHealth {
         val batteryPercent: Int?,
         val charging: Boolean?,
         val batteryOptimizationExempt: Boolean?,
-        val connectors: List<ConnectorInput>
+        val connectors: List<ConnectorInput>,
+        val lateCaptures7d: Long = 0
     )
 
     data class ConnectorHealth(val id: String, val label: String, val level: Level, val status: String, val uptimePercent: Double?, val capturedToday: Long)
@@ -107,6 +108,12 @@ object MarksyHealth {
             "Check notification access and that Marksy is not battery-restricted"
         )
         if (i.batteryOptimizationExempt == false) diagnostics += Diagnostic(Level.WARNING, "Battery optimisation may stop Marksy in the background", "Allow unrestricted battery use for Marksy")
+        // Frozen in the background (ColorOS "Hans"): captures arrive in bursts long after posting.
+        if (i.lateCaptures7d >= LATE_WARN && i.lateCaptures7d * 10 >= i.captured7d) diagnostics += Diagnostic(
+            Level.WARNING,
+            "${i.lateCaptures7d} of ${i.captured7d} captures arrived over a minute late (7d)",
+            "Settings › Apps › Marksy OS › Battery: allow background activity and turn on Auto launch"
+        )
         if (i.intelligenceBacklog > BACKLOG_WARN) diagnostics += Diagnostic(Level.WARNING, "${i.intelligenceBacklog} events are waiting for intelligence processing", "Processing resumes automatically in the background")
         if (i.failedTradingDeliveries > 0) diagnostics += Diagnostic(Level.WARNING, "${i.failedTradingDeliveries} trading events failed Marksy delivery", "Check the Marksy gateway connection")
         val captureFail = i.captureFailures7d + i.processingFailures7d
@@ -125,6 +132,7 @@ object MarksyHealth {
             Metric("Captured / day (7d avg)", "%.1f".format(i.captured7d / 7.0)),
             Metric("Processing latency", avgProcessing?.let { "$it ms" } ?: "n/a"),
             Metric("Capture delay", avgDelay?.let { "$it ms" } ?: "n/a"),
+            Metric("Late captures (7d)", i.lateCaptures7d.toString()),
             Metric("Duplicates (7d)", i.duplicates7d.toString()),
             Metric("Unclassified (7d)", i.unclassified7d.toString()),
             Metric("Important (7d)", i.important7d.toString()),
@@ -155,4 +163,5 @@ object MarksyHealth {
     private const val DAY = 24 * HOUR
     const val STALE_MS = 12 * HOUR
     private const val BACKLOG_WARN = 50
+    private const val LATE_WARN = 5L
 }
