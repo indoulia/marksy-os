@@ -6,6 +6,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
+import com.marksy.os.data.local.NotificationEventDao
+import com.marksy.os.data.local.NotificationEventEntity
 import kotlinx.coroutines.CancellationException
 import kotlin.Result as KotlinResult
 
@@ -30,8 +32,7 @@ class TradingDeliveryWorker(
         val now = System.currentTimeMillis()
 
         dao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
-        val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
-        if (pending.isEmpty()) return Result.success()
+        if (dao.findPendingTrading(1).isEmpty()) return Result.success()
 
         if (client is UnconfiguredMarksyGatewayClient) {
             Log.i(TAG, "Trading delivery deferred: Marksy Gateway is not configured")
@@ -45,17 +46,38 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
+        return if (TradingDeliveryRun(dao, client) { isStopped }.drain()) Result.retry() else Result.success()
+    }
+}
+
+/** One delivery pass over the PENDING trading queue; true when a transient failure wants a retry. */
+internal class TradingDeliveryRun(
+    private val dao: NotificationEventDao,
+    private val client: MarksyGatewayClient,
+    private val isStopped: () -> Boolean = { false }
+) {
+    // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
+    suspend fun drain(): Boolean {
+        while (!isStopped()) {
+            val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
+            if (pending.isEmpty()) return false
+            if (deliverBatch(pending)) return true
+        }
+        return false
+    }
+
+    private suspend fun deliverBatch(pending: List<NotificationEventEntity>): Boolean {
         var retryRequested = false
         for (event in pending) {
-            if (isStopped) return Result.success()
+            if (isStopped()) return false
 
             val attempts = event.deliveryAttempts + 1
             val claimed = dao.claimPendingTrading(event.id, attempts, System.currentTimeMillis())
             if (claimed != 1) continue
 
-            if (isStopped) {
+            if (isStopped()) {
                 dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                return Result.success()
+                return false
             }
 
             val request = event.toMarksyTradingEventRequest()
@@ -111,10 +133,8 @@ class TradingDeliveryWorker(
                 }
             )
         }
-        return if (retryRequested) Result.retry() else Result.success()
-    }
-
-    private companion object {
-        const val TAG = "MarksyTradingDelivery"
+        return retryRequested
     }
 }
+
+private const val TAG = "MarksyTradingDelivery"

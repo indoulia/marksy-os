@@ -182,7 +182,7 @@ class MainActivity : ComponentActivity() {
             repository.stripStoredMarkup()
             repository.reclassifyIfClassifierChanged(getSharedPreferences("marksy_classifier", MODE_PRIVATE))
             // Newly trading rows are PENDING; hand them to delivery now rather than at the next periodic run.
-            TradingDeliveryScheduler.schedule(applicationContext)
+            TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
             // Dues captured before Plan existed (or reclassified just now) become reminders; idempotent by dedupe key.
             runCatching {
                 plan.revalidate { repository.event(it) }
@@ -633,7 +633,10 @@ class MainActivity : ComponentActivity() {
                         authRepository = remember { MarksyContainer.authRepository(applicationContext) },
                         padding = padding,
                         currentUserId = remember { com.marksy.os.gateway.AuthSessionStore(applicationContext).signedInUserId() },
-                        onSignedIn = { showGatewaySettings = false }
+                        onSignedIn = {
+                            showGatewaySettings = false
+                            TradingDeliveryScheduler.requestImmediateDelivery(applicationContext)
+                        }
                     )
                 }
                 showAsk -> AskMarksyScreen(

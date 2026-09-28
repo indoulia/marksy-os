@@ -1,12 +1,14 @@
 package com.marksy.os.gateway
 
 import android.content.Context
+import android.os.Build
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
@@ -40,8 +42,8 @@ object TradingDeliveryScheduler {
      * durable fallback if this one-time request cannot run immediately.
      *
      * KEEP avoids replacing a delivery request that is already queued/running.
-     * The worker drains a batch of pending trading events, so one request is
-     * sufficient even when several notifications arrive close together.
+     * The worker drains the whole pending queue, so one request is sufficient
+     * even when several notifications arrive close together.
      */
     fun requestImmediateDelivery(context: Context) {
         val constraints = Constraints.Builder()
@@ -50,6 +52,8 @@ object TradingDeliveryScheduler {
         val request = OneTimeWorkRequestBuilder<TradingDeliveryWorker>()
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_DELAY_SECONDS, TimeUnit.SECONDS)
+            // Below API 31 expedited work needs a foreground notification the worker does not provide.
+            .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) }
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
