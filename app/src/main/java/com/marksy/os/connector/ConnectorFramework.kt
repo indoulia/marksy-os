@@ -14,6 +14,9 @@ import com.marksy.os.intelligence.RuleEngine
 import com.marksy.os.notification.EventFingerprint
 import com.marksy.os.notification.NotificationClassifier
 import com.marksy.os.notification.NotificationTextExtractor
+import com.marksy.os.notification.TradeCallParser
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Locale
 
 /**
@@ -131,13 +134,13 @@ class IngestionPipeline(
     }
 
     // A capture makes dozens of counter updates; batching turns them into one transaction.
-    suspend fun ingest(input: RawCapture): Result = metrics.batch { ingestNow(input) }
+    suspend fun ingest(input: RawCapture): Result = ingestLock.withLock { metrics.batch { ingestNow(input) } }
 
-    private suspend fun ingestNow(input: RawCapture): Result {
+    private suspend fun ingestNow(input: RawCapture, adapted: Boolean = false): Result {
         if (input.title.isBlank() && input.body.isBlank()) return Result.Empty
         // An adapter bug must not stop capture: fall back to the unadapted capture.
         val adapter = ConnectorRegistry.adapterFor(input.connectorId, input.sourcePackage)
-        val raw = adapter?.let { a -> runCatching { a.adapt(input) }.getOrNull() } ?: input
+        val raw = if (adapted) input else adapter?.let { a -> runCatching { a.adapt(input) }.getOrNull() } ?: input
         return try {
             val result = NotificationClassifier.classify(raw.sourcePackage, raw.title, raw.body)
             val isTrading = result.category == NotificationClassifier.Category.TRADING
@@ -155,7 +158,18 @@ class IngestionPipeline(
                     return Result.Duplicate
                 }
                 dao.updateContent(existing.id, title, body, maxOf(existing.postedAt, raw.postedAt))
+                // Chat threads: a call can arrive after small talk in the same notification.
+                val updated = if (existing.isTrading) null else NotificationClassifier.classify(raw.sourcePackage, title, body)
+                if (updated?.category == NotificationClassifier.Category.TRADING &&
+                    dao.updateClassification(existing.id, updated.category.name, updated.priority, updated.confidence, true) == 1
+                ) runCatching(onTradingCaptured)
                 runCatching { intelligence?.process(existing.id) }
+                // A new call in an already-trading notification is its own tip, delivered separately.
+                val added = if (raw.replaceOnUpdate) raw.body else NotificationTextExtractor.added(existing.body, raw.body)
+                if (existing.isTrading && added.isNotBlank() && TradeCallParser.parse(title, added) != null) {
+                    val call = raw.copy(sourceKey = "${raw.sourceKey}#${Integer.toHexString(added.hashCode())}", title = title, body = added)
+                    (ingestNow(call, adapted = true) as? Result.Stored)?.let { return it }
+                }
                 return Result.Updated(existing.id)
             }
             if (dao.findIdByFingerprint(raw.sourcePackage, fingerprint) != null) {
@@ -218,6 +232,8 @@ class IngestionPipeline(
     }
 
     private companion object {
+        // Process-wide: each service builds its own pipeline, and lookup-then-insert must not interleave.
+        val ingestLock = Mutex()
         const val IMPORTANT_SCORE = 70
         const val MAX_DELAY_MS = 10 * 60 * 1000L
     }

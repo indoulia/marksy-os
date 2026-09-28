@@ -7,6 +7,9 @@ import com.marksy.os.data.RuleRunner
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.intelligence.EventIntelligencePipeline
 import com.marksy.os.intelligence.RuleEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -108,5 +111,44 @@ class IngestionPipelineTest {
         assertEquals(ConnectorRegistry.NOTIFICATIONS, failure.connectorId)
         assertEquals("IllegalStateException", failure.detail)
         assertEquals(IngestionPipeline.Result.Empty, pipeline.ingest(raw("com.a", "x2", " ", "")))
+    }
+
+    // Regression: a tip posted after "Good morning" in the same chat notification was never treated as trading.
+    @Test
+    fun chatUpdateThatAddsATradeCallBecomesTradingAndIsDelivered() = runBlocking {
+        pipeline.ingest(raw("org.telegram.messenger", "chat", "Tips Group", "Good morning all"))
+        val r = pipeline.ingest(raw("org.telegram.messenger", "chat", "Tips Group", "Good morning all\nBUY RENUKA CMP 23.62 SL 22.25 TGT 26"))
+        val e = db.notificationEventDao().getById((r as IngestionPipeline.Result.Updated).eventId)!!
+        assertEquals("TRADING", e.category)
+        assertEquals("PENDING", e.deliveryState)
+        assertEquals(1, trading)
+    }
+
+    // Regression: a second call reusing the first call's notification slot was folded into it and never sent.
+    @Test
+    fun newCallInAnAlreadyTradingNotificationIsStoredAndDeliveredSeparately() = runBlocking {
+        pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"))
+        val r = pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY IDEA CMP 9.5 SL 8.9 TGT 11"))
+        val e = db.notificationEventDao().getById((r as IngestionPipeline.Result.Stored).eventId)!!
+        assertEquals("BUY IDEA CMP 9.5 SL 8.9 TGT 11", e.body)
+        assertEquals("PENDING", e.deliveryState)
+        assertEquals(2, trading)
+    }
+
+    // Regression: two quick posts of one notification raced lookup-then-insert and the second was dropped.
+    @Test
+    fun concurrentPostsOfOneNotificationAreBothKept() = runBlocking {
+        val bothInside = java.util.concurrent.CyclicBarrier(2)
+        val racing = IngestionPipeline(db.notificationEventDao(), db.connectorDao(), metrics, {
+            runCatching { bothInside.await(300, java.util.concurrent.TimeUnit.MILLISECONDS) }
+            emptyList()
+        }, null, null)
+
+        listOf("Good morning all", "See you at noon").map { body ->
+            async(Dispatchers.IO) { racing.ingest(raw("org.telegram.messenger", "chat", "Group", body)) }
+        }.awaitAll()
+
+        val body = db.notificationEventDao().findBySourceKey("org.telegram.messenger", "chat")!!.body
+        assertTrue(body, "Good morning all" in body && "See you at noon" in body)
     }
 }
