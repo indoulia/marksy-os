@@ -112,9 +112,13 @@ object IpoDetailFormatter {
     private fun scalar(key: String, v: Any, zone: ZoneId): String = when (v) {
         is Boolean -> if (v) "Yes" else "No"
         is Number -> number(v) + if (key.lowercase().endsWith("percent")) "%" else ""
-        is String -> date(v, zone) ?: if (v.length > 2 && v.all { it.isUpperCase() || it == '_' || it.isDigit() }) words(v) else v
+        // Marksy sends decimals as strings ("5.37888406"); they follow the same 2-decimal rule.
+        is String -> if (DECIMAL.matches(v)) scalar(key, BigDecimal(v), zone)
+            else date(v, zone) ?: if (v.length > 2 && v.all { it.isUpperCase() || it == '_' || it.isDigit() }) words(v) else v
         else -> v.toString()
     }
+
+    private val DECIMAL = Regex("""-?\d+\.\d+""")
 
     /** Two decimals at most, Indian digit grouping: 1499400.5 -> "14,99,400.5". */
     internal fun number(n: Number): String {

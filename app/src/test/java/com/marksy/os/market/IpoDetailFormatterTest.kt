@@ -64,4 +64,10 @@ class IpoDetailFormatterTest {
         assertTrue(text, text.contains("Positive listing probability: Insufficient evidence"))
         assertTrue(text, text.contains("Min investment: 14,994"))
     }
+
+    // Regression: Marksy sends decimals as strings ("5.37888406"), which skipped the 2-decimal rule.
+    @Test fun decimalStringsAreRoundedToTwoPlaces() {
+        val rows = IpoDetailFormatter.rows(JSONObject(mapOf("upsidePct" to "5.37888406", "bseCode" to "532508")))
+        assertEquals(setOf("5.38", "532508"), rows.map { it.value }.toSet())
+    }
 }
