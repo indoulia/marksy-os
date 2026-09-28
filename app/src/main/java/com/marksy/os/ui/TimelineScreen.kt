@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -53,7 +52,7 @@ fun TimelineScreen(
         } else {
             items(events, key = { it.id }) { event ->
                 TimelineNodeRow(
-                    time = formatTimestamp(event.postedAt),
+                    time = compactTime(event.postedAt).orEmpty(),
                     title = event.title.ifBlank { "Captured notification" },
                     source = event.sourceName,
                     icon = if (event.isTrading) Icons.Default.ShowChart else Icons.Default.Notifications,
@@ -134,5 +133,3 @@ private fun TimelineNodeRow(
     }
 }
 
-private fun formatTimestamp(timestamp: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))

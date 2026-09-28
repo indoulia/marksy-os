@@ -77,7 +77,7 @@ fun TradingIntelligenceScreen(
                                 price = quote?.lastPrice?.let(::rupees) ?: "—",
                                 change = quote?.changePct?.let(::signedPct) ?: "",
                                 signalType = call.side.name,
-                                headline = listOfNotNull(insight.source, call.horizon, relativeTime(insight.postedAt)).joinToString(" · "),
+                                headline = listOfNotNull(insight.source, call.horizon, compactTime(insight.postedAt)).joinToString(" · "),
                                 entry = call.entry?.let(::rupees) ?: "—",
                                 target = call.target?.let(::rupees) ?: "—",
                                 stopLoss = call.stopLoss?.let(::rupees) ?: "—",
@@ -120,17 +120,6 @@ private const val TAB_PREDICTIONS = "Predictions"
 private const val TAB_CALLS = "Calls"
 private const val TAB_CAPTURED = "Captured"
 val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_CALLS, TAB_CAPTURED)
-
-internal fun relativeTime(postedAt: Long, now: Long = System.currentTimeMillis()): String? {
-    if (postedAt <= 0) return null
-    val minutes = (now - postedAt) / 60_000
-    return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        minutes < 24 * 60 -> "${minutes / 60}h ago"
-        else -> "${minutes / (24 * 60)}d ago"
-    }
-}
 
 
 private fun marketMessage(market: MarketState, loaded: String): String = when (market) {
@@ -362,7 +351,7 @@ private fun CapturedInsightCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
-                Text(insight.status, color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                Text(listOfNotNull(compactTime(insight.postedAt), insight.status).joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 10.sp)
             }
             Spacer(Modifier.height(4.dp))
             Text(

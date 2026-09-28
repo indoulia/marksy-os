@@ -32,7 +32,6 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.intelligence.SmartInboxModel
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -284,7 +283,7 @@ private fun InboxNotificationCard(
                         }
                     }
                     Text(
-                        formatInboxTime(event.postedAt),
+                        compactTime(event.postedAt).orEmpty(),
                         color = if (!unread) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald,
                         fontSize = 10.sp,
                         fontWeight = if (!unread) FontWeight.Normal else FontWeight.Bold
@@ -400,5 +399,3 @@ private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
     }
 }
 
-private fun formatInboxTime(timestamp: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))

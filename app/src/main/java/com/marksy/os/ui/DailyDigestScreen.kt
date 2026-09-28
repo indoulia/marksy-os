@@ -29,7 +29,6 @@ import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.SmartInboxModel
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -222,7 +221,7 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(event.title.ifBlank { "Notification event" }, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                event.sourceName.ifBlank { "System" } + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(event.postedAt)),
+                event.sourceName.ifBlank { "System" } + " · " + compactTime(event.postedAt).orEmpty(),
                 color = MarksyTheme.TextMuted,
                 fontSize = 11.sp
             )

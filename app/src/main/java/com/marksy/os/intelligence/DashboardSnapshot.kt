@@ -2,7 +2,6 @@ package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
-import java.util.concurrent.TimeUnit
 
 /** Single deterministic snapshot for the Marksy OS home experience. */
 data class DashboardSnapshot(
@@ -79,13 +78,3 @@ data class DashboardSnapshot(
     }
 }
 
-fun dashboardAgeLabel(eventPostedAt: Long, nowMillis: Long): String {
-    val age = (nowMillis - eventPostedAt).coerceAtLeast(0L)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(age)
-    return when {
-        minutes < 1 -> "Just now"
-        minutes < 60 -> "${minutes}m ago"
-        minutes < 24 * 60 -> "${minutes / 60}h ago"
-        else -> "${minutes / (24 * 60)}d ago"
-    }
-}

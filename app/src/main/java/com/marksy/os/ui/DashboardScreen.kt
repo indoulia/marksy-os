@@ -35,7 +35,6 @@ import com.marksy.os.intelligence.HomeCategoryStats
 import com.marksy.os.intelligence.HomePeriod
 import com.marksy.os.intelligence.NotificationTrend
 import com.marksy.os.weather.Weather
-import com.marksy.os.intelligence.dashboardAgeLabel
 import com.marksy.os.upstox.UpstoxIndices
 import com.marksy.os.upstox.UpstoxLiveState
 
@@ -641,7 +640,7 @@ private fun AttentionCard(
                 )
             }
             Text(
-                "${result.attentionScore}/100 • ${dashboardAgeLabel(event.postedAt, nowMillis)}",
+                "${result.attentionScore}/100 • ${compactTime(event.postedAt, nowMillis).orEmpty()}",
                 color = MarksyTheme.TextMuted,
                 fontSize = 10.sp
             )
@@ -722,7 +721,7 @@ private fun CompactEventCard(
                     Spacer(Modifier.width(6.dp))
                 }
                 Text(
-                    dashboardAgeLabel(event.postedAt, nowMillis),
+                    compactTime(event.postedAt, nowMillis).orEmpty(),
                     color = MarksyTheme.TextMuted,
                     fontSize = 10.sp
                 )
