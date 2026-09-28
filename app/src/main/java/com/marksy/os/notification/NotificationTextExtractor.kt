@@ -65,22 +65,28 @@ object NotificationTextExtractor {
         return plain
     }
 
-    /**
-     * Combines a previously stored body with the content of a re-posted notification.
-     * Earlier lines are kept (apps often re-post only the newest message once dismissed)
-     * and only unseen lines are appended; when over the limit the newest content wins.
-     */
     /** Lines of [incoming] not already in [existing]: what a re-post actually adds. */
     fun added(existing: String, incoming: String): String {
         val known = existing.lines().filter { it.isNotBlank() }.toSet()
         return incoming.lines().filter { it.isNotBlank() && it !in known }.joinToString("\n")
     }
 
+    /** True when a re-post repeats at least one stored line (a chat thread growing), not a new item in a reused slot. */
+    fun sharesLines(existing: String, incoming: String): Boolean {
+        val known = existing.lines().filter { it.isNotBlank() }.toSet()
+        return incoming.lines().any { it.isNotBlank() && it in known }
+    }
+
+    /**
+     * Combines a previously stored body with the content of a re-posted notification.
+     * Earlier lines are kept (apps often re-post only the newest message once dismissed)
+     * and unseen lines go first, so the card shows the latest message; over the limit the newest content wins.
+     */
     fun merge(existing: String, incoming: String): String {
         val known = existing.lines().filter { it.isNotBlank() }
         val added = incoming.lines().filter { it.isNotBlank() && it !in known }
-        val merged = (known + added).joinToString("\n")
-        return if (merged.length <= MAX_BODY_LENGTH) merged else merged.takeLast(MAX_BODY_LENGTH)
+        val merged = (added + known).joinToString("\n")
+        return if (merged.length <= MAX_BODY_LENGTH) merged else merged.take(MAX_BODY_LENGTH)
     }
 
     private fun Sequence<String>.boundedLines(): List<String> =
