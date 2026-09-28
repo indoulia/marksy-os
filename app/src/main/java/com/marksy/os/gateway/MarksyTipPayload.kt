@@ -59,7 +59,8 @@ object MarksyTipPayloadBuilder {
     fun from(request: MarksyTradingEventRequest): MarksyTipPayload? {
         val text = "${request.title} ${request.body}"
         val symbol = extractSymbol(request.title, request.body, text) ?: return null
-        val direction = when {
+        val call = com.marksy.os.notification.TradeCallParser.parse(request.title, request.body)
+        val direction = call?.side?.name ?: when {
             Regex("\\bBUY\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "BUY"
             Regex("\\bSELL\\b", RegexOption.IGNORE_CASE).containsMatchIn(text) -> "SELL"
             else -> null
@@ -70,9 +71,9 @@ object MarksyTipPayloadBuilder {
             source = request.source,
             sourceReference = request.idempotencyKey,
             direction = direction,
-            entryPrice = extractNumber(text, "(?:entry|entry price|executed at|filled at|avg(?:erage) price)"),
-            targetPrice = extractNumber(text, "(?:target|target price)"),
-            stopLoss = extractNumber(text, "(?:stop loss|stoploss|sl)"),
+            entryPrice = call?.entry ?: extractNumber(text, "(?:entry|entry price|executed at|filled at|avg(?:erage) price)"),
+            targetPrice = call?.target ?: extractNumber(text, "(?:target|target price)"),
+            stopLoss = call?.stopLoss ?: extractNumber(text, "(?:stop loss|stoploss|sl)"),
             horizonDays = extractDays(text),
             confidence = extractPercent(text)?.div(100.0),
             rationale = extractRationale(text),
@@ -92,7 +93,8 @@ object MarksyTipPayloadBuilder {
     fun symbolOf(title: String, body: String): String? = extractSymbol(title, body, "$title $body")
 
     private fun extractSymbol(title: String, body: String, text: String): String? {
-        val labelled = Regex("(?i)(?:symbol|scrip|ticker|stock)\\s*[:=-]?\\s*([A-Z][A-Z0-9.-]{2,14})")
+        // Case-sensitive capture: "Stock Alert" must not yield ALERT.
+        val labelled = Regex("(?i:symbol|scrip|ticker|stock)\\s*[:=-]?\\s*([A-Z][A-Z0-9.-]{2,14})\\b")
             .find(text)?.groupValues?.getOrNull(1)
         if (!labelled.isNullOrBlank()) return labelled.uppercase()
         // A parsed call names the instrument after the side; the first caps word is often the SMS sender.
@@ -117,8 +119,8 @@ object MarksyTipPayloadBuilder {
     }
 
     private fun extractNumber(text: String, label: String): Double? =
-        Regex("(?i)$label\\s*[:=-]?\\s*(?:₹|INR)?\\s*([0-9]+(?:\\.[0-9]+)?)")
-            .find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+        Regex("(?i)$label\\s*[:=-]?\\s*(?:₹|INR)?\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)")
+            .find(text)?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
 
     private fun extractDays(text: String): Int? =
         Regex("(?i)\\b(?:horizon|holding|for)\\s*[:=-]?\\s*(\\d{1,3})\\s*(?:days?|d)\\b")
