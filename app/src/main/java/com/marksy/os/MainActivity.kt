@@ -135,6 +135,16 @@ class MainActivity : ComponentActivity() {
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
         lifecycleScope.launch { runCatching { MarksyContainer.actions(applicationContext).recover() } }
+        // OTPs expire in minutes, so retire while the app is on screen, not only in the daily worker.
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                val repository = MarksyContainer.repository(applicationContext)
+                while (true) {
+                    runCatching { repository.retireExpired() }
+                    delay(60_000)
+                }
+            }
+        }
         notificationAccessEnabled = NotificationListenerStatus.isEnabled(this)
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
         setContent { com.marksy.os.ui.MarksyMaterialTheme { MarksyApp() } }

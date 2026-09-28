@@ -71,6 +71,18 @@ class NotificationRepository(
         prefs.edit().putInt(KEY_CLASSIFIER_VERSION, com.marksy.os.notification.NotificationClassifier.VERSION).apply()
     }
 
+    /** Moves items whose moment has passed (EventExpiry) out of the active views; history keeps them. */
+    suspend fun retireExpired(nowMillis: Long = System.currentTimeMillis()): Int {
+        val open = dao.findRetirable()
+        val reasons = com.marksy.os.intelligence.EventExpiry.superseded(open.filter { it.category == "TRADING" }).toMutableMap()
+        open.forEach { e ->
+            if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.of(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
+        }
+        return reasons.entries.groupBy({ it.value }, { it.key }).entries.sumOf { (reason, ids) ->
+            ids.chunked(500).sumOf { dao.resolve(it, reason, nowMillis) }
+        }
+    }
+
     suspend fun archive(eventId: Long): Boolean {
         learning?.recordAction(listOf(eventId), PersonalLearning.Signal.ARCHIVED_UNOPENED)
         interaction()
