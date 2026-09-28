@@ -89,6 +89,8 @@ object MarksyTipPayloadBuilder {
         )
     }
 
+    fun symbolOf(title: String, body: String): String? = extractSymbol(title, body, "$title $body")
+
     private fun extractSymbol(title: String, body: String, text: String): String? {
         val labelled = Regex("(?i)(?:symbol|scrip|ticker|stock)\\s*[:=-]?\\s*([A-Z][A-Z0-9.-]{2,14})")
             .find(text)?.groupValues?.getOrNull(1)
