@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 8
+    const val VERSION = 9
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -77,7 +77,7 @@ object NotificationClassifier {
             "order executed", "order filled", "buy order", "sell order", "trade executed",
             "trade confirmation", "position opened", "position closed", "stop loss", "target hit",
             "market alert", "order rejected", "order cancelled", "order canceled", "executed at",
-            "filled at", "quantity executed", "average price", "p&l", "profit and loss"
+            "filled at", "quantity executed", "average price"
         )),
         // Dues and birthdays you must act on; ahead of banking so "ensure funds are credited" stays a reminder.
         Rule(Category.REMINDERS, 88, .90f, listOf(
@@ -130,6 +130,7 @@ object NotificationClassifier {
     private val callSide = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""")
     private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
     private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
+    private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
     fun classify(packageName: String, title: String, body: String): Result {
         val normalizedPackage = packageName.trim().lowercase()
@@ -138,7 +139,9 @@ object NotificationClassifier {
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
-        if (otpRule.terms.any { term -> notificationText.containsRuleTerm(term) }) {
+        // Tip SMS often end with "never share your OTP"; that warning alone does not make a call an OTP.
+        val otpText = if (TradeCallParser.parse(title, body) != null) notificationText.replace(otpWarning, " ") else notificationText
+        if (otpRule.terms.any { term -> otpText.containsRuleTerm(term) }) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
 

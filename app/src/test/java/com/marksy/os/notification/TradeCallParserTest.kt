@@ -48,4 +48,29 @@ class TradeCallParserTest {
     @Test fun textWithoutACallIsNotParsed() {
         assertNull(TradeCallParser.parse("4 IPOs Just Went Live", "Acevector & Orient Cables IPOs are now open for subscription"))
     }
+
+    // Regression: options calls were read as the index itself with no entry.
+    @Test fun parsesOptionsCallWithStrikeAndAtPrice() {
+        val call = TradeCallParser.parse("F&O Call", "SELL NIFTY 24500 PE @ 120 SL 140 TGT 90")!!
+        assertEquals(TradeCallParser.Side.SELL, call.side)
+        assertEquals("NIFTY 24500 PE", call.symbol)
+        assertEquals(120.0, call.entry!!, 0.001)
+    }
+
+    // Regression: symbols that start with a digit were dropped.
+    @Test fun parsesDigitLeadingSymbol() {
+        assertEquals("360ONE", TradeCallParser.parse("Call", "BUY 360ONE CMP 1150 SL 1090 TGT 1260")!!.symbol)
+    }
+
+    // Regression: "Target 1: 150" was read as a target of 1.
+    @Test fun numberedTargetIsNotTakenAsThePrice() {
+        assertEquals(150.0, TradeCallParser.parse("Call", "BUY RENUKA CMP 140 SL 132 Target 1: 150")!!.target!!, 0.001)
+    }
+
+    // Regression: "in the range of" became part of the symbol.
+    @Test fun rangeEndsTheSymbolAndGivesTheEntry() {
+        val call = TradeCallParser.parse("Call", "Buy TATASTEEL in the range of 150-152, target 170, SL 144")!!
+        assertEquals("TATASTEEL", call.symbol)
+        assertEquals(150.0, call.entry!!, 0.001)
+    }
 }
