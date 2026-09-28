@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 7
+    const val VERSION = 8
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -149,7 +149,7 @@ object NotificationClassifier {
         // marketing, and everything else (holdings alerts, research views, IPO notices, market moves) is MARKET.
         if (normalizedPackage in tradingPackages || normalizedPackage in marketPackages) {
             val execution = normalizedPackage in tradingPackages && tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }
-            if (execution || isTradeCall(notificationText)) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
+            if (execution || isTradeCall(notificationText) || TradeCallParser.parse(title, body) != null) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
             // Explicit utility messages (welcome-kit delivery, funds credited, bills) keep their own category.
             rules.firstOrNull { it.category in BROKER_UTILITY && it.terms.any { term -> notificationText.containsRuleTerm(term) } }
                 ?.let { return Result(it.category, it.priority, it.confidence) }

@@ -37,6 +37,12 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.TRADING, result.category)
     }
 
+    // Regression: ICICI Direct research calls landed in MARKET (only one level keyword, "target").
+    @Test fun iciciResearchCallIsTrading() {
+        val result = NotificationClassifier.classify("com.icicidirect.idirectsuper", "ICICI Direct", "Buy INDGN around Rs 609 for 12 Month with target price of Rs 750, potential upside of 23.15%.")
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    }
+
     @Test fun tipCallTextFromANonBrokerAppIsStillNotTrading() {
         val result = NotificationClassifier.classify("com.android.shell", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
         assertTrue(result.category != NotificationClassifier.Category.TRADING)

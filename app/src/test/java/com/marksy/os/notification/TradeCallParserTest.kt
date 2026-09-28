@@ -36,6 +36,15 @@ class TradeCallParserTest {
         assertEquals("1-2 Months", call.horizon)
     }
 
+    // Regression: ICICI Direct research calls ("around Rs N … target price of Rs M") were never parsed.
+    @Test fun parsesIciciResearchCallWithAroundAndTargetPrice() {
+        val call = TradeCallParser.parse("ICICI Direct", "Buy JSL around Rs 750 for 12 Month with target price of Rs 915, potential upside of 22%.")!!
+        assertEquals(TradeCallParser.Side.BUY, call.side)
+        assertEquals("JSL", call.symbol)
+        assertEquals(750.0, call.entry!!, 0.001)
+        assertEquals(915.0, call.target!!, 0.001)
+    }
+
     @Test fun textWithoutACallIsNotParsed() {
         assertNull(TradeCallParser.parse("4 IPOs Just Went Live", "Acevector & Orient Cables IPOs are now open for subscription"))
     }
