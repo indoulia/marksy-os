@@ -22,6 +22,7 @@ class RetentionWorker(
             MarksyContainer.memory(applicationContext).ingest()
             // Daily gauge snapshot for the 30-day validation (EPIC-023); must not block housekeeping.
             runCatching { ValidationRepository(applicationContext).snapshot() }
+            runCatching { MarksyContainer.repository(applicationContext).retireExpired(now) }
             MarksyContainer.learning(applicationContext).run {
                 sweepIgnored(now)
                 pruneExpired(now)

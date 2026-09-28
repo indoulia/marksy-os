@@ -29,10 +29,10 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET category = :category, priority = :priority, confidence = :confidence, isTrading = :isTrading, deliveryState = CASE WHEN :isTrading THEN 'PENDING' ELSE deliveryState END, intelligenceVersion = 0 WHERE id = :eventId AND isTrading = 0")
     suspend fun updateClassification(eventId: Long, category: String, priority: Int, confidence: Float, isTrading: Boolean): Int
 
-    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE category = :category AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE category = :category AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeByCategory(category: String, limit: Int): Flow<List<NotificationEventEntity>>
 
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
@@ -42,15 +42,15 @@ interface NotificationEventDao {
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
     /** Bounded by retention (7 days, 30 for trading), so safe to observe in full. */
-    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC")
+    @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC")
     fun observeActive(): Flow<List<NotificationEventEntity>>
 
     /** High-value active events for the Home/Smart Inbox attention surfaces. */
-    @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 ORDER BY priority DESC, postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY priority DESC, postedAt DESC LIMIT :limit")
     fun observeByMinimumPriority(minimumPriority: Int, limit: Int): Flow<List<NotificationEventEntity>>
 
     /** Trading events remain source-driven and independently delivered to Marksy. */
-    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
@@ -154,7 +154,7 @@ interface NotificationEventDao {
     // ---- EPIC-011 Smart Inbox (thread-level actions take the thread's event ids) ----
 
     /** Non-archived events incl. resolved ones; bounded by retention and the limit. */
-    @Query("SELECT * FROM notification_events WHERE archived = 0 ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeInbox(limit: Int): Flow<List<NotificationEventEntity>>
 
     @Query("UPDATE notification_events SET isRead = 1, lifecycleState = CASE WHEN lifecycleState = 'NEW' THEN 'ACTIVE' ELSE lifecycleState END, lifecycleUpdatedAt = :atMillis WHERE id IN (:ids) AND archived = 0 AND (lifecycleState = 'NEW' OR isRead = 0)")
@@ -176,7 +176,12 @@ interface NotificationEventDao {
     suspend fun getByIds(ids: List<Long>): List<NotificationEventEntity>
 
     /** EPIC-012: still-unseen events older than the cutoff count as ignored. */
-    @Query("SELECT * FROM notification_events WHERE lifecycleState = 'NEW' AND archived = 0 AND postedAt < :beforeMillis ORDER BY postedAt ASC LIMIT :limit")
+    // Open items EventExpiry can retire; kept items and pending reminders stay.
+    @Query("SELECT * FROM notification_events WHERE lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0 AND kept = 0 AND remindAt IS NULL AND category IN ('OTP', 'PROMOTIONS', 'TRADING', 'MARKET', 'DELIVERY')")
+    suspend fun findRetirable(): List<NotificationEventEntity>
+
+    // Retired-but-unseen items still count as ignored for learning.
+    @Query("SELECT * FROM notification_events WHERE (lifecycleState = 'NEW' OR (lifecycleState = 'RESOLVED' AND isRead = 0 AND lifecycleReason LIKE 'Retired: %')) AND archived = 0 AND postedAt < :beforeMillis ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findStaleNew(beforeMillis: Long, limit: Int): List<NotificationEventEntity>
 
     /** EPIC-014 REPORT: the user's corrected category replaces the classifier's (the original is kept in the audit row). */
