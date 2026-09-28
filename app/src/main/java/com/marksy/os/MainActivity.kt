@@ -95,8 +95,6 @@ import com.marksy.os.ui.MarksyViewModelFactory
 import com.marksy.os.ui.RulesScreen
 import com.marksy.os.ui.SmartInboxScreen
 import com.marksy.os.ui.TimelineScreen
-import com.marksy.os.ui.TradingInsight
-import com.marksy.os.ui.TradingInsightDetailDialog
 import com.marksy.os.ui.TradingIntelligenceScreen
 import com.marksy.os.ui.toTradingInsight
 import com.marksy.os.ui.MarketScreen
@@ -266,7 +264,6 @@ class MainActivity : ComponentActivity() {
             if (granted) lifecycleScope.launch { runCatching { com.marksy.os.plan.BirthdaySync.sync(applicationContext, plan) } }
         }
         var selectedEvent by remember { mutableStateOf<NotificationEventEntity?>(null) }
-        var selectedTradingInsight by remember { mutableStateOf<TradingInsight?>(null) }
 
         val openEvent: (NotificationEventEntity) -> Unit = { event ->
             selectedEvent = event
@@ -738,7 +735,7 @@ class MainActivity : ComponentActivity() {
                                 .mapNotNull { e -> com.marksy.os.market.DailySetups.parse(e.body)?.takeIf { it.setups.isNotEmpty() }?.let { com.marksy.os.ui.SetupReport(e.id, e.postedAt, it) } }
                                 .take(3)
                         }
-                    ) { selectedTradingInsight = it }
+                    )
                 }
                 selectedTab == 4 -> MarketScreen(
                     repository = remember { MarksyContainer.marketIntelligence(applicationContext) },
@@ -842,9 +839,6 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        selectedTradingInsight?.let { insight ->
-            TradingInsightDetailDialog(insight) { selectedTradingInsight = null }
-        }
     }
 }
 

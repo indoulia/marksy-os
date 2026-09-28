@@ -38,8 +38,7 @@ fun TradingIntelligenceScreen(
     onFilterSelected: (String) -> Unit = {},
     onOpenStock: (String) -> Unit = {},
     marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
-    setupReports: List<SetupReport> = emptyList(),
-    onInsightSelected: (TradingInsight) -> Unit = {}
+    setupReports: List<SetupReport> = emptyList()
 ) {
     // Marksy supplies what to show (picks, movers, targets); prices tick live from the user's Upstox feed.
     // External calls (broker apps, SMS, chat) parsed into side / symbol / levels, shown immediately.
@@ -72,7 +71,7 @@ fun TradingIntelligenceScreen(
                     if (calls.isEmpty()) item { EmptyState("No calls captured yet.", "Buy/sell calls from your broker apps, SMS and chats appear here the moment they arrive.") }
                     itemsIndexed(calls, key = { _, (i, _) -> "call-${i.eventId}" }) { _, (insight, call) ->
                         val quote = live[call.symbol]
-                        Box(Modifier.clickable { onInsightSelected(insight) }) {
+                        Box(Modifier.clickable { onOpenStock(call.symbol) }) {
                             TradingSignalCard(
                                 symbol = call.symbol,
                                 price = quote?.lastPrice?.let(::rupees) ?: "—",
@@ -100,7 +99,8 @@ fun TradingIntelligenceScreen(
                         }
                     } else {
                         items(others, key = { it.eventId }) { insight ->
-                            CapturedInsightCard(insight) { onInsightSelected(insight) }
+                            val symbol = remember(insight.eventId) { com.marksy.os.gateway.MarksyTipPayloadBuilder.symbolOf(insight.title, insight.body) }
+                            CapturedInsightCard(insight, symbol?.let { { onOpenStock(it) } })
                         }
                     }
                 }
@@ -340,15 +340,16 @@ private fun TradingTickerCard(
 @Composable
 private fun CapturedInsightCard(
     insight: TradingInsight,
-    onClick: () -> Unit
+    onClick: (() -> Unit)?
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
+        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface, disabledContainerColor = MarksyTheme.Surface),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
-        onClick = onClick
+        onClick = onClick ?: {},
+        enabled = onClick != null
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(
