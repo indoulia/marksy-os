@@ -36,6 +36,17 @@ private fun summary(marketStatus: String = "MARKET_HOURS") = MarketSummaryDto(
 
 class MarketIntelligenceRepositoryTest {
     @Test
+    fun emptyPredictionPageStillPublishesItsLatestScan() = runBlocking {
+        val scan = LatestScanDto("2026-09-28", "2026-09-28T10:47:00Z", "PROVISIONAL", null)
+        val repository = MarketIntelligenceRepository(FakeMarketApiClient(predictionPage = ActivePredictionPageDto(emptyList(), null, scan)))
+
+        val state = repository.activePredictions()
+
+        assertTrue(state is MarketDataState.Empty)
+        assertEquals(scan, MarketIntelligenceRepository.latestScan.value)
+    }
+
+    @Test
     fun unconfiguredClientYieldsUnavailable() = runBlocking {
         val repository = MarketIntelligenceRepository(client = null)
 

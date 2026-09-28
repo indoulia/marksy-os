@@ -31,6 +31,7 @@ import com.marksy.os.market.ClosedPredictionDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PerformanceSummaryDto
+import com.marksy.os.market.PicksBasis
 import java.util.Locale
 
 /** A cursor-paged list that grows as its last row scrolls into view. */
@@ -174,12 +175,15 @@ internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: Strin
         Text(
             listOfNotNull(
                 p.remainingTradingDays?.let { "$it day${if (it == 1) "" else "s"} left" } ?: "${p.horizon}-day call",
+                if (note == null) PicksBasis.day(p.scanSessionDate)?.let { "$it call" } else null,
                 "conf ${(if (p.confidence <= 1) p.confidence * 100 else p.confidence).toInt()}%",
                 p.lifecycleState.takeIf { it != "UNAVAILABLE" }?.let(::words),
-                note ?: p.lifecycleDetail
+                p.lifecycleDetail
             ).joinToString(" · "),
             color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp)
         )
+        // Own line: which session and when the pick was made must never be ellipsized away.
+        note?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp)) }
     }
 }
 
