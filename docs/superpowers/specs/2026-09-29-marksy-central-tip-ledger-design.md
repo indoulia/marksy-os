@@ -102,8 +102,10 @@ for scoring.
   allow-list. Nothing outside that set leaves the phone.
 - `POST /tips/ingest-text` as the signed-in customer (bearer session) with
   `device_event_key, medium, app_package, channel_label, text, device_posted_at`. No title, body or sender.
-- `channel_label`: the app name for app notifications; the sender id for SMS; the group or chat name for
+- `channel_label`: the app name for app notifications; the sender id for SMS; the group name for
   WhatsApp/Telegram, with the individual sender inside a group removed ("Rahul @ StockTips" → "StockTips").
+  1:1 chats never leave the phone (decided 2026-09-30).
+- The customer's own order/execution notifications from broker apps never leave the phone (decided 2026-09-30).
 - Cleaning before send: the customer's username, phone numbers, emails, PAN-like codes
   (`[A-Z]{5}[0-9]{4}[A-Z]`) and digit runs of 8 or more (accounts, folios) are replaced with mask tokens.
 
@@ -365,7 +367,7 @@ the app's direct Upstox use; existing `/market/*` and `/dashboard/snapshot`; the
 - Return realization compares like with like: its numerator sums `actual_return` only over the tips that have
   a target, so it can differ from the displayed Total actual return, which includes direction-only tips.
 - Marksy withdrawing its own call counts as a source exit at that moment's price.
-- 1:1 WhatsApp/Telegram contact labels are sent as channel labels (chosen); admin merge folds per-customer
-  labels into one channel.
+- ~~1:1 WhatsApp/Telegram contact labels are sent as channel labels~~ — reversed 2026-09-30: 1:1 chats stay on the
+  phone; only group names are sent.
 - Defaults: 5-session entry window, 20-session default horizon, rating SHORT = 20 / LONG = 250 sessions,
   10 completed tips before a trust score shows.
