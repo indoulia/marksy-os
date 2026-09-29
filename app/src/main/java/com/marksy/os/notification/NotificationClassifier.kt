@@ -130,6 +130,19 @@ object NotificationClassifier {
     private val callSide = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""")
     private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
     private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
+
+    // The customer's own orders (placed, filled, cancelled, rejected, GTT triggered) never leave the phone (spec §5.1).
+    private val ownOrderEvents = listOf(
+        Regex("""\b(?:order|trade|gtt)\b[^.\n]{0,80}?\b(?:executed|filled|placed|rejected|cancell?ed|modified|triggered|complete|completed|confirmed)\b"""),
+        Regex("""\b(?:executed|filled)\s+at\b"""),
+        Regex("""\b(?:quantity\s+executed|partially\s+(?:filled|executed)|trade\s+confirmation)\b""")
+    )
+
+    fun isOwnOrderEvent(title: String, body: String): Boolean {
+        val text = "$title $body".lowercase()
+        return ownOrderEvents.any { it.containsMatchIn(text) }
+    }
+
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
     fun classify(packageName: String, title: String, body: String): Result {
