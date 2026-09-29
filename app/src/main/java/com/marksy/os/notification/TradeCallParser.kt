@@ -8,7 +8,7 @@ package com.marksy.os.notification
 object TradeCallParser {
     enum class Side { BUY, SELL }
 
-    data class TradeCall(val side: Side, val symbol: String, val entry: Double?, val stopLoss: Double?, val target: Double?, val horizon: String?)
+    data class TradeCall(val side: Side, val symbol: String, val entry: Double?, val stopLoss: Double?, val target: Double?, val horizon: String?, val horizonSessions: Int? = null)
 
     // "short" is a SELL only on its own: "Short term Call" is a horizon, not a side.
     private val side = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""", RegexOption.IGNORE_CASE)
@@ -21,8 +21,6 @@ object TradeCallParser {
     private val stop = Regex("""\b(?:sl|stop\s*loss|stoploss|stop-loss)$PRICE""", RegexOption.IGNORE_CASE)
     // "Target 1: 150": the 1 numbers the target, it is not the price.
     private val target = Regex("""\b(?:tgt|targets?)(?:\s*\d\s*[:\-=)])?(?:\s+price)?(?:\s+of)?$PRICE""", RegexOption.IGNORE_CASE)
-    private val horizonPhrase = Regex("""\b(short[\s-]term|long[\s-]term|intraday|btst|positional|swing)\b""", RegexOption.IGNORE_CASE)
-    private val horizonField = Regex("""\b(?:time|duration|horizon)\s*[:\-]\s*([^|\n]+)""", RegexOption.IGNORE_CASE)
 
     fun parse(title: String, body: String): TradeCall? {
         val text = "$title\n$body"
@@ -33,9 +31,8 @@ object TradeCallParser {
         if (symbol.isEmpty() || symbol.length > 30 || symbol.none { it.isLetter() }) return null
         val levels = listOf(entry, stop, target).map { re -> re.find(text)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull() }
         if (levels.count { it != null } < 2) return null
-        val horizon = horizonField.find(text)?.groupValues?.get(1)?.trim()?.trimEnd('|', ' ')?.takeIf { it.isNotEmpty() }
-            ?: horizonPhrase.find(text)?.value?.replace('-', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() }
+        val horizon = CallHorizon.parse(text)
         val s = if (sideMatch.value.lowercase() in setOf("sell", "short")) Side.SELL else Side.BUY
-        return TradeCall(s, symbol, levels[0], levels[1], levels[2], horizon)
+        return TradeCall(s, symbol, levels[0], levels[1], levels[2], horizon?.label, horizon?.sessions)
     }
 }

@@ -33,7 +33,7 @@ class TradeCallParserTest {
         assertEquals(2.82, call.entry!!, 0.001)
         assertEquals(10.0, call.target!!, 0.001)
         assertEquals(2.0, call.stopLoss!!, 0.001)
-        assertEquals("1-2 Months", call.horizon)
+        assertEquals("1-2 months", call.horizon)
     }
 
     // Regression: ICICI Direct research calls ("around Rs N … target price of Rs M") were never parsed.
@@ -43,6 +43,9 @@ class TradeCallParserTest {
         assertEquals("JSL", call.symbol)
         assertEquals(750.0, call.entry!!, 0.001)
         assertEquals(915.0, call.target!!, 0.001)
+        // Regression: "for 12 Month" (TENNIND, 2026-09-29) showed no horizon.
+        assertEquals("12 months", call.horizon)
+        assertEquals(252, call.horizonSessions)
     }
 
     @Test fun textWithoutACallIsNotParsed() {

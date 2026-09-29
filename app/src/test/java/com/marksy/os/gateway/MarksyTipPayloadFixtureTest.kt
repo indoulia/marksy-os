@@ -169,6 +169,14 @@ class MarksyTipPayloadFixtureTest {
         assertEquals(1450.50, tip("Order update", "Symbol: RELIANCE BUY order executed at 1,450.50", "Upstox").entryPrice!!, 0.001)
     }
 
+    // Regression: "for 12 Month" reached Marksy as horizonDays null; the backend counts horizon in trading sessions.
+    @Test
+    fun monthHorizonIsSentAsTradingSessions() {
+        assertEquals(252, tip("ICICI Direct", "Buy TENNIND around Rs 500 for 12 Month with target price of Rs 650, potential upside of 30%.", "ICICI Direct").horizonDays)
+        assertEquals(15, tip("Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26 for 3 weeks").horizonDays)
+        assertEquals(504, tip("Research", "Buy TENNIND around Rs 500 for 24 months with target price of Rs 800", "ICICI Direct").horizonDays)
+    }
+
     // Regression: ICICI "Accumulate" calls went out with no direction.
     @Test
     fun accumulateCallIsSentAsBuy() {

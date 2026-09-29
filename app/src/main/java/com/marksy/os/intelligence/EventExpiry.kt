@@ -22,7 +22,6 @@ object EventExpiry {
     private val validTill = Regex("""\b(?:valid|expires?)\s+(?:till|until|upto|up\s+to|by)\s+(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)?""", RegexOption.IGNORE_CASE)
     private val closesToday = Regex("""\b(?:closes|closing|ends|last\s+day)\s+(?:is\s+)?today\b""", RegexOption.IGNORE_CASE)
     private val deliveryToday = Regex("""\b(?:out\s+for\s+delivery|arriving\s+today|delivered)\b""", RegexOption.IGNORE_CASE)
-    private val span = Regex("""(\d{1,3})(?:\s*(?:-|to)\s*(\d{1,3}))?\s*(day|week|month|year)s?\b""", RegexOption.IGNORE_CASE)
 
     fun of(event: NotificationEventEntity, zone: ZoneId = ZoneId.systemDefault()): Expiry? {
         val text = "${event.title}\n${event.body}"
@@ -32,7 +31,7 @@ object EventExpiry {
             "OTP" -> Expiry(otpValidUntil(text, posted, zone), "${REASON_PREFIX}OTP validity passed")
             "PROMOTIONS" -> Expiry(posted + DAY, "${REASON_PREFIX}promotion older than a day")
             "TRADING" -> TradeCallParser.parse(event.title, event.body)
-                ?.let { Expiry(callExpiry(it.horizon, posted), "${REASON_PREFIX}call horizon passed") }
+                ?.let { Expiry(callExpiry(it.horizon, it.horizonSessions, posted), "${REASON_PREFIX}call horizon passed") }
                 ?: Expiry(posted + 7 * DAY, "${REASON_PREFIX}trading update older than a week")
             "MARKET" -> Expiry(nextSessionClose(posted), "${REASON_PREFIX}market session closed")
             "DELIVERY" -> if (deliveryToday.containsMatchIn(text)) Expiry(endOfDay(posted, zone), "${REASON_PREFIX}delivery day ended") else null
@@ -70,21 +69,13 @@ object EventExpiry {
         return posted + 30 * MINUTE
     }
 
-    private fun callExpiry(horizon: String?, posted: Long): Long {
+    /** The close of the [sessions]-th session after the posting one (weekdays; holidays not known here). */
+    private fun callExpiry(horizon: String?, sessions: Int?, posted: Long): Long {
         val h = horizon?.lowercase().orEmpty()
-        val postedAt = Instant.ofEpochMilli(posted).atZone(MARKET_ZONE)
         return when {
             "intraday" in h -> nextSessionClose(posted)
-            "btst" in h || "stbt" in h -> nextSessionClose(nextSessionClose(posted) + 1)
-            else -> span.find(h)?.let { m ->
-                val n = (m.groupValues[2].ifEmpty { m.groupValues[1] }).toLong()
-                when (m.groupValues[3].lowercase()) {
-                    "day" -> postedAt.plusDays(n)
-                    "week" -> postedAt.plusWeeks(n)
-                    "month" -> postedAt.plusMonths(n)
-                    else -> postedAt.plusYears(n)
-                }.toInstant().toEpochMilli()
-            } ?: (posted + (if ("long" in h) 365 else 30) * DAY)
+            sessions != null -> (0 until sessions).fold(nextSessionClose(posted)) { close, _ -> nextSessionClose(close + 1) }
+            else -> posted + 30 * DAY
         }
     }
 
