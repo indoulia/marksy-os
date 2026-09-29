@@ -10,6 +10,7 @@ import com.marksy.os.connector.IngestionPipeline
 import com.marksy.os.connector.RawCapture
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
+import com.marksy.os.gateway.CaptureStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import kotlinx.coroutines.CoroutineScope
@@ -72,6 +73,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
+        if (CaptureMedium.of(packageName).isChat) {
+            CaptureStore(applicationContext).rememberChatSenders(NotificationTextExtractor.senders(extras))
+        }
         OriginalAppLauncher.remember(sbn)
 
         val raw = RawCapture(
@@ -81,7 +85,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             sourceKey = sbn.key,
             title = title,
             body = text,
-            postedAt = sbn.postTime
+            postedAt = sbn.postTime,
+            groupConversation = NotificationTextExtractor.groupConversation(extras)
         )
 
         serviceScope.launch {

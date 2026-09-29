@@ -135,6 +135,17 @@ class IngestionPipelineTest {
         assertEquals(2, trading)
     }
 
+    // Tip capture sends a chat only when it knows it is a group, so a later call split into its own row keeps the flag.
+    @Test
+    fun theGroupConversationFlagIsStoredOnTheRowAndOnASplitCall() = runBlocking {
+        val first = pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26").copy(groupConversation = true))
+        val split = pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY IDEA CMP 9.5 SL 8.9 TGT 11").copy(groupConversation = true))
+        val dao = db.notificationEventDao()
+
+        assertEquals(true, dao.getById((first as IngestionPipeline.Result.Stored).eventId)!!.chatGroup)
+        assertEquals(true, dao.getById((split as IngestionPipeline.Result.Stored).eventId)!!.chatGroup)
+    }
+
     // Regression: two quick posts of one notification raced lookup-then-insert and the second was dropped.
     @Test
     fun concurrentPostsOfOneNotificationAreBothKept() = runBlocking {

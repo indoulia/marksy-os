@@ -68,7 +68,9 @@ data class NotificationEventEntity(
     /** 0 = not yet processed; bumping EventIntelligencePipeline.VERSION triggers a background re-derive. */
     val intelligenceVersion: Int = 0,
     /** EPIC-011: hidden from the inbox until this time; persisted so snoozes survive restarts. */
-    val snoozedUntil: Long? = null
+    val snoozedUntil: Long? = null,
+    /** Chats only: whether it was a group conversation, null when unknown. Only groups leave the phone. */
+    val chatGroup: Boolean? = null
 )
 
 enum class DeliveryState {

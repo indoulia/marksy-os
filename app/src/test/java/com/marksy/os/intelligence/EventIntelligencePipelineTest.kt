@@ -178,7 +178,7 @@ class EventIntelligencePipelineTest {
         }
 
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7)
             .allowMainThreadQueries().build()
         try {
             val rows = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }
@@ -186,6 +186,8 @@ class EventIntelligencePipelineTest {
             assertTrue(rows.all { it.intelligenceVersion == 0 && it.threadKey == null })
             // 3->4: existing rows start read, nothing kept or reminded.
             assertTrue(rows.all { it.isRead && !it.kept && it.remindAt == null })
+            // 6->7: rows from before tip capture have unknown group-ness, so they stay on the phone.
+            assertTrue(rows.all { it.chatGroup == null })
         } finally {
             migrated.close()
             context.deleteDatabase(name)
@@ -211,7 +213,7 @@ class EventIntelligencePipelineTest {
             raw.version = 3
         }
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7)
             .allowMainThreadQueries().build()
         try {
             val row = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }.single()
