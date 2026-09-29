@@ -11,8 +11,11 @@
   - Migration `0184_channel_alias_scope` backfills existing aliases and removes mask-only labels.
 - **Part B (marksy-os, ships only after Part A is in production).**
   - `TipTextCleaner` mirrors the server cleaner rule for rule, checked against the same test vectors.
-  - The listener records MessagingStyle sender names locally.
-  - One pure gate (`CaptureGate`) decides, per queued trading row, whether it leaves the phone, and builds the §5.1 payload. The payload carries the app name, the SMS sender id, or the allow-listed chat name without its sender; the text has sender names stripped and masked; the device event key is salted.
+  - The listener records MessagingStyle sender names locally. Each captured row also stores whether its chat was a group, in the new Room column `chatGroup`.
+  - One pure gate (`CaptureGate`) decides, per queued trading row, whether it leaves the phone, and builds the §5.1 payload.
+    - Two kinds of message always stay local: 1:1 chats (and chats whose group-ness is unknown), and the customer's own broker order and execution notifications.
+    - The payload carries the app name, the SMS sender id, or the allow-listed group name without its sender.
+    - The text has sender names stripped and masked, and the device event key is salted.
   - The delivery worker loads a cached `GET /channels/capture-list` and posts to `/tips/ingest-text` instead of `POST /tips`.
 
 **Tech Stack:**
@@ -23,7 +26,7 @@
 - §2 invariant 11;
 - §5.1 and §5.2 steps 1–2;
 - §10, the "Add" bullet only;
-- §15, 1:1 labels.
+- §15, 1:1 labels. Commit 8efb97f amended §5.1 (lines 105–108) and reversed §15 (line 370), both on 2026-09-30.
 
 The Phase 1 plan gives context: `C:\AIAgent\marksy-os\docs\superpowers\plans\2026-09-29-tip-ledger-phase-0-1.md`, resolved ambiguities 9, 10 and 14 and Tasks 4, 11, 13 and 14.
 
@@ -48,6 +51,10 @@ The Phase 1 plan gives context: `C:\AIAgent\marksy-os\docs\superpowers\plans\202
 **Part B (marksy-os)**
 - Repo: `C:\AIAgent\marksy-os`. Work in the worktree `C:\AIAgent\marksy-os-phase4a` on branch `feat/tip-capture-payload`, created from `origin/main`. Leave `C:\AIAgent\marksy-os` on its current branch.
 - **Part B starts only after Part A is deployed.** Task B1 Step 1 checks production and stops if Part A is not there.
+- Spec §5.1 as amended (lines 105–108), verbatim:
+  - "`channel_label`: the app name for app notifications; the sender id for SMS; the group name for WhatsApp/Telegram, with the individual sender inside a group removed ("Rahul @ StockTips" → "StockTips"). 1:1 chats never leave the phone (decided 2026-09-30)."
+  - "The customer's own order/execution notifications from broker apps never leave the phone (decided 2026-09-30)."
+- Spec §15 (line 370), verbatim: "reversed 2026-09-30: 1:1 chats stay on the phone; only group names are sent."
 - Unit-test command, all from `C:\AIAgent\marksy-os-phase4a`:
   - The Windows user `Path` has a corrupted entry that kills forked test JVMs. Strip it first.
   - Stop Gradle once per shell session, then run with `--no-daemon`.
@@ -68,11 +75,13 @@ The Phase 1 plan gives context: `C:\AIAgent\marksy-os\docs\superpowers\plans\202
 
 These are the inputs the spec implies but its happy paths never exercise. Each one has a test in the owning task:
 
-1. **A 1:1 chat whose title is a phone number.** The customer allow-listed "+91 98765 43210". The label cleans to `[PHONE]`, and the message must stay on the phone. The server must also reject such a label (422) rather than pool every such chat into one channel. Test: Task B3, `aOneToOneChatTitledWithAPhoneNumberNeverLeavesThePhone`. The server backstop is Task A1, `test_a_mask_only_label_is_rejected_and_pools_nothing`.
-2. **A group label with the sender prefix.** WhatsApp stores group titles as "StockTips: Rahul" and Telegram as "Rahul @ StockTips". The label must be "StockTips", and no sender name may appear in the text. Test: Task B3, `aGroupMessageSendsTheGroupNameAndNoSenderName`.
-3. **A WhatsApp group named "Zerodha".** It must get its own WHATSAPP_GROUP channel, never the broker's; and an app label never resolves to a WhatsApp group. Test: Task A3, `test_a_whatsapp_group_named_zerodha_is_not_the_zerodha_broker`.
-4. **A retry after the server already recorded the message.** This is a response lost after the commit. The retry must carry the same `deviceEventKey`, so the server returns the stored receipt instead of a second one. The key must reveal nothing of the Android notification key. Test: Task B3, `theDeviceEventKeyIsStableAcrossRetriesAndRevealsNoNotificationKey`.
-5. **The first delivery run, with no capture list cached yet** (for example, offline right after the upgrade). App notifications must wait: they are neither sent unfiltered nor dropped. Allow-listed chats still go. Test: Task B3, `appNotificationsWaitUntilTheCaptureListIsCached`. The run-level half is Task B4, `aRowWaitingForTheCaptureListEndsTheRunWithARetry`.
+1. **A 1:1 chat on the allow-list is never sent** (spec §5.1 line 107, §15 line 370). The customer allow-listed "Rahul". A WhatsApp or Telegram chat flagged 1:1 must stay on the phone, and so must a 1:1 titled with a phone number. A chat whose group-ness is unknown also stays local. Only a chat flagged as a group goes. Test: Task B3, `anAllowListedOneToOneChatIsNeverSent`. The server backstop for phone-number labels is Task A1, `test_a_mask_only_label_is_rejected_and_pools_nothing`.
+2. **The customer's own broker order and execution notifications never leave the phone** (spec §5.1 line 108). This covers "Your order to BUY 10 RELIANCE is executed", a fill, and an order that is placed, cancelled or rejected, from a capture-list broker app or an allow-listed broker SMS. A GTT trigger stays local too. A research call from the same app ("Buy order: RENUKA above 24, target 26, stop loss 22") must still go. Test: Task B3, `theCustomersOwnOrderNotificationsNeverLeaveThePhone`.
+3. **A group label with the sender prefix.** WhatsApp stores group titles as "StockTips: Rahul" and Telegram as "Rahul @ StockTips". The label must be "StockTips", and no sender name may appear in the text. Test: Task B3, `aGroupMessageSendsTheGroupNameAndNoSenderName`.
+4. **A WhatsApp group named "Zerodha".** It must get its own WHATSAPP_GROUP channel, never the broker's; and an app label never resolves to a WhatsApp group. Test: Task A3, `test_a_whatsapp_group_named_zerodha_is_not_the_zerodha_broker`.
+5. **The first delivery run, with no capture list cached yet** (for example, offline right after the upgrade). App notifications must wait: they are neither sent unfiltered nor dropped. Allow-listed groups still go. Test: Task B3, `appNotificationsWaitUntilTheCaptureListIsCached`. The run-level half is Task B4, `aRowWaitingForTheCaptureListEndsTheRunWithARetry`.
+
+The retry-stable, salted event key (decision 9) is no longer a Review Focus item, but it keeps its test: Task B3, `theDeviceEventKeyIsStableAcrossRetriesAndRevealsNoNotificationKey`.
 
 ## Resolved ambiguities (decisions this plan makes)
 
@@ -93,19 +102,30 @@ These are the inputs the spec implies but its happy paths never exercise. Each o
 4. **`scope` has an ORM and server default, `APP_NOTIFICATION`**: the scope of every package and app name. Existing fixtures, including the Phase 2a/2b tests that build `ChannelAlias(..., kind=ALIAS_PACKAGE)`, stay valid. `resolve_channel` always passes the scope explicitly.
 5. **The capture set on the phone:**
    - APP_NOTIFICATION: the package is on the cached capture list.
-   - WhatsApp (`com.whatsapp`, `com.whatsapp.w4b`) and Telegram (`org.telegram.messenger`, `org.telegram.messenger.web`): the chat name is on the customer's allow-list. The allow-list is the existing local `WhatsAppSenderWatchlist` store, which Phase 4b presents as the chat allow-list.
+   - WhatsApp (`com.whatsapp`, `com.whatsapp.w4b`) and Telegram (`org.telegram.messenger`, `org.telegram.messenger.web`): the chat is a group (decision 8), and its group name is on the customer's allow-list. The allow-list is the existing local `WhatsAppSenderWatchlist` store, which Phase 4b presents as the chat allow-list.
    - SMS (`com.google.android.apps.messaging`, `com.android.mms`, `com.samsung.android.messaging`): the sender id is on the same allow-list. §5.1 gives SMS a label rule but names no SMS gate, and the allow-list is the customer's only consent.
    - Only rows the classifier already queues as TRADING are candidates, so OTPs never are. The existing check (`isTrading && category == TRADING && sourceKey` not blank) moves from `toMarksyTradingEventRequest` into the gate.
+   - The customer's own order and execution notifications stay local even inside the capture set (decision 17).
 6. **Channel labels:**
    - App notifications use the app name (`sourceName`).
-   - Chats use the first allow-listed candidate of the title. The candidates, in order, are the part after the last " @ " (Telegram's "Rahul @ StockTips"), the part before the last ": " (WhatsApp's "StockTips: Rahul"; see `Adapters.WHATSAPP`, `connector/ConnectorFramework.kt:64`), and then the whole title. So the individual sender is never part of the label.
+   - Group chats use the first allow-listed candidate of the title. The candidates, in order, are the part after the last " @ " (Telegram's "Rahul @ StockTips"), the part before the last ": " (WhatsApp's "StockTips: Rahul"; see `Adapters.WHATSAPP`, `connector/ConnectorFramework.kt:64`), and then the whole title. So the individual sender is never part of the label.
    - SMS uses the sender id, with the TRAI DLT operator/circle prefix and type suffix removed ("JD-ZERODH-S" → "ZERODH"). One sender is then one channel across telecom circles.
    - The label then goes through the mirrored `channel_label_for`, and a mask-only result stays on the phone.
 7. **Chat text carries no sender.**
    - The listener records MessagingStyle sender names in a local store (never sent), because the stored body already reads "Rahul: …".
-   - For a chat row, the gate strips a known sender's "Name: " line prefix and masks that sender's other whole-word mentions as `[SENDER]`, a phone-only token. It does this for senders of this row, meaning those in its title or starting one of its lines.
-   - Chat rows posted before sender tracking began (`captureSince`) stay local, because their senders are unknown.
-8. **§15 1:1 labels:** an allow-listed 1:1 chat sends its chat name as the label, as §15 chose. The allow-list entry is the customer's consent, and without new storage the phone can't tell a 1:1 title from a single-message group title. A title that cleans to masks only never leaves the phone (Review Focus 1). This conflicts with the user's rule that contact names are never sent; see the hand-off note.
+   - For a group row, the gate strips a known sender's "Name: " line prefix and masks that sender's other whole-word mentions as `[SENDER]`, a phone-only token. It does this for senders of this row, meaning those in its title or starting one of its lines.
+   - A separate "sender tracking started" timestamp is not needed.
+     - Every chat row captured before this change, and every WhatsApp accessibility-connector row, has `chatGroup = null`, so it stays local under decision 8.
+     - The listener records a row's senders in the same capture that sets its `chatGroup`, so any row with a group flag also has its senders recorded.
+8. **1:1 chats never leave the phone** (spec §5.1 line 107, §15 line 370).
+   - At capture, `NotificationTextExtractor.groupConversation` reads the notification's own `android.isGroupConversation` extra. Android writes that extra for every MessagingStyle notification from Android 9 on.
+   - When the extra is absent, the fallback is Android's pre-9 MessagingStyle rule: messages plus a non-blank `android.conversationTitle` mean a group.
+   - The result is stored on the row as `NotificationEventEntity.chatGroup` (nullable; Room v7 via `MIGRATION_6_7`), and it travels with split call rows through `RawCapture.groupConversation`.
+   - The gate sends a WhatsApp or Telegram row only when `chatGroup == true`.
+     - `false` keeps it local as `one-to-one-chat`. This includes a 1:1 titled with a phone number and a 1:1 that is on the allow-list.
+     - `null` (unknown) keeps it local as `group-unknown`, the privacy-safe default.
+     - Unknown rows include pre-change rows, WhatsApp accessibility-connector rows, which carry no extras, and non-MessagingStyle chat notifications.
+   - If an app sets a false flag on a real group, the error is a group kept local, never a 1:1 sent. The reason code in logcat (`MarksyTradingDelivery`, "stays on the phone (one-to-one-chat)") makes it visible.
 9. **`deviceEventKey`** is `"n1-" + sha256(salt|package|sourceKey)`. The salt is a random per-install value, so the key reveals nothing of the Android notification key, whose tag may hold a chat id.
    - Ingestion already gives each new call its own row and `sourceKey` (`"<key>#<hash>"`, `ConnectorFramework.kt:155,175`), so one row is one message.
    - The same row always yields the same key, and the server's unique `(user_id, device_event_key)` turns a retry into the stored receipt.
@@ -125,10 +145,10 @@ These are the inputs the spec implies but its happy paths never exercise. Each o
     - The server's `POST /tips` is unchanged (§9 keeps it until its readers move).
 13. **On-device parsing:**
     - `TradeCallParser`, `CallHorizon`, `DailySetups` and the classifier's trade-call rule keep running for the local UI, and as the TRADING pre-filter that decides what is queued at all. Nothing they compute is sent: the server parses.
-    - When Phase 4b deletes the trade-call rule, it must replace that pre-filter.
+    - When Phase 4b deletes the trade-call rule, it must replace that pre-filter. It must also keep `NotificationClassifier.isOwnOrderEvent` (decision 17), which is a privacy filter, not parsing.
 14. **No kill switch or feature flag:**
     - Part B ships only after Task B1 Step 1 has confirmed Part A in production.
-    - The server-side capture list is already a remote off switch for app notifications: setting `capture_enabled` to false empties it at the phone's next refresh. Chats need the customer's own allow-list entry.
+    - The server-side capture list is already a remote off switch for app notifications: setting `capture_enabled` to false empties it at the phone's next refresh. Group chats and SMS need the customer's own allow-list entry.
     - Failures are per row (4xx) or retried (5xx and IO).
     - The app has one user, and a rollback is reinstalling the previous APK.
 15. **The capture-list cache:**
@@ -136,6 +156,18 @@ These are the inputs the spec implies but its happy paths never exercise. Each o
     - Until the first successful fetch the list is null, so app rows Wait.
     - An empty list sends nothing from apps.
 16. **The username masked on the phone is the signed-in user id** (`AuthSessionStore.getUserId()`). The server masks `customer_id` the same way (`api/services/tips.py:152`).
+17. **The customer's own order and execution notifications never leave the phone** (spec §5.1 line 108).
+    - The matcher is `NotificationClassifier.isOwnOrderEvent(title, body)`. The gate checks it for APP_NOTIFICATION and SMS rows, before the capture list: an own order is kept even while the list is uncached. It returns reason `own-order`.
+    - Scope:
+      - Applying it to SMS goes beyond "from broker apps" in the privacy-safe direction: if a broker's DLT sender is allow-listed, its order SMS would otherwise leave.
+      - Group chats are not filtered, because a broker doesn't send the customer's own orders into a group. There, "trade executed" or "position closed" is a tipster's own call update, which the server needs as an EXIT.
+    - What it matches:
+      - An order, trade or GTT, and within the same sentence one of executed, filled, placed, rejected, cancelled, modified, triggered, complete(d) or confirmed.
+      - "executed at" or "filled at".
+      - "quantity executed", "partially filled" or "partially executed", and "trade confirmation".
+    - Grounding: it widens the classifier's own TRADING execution vocabulary (`NotificationClassifier.kt:76–81`, used by `classify` at line 154). That vocabulary misses "Your order to BUY 10 RELIANCE is executed".
+    - What it leaves out: that rule's call vocabulary ("stop loss", "target hit", "market alert", "buy order", "sell order"), so a research call such as "Buy order: RENUKA above 24, target 26" and a channel exit still go.
+    - An own-order notification is still TRADING locally, and shows "Local only".
 
 ## File Structure
 
@@ -153,12 +185,16 @@ These are the inputs the spec implies but its happy paths never exercise. Each o
   - `main/java/com/marksy/os/gateway/CaptureStore.kt`.
   - `main/java/com/marksy/os/gateway/CaptureGate.kt`: `CapturedMessage`, `CaptureContext`, `CaptureDecision`, `CaptureGate` and `parseCaptureList`.
 - Modify:
-  - `main/java/com/marksy/os/notification/NotificationTextExtractor.kt`: `senders`.
-  - `main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt`: record senders and `captureSince`.
+  - `main/java/com/marksy/os/notification/NotificationTextExtractor.kt`: `senders` and `groupConversation`.
+  - `main/java/com/marksy/os/connector/ConnectorFramework.kt`: `RawCapture.groupConversation`, stored as `chatGroup` on new rows.
+  - `main/java/com/marksy/os/data/local/NotificationEventEntity.kt`: `chatGroup`.
+  - `main/java/com/marksy/os/data/local/MarksyDatabase.kt`: version 7 and `MIGRATION_6_7`.
+  - `main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt`: record senders and group-ness.
+  - `main/java/com/marksy/os/notification/NotificationClassifier.kt`: `isOwnOrderEvent`.
   - `main/java/com/marksy/os/gateway/MarksyGatewayClient.kt`, `MarksyTipsApiClient.kt`, `TradingDeliveryWorker.kt`, `MarksyTipPayload.kt` and `MarksyGatewayContract.kt`.
 - Tests:
   - Create `test/java/com/marksy/os/notification/TipTextCleanerTest.kt` and `test/java/com/marksy/os/gateway/CaptureGateTest.kt`.
-  - Modify `NotificationTextExtractorTest.kt`, `TradingDeliveryRunTest.kt`, `MarksyGatewayClientTest.kt` and `MarksyTipsApiClientTest.kt`.
+  - Modify `NotificationTextExtractorTest.kt`, `connector/IngestionPipelineTest.kt`, `intelligence/EventIntelligencePipelineTest.kt` (the migration tests), `TradingDeliveryRunTest.kt`, `MarksyGatewayClientTest.kt` and `MarksyTipsApiClientTest.kt`.
   - Delete `MarksyTipPayloadFixtureTest.kt` and `MarksyTradingEventMappingTest.kt`.
 
 ---
@@ -952,20 +988,25 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task B2: Chat senders recorded on the phone
+### Task B2: Chat senders and group-ness recorded at capture
 
 **Files:**
-- Modify: `app/src/main/java/com/marksy/os/notification/NotificationTextExtractor.kt`: `messageLines` at lines 95–112, and a new `senders` after `extract`.
+- Modify: `app/src/main/java/com/marksy/os/notification/NotificationTextExtractor.kt`: `messageLines` at lines 95–112, and new `senders` and `groupConversation` after `extract`.
+- Modify: `app/src/main/java/com/marksy/os/connector/ConnectorFramework.kt`: `RawCapture` (line 30), and the new-row entity in `ingestNow` (lines 184–189).
+- Modify: `app/src/main/java/com/marksy/os/data/local/NotificationEventEntity.kt`: `chatGroup`.
+- Modify: `app/src/main/java/com/marksy/os/data/local/MarksyDatabase.kt`: version 7 and `MIGRATION_6_7`.
 - Create: `app/src/main/java/com/marksy/os/gateway/CaptureStore.kt`
-- Modify: `app/src/main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt` (`onListenerConnected`, `captureUnsafe`)
-- Test: `app/src/test/java/com/marksy/os/notification/NotificationTextExtractorTest.kt`
+- Modify: `app/src/main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt` (`captureUnsafe`)
+- Test: `app/src/test/java/com/marksy/os/notification/NotificationTextExtractorTest.kt`, `app/src/test/java/com/marksy/os/connector/IngestionPipelineTest.kt`, `app/src/test/java/com/marksy/os/intelligence/EventIntelligencePipelineTest.kt`
 
 **Interfaces:**
 - Produces:
   - `NotificationTextExtractor.senders(extras: Bundle): List<String>`
+  - `NotificationTextExtractor.groupConversation(extras: Bundle): Boolean?`: true or false when the notification says, null when it doesn't.
+  - `RawCapture.groupConversation: Boolean? = null`
+  - `NotificationEventEntity.chatGroup: Boolean? = null`: a nullable `INTEGER` column added by `MarksyDatabase.MIGRATION_6_7` (database version 7).
   - `class CaptureStore(context: Context)`, with:
     - `deviceSalt(): String`
-    - `captureSince(now: Long): Long`
     - `capturePackages(): Set<String>?`
     - `isCaptureListStale(now: Long): Boolean`
     - `saveCapturePackages(packages: Set<String>, now: Long)`
@@ -973,9 +1014,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - `rememberChatSenders(senders: Collection<String>)`
 - Consumes: `CaptureMedium` (Task B1).
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
-Append to `NotificationTextExtractorTest`, after `includesMessagingStyleHistoryWithSenders`:
+In `NotificationTextExtractorTest`, add `import org.junit.Assert.assertNull`. Then append after `includesMessagingStyleHistoryWithSenders`:
 
 ```kotlin
     // Tip capture strips these from chat text before anything leaves the phone.
@@ -991,16 +1032,67 @@ Append to `NotificationTextExtractorTest`, after `includesMessagingStyleHistoryW
 
         assertEquals(listOf("Mom", "Dad"), NotificationTextExtractor.senders(extras))
     }
+
+    // Tip capture sends group chats only; a notification that doesn't say is unknown, never a group.
+    @Test
+    fun groupConversationComesFromTheNotificationAndIsNullWhenItDoesNotSay() {
+        val messages = arrayOf(Bundle().apply { putCharSequence("sender", "Rahul"); putCharSequence("text", "BUY RENUKA") })
+
+        assertEquals(true, NotificationTextExtractor.groupConversation(Bundle().apply { putBoolean("android.isGroupConversation", true) }))
+        assertEquals(false, NotificationTextExtractor.groupConversation(Bundle().apply {
+            putBoolean("android.isGroupConversation", false)
+            putCharSequence("android.conversationTitle", "StockTips")
+        }))
+        assertEquals(true, NotificationTextExtractor.groupConversation(Bundle().apply {
+            putParcelableArray("android.messages", messages)
+            putCharSequence("android.conversationTitle", "StockTips")
+        }))
+        assertNull(NotificationTextExtractor.groupConversation(Bundle().apply { putParcelableArray("android.messages", messages) }))
+        assertNull(NotificationTextExtractor.groupConversation(Bundle().apply { putCharSequence("android.title", "Rahul") }))
+    }
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+Append to `IngestionPipelineTest`, after `newCallInAnAlreadyTradingNotificationIsStoredAndDeliveredSeparately`:
 
-Run the unit-test command with `--tests 'com.marksy.os.notification.NotificationTextExtractorTest'`.
-Expected: FAIL at compile with `Unresolved reference 'senders'`.
+```kotlin
+    // Tip capture sends a chat only when it knows it is a group, so a later call split into its own row keeps the flag.
+    @Test
+    fun theGroupConversationFlagIsStoredOnTheRowAndOnASplitCall() = runBlocking {
+        val first = pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26").copy(groupConversation = true))
+        val split = pipeline.ingest(raw("com.fivepaisa.trade", "n1", "Short term Call", "BUY IDEA CMP 9.5 SL 8.9 TGT 11").copy(groupConversation = true))
+        val dao = db.notificationEventDao()
 
-- [ ] **Step 3: Share the MessagingStyle parsing and add `senders`**
+        assertEquals(true, dao.getById((first as IngestionPipeline.Result.Stored).eventId)!!.chatGroup)
+        assertEquals(true, dao.getById((split as IngestionPipeline.Result.Stored).eventId)!!.chatGroup)
+    }
+```
 
-In `NotificationTextExtractor.kt`, replace the whole `messageLines` function, from `@Suppress("DEPRECATION")` down to its closing brace, with:
+In `EventIntelligencePipelineTest`, both migration tests build Room with `.addMigrations(MarksyDatabase.MIGRATION_1_2, …, MarksyDatabase.MIGRATION_5_6)`.
+- In both, append `, MarksyDatabase.MIGRATION_6_7` to that list.
+- In `migrationFromV2PreservesRowsAndMapsArchivedToLifecycle`, directly after the `// 3->4: …` assertion, add:
+
+```kotlin
+            // 6->7: rows from before tip capture have unknown group-ness, so they stay on the phone.
+            assertTrue(rows.all { it.chatGroup == null })
+```
+
+These two tests replay every migration from v2 or v3 and pass Room's schema validation. They are the migration test for `MIGRATION_6_7`.
+
+- [ ] **Step 2: Run them to verify they fail**
+
+Run the unit-test command with `--tests 'com.marksy.os.notification.NotificationTextExtractorTest' --tests 'com.marksy.os.connector.IngestionPipelineTest' --tests 'com.marksy.os.intelligence.EventIntelligencePipelineTest'`.
+
+Expected: FAIL at compile, with `Unresolved reference 'senders'`, `Unresolved reference 'groupConversation'`, `No parameter with name 'groupConversation'` and `Unresolved reference 'MIGRATION_6_7'`.
+
+- [ ] **Step 3: Share the MessagingStyle parsing; add `senders` and `groupConversation`**
+
+In `NotificationTextExtractor.kt`, directly after `const val MAX_LINE_COUNT = 50`, add:
+
+```kotlin
+    private const val EXTRA_IS_GROUP_CONVERSATION = "android.isGroupConversation"
+```
+
+Replace the whole `messageLines` function, from `@Suppress("DEPRECATION")` down to its closing brace, with:
 
 ```kotlin
     @Suppress("DEPRECATION")
@@ -1032,9 +1124,83 @@ Directly after the `extract` function, add:
     fun senders(extras: Bundle): List<String> =
         messageBundles(extras).mapNotNull { senderName(it)?.let(::stripMarkup)?.trim() }
             .filter { it.isNotBlank() }.distinct().toList()
+
+    /** The notification's group flag; before it existed, MessagingStyle marked a group by its conversation title. */
+    fun groupConversation(extras: Bundle): Boolean? = when {
+        extras.containsKey(EXTRA_IS_GROUP_CONVERSATION) -> extras.getBoolean(EXTRA_IS_GROUP_CONVERSATION)
+        messageBundles(extras).any() && !extras.getCharSequence("android.conversationTitle").isNullOrBlank() -> true
+        else -> null
+    }
 ```
 
-- [ ] **Step 4: Add the local capture store**
+- [ ] **Step 4: Store the flag with the captured row**
+
+In `ConnectorFramework.kt`, replace the end of `data class RawCapture`:
+
+```kotlin
+    val replaceOnUpdate: Boolean = false
+)
+```
+
+with:
+
+```kotlin
+    val replaceOnUpdate: Boolean = false,
+    /** MessagingStyle's group flag; null when the notification doesn't say. */
+    val groupConversation: Boolean? = null
+)
+```
+
+In `ingestNow`, change the new-row entity's last two arguments from:
+
+```kotlin
+                confidence = result.confidence, isTrading = isTrading,
+                deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+            )
+```
+
+to:
+
+```kotlin
+                confidence = result.confidence, isTrading = isTrading,
+                deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name,
+                chatGroup = raw.groupConversation
+            )
+```
+
+The split paths (`raw.copy(sourceKey = …)` at lines 155 and 175) copy `groupConversation` with the rest of the capture. An update to an existing row leaves its flag as first stored.
+
+In `NotificationEventEntity.kt`, replace:
+
+```kotlin
+    val snoozedUntil: Long? = null
+)
+```
+
+with:
+
+```kotlin
+    val snoozedUntil: Long? = null,
+    /** Chats only: whether it was a group conversation, null when unknown. Only groups leave the phone. */
+    val chatGroup: Boolean? = null
+)
+```
+
+In `MarksyDatabase.kt`:
+- Change `version = 6,` to `version = 7,`.
+- Directly after the `MIGRATION_5_6` object, add the block below. It uses the same `addColumn(…, "INTEGER")` form as the nullable `snoozedUntil` and `remindAt` columns.
+- Append `, MIGRATION_6_7` to the `.addMigrations(...)` list in `getInstance`.
+
+```kotlin
+        // Tip capture sends group chats only; rows captured before this have unknown group-ness and stay local.
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                addColumn(database, "chatGroup", "INTEGER")
+            }
+        }
+```
+
+- [ ] **Step 5: Add the local capture store**
 
 Create `app/src/main/java/com/marksy/os/gateway/CaptureStore.kt`:
 
@@ -1050,11 +1216,6 @@ class CaptureStore(context: Context) {
 
     fun deviceSalt(): String = synchronized(LOCK) {
         prefs.getString(KEY_SALT, null) ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_SALT, it).apply() }
-    }
-
-    /** When sender tracking began; set once. */
-    fun captureSince(now: Long): Long = synchronized(LOCK) {
-        prefs.getLong(KEY_SINCE, -1L).takeIf { it >= 0 } ?: now.also { prefs.edit().putLong(KEY_SINCE, it).apply() }
     }
 
     /** Null until the first successful fetch of `GET /channels/capture-list`. */
@@ -1083,7 +1244,6 @@ class CaptureStore(context: Context) {
         val LOCK = Any()
         const val PREFS = "tip_capture"
         const val KEY_SALT = "device_salt"
-        const val KEY_SINCE = "capture_since"
         const val KEY_PACKAGES = "capture_packages"
         const val KEY_FETCHED_AT = "capture_list_fetched_at"
         const val KEY_SENDERS = "chat_senders"
@@ -1093,16 +1253,9 @@ class CaptureStore(context: Context) {
 }
 ```
 
-- [ ] **Step 5: Record senders and the tracking start in the listener**
+- [ ] **Step 6: Record senders and group-ness in the listener**
 
 In `MarksyNotificationListenerService.kt`, add the import `import com.marksy.os.gateway.CaptureStore`.
-
-In `onListenerConnected`, directly after `super.onListenerConnected()`, add:
-
-```kotlin
-        // Chat rows captured before sender tracking have unknown senders and never leave the phone.
-        CaptureStore(applicationContext).captureSince(System.currentTimeMillis())
-```
 
 In `captureUnsafe`, directly after `if (title.isBlank() && text.isBlank()) return`, add:
 
@@ -1112,17 +1265,32 @@ In `captureUnsafe`, directly after `if (title.isBlank() && text.isBlank()) retur
         }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+In the same function's `RawCapture(...)`, replace `postedAt = sbn.postTime` with:
 
-Run the unit-test command with `--tests 'com.marksy.os.notification.NotificationTextExtractorTest' --tests 'com.marksy.os.connector.IngestionPipelineTest'`.
-Expected: all PASS. The existing MessagingStyle tests prove `messageLines` still renders "Sender: text".
+```kotlin
+            postedAt = sbn.postTime,
+            groupConversation = NotificationTextExtractor.groupConversation(extras)
+```
 
-- [ ] **Step 7: Commit**
+Senders are remembered before `ingestion.ingest(raw)` is launched. So any row that carries a group flag has its senders recorded.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run the unit-test command with `--tests 'com.marksy.os.notification.NotificationTextExtractorTest' --tests 'com.marksy.os.connector.*' --tests 'com.marksy.os.intelligence.EventIntelligencePipelineTest' --tests 'com.marksy.os.data.*'`.
+
+Expected: all PASS.
+- The existing MessagingStyle tests prove `messageLines` still renders "Sender: text".
+- The migration tests prove v2/v3 → v7 passes Room's schema validation.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add app/src/main/java/com/marksy/os/notification/NotificationTextExtractor.kt app/src/main/java/com/marksy/os/gateway/CaptureStore.kt \
-  app/src/main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt app/src/test/java/com/marksy/os/notification/NotificationTextExtractorTest.kt
-git commit -m "Tip capture: record chat sender names on the phone so chat text can be sent without them
+git add app/src/main/java/com/marksy/os/notification/NotificationTextExtractor.kt app/src/main/java/com/marksy/os/connector/ConnectorFramework.kt \
+  app/src/main/java/com/marksy/os/data/local/NotificationEventEntity.kt app/src/main/java/com/marksy/os/data/local/MarksyDatabase.kt \
+  app/src/main/java/com/marksy/os/gateway/CaptureStore.kt app/src/main/java/com/marksy/os/notification/MarksyNotificationListenerService.kt \
+  app/src/test/java/com/marksy/os/notification/NotificationTextExtractorTest.kt app/src/test/java/com/marksy/os/connector/IngestionPipelineTest.kt \
+  app/src/test/java/com/marksy/os/intelligence/EventIntelligencePipelineTest.kt
+git commit -m "Tip capture: record chat senders and group-ness at capture (Room v7 adds chatGroup)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1133,11 +1301,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `app/src/main/java/com/marksy/os/notification/ChatLabels.kt`
+- Modify: `app/src/main/java/com/marksy/os/notification/NotificationClassifier.kt`: add `isOwnOrderEvent` after `isTradeCall` (line 132).
 - Create: `app/src/main/java/com/marksy/os/gateway/CaptureGate.kt`
 - Test: `app/src/test/java/com/marksy/os/gateway/CaptureGateTest.kt`
 
 **Interfaces:**
 - Produces:
+  - `NotificationClassifier.isOwnOrderEvent(title: String, body: String): Boolean`. `classify` and `VERSION` are unchanged.
   - `object ChatLabels`, with:
     - `const val MASK_SENDER = "[SENDER]"`
     - `fun allowListedChat(title: String, allowList: Collection<String>): String?`
@@ -1145,14 +1315,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - `fun allowListedSmsSender(title: String, allowList: Collection<String>): String?`
     - `fun withoutSenders(body: String, title: String, senders: Collection<String>): String`
   - `data class CapturedMessage(deviceEventKey, medium, appPackage, channelLabel, text, devicePostedAt: String)`, with `fun toJson(): JSONObject`.
-  - `data class CaptureContext(capturePackages: Set<String>?, chatAllowList: Set<String>, chatSenders: Set<String>, username: String, deviceSalt: String, captureSince: Long)`
+  - `data class CaptureContext(capturePackages: Set<String>?, chatAllowList: Set<String>, chatSenders: Set<String>, username: String, deviceSalt: String)`
   - `sealed interface CaptureDecision { Send(message), Wait, Keep(reason) }`
   - `object CaptureGate`, with:
     - `fun decide(event: NotificationEventEntity, context: CaptureContext): CaptureDecision`
     - `fun deviceEventKey(salt: String, sourcePackage: String, sourceKey: String): String`
-    - the reason codes `NOT_TRADING`, `OUTSIDE_CAPTURE_SET`, `BEFORE_SENDER_TRACKING`, `NO_LABEL`, `MASKED_LABEL`, `EMPTY_TEXT`
+    - the reason codes `NOT_TRADING`, `OWN_ORDER`, `OUTSIDE_CAPTURE_SET`, `ONE_TO_ONE_CHAT`, `GROUP_UNKNOWN`, `NO_LABEL`, `MASKED_LABEL`, `EMPTY_TEXT`
   - `fun parseCaptureList(data: JSONObject): Set<String>`
-- Consumes: `CaptureMedium` and `TipTextCleaner` (Task B1), and `WhatsAppSenderWatchlist.matches`.
+- Consumes: `CaptureMedium` and `TipTextCleaner` (Task B1), `NotificationEventEntity.chatGroup` (Task B2), and `WhatsAppSenderWatchlist.matches`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1173,11 +1343,10 @@ import org.junit.Test
 class CaptureGateTest {
     private val context = CaptureContext(
         capturePackages = setOf("com.upstox.pro"),
-        chatAllowList = setOf("stocktips", "+91 98765 43210", "zerodh"),
+        chatAllowList = setOf("stocktips", "rahul", "+91 98765 43210", "zerodh"),
         chatSenders = setOf("Rahul", "Amit"),
         username = "prsingh",
-        deviceSalt = "salt-1",
-        captureSince = 1_000L
+        deviceSalt = "salt-1"
     )
 
     @Test
@@ -1196,22 +1365,47 @@ class CaptureGateTest {
     @Test
     fun aGroupMessageSendsTheGroupNameAndNoSenderName() {
         val whatsapp = send(event(
-            pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips: Rahul",
+            pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips: Rahul", group = true,
             body = "Rahul: BUY RENUKA CMP 23.62 SL 22.25 TGT 26\nAmit: thanks Rahul"
         ))
         assertEquals("WHATSAPP" to "StockTips", whatsapp.medium to whatsapp.channelLabel)
         assertEquals("BUY RENUKA CMP 23.62 SL 22.25 TGT 26\nthanks [SENDER]", whatsapp.text)
 
-        val telegram = send(event(pkg = "org.telegram.messenger", source = "Telegram", title = "Rahul @ StockTips"))
+        val telegram = send(event(pkg = "org.telegram.messenger", source = "Telegram", title = "Rahul @ StockTips", group = true))
         assertEquals("TELEGRAM" to "StockTips", telegram.medium to telegram.channelLabel)
         assertFalse(telegram.text.contains("Rahul"))
     }
 
     @Test
-    fun aOneToOneChatTitledWithAPhoneNumberNeverLeavesThePhone() {
-        val chat = event(pkg = "com.whatsapp", source = "WhatsApp", title = "+91 98765 43210")
+    fun anAllowListedOneToOneChatIsNeverSent() {
+        fun decide(pkg: String, title: String, group: Boolean?) =
+            CaptureGate.decide(event(pkg = pkg, source = "Chat", title = title, group = group), context)
+        val oneToOne = CaptureDecision.Keep(CaptureGate.ONE_TO_ONE_CHAT)
 
-        assertEquals(CaptureDecision.Keep(CaptureGate.MASKED_LABEL), CaptureGate.decide(chat, context))
+        assertEquals(oneToOne, decide("com.whatsapp", "Rahul", false))
+        assertEquals(oneToOne, decide("com.whatsapp", "+91 98765 43210", false))
+        assertEquals(oneToOne, decide("org.telegram.messenger", "Rahul", false))
+        assertEquals(CaptureDecision.Keep(CaptureGate.GROUP_UNKNOWN), decide("com.whatsapp", "Rahul", null))
+        assertTrue(decide("com.whatsapp", "StockTips", true) is CaptureDecision.Send)
+    }
+
+    @Test
+    fun theCustomersOwnOrderNotificationsNeverLeaveThePhone() {
+        val ownOrder = CaptureDecision.Keep(CaptureGate.OWN_ORDER)
+        listOf(
+            "Order update" to "Your order to BUY 10 RELIANCE is executed",
+            "Order filled" to "BUY 10 TCS filled at 3900",
+            "Order placed" to "Your SELL order for 5 INFY has been placed",
+            "Order cancelled" to "Your BUY order for 5 INFY was cancelled",
+            "Order rejected" to "RMS: insufficient margin for RELIANCE",
+            "GTT triggered" to "Your GTT for RELIANCE has been triggered"
+        ).forEach { (title, body) -> assertEquals(title, ownOrder, CaptureGate.decide(event(title = title, body = body), context)) }
+
+        val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",
+            body = "Your order to BUY 10 RELIANCE is executed at 1450")
+        assertEquals(ownOrder, CaptureGate.decide(brokerSms, context))
+        val researchCall = event(title = "Research call", body = "Buy order: RENUKA above 24, target 26, stop loss 22")
+        assertTrue(CaptureGate.decide(researchCall, context) is CaptureDecision.Send)
     }
 
     @Test
@@ -1221,11 +1415,11 @@ class CaptureGateTest {
 
         assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), decide(event(trading = false)))
         assertEquals(outside, decide(event(pkg = "com.zerodha.kite3", source = "Zerodha")))
-        assertEquals(outside, decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "Family Group")))
+        assertEquals(outside, decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "Family Group", group = true)))
         assertEquals(outside, decide(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "Amit")))
         assertEquals(
-            CaptureDecision.Keep(CaptureGate.BEFORE_SENDER_TRACKING),
-            decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", postedAt = 999L))
+            CaptureDecision.Keep(CaptureGate.MASKED_LABEL),
+            decide(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "+91 98765 43210"))
         )
         val sms = send(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S"))
         assertEquals("SMS" to "ZERODH", sms.medium to sms.channelLabel)
@@ -1236,7 +1430,8 @@ class CaptureGateTest {
         val uncached = context.copy(capturePackages = null)
 
         assertEquals(CaptureDecision.Wait, CaptureGate.decide(event(), uncached))
-        assertTrue(CaptureGate.decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips"), uncached) is CaptureDecision.Send)
+        val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true)
+        assertTrue(CaptureGate.decide(group, uncached) is CaptureDecision.Send)
     }
 
     @Test
@@ -1267,11 +1462,12 @@ class CaptureGateTest {
         body: String = "BUY RENUKA CMP 23.62 SL 22.25 TGT 26",
         trading: Boolean = true,
         key: String = "k-1",
-        postedAt: Long = 2_000L
+        group: Boolean? = null
     ) = NotificationEventEntity(
         sourcePackage = pkg, sourceName = source, sourceKey = key, eventFingerprint = key, title = title, body = body,
-        postedAt = postedAt, category = if (trading) "TRADING" else "MESSAGES", priority = 100, confidence = 0.96f,
-        isTrading = trading, deliveryState = if (trading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+        postedAt = 2_000L, category = if (trading) "TRADING" else "MESSAGES", priority = 100, confidence = 0.96f,
+        isTrading = trading, deliveryState = if (trading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name,
+        chatGroup = group
     )
 }
 ```
@@ -1281,7 +1477,27 @@ class CaptureGateTest {
 Run the unit-test command with `--tests 'com.marksy.os.gateway.CaptureGateTest'`.
 Expected: FAIL at compile with `Unresolved reference 'CaptureContext'`.
 
-- [ ] **Step 3: Write the chat and SMS label rules**
+- [ ] **Step 3: Recognise the customer's own order notifications**
+
+In `NotificationClassifier.kt`, directly after `private fun isTradeCall(...)` (line 132), add the code below.
+- It widens the TRADING rule's execution vocabulary (lines 76–81: "order executed", "order filled", "trade executed", "trade confirmation", "order rejected", "order cancelled", "executed at", "filled at", "quantity executed"), which `classify` uses at line 154 to route broker executions to TRADING. It adds placed, modified, GTT and words in between ("Your order to BUY 10 RELIANCE is executed").
+- It deliberately leaves out that rule's call vocabulary ("stop loss", "target hit", "market alert", "buy order", "sell order"), so research calls and source exits still go.
+
+```kotlin
+    // The customer's own orders (placed, filled, cancelled, rejected, GTT triggered) never leave the phone (spec §5.1).
+    private val ownOrderEvents = listOf(
+        Regex("""\b(?:order|trade|gtt)\b[^.\n]{0,80}?\b(?:executed|filled|placed|rejected|cancell?ed|modified|triggered|complete|completed|confirmed)\b"""),
+        Regex("""\b(?:executed|filled)\s+at\b"""),
+        Regex("""\b(?:quantity\s+executed|partially\s+(?:filled|executed)|trade\s+confirmation)\b""")
+    )
+
+    fun isOwnOrderEvent(title: String, body: String): Boolean {
+        val text = "$title $body".lowercase()
+        return ownOrderEvents.any { it.containsMatchIn(text) }
+    }
+```
+
+- [ ] **Step 4: Write the group-chat and SMS label rules**
 
 Create `app/src/main/java/com/marksy/os/notification/ChatLabels.kt`:
 
@@ -1290,7 +1506,7 @@ package com.marksy.os.notification
 
 import java.util.Locale
 
-/** Channel labels and sender-free text for chat and SMS captures (tip-ledger spec §5.1). */
+/** Channel labels and sender-free text for group-chat and SMS captures (tip-ledger spec §5.1). */
 object ChatLabels {
     const val MASK_SENDER = "[SENDER]"
     private const val GROUP_SENDER = " @ "
@@ -1299,7 +1515,7 @@ object ChatLabels {
     // TRAI DLT sender ids: the operator/circle prefix and type suffix vary per message, the 6-character header does not.
     private val DLT_HEADER = Regex("^[A-Za-z]{2}-([A-Za-z0-9]{6})(?:-[PSTGpstg])?$")
 
-    /** The allow-listed chat a title names: "Rahul @ StockTips" (Telegram), "StockTips: Rahul" (WhatsApp) or "StockTips". */
+    /** The allow-listed group a title names: "Rahul @ StockTips" (Telegram), "StockTips: Rahul" (WhatsApp) or "StockTips". */
     fun allowListedChat(title: String, allowList: Collection<String>): String? {
         val value = title.trim()
         val candidates = listOfNotNull(
@@ -1338,7 +1554,7 @@ object ChatLabels {
 }
 ```
 
-- [ ] **Step 4: Write the gate and the payload**
+- [ ] **Step 5: Write the gate and the payload**
 
 Create `app/src/main/java/com/marksy/os/gateway/CaptureGate.kt`:
 
@@ -1348,6 +1564,7 @@ package com.marksy.os.gateway
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.notification.CaptureMedium
 import com.marksy.os.notification.ChatLabels
+import com.marksy.os.notification.NotificationClassifier
 import com.marksy.os.notification.TipTextCleaner
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -1379,8 +1596,7 @@ data class CaptureContext(
     val chatAllowList: Set<String>,
     val chatSenders: Set<String>,
     val username: String,
-    val deviceSalt: String,
-    val captureSince: Long
+    val deviceSalt: String
 )
 
 sealed interface CaptureDecision {
@@ -1394,8 +1610,10 @@ sealed interface CaptureDecision {
 /** The only way a captured notification leaves the phone (tip-ledger spec §2.11, §5.1). */
 object CaptureGate {
     const val NOT_TRADING = "not-trading"
+    const val OWN_ORDER = "own-order"
     const val OUTSIDE_CAPTURE_SET = "outside-capture-set"
-    const val BEFORE_SENDER_TRACKING = "before-sender-tracking"
+    const val ONE_TO_ONE_CHAT = "one-to-one-chat"
+    const val GROUP_UNKNOWN = "group-unknown"
     const val NO_LABEL = "no-label"
     const val MASKED_LABEL = "masked-label"
     const val EMPTY_TEXT = "empty-text"
@@ -1404,6 +1622,8 @@ object CaptureGate {
         if (!event.isTrading || event.category != "TRADING" || event.sourceKey.isBlank()) return CaptureDecision.Keep(NOT_TRADING)
         val appPackage = event.sourcePackage.trim().lowercase(Locale.ROOT)
         val medium = CaptureMedium.of(appPackage)
+        // Brokers tell the customer about their own orders in apps and SMS, not in chat groups.
+        if (!medium.isChat && NotificationClassifier.isOwnOrderEvent(event.title, event.body)) return CaptureDecision.Keep(OWN_ORDER)
         val label = when (medium) {
             CaptureMedium.APP_NOTIFICATION -> {
                 val packages = context.capturePackages ?: return CaptureDecision.Wait
@@ -1413,7 +1633,7 @@ object CaptureGate {
             CaptureMedium.SMS -> ChatLabels.allowListedSmsSender(event.title, context.chatAllowList)
                 ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
             CaptureMedium.WHATSAPP, CaptureMedium.TELEGRAM -> {
-                if (event.postedAt < context.captureSince) return CaptureDecision.Keep(BEFORE_SENDER_TRACKING)
+                if (event.chatGroup != true) return CaptureDecision.Keep(if (event.chatGroup == false) ONE_TO_ONE_CHAT else GROUP_UNKNOWN)
                 ChatLabels.allowListedChat(event.title, context.chatAllowList) ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
             }
         }
@@ -1455,17 +1675,17 @@ fun parseCaptureList(data: JSONObject): Set<String> {
 }
 ```
 
-- [ ] **Step 5: Run it to verify it passes**
+- [ ] **Step 6: Run it to verify it passes**
 
-Run the unit-test command with `--tests 'com.marksy.os.gateway.CaptureGateTest'`.
-Expected: 7 PASS.
+Run the unit-test command with `--tests 'com.marksy.os.gateway.CaptureGateTest' --tests 'com.marksy.os.notification.NotificationClassifier*'`.
+Expected: all PASS: 8 in `CaptureGateTest`, and the classifier tests unchanged.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add app/src/main/java/com/marksy/os/notification/ChatLabels.kt app/src/main/java/com/marksy/os/gateway/CaptureGate.kt \
-  app/src/test/java/com/marksy/os/gateway/CaptureGateTest.kt
-git commit -m "Tip capture: one gate decides what leaves the phone and builds the §5.1 payload
+git add app/src/main/java/com/marksy/os/notification/ChatLabels.kt app/src/main/java/com/marksy/os/notification/NotificationClassifier.kt \
+  app/src/main/java/com/marksy/os/gateway/CaptureGate.kt app/src/test/java/com/marksy/os/gateway/CaptureGateTest.kt
+git commit -m "Tip capture: one gate decides what leaves the phone; 1:1 chats and own orders stay local
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1520,7 +1740,7 @@ class TradingDeliveryRunTest {
     private val dao = db.notificationEventDao()
     private val capture = CaptureContext(
         capturePackages = setOf("com.fivepaisa.trade"), chatAllowList = emptySet(), chatSenders = emptySet(),
-        username = "user-1", deviceSalt = "salt", captureSince = 0L
+        username = "user-1", deviceSalt = "salt"
     )
     private val client = object : MarksyGatewayClient {
         override suspend fun capture(eventId: Long, message: CapturedMessage) = Result.success(MarksyInsight(eventId, "ok"))
@@ -1704,8 +1924,7 @@ In `TradingDeliveryWorker.kt`:
             chatAllowList = WhatsAppSenderWatchlist.get(applicationContext),
             chatSenders = store.chatSenders(),
             username = username,
-            deviceSalt = store.deviceSalt(),
-            captureSince = store.captureSince(now)
+            deviceSalt = store.deviceSalt()
         )
 ```
 
@@ -1839,11 +2058,15 @@ The phone now sends each captured market message to `POST /tips/ingest-text` as 
 spec §5.1); the server parses. Requires marksy-api Phase 4a (A) in production (checked before this branch was cut).
 
 - `TipTextCleaner` mirrors the server's masks (username, phones, emails, PAN, 8+ digit runs) with the same test vectors
-- `CaptureGate` is the only way out: capture-list packages, or allow-listed WhatsApp/Telegram chats and SMS senders;
+- `CaptureGate` is the only way out: capture-list packages, or allow-listed WhatsApp/Telegram groups and SMS senders;
   everything else stays "Local only"
-- Labels: app name, SMS sender id (DLT header), or the allow-listed chat name without its sender; a label that cleans
-  to masks only (a chat titled with a phone number) never leaves the phone
-- Chat text: MessagingStyle sender names are recorded on the phone, stripped and masked before sending
+- 1:1 chats never leave the phone (spec §5.1, §15 as amended 2026-09-30): the notification's group flag is stored per row
+  (Room v7, `chatGroup`), and a chat whose group-ness is unknown stays local
+- The customer's own broker order/execution notifications (executed, filled, placed, cancelled, rejected, GTT triggered)
+  never leave the phone (`NotificationClassifier.isOwnOrderEvent`)
+- Labels: app name, SMS sender id (DLT header), or the allow-listed group name without its sender; a label that cleans
+  to masks only (an SMS sender that is a phone number) never leaves the phone
+- Group text: MessagingStyle sender names are recorded on the phone, stripped and masked before sending
 - Salted per-row `deviceEventKey`, so retries return the same receipt; the capture list is cached for 6 h
 - `POST /tips` and its title/body payload are retired; on-device parsing keeps serving the local UI until Phase 4b
 
@@ -1868,6 +2091,7 @@ test -z "$(git -C /c/AIAgent/marksy-os-phase4a status --porcelain)" && cd /c/AIA
 Part A closes the Phase 1 entry criterion for capture. A label made only of masks is rejected instead of pooling strangers into one channel, and every alias lives in its medium's namespace, so no WhatsApp group can ever become a broker's record, or the reverse. Part B turns the phone into a capture-only client:
 - One pure gate decides what leaves the phone.
 - Nothing outside the capture list or the customer's allow-list is sent, and no title, body or sender name is sent at all.
+- 1:1 chats, chats of unknown group-ness and the customer's own order notifications always stay on the phone.
 - The payload is the §5.1 body under the bearer session, with a salted, retry-stable event key.
 
 Phase 4b (after Phase 3) deletes the on-device parsing and adds the calls box, My tips and Scorecards screens. It must also replace the classifier's TRADING pre-filter that still decides what is queued.
@@ -1879,7 +2103,7 @@ Phase 4b (after Phase 3) deletes the on-device parsing and adds the calls box, M
 - Task A3: `tests/test_tip_ledger.py`, `tests/test_api_tips_ingest.py`, `tests/test_api_channels.py`, `tests/test_tip_text_cleaning.py`
 - Task A4: the regression set in Task A4 Step 1, and the production checks in Task A4 Step 4
 - Task B1: the production gate in Task B1 Step 1, and `TipTextCleanerTest`
-- Task B2: `NotificationTextExtractorTest`, `IngestionPipelineTest`
-- Task B3: `CaptureGateTest`
+- Task B2: `NotificationTextExtractorTest`, `com.marksy.os.connector.*`, `EventIntelligencePipelineTest` (the migration tests), `com.marksy.os.data.*`
+- Task B3: `CaptureGateTest`, `NotificationClassifier*`
 - Task B4: `com.marksy.os.gateway.*`, and the three greps in Task B4 Step 7
 - Task B5: the full `:app:testDebugUnitTest`
