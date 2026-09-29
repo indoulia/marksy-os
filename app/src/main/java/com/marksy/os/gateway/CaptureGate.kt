@@ -56,8 +56,11 @@ object CaptureGate {
     const val NO_LABEL = "no-label"
     const val MASKED_LABEL = "masked-label"
     const val EMPTY_TEXT = "empty-text"
+    // Fix round 1 finding C1: an SMS title that isn't shaped like a sender id is never a consented channel.
+    const val SMS_NOT_SENDER_ID = "sms-not-sender-id"
 
     fun decide(event: NotificationEventEntity, context: CaptureContext): CaptureDecision {
+        require(context.deviceSalt.isNotBlank()) { "deviceSalt must not be blank (fix round 1, defence in depth)" }
         if (!event.isTrading || event.category != "TRADING" || event.sourceKey.isBlank()) return CaptureDecision.Keep(NOT_TRADING)
         val appPackage = event.sourcePackage.trim().lowercase(Locale.ROOT)
         val medium = CaptureMedium.of(appPackage)
@@ -69,11 +72,14 @@ object CaptureGate {
                 if (appPackage !in packages) return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
                 event.sourceName
             }
-            CaptureMedium.SMS -> ChatLabels.allowListedSmsSender(event.title, context.chatAllowList)
-                ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
+            CaptureMedium.SMS -> {
+                if (!ChatLabels.isSenderIdShaped(event.title)) return CaptureDecision.Keep(SMS_NOT_SENDER_ID)
+                ChatLabels.allowListedSmsSender(event.title, context.chatAllowList) ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
+            }
             CaptureMedium.WHATSAPP, CaptureMedium.TELEGRAM -> {
                 if (event.chatGroup != true) return CaptureDecision.Keep(if (event.chatGroup == false) ONE_TO_ONE_CHAT else GROUP_UNKNOWN)
-                ChatLabels.allowListedChat(event.title, context.chatAllowList) ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
+                ChatLabels.allowListedChat(event.title, context.chatAllowList, context.chatSenders)
+                    ?: return CaptureDecision.Keep(OUTSIDE_CAPTURE_SET)
             }
         }
         val channelLabel = TipTextCleaner.channelLabel(medium, label, context.username) ?: return CaptureDecision.Keep(NO_LABEL)
@@ -104,11 +110,18 @@ object CaptureGate {
     }
 }
 
-/** `GET /channels/capture-list` data: the app packages a phone may send (tip-ledger spec §5.1). */
+/**
+ * `GET /channels/capture-list` data: the app packages a phone may send (tip-ledger spec §5.1).
+ * Fix round 1 finding I2: malformed data throws, so the caller keeps its cached or null list and rows wait,
+ * instead of silently emptying the capture set (which would have sent nothing from apps).
+ */
 fun parseCaptureList(data: JSONObject): Set<String> {
-    val packages = data.optJSONArray("packages") ?: return emptySet()
-    return (0 until packages.length()).mapNotNull { i ->
-        // Android's optString turns a JSON null into the text "null".
-        packages.optJSONObject(i)?.optString("package")?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() && it != "null" }
-    }.toSet()
+    val packages = data.optJSONArray("packages")
+        ?: throw IllegalArgumentException("capture-list 'packages' is missing or not an array")
+    return (0 until packages.length()).map { i ->
+        val entry = packages.optJSONObject(i) ?: throw IllegalArgumentException("capture-list entry $i is not an object")
+        val value = entry.opt("package")
+        if (value !is String) throw IllegalArgumentException("capture-list entry $i has no string 'package'")
+        value.trim().lowercase(Locale.ROOT)
+    }.filter { it.isNotBlank() }.toSet()
 }

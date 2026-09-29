@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class CaptureGateTest {
@@ -40,9 +41,43 @@ class CaptureGateTest {
         assertEquals("WHATSAPP" to "StockTips", whatsapp.medium to whatsapp.channelLabel)
         assertEquals("BUY RENUKA CMP 23.62 SL 22.25 TGT 26\nthanks [SENDER]", whatsapp.text)
 
-        val telegram = send(event(pkg = "org.telegram.messenger", source = "Telegram", title = "Rahul @ StockTips", group = true))
+        // I3 fix: the body must actually contain the sender's name, or assertFalse below can never fail.
+        val telegramContext = context.copy(chatSenders = setOf("Rahul Sharma"))
+        val telegram = (CaptureGate.decide(
+            event(
+                pkg = "org.telegram.messenger", source = "Telegram", title = "Rahul Sharma @ StockTips", group = true,
+                body = "Rahul Sharma: BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
+            ),
+            telegramContext
+        ) as CaptureDecision.Send).message
         assertEquals("TELEGRAM" to "StockTips", telegram.medium to telegram.channelLabel)
         assertFalse(telegram.text.contains("Rahul"))
+    }
+
+    @Test
+    fun everyKnownSenderIsMaskedRegardlessOfPresenceInTheRow() {
+        // Finding C3: mask every known chatSenders name, not only the ones this row itself names.
+        val withBothSenders = context.copy(chatSenders = setOf("Amit", "Rahul"))
+        val whatsapp = (CaptureGate.decide(
+            event(
+                pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips: Amit", group = true,
+                body = "Amit: Rahul's RENUKA call hit target"
+            ),
+            withBothSenders
+        ) as CaptureDecision.Send).message
+        assertFalse(whatsapp.text.contains("Amit"))
+        assertFalse(whatsapp.text.contains("Rahul"))
+
+        // A short handle ("RK", length 2) must still be masked (MIN_MASKED_SENDER_LENGTH lowered to 2).
+        val withShortHandle = context.copy(chatSenders = setOf("Amit", "RK"))
+        val telegram = (CaptureGate.decide(
+            event(
+                pkg = "org.telegram.messenger", source = "Telegram", title = "StockTips", group = true,
+                body = "Amit: thanks RK"
+            ),
+            withShortHandle
+        ) as CaptureDecision.Send).message
+        assertFalse(telegram.text.contains("RK"))
     }
 
     @Test
@@ -67,7 +102,20 @@ class CaptureGateTest {
             "Order placed" to "Your SELL order for 5 INFY has been placed",
             "Order cancelled" to "Your BUY order for 5 INFY was cancelled",
             "Order rejected" to "RMS: insufficient margin for RELIANCE",
-            "GTT triggered" to "Your GTT for RELIANCE has been triggered"
+            "GTT triggered" to "Your GTT for RELIANCE has been triggered",
+            // Finding C2: customer-marker + status based recognition (fix round 1).
+            "Order executed with price" to "Your BUY order for 10 RELIANCE @ 1450.50 is executed",
+            "Order placed with rupee note" to "Your SELL order for 5 INFY at Rs. 1500 has been placed",
+            "Order traded with avg price" to "BUY order traded: 10 RELIANCE, average price 1450",
+            "Order successful with qty avg price" to "Your Buy Order for RELIANCE is Successful. Qty 10, Avg Price 1450.50",
+            "Order open at exchange" to "Your SELL order for 5 INFY is open at exchange",
+            "Position opened" to "Position opened: BUY 10 RELIANCE @ 1450",
+            "Stop loss order hit with qty" to "Stop loss order for RELIANCE hit at 1420.50, qty 10",
+            "Trades executed" to "Trades executed for your account",
+            "Order No. executed" to "Order No. 2026093012345: RELIANCE BUY 10 Executed",
+            "Executed at symbol" to "executed @ 1450",
+            "Bought shares" to "Bought 10 shares of RELIANCE",
+            "SIP processed" to "SIP of Rs. 5000 in XYZ processed"
         ).forEach { (title, body) -> assertEquals(title, ownOrder, CaptureGate.decide(event(title = title, body = body), context)) }
 
         val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",
@@ -78,6 +126,23 @@ class CaptureGateTest {
     }
 
     @Test
+    fun researchCallsAndSourceExitsStillGo() {
+        listOf(
+            "Target 26 achieved. Trade completed, book profits",
+            "Our RELIANCE trade: Stop loss triggered, exit now",
+            "Wait for trade confirmation above 1450, then BUY RELIANCE SL 1420 TGT 1500",
+            "Buy order to be placed above 24, target 26, SL 22",
+            "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
+        ).forEach { body ->
+            // A capture-listed app row carrying it.
+            assertTrue(body, CaptureGate.decide(event(title = "Research call", body = body), context) is CaptureDecision.Send)
+            // An allow-listed group row carrying it.
+            val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true)
+            assertTrue(body, CaptureGate.decide(group, context) is CaptureDecision.Send)
+        }
+    }
+
+    @Test
     fun onlyTheCaptureSetLeavesThePhone() {
         fun decide(event: NotificationEventEntity) = CaptureGate.decide(event, context)
         val outside = CaptureDecision.Keep(CaptureGate.OUTSIDE_CAPTURE_SET)
@@ -85,13 +150,32 @@ class CaptureGateTest {
         assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), decide(event(trading = false)))
         assertEquals(outside, decide(event(pkg = "com.zerodha.kite3", source = "Zerodha")))
         assertEquals(outside, decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "Family Group", group = true)))
-        assertEquals(outside, decide(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "Amit")))
+        // Finding C1: "Amit" and a non-Indian number are not shaped like a sender id, so they never reach the allow-list.
         assertEquals(
-            CaptureDecision.Keep(CaptureGate.MASKED_LABEL),
+            CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID),
+            decide(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "Amit"))
+        )
+        assertEquals(
+            CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID),
             decide(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "+91 98765 43210"))
         )
         val sms = send(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S"))
         assertEquals("SMS" to "ZERODH", sms.medium to sms.channelLabel)
+    }
+
+    @Test
+    fun smsLeavesOnlyWhenTheTitleIsShapedLikeASenderId() {
+        // Even an allow-listed person name or foreign number must stay local: the title itself must look like a sender id.
+        val withPhoneAllowed = context.copy(chatAllowList = context.chatAllowList + "+44 7911 123456")
+        fun decide(title: String) = CaptureGate.decide(
+            event(pkg = "com.google.android.apps.messaging", source = "Messages", title = title),
+            withPhoneAllowed
+        )
+
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Rahul"))
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("+44 7911 123456"))
+        val sent = (decide("JD-ZERODH-S") as CaptureDecision.Send).message
+        assertEquals("ZERODH", sent.channelLabel)
     }
 
     @Test
@@ -115,11 +199,42 @@ class CaptureGateTest {
         assertNotEquals(first, otherInstall.message.deviceEventKey)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun decideRefusesToRunWithABlankDeviceSalt() {
+        CaptureGate.decide(event(), context.copy(deviceSalt = " "))
+    }
+
     @Test
     fun theCaptureListKeepsOnlyPackageNames() {
-        val data = JSONObject("""{"packages":[{"package":"COM.UPSTOX.PRO","channelId":3},{"package":""},{"channelId":4}]}""")
+        val data = JSONObject("""{"packages":[{"package":"COM.UPSTOX.PRO","channelId":3},{"package":""}]}""")
 
         assertEquals(setOf("com.upstox.pro"), parseCaptureList(data))
+    }
+
+    @Test
+    fun anEmptyPackagesArrayReturnsAnEmptySet() {
+        assertEquals(emptySet<String>(), parseCaptureList(JSONObject("""{"packages":[]}""")))
+    }
+
+    @Test
+    fun malformedCaptureListDataThrows() {
+        // Finding I2: malformed data throws so the caller keeps its cached/null list and rows wait, rather
+        // than silently resolving to an empty set (which would have sent nothing from apps).
+        val malformed = listOf(
+            JSONObject("""{"other":"x"}"""),
+            JSONObject("""{"packages":"not-an-array"}"""),
+            JSONObject("""{"packages":[{"channelId":4}]}"""),
+            JSONObject("""{"packages":[{"package":42}]}"""),
+            JSONObject("""{"packages":["not-an-object"]}""")
+        )
+        malformed.forEach { data ->
+            try {
+                parseCaptureList(data)
+                fail("expected IllegalArgumentException for $data")
+            } catch (expected: IllegalArgumentException) {
+                // expected
+            }
+        }
     }
 
     // B2 review carry-over: the gate decides by medium first; SMS never takes the chat/group-label path.
@@ -129,7 +244,7 @@ class CaptureGateTest {
             pkg = "com.google.android.apps.messaging", source = "Messages",
             title = "StockTips: Rahul", group = true
         )
-        assertEquals(CaptureDecision.Keep(CaptureGate.OUTSIDE_CAPTURE_SET), CaptureGate.decide(smsWithGroupFlag, context))
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), CaptureGate.decide(smsWithGroupFlag, context))
     }
 
     private fun send(event: NotificationEventEntity) = (CaptureGate.decide(event, context) as CaptureDecision.Send).message

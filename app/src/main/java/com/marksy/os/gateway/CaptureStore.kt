@@ -8,7 +8,8 @@ class CaptureStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun deviceSalt(): String = synchronized(LOCK) {
-        prefs.getString(KEY_SALT, null) ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_SALT, it).apply() }
+        // commit() (not apply()) so a retry after process death still finds this same salt on disk (fix round 1).
+        prefs.getString(KEY_SALT, null) ?: UUID.randomUUID().toString().also { prefs.edit().putString(KEY_SALT, it).commit() }
     }
 
     /** Null until the first successful fetch of `GET /channels/capture-list`. */
