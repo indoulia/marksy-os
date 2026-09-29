@@ -60,7 +60,7 @@ hit-rate scorecard, Marksy predictions with a six-state lifecycle and `DailyPred
 **channels** — `id, name, type, canonical_channel_id, default_horizon_sessions (20), created_at`.
 Types: `BROKER_APP, NEWS_PORTAL, SMS_SENDER, WHATSAPP_GROUP, TELEGRAM_CHANNEL, YOUTUBE, MARKSY` (extendable).
 `canonical_channel_id` is itself unless merged. **channel_aliases** — `channel_id, alias` (package name or
-label), alias unique. Seeded from the app's `SourceRegistry`.
+label), unique per `(scope, alias)` where scope is the medium the alias was seen on (Phase 4a). Seeded from the app's `SourceRegistry`.
 
 **callers** — `id, channel_id, name, canonical_caller_id`. Optional on tips.
 
