@@ -74,7 +74,7 @@ object MarksyTipPayloadBuilder {
             entryPrice = call?.entry ?: extractNumber(text, "(?:entry|entry price|executed at|filled at|avg(?:erage) price)"),
             targetPrice = call?.target ?: extractNumber(text, "(?:target|target price)"),
             stopLoss = call?.stopLoss ?: extractNumber(text, "(?:stop loss|stoploss|sl)"),
-            horizonDays = extractDays(text),
+            horizonDays = call?.horizonSessions ?: com.marksy.os.notification.CallHorizon.parse(text)?.sessions,
             confidence = extractPercent(text)?.div(100.0),
             rationale = extractRationale(text),
             tipAsOf = occurredAt,
@@ -121,10 +121,6 @@ object MarksyTipPayloadBuilder {
     private fun extractNumber(text: String, label: String): Double? =
         Regex("(?i)$label\\s*[:=-]?\\s*(?:₹|INR)?\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)")
             .find(text)?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
-
-    private fun extractDays(text: String): Int? =
-        Regex("(?i)\\b(?:horizon|holding|for)\\s*[:=-]?\\s*(\\d{1,3})\\s*(?:days?|d)\\b")
-            .find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it in 1..365 }
 
     private fun extractPercent(text: String): Double? =
         Regex("(?i)\\b(?:confidence|probability)\\s*[:=-]?\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%")

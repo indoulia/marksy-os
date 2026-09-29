@@ -42,7 +42,10 @@ class EventExpiryTest {
         val intraday = event("TRADING", "Intraday Call", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26")
         val months = event("TRADING", "KISHAN", "BUY | CROPSTER AGRO | Entry 2.82 | Target 10 | SL 2 | Time: 1-2 Months")
         assertEquals(mondayTen.withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(intraday))
-        assertEquals(mondayTen.plusMonths(2).toInstant().toEpochMilli(), expiry(months))
+        // Horizons count trading sessions after the posting session: 1-2 months = 42, 12 months = 252.
+        assertEquals(mondayTen.plusWeeks(8).plusDays(2).withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(months))
+        val year = event("TRADING", "ICICI Direct", "Buy TENNIND around Rs 500 for 12 Month with target price of Rs 650, potential upside of 30%.")
+        assertEquals(mondayTen.plusWeeks(50).plusDays(2).withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(year))
     }
 
     @Test
