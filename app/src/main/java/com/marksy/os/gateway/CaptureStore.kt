@@ -49,6 +49,9 @@ class CaptureStore(context: Context) {
         val fresh = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (fresh.isEmpty()) return@synchronized
         val ordered = orderedSenders().toMutableList()
+        // Finding N3: skip the JSON rewrite and commit() when fresh is already the tail, in the same
+        // order -- e.g. the same sender posting again with nothing new to record.
+        if (ordered.size >= fresh.size && ordered.takeLast(fresh.size) == fresh) return@synchronized
         fresh.forEach { name ->
             ordered.remove(name)
             ordered.add(name)

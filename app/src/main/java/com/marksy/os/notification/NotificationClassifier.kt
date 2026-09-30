@@ -149,15 +149,20 @@ object NotificationClassifier {
         Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
     )
     private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
-    // Unbounded (no \b) so an inflection such as "opened"/"rejected" still counts as its status word; "hit" added
-    // for a stop-loss trigger ("Stop loss order ... hit at ...") -- not in any brief's list, kept local per the
-    // ambiguous-case rule (fix round 1, finding C2; see task-B3-report.md Fix round 1 for the trace).
+    // Round-2 finding C3 residual (a): "your ... order/gtt/position/trade" is strong evidence when paired
+    // with any status word. The weak rule below required the same pairing but let looksLikeCall veto it,
+    // which let a genuine own-order notification that also reads like a call (an entry, target and stop
+    // loss spelled out) slip through as a call.
+    private val possessiveOrderPhrase = Regex("""\byour\b.{0,40}?\b(?:orders?|gtt|position|trades?)\b""", RegexOption.IGNORE_CASE)
+    // Whole-word boundaries (round-2 finding C3 residual (c)) so "oversold" doesn't match "sold". "hit" stays
+    // (fix round 1, finding C2) for a stop-loss trigger, always used as a standalone word in practice.
     private val orderStatus = Regex(
-        """(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit)""",
+        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit)\b""",
         RegexOption.IGNORE_CASE
     )
     private val strongExecution = listOf(
-        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed)\b""", RegexOption.IGNORE_CASE),
+        // Round-2 finding C3 residual (b): placed/triggered/modified/pending added to this pattern's status set.
+        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending)\b""", RegexOption.IGNORE_CASE),
         Regex("""(?:executed|filled)\s+(?:at|@)""", RegexOption.IGNORE_CASE),
         Regex("""\bbought\s+\d+\s+shares?\b""", RegexOption.IGNORE_CASE),
         Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
@@ -179,6 +184,7 @@ object NotificationClassifier {
         val text = "$title $body".lowercase()
         val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
             (hardCustomerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)) ||
+            (possessiveOrderPhrase.containsMatchIn(text) && orderStatus.containsMatchIn(text)) ||
             classifierExecutionTerms.any { text.containsRuleTerm(it) }
         if (strongEvidence) return true
         if (looksLikeCall(title, body, text)) return false

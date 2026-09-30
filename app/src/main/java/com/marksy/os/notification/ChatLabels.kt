@@ -46,37 +46,35 @@ object ChatLabels {
 
     fun allowListedSmsSender(title: String, allowList: Collection<String>): String? {
         val sender = smsSender(title)
-        return sender.takeIf { it.isNotBlank() && WhatsAppSenderWatchlist.matches(allowList.map(::smsSender), it) }
+        // Round-2 finding N2: production allow-list entries are stored lowercased ("jd-zerodh-s"); the
+        // now-uppercase-only DLT_HEADER (finding C1) needs the entry uppercased before extraction, or it
+        // never matches. The title side stays exactly as posted (case-sensitive).
+        val normalizedAllowList = allowList.map { smsSender(it.trim().uppercase(Locale.ROOT)) }
+        return sender.takeIf { it.isNotBlank() && WhatsAppSenderWatchlist.matches(normalizedAllowList, it) }
     }
 
-    // Finding M1: one alternation regex over every known sender (not one Regex object per sender, up to
-    // 5000), longest name first so an overlapping shorter name never wins early. Cached and rebuilt only
-    // when the sender list actually changes -- at most once per batch, since the gate re-reads chatSenders
-    // once per batch (finding C2a), not once per row. This is a singleton cache, so it assumes sequential
-    // batch processing, which WorkManager's ExistingWorkPolicy.KEEP already guarantees (no concurrent runs).
-    @Volatile private var cachedMaskableNames: List<String> = emptyList()
-    @Volatile private var cachedMask: Regex? = null
-
-    private fun maskFor(maskableNames: List<String>): Regex? {
-        if (maskableNames.isEmpty()) return null
-        if (maskableNames != cachedMaskableNames) {
-            val alternation = maskableNames.joinToString("|") { Regex.escape(it) }
-            cachedMask = Regex("(?<![$WORD])(?:$alternation)(?![$WORD])", RegexOption.IGNORE_CASE)
-            cachedMaskableNames = maskableNames
-        }
-        return cachedMask
+    /**
+     * Finding M1 (one alternation, not one Regex per sender) without any shared/cached state (round-2
+     * finding N1: a global cache handed a concurrent batch a stale regex). Pure and stateless: the caller
+     * (CaptureContext.senderMask) builds and memoizes this once per batch, not ChatLabels itself.
+     */
+    fun buildSenderMask(names: Collection<String>): Regex? {
+        val maskable = names.map { it.trim() }.filter { it.length >= MIN_MASKED_SENDER_LENGTH }.distinct().sortedByDescending { it.length }
+        if (maskable.isEmpty()) return null
+        val alternation = maskable.joinToString("|") { Regex.escape(it) }
+        return Regex("(?<![$WORD])(?:$alternation)(?![$WORD])", RegexOption.IGNORE_CASE)
     }
 
     /**
      * This row's senders lose their "Name: " line prefix, and EVERY known chat sender (not only those
      * present in this row) is masked wherever it appears, whole-word and case-insensitively (fix round 1,
-     * finding C3). Over-masking (e.g. a sender named "Titan" masking the word "titan") is accepted.
+     * finding C3), via the precomputed [mask] (finding N1). Over-masking (e.g. a sender named "Titan"
+     * masking the word "titan") is accepted.
      */
-    fun withoutSenders(body: String, title: String, senders: Collection<String>): String {
+    fun withoutSenders(body: String, title: String, senders: Collection<String>, mask: Regex?): String {
         val lines = body.lines()
         val names = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
         val linePrefixNames = names.filter { name -> title.contains(name) || lines.any { it.startsWith("$name$SENDER_SUFFIX") } }
-        val mask = maskFor(names.filter { it.length >= MIN_MASKED_SENDER_LENGTH })
         if (mask == null && linePrefixNames.isEmpty()) return body
         return lines.joinToString("\n") { line ->
             val unprefixed = linePrefixNames.firstOrNull { line.startsWith("$it$SENDER_SUFFIX") }

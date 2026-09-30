@@ -36,7 +36,15 @@ data class CaptureContext(
     val chatSenders: Set<String>,
     val username: String,
     val deviceSalt: String
-)
+) {
+    /**
+     * Round-2 finding N1: replaces ChatLabels' removed global mask cache. Each `CaptureContext` instance
+     * (one per batch, via `TradingDeliveryRun.drain()`'s per-batch `.copy(chatSenders = ...)`) builds and
+     * memoizes its own mask exactly once, from its own `chatSenders` -- no state is shared across batches
+     * or threads. Not a constructor property, so `.copy()` always yields a fresh, unbuilt cache.
+     */
+    val senderMask: Regex? by lazy { ChatLabels.buildSenderMask(chatSenders) }
+}
 
 sealed interface CaptureDecision {
     data class Send(val message: CapturedMessage) : CaptureDecision
@@ -87,7 +95,8 @@ object CaptureGate {
         val raw = when (medium) {
             CaptureMedium.APP_NOTIFICATION -> listOf(event.title, event.body).filter { it.isNotBlank() }.joinToString("\n")
             CaptureMedium.SMS -> event.body
-            CaptureMedium.WHATSAPP, CaptureMedium.TELEGRAM -> ChatLabels.withoutSenders(event.body, event.title, context.chatSenders)
+            CaptureMedium.WHATSAPP, CaptureMedium.TELEGRAM ->
+                ChatLabels.withoutSenders(event.body, event.title, context.chatSenders, context.senderMask)
         }
         val text = TipTextCleaner.clean(raw, context.username).trim()
         if (text.isEmpty()) return CaptureDecision.Keep(EMPTY_TEXT)

@@ -118,7 +118,12 @@ class CaptureGateTest {
             "SIP processed" to "SIP of Rs. 5000 in XYZ processed",
             // Final-review finding C3: strong evidence returns own-order before the call veto is even considered.
             "Trade confirmation with bought" to "Trade confirmation: Bought 10 RELIANCE @ 1450",
-            "Own order that also reads like a call" to "Your BUY order for 10 RELIANCE is executed at 1450. Target 1500, SL 1420"
+            "Own order that also reads like a call" to "Your BUY order for 10 RELIANCE is executed at 1450. Target 1500, SL 1420",
+            // Round 2, C3 residual: a possessive order phrase ("your ... order/gtt") plus any status word.
+            "Bracket order placed" to "Your bracket order to BUY 10 RELIANCE at 1450 has been placed. Target 1500, Stoploss 1420",
+            "GTT triggered with levels" to "Your GTT for RELIANCE has been triggered: BUY 10 @ 1450, target 1500, SL 1420",
+            "Order pending with levels" to "Your SELL order for 5 INFY at 1500 is pending. SL 1520, Target 1450",
+            "Order executed with full description" to "Your BUY order for 10 shares of RELIANCE INDUSTRIES LTD (NSE, CNC, LIMIT @ 1450.00, Target 1500, SL 1420, validity DAY) has been executed"
         ).forEach { (title, body) -> assertEquals(title, ownOrder, CaptureGate.decide(event(title = title, body = body), context)) }
 
         val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",
@@ -130,21 +135,35 @@ class CaptureGateTest {
 
     @Test
     fun researchCallsAndSourceExitsStillGo() {
-        listOf(
+        val stillGo = listOf(
             "Target 26 achieved. Trade completed, book profits",
-            "Our RELIANCE trade: Stop loss triggered, exit now",
-            "Buy order to be placed above 24, target 26, SL 22",
             "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
-        ).forEach { body ->
-            // A capture-listed app row carrying it.
-            assertTrue(body, CaptureGate.decide(event(title = "Research call", body = body), context) is CaptureDecision.Send)
-            // An allow-listed group row carrying it.
+        )
+        // Round 2, finding C3 residual (b): "placed"/"triggered" were added to STRONG_EXECUTION's first
+        // pattern's status set, so "trade ... triggered" and "order ... placed" now count as strong
+        // evidence on their own (no possessive "your" needed). That is a direct, mechanical consequence of
+        // implementing (b) exactly as specified; it conflicts with these two having been "must still go"
+        // strings, and is resolved toward keeping the data local, per the standing ambiguous-case rule (see
+        // task-B3-report.md, "Final fix wave round 2", for the trace and discussion).
+        val nowOwnOrderToo = listOf(
+            "Our RELIANCE trade: Stop loss triggered, exit now",
+            "Buy order to be placed above 24, target 26, SL 22"
+        )
+        (stillGo + nowOwnOrderToo).forEach { body ->
+            // A group row is never subject to the own-order check (it only applies outside chat media), so
+            // it still sends regardless of the strings above.
             val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true)
             assertTrue(body, CaptureGate.decide(group, context) is CaptureDecision.Send)
         }
+        stillGo.forEach { body ->
+            assertTrue(body, CaptureGate.decide(event(title = "Research call", body = body), context) is CaptureDecision.Send)
+        }
+        nowOwnOrderToo.forEach { body ->
+            assertEquals(body, CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = body), context))
+        }
 
-        // Final-review finding C3: this string now carries strong evidence ("trade confirmation"), so it
-        // is own-order and stays local even though it also reads like a call (accepted per the ruling).
+        // Fix round 1, finding C3: this string carries strong evidence ("trade confirmation"), so it is
+        // own-order and stays local even though it also reads like a call (accepted per that round's ruling).
         val flipped = "Wait for trade confirmation above 1450, then BUY RELIANCE SL 1420 TGT 1500"
         assertEquals(CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = flipped), context))
     }
@@ -191,6 +210,47 @@ class CaptureGateTest {
         assertEquals("ZERODH", (decide("JD-ZERODH-S") as CaptureDecision.Send).message.channelLabel)
         assertEquals("ZERODH", (decide("VM-ZERODH") as CaptureDecision.Send).message.channelLabel)
         assertEquals("UPSTOX", (decide("AD-UPSTOX-S") as CaptureDecision.Send).message.channelLabel)
+    }
+
+    // Round 2 finding N2: production allow-list entries are stored lowercased; the entry must still be
+    // normalized to uppercase before extraction, or an otherwise-valid DLT-shaped title never matches.
+    @Test
+    fun smsAllowListMatchesADltEntryStoredLowercased() {
+        val lowercasedEntry = context.copy(chatAllowList = context.chatAllowList + "jd-zerodh-s")
+
+        val sent = (CaptureGate.decide(
+            event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "VM-ZERODH"),
+            lowercasedEntry
+        ) as CaptureDecision.Send).message
+
+        assertEquals("ZERODH", sent.channelLabel)
+    }
+
+    // Round 2 finding N1: ChatLabels keeps no shared mask cache; each CaptureContext (one per batch) builds
+    // its own mask from its own chatSenders, so two different sender sets used back to back (or
+    // interleaved) each mask exactly their own names, never the other's.
+    @Test
+    fun interleavedBatchesEachMaskOnlyTheirOwnSenders() {
+        val contextA = context.copy(chatSenders = setOf("Alice"))
+        val contextB = context.copy(chatSenders = setOf("Bob"))
+        val rowA = event(
+            pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true,
+            body = "Alice: BUY RENUKA CMP 23 SL 22 TGT 26"
+        )
+        val rowB = event(
+            pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true,
+            body = "Bob: BUY RENUKA CMP 23 SL 22 TGT 26"
+        )
+
+        val sentA1 = (CaptureGate.decide(rowA, contextA) as CaptureDecision.Send).message
+        val sentB1 = (CaptureGate.decide(rowB, contextB) as CaptureDecision.Send).message
+        val sentB2 = (CaptureGate.decide(rowB, contextB) as CaptureDecision.Send).message
+        val sentA2 = (CaptureGate.decide(rowA, contextA) as CaptureDecision.Send).message
+
+        assertFalse(sentA1.text.contains("Alice"))
+        assertFalse(sentA2.text.contains("Alice"))
+        assertFalse(sentB1.text.contains("Bob"))
+        assertFalse(sentB2.text.contains("Bob"))
     }
 
     @Test

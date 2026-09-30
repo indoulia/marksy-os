@@ -55,7 +55,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         try {
             captureUnsafe(sbn)
         } catch (e: Exception) {
-            Log.e(TAG, "Skipped notification from ${sbn.packageName}", e)
+            // Log hygiene (round 2): the exception's class name is diagnosable; the object/message never is.
+            Log.e(TAG, "Skipped notification from ${sbn.packageName} (${e::class.java.simpleName})")
         }
     }
 
@@ -93,7 +94,15 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             // Finding C2(b): record this row's senders (committed synchronously, CaptureStore.kt) before
             // inserting the row, so a delivery run's per-batch chatSenders re-read (finding C2a) is
             // guaranteed to already include them once this row is visible to findPendingTrading.
-            if (isChat) CaptureStore(applicationContext).rememberChatSenders(senders)
+            if (isChat) {
+                try {
+                    CaptureStore(applicationContext).rememberChatSenders(senders)
+                } catch (e: Exception) {
+                    // Finding N4: fail closed -- no row is ever created with an unrecorded sender.
+                    Log.e(TAG, "Failed to record chat senders (${e::class.java.simpleName}); skipping this notification")
+                    return@launch
+                }
+            }
             val result = ingestion.ingest(raw)
             if (result is IngestionPipeline.Result.Failed) {
                 // Not stored, so never dismiss it.

@@ -69,4 +69,20 @@ class CaptureStoreTest {
         assertEquals(setOf("Rahul", "Amit"), remembered)
         assertNotNull(prefs.getString("chat_senders", null))
     }
+
+    // Finding N3: remembering an already-current tail (same names, same order) is a correct no-op -- the
+    // stored content is unchanged. (A stricter "commit() was never called" check via a SharedPreferences
+    // change listener was tried and dropped: Robolectric's shadow does not notify listeners for a
+    // value-identical commit either way, so that signal cannot discriminate the skip from a real rewrite
+    // that happens to reproduce the same content -- confirmed empirically against the pre-N3 code. The
+    // skip itself is reviewable directly in CaptureStore.rememberChatSenders.)
+    @Test
+    fun rememberingTheSameTailLeavesTheStoredContentUnchanged() {
+        val store = CaptureStore(context)
+        store.rememberChatSenders(listOf("Amit", "Rahul"))
+
+        store.rememberChatSenders(listOf("Amit", "Rahul"))
+
+        assertEquals(setOf("Amit", "Rahul"), store.chatSenders())
+    }
 }
