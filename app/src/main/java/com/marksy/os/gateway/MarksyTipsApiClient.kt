@@ -1,5 +1,7 @@
 package com.marksy.os.gateway
 
+import com.marksy.os.market.LedgerCalls
+import com.marksy.os.market.LedgerTipDto
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import java.io.IOException
@@ -52,50 +54,8 @@ open class MarksyTipsApiClient(
         action = kind
     )
 
-    private suspend fun fetchTip(tipId: String, eventId: Long, kind: String): MarksyInsight {
-        val data = execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data")
-        val comparison = data.optJSONObject("comparison")
-        val marksyView = data.optJSONObject("marksyView")
-        val verdict = comparison?.str("verdict")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() } ?: "NO_VIEW"
-        val reasons = comparison?.stringList("verdictReasons").orEmpty()
-        val recommendation = marksyView?.str("recommendation")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() }
-        val summary = buildString {
-            append(verdict)
-            if (reasons.isNotEmpty()) append(" — ").append(reasons.joinToString("; "))
-            if (recommendation != null) append(" | ").append(recommendation)
-        }.boundedText(MAX_SUMMARY_CHARS).ifBlank { "Marksy comparison available." }
-
-        return MarksyInsight(
-            eventId = eventId,
-            summary = summary,
-            action = (recommendation ?: kind).boundedText(MAX_LONG_TEXT_CHARS),
-            confidence = marksyView?.finiteDouble("confidence")?.toFloat()?.coerceIn(0f, 1f)
-                ?: marksyView?.finiteDouble("probability")?.toFloat()?.coerceIn(0f, 1f),
-            verdict = verdict,
-            verdictReasons = reasons,
-            recommendation = recommendation,
-            probability = marksyView?.finiteDouble("probability"),
-            opportunityScore = marksyView?.finiteDouble("opportunityScore"),
-            trustScore = marksyView?.finiteDouble("trustScore"),
-            trustQuality = marksyView?.str("trustQuality")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            uncertaintyLevel = marksyView?.str("uncertaintyLevel")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            entryPrice = marksyView?.finiteDouble("entryPrice"),
-            targetPrice = marksyView?.finiteDouble("targetPrice"),
-            stopLoss = marksyView?.finiteDouble("stopLoss"),
-            upsidePct = marksyView?.finiteDouble("upsidePct"),
-            horizonDays = marksyView?.optInt("horizonDays")?.takeIf { it > 0 },
-            levelState = marksyView?.str("levelState")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            modelVersion = marksyView?.str("modelVersion")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            asOf = marksyView?.str("asOf")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            failedCriteria = marksyView?.stringList("failedCriteria").orEmpty(),
-            decisionOutcome = marksyView?.str("decisionOutcome")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            evidence = marksyView?.stringList("evidence").orEmpty(),
-            marksySource = comparison?.str("marksySource")?.boundedText(MAX_SHORT_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            marksyView = comparison?.str("marksyView")?.boundedText(MAX_LONG_TEXT_CHARS)?.takeIf { it.isNotBlank() },
-            tipId = tipId.boundedText(MAX_SHORT_TEXT_CHARS),
-            rawResponseJson = data.toString().take(MAX_RESPONSE_CHARS)
-        )
-    }
+    private suspend fun fetchTip(tipId: String, eventId: Long, kind: String): MarksyInsight =
+        ledgerInsight(eventId, kind, tipId, execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data"))
 
     // internal open: a test seam so a fake HTTP layer can be substituted without a real (HTTPS-only) server.
     internal open suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
@@ -153,15 +113,28 @@ open class MarksyTipsApiClient(
 
 }
 
+/** The tip as the ledger tracks it (spec §9 `GET /tips/{id}`); Marksy's EPIC-803 comparison is no longer read. */
+internal fun ledgerInsight(eventId: Long, kind: String, tipId: String, data: JSONObject): MarksyInsight {
+    val ledger = data.optJSONObject("ledger")
+    val summary = ledger?.let(LedgerTipDto::parse)?.let { tip ->
+        listOfNotNull(LedgerCalls.state(tip), LedgerCalls.progressText(tip)).joinToString(" · ")
+    } ?: "Recorded by Marksy; tracking starts with the next session"
+    return MarksyInsight(
+        eventId = eventId,
+        summary = summary.boundedText(MAX_SUMMARY_CHARS),
+        action = kind,
+        tipId = tipId.boundedText(MAX_SHORT_TEXT_CHARS),
+        rawResponseJson = ledger?.toString()?.take(MAX_RESPONSE_CHARS)
+    )
+}
+
 private const val CONNECT_TIMEOUT_MS = 10_000
 private const val READ_TIMEOUT_MS = 20_000
 private const val MAX_HTTP_RESPONSE_CHARS = 100_000
 private const val MAX_RESPONSE_CHARS = 50_000
 private const val MAX_ERROR_DETAIL_CHARS = 300
-private const val MAX_LIST_ITEMS = 20
 private const val MAX_STATUS_CHARS = 100
 private const val MAX_SHORT_TEXT_CHARS = 200
-private const val MAX_LONG_TEXT_CHARS = 1_000
 private const val MAX_SUMMARY_CHARS = 2_000
 private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
@@ -185,14 +158,6 @@ private fun normalizeBaseUrl(value: String): String {
     require(uri.host?.isNotBlank() == true) { "MARKSY_API_BASE_URL must include a host" }
     return trimmed
 }
-
-private fun JSONObject.finiteDouble(name: String): Double? = optDouble(name).takeIf { it.isFinite() }
-
-private fun JSONObject.stringList(name: String): List<String> = optJSONArray(name)?.let { array ->
-    (0 until minOf(array.length(), MAX_LIST_ITEMS)).mapNotNull { i ->
-        array.optString(i).boundedText(MAX_LONG_TEXT_CHARS).takeIf { it.isNotBlank() }
-    }
-}.orEmpty()
 
 private fun String.boundedText(maxChars: Int): String = take(maxChars)
 

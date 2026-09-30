@@ -3,6 +3,7 @@ package com.marksy.os.gateway
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,6 +75,22 @@ class MarksyTipsApiContractTest {
         assertEquals(5, view.getInt("horizonDays"))
         assertTrue(view.getJSONArray("evidence").length() > 0)
         assertEquals(0, view.getJSONArray("failedCriteria").length())
+    }
+
+    @Test
+    fun aCapturedTipIsDescribedByItsLedgerStateNotByMarksysComparison() {
+        val data = JSONObject(
+            """{"comparison": {"verdict": "AGREE"}, "marksyView": {"recommendation": "POSITIVE_OPPORTUNITY"},
+               "ledger": {"tipId": "t-1", "symbol": "RENUKA", "direction": "BUY", "firstSeenAt": "2026-09-29T04:00:00Z",
+                          "status": "SOURCE_EXIT", "outcome": "FAILURE", "actualReturn": "-0.030000"}}"""
+        )
+
+        val insight = ledgerInsight(7L, "TIP", "t-1", data)
+
+        assertEquals("Exited · Failed · -3.00%", insight.summary)
+        assertEquals("TIP", insight.action)
+        assertNull(insight.verdict)
+        assertFalse(insight.rawResponseJson!!.contains("AGREE"))
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.ActivePredictionDto
+import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PicksBasis
@@ -25,7 +26,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
     }
     val all = (marksy as? MarketDataState.Loaded)?.value.orEmpty()
     val live = remember(all) {
-        all.filter { it.lifecycleState !in INVALIDATED }
+        all.filter(LedgerCalls::isLive)
             .sortedWith(compareByDescending<ActivePredictionDto> { it.isActionableNow }.thenByDescending { it.compositeOpportunityScore ?: -1.0 })
     }
     val quotes = rememberUpstoxQuotes(remember(live) { live.map { it.symbol }.distinct() })
@@ -43,7 +44,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             else -> if (live.isEmpty()) item {
                 EmptyState(
                     "No live Marksy setups right now",
-                    if (all.isNotEmpty()) "All ${all.size} open calls are invalidated. See Predictions for their history."
+                    if (all.isNotEmpty()) "All ${all.size} open calls have ended. See Predictions for their results."
                     else "Marksy's new calls appear here after each market close." + scan?.let(PicksBasis::label)?.let { " Last scan: $it." }.orEmpty()
                 )
             }

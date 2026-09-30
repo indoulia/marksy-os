@@ -32,6 +32,25 @@ object LedgerCalls {
 
     fun isActive(t: LedgerTipDto): Boolean = t.status == STATUS_ACTIVE
 
+    private val MONITOR_ENDED = setOf("INVALIDATED", "DATA_UNRESOLVED")
+
+    /** Live on both sides: the tip is open and Marksy has not withdrawn it. Without `ledger` (an older backend) the monitor decides. */
+    fun isLive(p: ActivePredictionDto): Boolean = p.lifecycleState !in MONITOR_ENDED && p.ledger?.let(::isActive) != false
+
+    /** An ended call reads as its ledger result (spec §7); a withdrawal the tracker has not priced yet says so, never "Invalidated". */
+    fun endedLine(p: ActivePredictionDto): String? {
+        val t = p.ledger ?: return null
+        return if (isActive(t)) "Withdrawn · result pending" else listOfNotNull(state(t), returnText(t.actualReturn)).joinToString(" · ")
+    }
+
+    /** The monitor's lifecycle word, dropped once the tip speaks for an ended call. */
+    fun lifecycleWord(p: ActivePredictionDto): String? =
+        p.lifecycleState.takeIf { it != "UNAVAILABLE" && (p.ledger == null || it !in MONITOR_ENDED) }
+
+    fun closedLabel(c: ClosedPredictionDto): String? = c.ledger?.let(::state)
+
+    fun closedReturn(c: ClosedPredictionDto): Double? = if (c.ledger != null) c.ledger.actualReturn else c.realizedReturn
+
     fun state(t: LedgerTipDto): String = when (t.status) {
         STATUS_ACTIVE -> if (t.entryStatus == "WAITING") "Waiting for entry" else "Active"
         "SOURCE_EXIT", "DIRECTION_HORIZON" -> listOfNotNull(STATUS[t.status], t.outcome?.let(OUTCOME::get)).joinToString(" · ")
