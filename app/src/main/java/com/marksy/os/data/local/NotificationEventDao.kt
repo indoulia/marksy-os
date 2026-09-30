@@ -53,8 +53,13 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
-    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
-    suspend fun findPendingTrading(limit: Int): List<NotificationEventEntity>
+    // Queued by CaptureGate.queues at capture, whatever the category; the gate decides again at delivery.
+    @Query("SELECT * FROM notification_events WHERE archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
+    suspend fun findPendingCapture(limit: Int): List<NotificationEventEntity>
+
+    // A local row that gains a market signal goes back through CaptureGate.decide, never straight out.
+    @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE id = :eventId AND archived = 0 AND deliveryState = 'NOT_APPLICABLE'")
+    suspend fun requeueLocal(eventId: Long): Int
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?

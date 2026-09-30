@@ -6,7 +6,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,8 +33,8 @@ class ReclassificationTest {
         isTrading = trading, deliveryState = delivery
     )
 
-    // Regression: broker calls captured before the classifier fix stayed in OTHER forever.
-    @Test fun storedBrokerCallBecomesDeliverableTradingOnce() = runBlocking {
+    // Regression: broker calls captured before the classifier fix stayed in OTHER forever; since 4b they are MARKET, and never newly sent.
+    @Test fun storedBrokerCallMovesToMarketOnceAndIsNotNewlySent() = runBlocking {
         val dao = db.notificationEventDao()
         val call = dao.insert(event("com.fivepaisa.trade", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26", "OTHER", false, "NOT_APPLICABLE"))
         val delivered = dao.insert(event("com.zerodha.kite3", "Order executed", "BUY 10 INFY", "TRADING", true, "DELIVERED"))
@@ -43,14 +43,14 @@ class ReclassificationTest {
         repo.reclassifyIfClassifierChanged(prefs)
 
         val updated = dao.getById(call)!!
-        assertEquals("TRADING", updated.category)
-        assertTrue(updated.isTrading)
-        assertEquals("PENDING", updated.deliveryState)
+        assertEquals("MARKET", updated.category)
+        assertFalse(updated.isTrading)
+        assertEquals("NOT_APPLICABLE", updated.deliveryState)
         assertEquals("DELIVERED", dao.getById(delivered)!!.deliveryState)
 
         // Second launch: already at this classifier version, so nothing is re-run.
-        dao.updateText(call, "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
+        dao.updateClassification(call, "OTHER", 10, .5f, false)
         repo.reclassifyIfClassifierChanged(prefs)
-        assertEquals("PENDING", dao.getById(call)!!.deliveryState)
+        assertEquals("OTHER", dao.getById(call)!!.category)
     }
 }

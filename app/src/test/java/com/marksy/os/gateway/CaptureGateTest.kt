@@ -179,7 +179,7 @@ class CaptureGateTest {
         fun decide(event: NotificationEventEntity) = CaptureGate.decide(event, context)
         val outside = CaptureDecision.Keep(CaptureGate.OUTSIDE_CAPTURE_SET)
 
-        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), decide(event(trading = false)))
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), decide(event(trading = false)))
         assertEquals(outside, decide(event(pkg = "com.zerodha.kite3", source = "Zerodha")))
         assertEquals(outside, decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "Family Group", group = true)))
         // Finding C1: "Amit" and a non-Indian number are not shaped like a sender id, so they never reach the allow-list.
@@ -193,6 +193,37 @@ class CaptureGateTest {
         )
         val sms = send(event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S"))
         assertEquals("SMS" to "ZERODH", sms.medium to sms.channelLabel)
+    }
+
+    // Phase 4b: calls no longer classify as TRADING, so the gate, not the classifier, decides what may leave.
+    @Test
+    fun aBrokerResearchCallStillLeavesButHoldingsAlertsAndOtpsStayLocal() {
+        fun decide(category: String, body: String, pkg: String = "com.upstox.pro", title: String = "Upstox") =
+            CaptureGate.decide(event(pkg = pkg, title = title, body = body).copy(category = category, isTrading = category == "TRADING"), context)
+        val sms = "com.google.android.apps.messaging"
+        val ownAccount = CaptureDecision.Keep(CaptureGate.OWN_ACCOUNT)
+        val notACandidate = CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE)
+
+        assertTrue(decide("MARKET", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26") is CaptureDecision.Send)
+        assertEquals(ownAccount, decide("MARKET", "Your stock NATSEC has touched 52 week low of 780.0"))
+        assertEquals(ownAccount, decide("MARKET", "RELIANCE in your holdings is up 3% today"))
+        assertEquals(ownAccount, decide("MARKET", "Your P&L statement for September is ready"))
+        assertEquals(notACandidate, decide("PROMOTIONS", "Zero brokerage for a month"))
+        assertEquals(notACandidate, decide("OTP", "Your OTP is 482913. Never share your OTP", pkg = sms, title = "JD-ZERODH-S"))
+        assertEquals(notACandidate, decide("BANKING", "Rs 5,000 credited to your account", pkg = sms, title = "JD-ZERODH-S"))
+        assertTrue(decide("OTHER", "BUY | CROPSTER AGRO | Entry ₹2.82 | Target ₹10 | SL ₹2", pkg = sms, title = "JD-ZERODH-S") is CaptureDecision.Send)
+        val groupCall = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true).copy(category = "MESSAGES", isTrading = false)
+        assertTrue(CaptureGate.decide(groupCall, context) is CaptureDecision.Send)
+        // 4b ruling: chat and SMS candidacy needs a market signal, so allow-listed chatter stays local.
+        assertEquals(notACandidate, CaptureGate.decide(groupCall.copy(body = "Good morning all, see you at the meetup"), context))
+        assertEquals(notACandidate, decide("OTHER", "Your KYC is complete. Download the app", pkg = sms, title = "JD-ZERODH-S"))
+
+        assertTrue(CaptureGate.queues("com.upstox.pro", "MARKET", null))
+        assertFalse(CaptureGate.queues("com.facebook.orca", "MESSAGES", null))
+        assertTrue(CaptureGate.queues("org.telegram.messenger", "MESSAGES", true))
+        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", false))
+        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", null))
+        assertFalse(CaptureGate.queues(sms, "OTP", null))
     }
 
     @Test
@@ -338,14 +369,14 @@ class CaptureGateTest {
             postedAt = 2_000L, category = "MESSAGES", priority = 100, confidence = 0.96f,
             isTrading = true, deliveryState = DeliveryState.PENDING.name, chatGroup = null
         )
-        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), CaptureGate.decide(inconsistent, context))
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), CaptureGate.decide(inconsistent, context))
     }
 
     // B4 fix round 1: restore the guard test for missing idempotency key.
     @Test
     fun aRowWithABlankSourceKeyIsNotSent() {
         val noKey = event(key = "")
-        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), CaptureGate.decide(noKey, context))
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), CaptureGate.decide(noKey, context))
     }
 
     private fun send(event: NotificationEventEntity) = (CaptureGate.decide(event, context) as CaptureDecision.Send).message

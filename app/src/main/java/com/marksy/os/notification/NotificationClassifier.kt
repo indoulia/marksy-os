@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 9
+    const val VERSION = 10
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -118,7 +118,6 @@ object NotificationClassifier {
     private const val EMAIL_PRIORITY_CEILING = 50
     private val BROKER_UTILITY = setOf(Category.DELIVERY, Category.BANKING, Category.PAYMENTS, Category.BILLS)
     private val paymentAppTransferTerms = listOf("received ₹", "received rs", "sent ₹", "paid ₹", "paid to", "requested", "refund", "cashback received")
-    private val callChannels = listOf("messaging", "mms", "sms", "whatsapp", "telegram")
     private val brokerPromoTerms = listOf(
         "apply now", "click to apply", "pre apply", "pre-apply", "discover", "new on", "offer", "discount", "cashback",
         "refer", "invite", "open account", "open an account", "limited time", "sale", "coupon", "zero brokerage", "download",
@@ -126,12 +125,10 @@ object NotificationClassifier {
         "check your portfolio", "beating nifty", "beating the nifty"
     )
 
-    // Broker tip/call shorthand: "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26", "SELL X @ 120 target 110 stoploss 125".
-    private val callSide = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""")
-    private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
-    private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
+    // A tip's "never share your OTP" footer alone doesn't make it an OTP: a real OTP names no price levels.
+    private val priceLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
 
-    // Strong evidence of the customer's own order returns own-order before the call veto even runs (spec §5.1).
+    // Strong evidence of the customer's own order (spec §5.1); since 4b no call veto guards the weak rule either.
     private val hardCustomerMarkers = listOf(
         Regex("""\bqty\b""", RegexOption.IGNORE_CASE),
         Regex("""\bquantity\b""", RegexOption.IGNORE_CASE),
@@ -168,10 +165,6 @@ object NotificationClassifier {
         "sent to exchange", "is active", "execute ho gaya", "ho gaya", "insufficient margin"
     )
 
-    /** A trade call reads like a call (side + symbol + levels); an own-order notification never does. */
-    private fun looksLikeCall(title: String, body: String, text: String): Boolean =
-        isTradeCall(text) || TradeCallParser.parse(title, body) != null
-
     fun isOwnOrderEvent(title: String, body: String): Boolean {
         val text = "$title $body".lowercase()
         val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
@@ -180,9 +173,13 @@ object NotificationClassifier {
             devanagariPossessivePhrase.containsMatchIn(text) ||
             classifierExecutionTerms.any { text.containsRuleTerm(it) }
         if (strongEvidence) return true
-        if (looksLikeCall(title, body, text)) return false
         return weakCustomerMarker.containsMatchIn(text) && orderStatus.containsMatchIn(text)
     }
+
+    // The customer's own holdings, portfolio and account alerts never leave the phone (spec §2.11).
+    private val ownAccountEvents = Regex("""\byour\s+(?:stocks?|holdings?|portfolio|positions?|watchlist|funds?|margin|account|a/c|demat|sips?|mandates?|pledges?|ledger|p&l|pnl|investments?)\b|\bcontract\s+note\b""")
+
+    fun isOwnAccountEvent(title: String, body: String): Boolean = ownAccountEvents.containsMatchIn("$title $body".lowercase())
 
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
@@ -193,8 +190,7 @@ object NotificationClassifier {
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
-        // Tip SMS often end with "never share your OTP"; that warning alone does not make a call an OTP.
-        val otpText = if (TradeCallParser.parse(title, body) != null) notificationText.replace(otpWarning, " ") else notificationText
+        val otpText = if (priceLevels.findAll(notificationText).count() >= 2) notificationText.replace(otpWarning, " ") else notificationText
         if (otpRule.terms.any { term -> otpText.containsRuleTerm(term) }) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
@@ -202,24 +198,20 @@ object NotificationClassifier {
         // A broker package is a source hint, not proof that the notification is
         // a trade. Require an actual trading signal before routing it to Marksy.
         val tradingRule = rules.first { it.category == Category.TRADING }
-        // Broker and market-news apps: a call or execution is TRADING, a call-to-action is the app's own
-        // marketing, and everything else (holdings alerts, research views, IPO notices, market moves) is MARKET.
+        // Broker and market-news apps: an execution is TRADING, a call-to-action is the app's own marketing, and
+        // everything else (calls, holdings alerts, research views, IPO notices, market moves) is MARKET.
         if (normalizedPackage in tradingPackages || normalizedPackage in marketPackages) {
             val execution = normalizedPackage in tradingPackages && tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }
-            if (execution || isTradeCall(notificationText) || TradeCallParser.parse(title, body) != null) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
+            if (execution) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
             // Explicit utility messages (welcome-kit delivery, funds credited, bills) keep their own category.
             rules.firstOrNull { it.category in BROKER_UTILITY && it.terms.any { term -> notificationText.containsRuleTerm(term) } }
                 ?.let { return Result(it.category, it.priority, it.confidence) }
             if (brokerPromoTerms.any { notificationText.containsRuleTerm(it) }) return Result(Category.PROMOTIONS, 20, .85f)
             return Result(Category.MARKET, 60, .80f)
         }
-        // Calls also arrive by SMS and chat. Only a fully parsed call (side, symbol, two price levels) counts,
-        // so ordinary messages that say "buy" never become trades.
-        if (callChannels.any { normalizedPackage.contains(it) } && TradeCallParser.parse(title, body) != null) {
-            return Result(tradingRule.category, tradingRule.priority, .85f)
-        }
 
-        val haystack = "$normalizedPackage $notificationText"
+        // The OTP rule leads this list too, so it must not see a tip's stripped footer either.
+        val haystack = "$normalizedPackage $otpText"
         val rule = rules.firstOrNull { candidate ->
             candidate.category != Category.TRADING && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
         }

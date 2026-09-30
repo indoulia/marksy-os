@@ -25,22 +25,15 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.OTHER, result.category)
     }
 
-    // Regression: 5paisa "Short term Call" tips (BUY … CMP … SL … TGT) landed in OTHER.
-    @Test fun brokerTipCallWithCmpSlTargetIsTrading() {
-        val result = NotificationClassifier.classify("com.fivepaisa.trade", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
-        assertEquals(NotificationClassifier.Category.TRADING, result.category)
-    }
-
-    // Regression: Upstox's Play Store package is in.upstox.app, so its calls were never seen as broker calls.
-    @Test fun upstoxPlayStorePackageCallIsTrading() {
-        val result = NotificationClassifier.classify("in.upstox.app", "📈BUY LCCPROJECT with 20.0% upside potential", "🛠️ Entry : Rs 144.24 🎯 Target : Rs 173.08 🛑 Stoploss : Rs 129.81")
-        assertEquals(NotificationClassifier.Category.TRADING, result.category)
-    }
-
-    // Regression: ICICI Direct research calls landed in MARKET (only one level keyword, "target").
-    @Test fun iciciResearchCallIsTrading() {
-        val result = NotificationClassifier.classify("com.icicidirect.idirectsuper", "ICICI Direct", "Buy INDGN around Rs 609 for 12 Month with target price of Rs 750, potential upside of 23.15%.")
-        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    // Phase 4b: the phone no longer spots calls; they land in categories the capture gate sends (CaptureGateTest).
+    @Test fun callsLandInCategoriesTheCaptureGateSends() {
+        fun cat(pkg: String, t: String, b: String) = NotificationClassifier.classify(pkg, t, b).category
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.fivepaisa.trade", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("in.upstox.app", "📈BUY LCCPROJECT with 20.0% upside potential", "🛠️ Entry : Rs 144.24 🎯 Target : Rs 173.08 🛑 Stoploss : Rs 129.81"))
+        assertEquals(NotificationClassifier.Category.MARKET, cat("com.icicidirect.idirectsuper", "ICICI Direct", "Buy INDGN around Rs 609 for 12 Month with target price of Rs 750, potential upside of 23.15%."))
+        assertEquals(NotificationClassifier.Category.OTHER, cat("com.google.android.apps.messaging", "KISHAN ENTERPRISE", "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"))
+        assertEquals(NotificationClassifier.Category.MESSAGES, cat("com.whatsapp", "Tips Group", "BUY TATASTEEL CMP 152 SL 147 TGT 162"))
+        assertEquals(NotificationClassifier.Category.MESSAGES, cat("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525"))
     }
 
     @Test fun tipCallTextFromANonBrokerAppIsStillNotTrading() {
@@ -72,14 +65,6 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.PROMOTIONS, cat("Ask The Expert is live!", "SEBI Reg. expert is here to answer your stock questions!"))
         assertEquals(NotificationClassifier.Category.MARKET, cat("Live Trades", "New Options Recommendation with Profit Potential Rs.6522.75 by Dhaval Vyas has been posted. Know Details!"))
         assertEquals(NotificationClassifier.Category.MARKET, cat("Chart Patterns", "New Horizontal Resistance formed! Check out the stock and pattern details and get real-time updates."))
-    }
-
-    // Calls also arrive by SMS and chat; a parsed call (side + symbol + levels) from those apps is TRADING.
-    @Test fun smsAndChatCallsAreTrading() {
-        val sms = "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"
-        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN ENTERPRISE", sms).category)
-        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("com.whatsapp", "Tips Group", "BUY TATASTEEL CMP 152 SL 147 TGT 162").category)
-        assertEquals(NotificationClassifier.Category.TRADING, NotificationClassifier.classify("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525").category)
     }
 
     // Bills, EMIs, card dues and birthdays are reminders, ahead of generic bills/banking.
@@ -203,9 +188,11 @@ class NotificationClassifierTest {
         assertTrue(result.category != NotificationClassifier.Category.TRADING)
     }
 
-    // Regression: a tip SMS with a "never share your OTP" footer was filed as an OTP.
-    @Test fun tradeSmsWithOtpWarningIsTrading() {
-        val result = NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26. Never share your OTP with anyone.")
-        assertEquals(NotificationClassifier.Category.TRADING, result.category)
+    // Regression: a tip SMS with a "never share your OTP" footer was filed as an OTP; a real OTP with it still is one.
+    @Test fun tradeSmsWithOtpWarningIsNotAnOtp() {
+        val tip = NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26. Never share your OTP with anyone.")
+        val otp = NotificationClassifier.classify("com.google.android.apps.messaging", "JD-ZERODH-S", "Use 482913 to log in. Never share your OTP with anyone.")
+        assertTrue(tip.category != NotificationClassifier.Category.OTP)
+        assertEquals(NotificationClassifier.Category.OTP, otp.category)
     }
 }

@@ -1,6 +1,7 @@
 package com.marksy.os.gateway
 
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.market.StockMentions
 import com.marksy.os.notification.CaptureMedium
 import com.marksy.os.notification.ChatLabels
 import com.marksy.os.notification.NotificationClassifier
@@ -51,8 +52,9 @@ sealed interface CaptureDecision {
 
 /** The only way a captured notification leaves the phone (tip-ledger spec §2.11, §5.1). */
 object CaptureGate {
-    const val NOT_TRADING = "not-trading"
+    const val NOT_A_CANDIDATE = "not-a-candidate"
     const val OWN_ORDER = "own-order"
+    const val OWN_ACCOUNT = "own-account"
     const val OUTSIDE_CAPTURE_SET = "outside-capture-set"
     const val ONE_TO_ONE_CHAT = "one-to-one-chat"
     const val GROUP_UNKNOWN = "group-unknown"
@@ -64,11 +66,13 @@ object CaptureGate {
 
     fun decide(event: NotificationEventEntity, context: CaptureContext): CaptureDecision {
         require(context.deviceSalt.isNotBlank()) { "deviceSalt must not be blank (fix round 1, defence in depth)" }
-        if (!event.isTrading || event.category != "TRADING" || event.sourceKey.isBlank()) return CaptureDecision.Keep(NOT_TRADING)
         val appPackage = event.sourcePackage.trim().lowercase(Locale.ROOT)
         val medium = CaptureMedium.of(appPackage)
-        // Brokers tell the customer about their own orders in apps and SMS, not in chat groups.
+        if (event.sourceKey.isBlank() || event.category !in candidateCategories(medium)) return CaptureDecision.Keep(NOT_A_CANDIDATE)
+        if (needsMarketSignal(medium, event.category) && !hasMarketSignal(event.body)) return CaptureDecision.Keep(NOT_A_CANDIDATE)
+        // Brokers tell the customer about their own orders and holdings in apps and SMS, not in chat groups.
         if (!medium.isChat && NotificationClassifier.isOwnOrderEvent(event.title, event.body)) return CaptureDecision.Keep(OWN_ORDER)
+        if (!medium.isChat && NotificationClassifier.isOwnAccountEvent(event.title, event.body)) return CaptureDecision.Keep(OWN_ACCOUNT)
         val label = when (medium) {
             CaptureMedium.APP_NOTIFICATION -> {
                 val packages = context.capturePackages ?: return CaptureDecision.Wait
@@ -105,6 +109,35 @@ object CaptureGate {
                 devicePostedAt = Instant.ofEpochMilli(event.postedAt).toString()
             )
         )
+    }
+
+    /** Whether a new row may ever leave the phone, decided at capture; the capture set is checked at delivery. */
+    fun queues(sourcePackage: String, category: String, chatGroup: Boolean?): Boolean {
+        val medium = CaptureMedium.of(sourcePackage)
+        return category in candidateCategories(medium) && (!medium.isChat || chatGroup == true)
+    }
+
+    /** A chat or SMS row kept local for want of a market signal is decided again once an update adds one. */
+    fun requeuesOnUpdate(sourcePackage: String, category: String, chatGroup: Boolean?, before: String, after: String): Boolean =
+        queues(sourcePackage, category, chatGroup) && needsMarketSignal(CaptureMedium.of(sourcePackage), category) &&
+            !hasMarketSignal(before) && hasMarketSignal(after)
+
+    // Apps: executions and broker/market updates, where calls now land; chats and SMS: anything but private categories.
+    private val APP_CATEGORIES = setOf("TRADING", "MARKET")
+    private val CHAT_CATEGORIES = setOf("TRADING", "MARKET", "MESSAGES", "OTHER", "PROMOTIONS")
+
+    private fun candidateCategories(medium: CaptureMedium) = if (medium == CaptureMedium.APP_NOTIFICATION) APP_CATEGORIES else CHAT_CATEGORIES
+
+    // 4b ruling: chat and SMS text leaves only as a market message; a chat or SMS row was TRADING only for a parsed call.
+    private fun needsMarketSignal(medium: CaptureMedium, category: String) = medium != CaptureMedium.APP_NOTIFICATION && category != "TRADING"
+
+    private val marketLevel = Regex("""\b(?:cmp|ltp|sl|tgt|targets?|stop[\s-]*loss|entry)\b""")
+    private val marketSide = Regex("""\b(?:buy|sell|short(?![\s-]*term)|accumulate)\b""")
+
+    // A price level plus a side or a ticker, read from the body alone: SMS titles are upper-case sender ids.
+    private fun hasMarketSignal(body: String): Boolean {
+        val text = body.lowercase(Locale.ROOT)
+        return marketLevel.containsMatchIn(text) && (marketSide.containsMatchIn(text) || StockMentions.find(body, { true }, 1).isNotEmpty())
     }
 
     /** One key per notification row, so a retry is the same receipt; salted so it reveals no notification key. */

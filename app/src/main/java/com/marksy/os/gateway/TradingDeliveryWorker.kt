@@ -33,7 +33,7 @@ class TradingDeliveryWorker(
         val now = System.currentTimeMillis()
 
         dao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
-        if (dao.findPendingTrading(1).isEmpty()) return Result.success()
+        if (dao.findPendingCapture(1).isEmpty()) return Result.success()
 
         if (client is UnconfiguredMarksyGatewayClient) {
             Log.i(TAG, "Trading delivery deferred: Marksy Gateway is not configured")
@@ -53,7 +53,7 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        // Finding C2(a): re-read chatSenders right after each findPendingTrading call (inside drain()),
+        // Finding C2(a): re-read chatSenders right after each findPendingCapture call (inside drain()),
         // not once for the whole run, so a chat row inserted mid-run still masks its own sender.
         val store = CaptureStore(applicationContext)
         return if (
@@ -93,7 +93,7 @@ internal class TradingDeliveryRun(
     // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
     suspend fun drain(): Boolean {
         while (!isStopped()) {
-            val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
+            val pending = dao.findPendingCapture(TradingDeliveryPolicy.BATCH_SIZE)
             if (pending.isEmpty()) return false
             // Re-read right after the query, before this batch is decided: a row inserted mid-run has its
             // sender recorded (and committed, finding C2b) before the row itself is inserted, so this read
