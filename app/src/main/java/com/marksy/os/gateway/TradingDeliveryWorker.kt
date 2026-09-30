@@ -105,30 +105,39 @@ internal class TradingDeliveryRun(
                 return false
             }
 
-            val message = when (val decision = CaptureGate.decide(event, capture)) {
-                is CaptureDecision.Send -> decision.message
-                CaptureDecision.Wait -> {
-                    dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                    retryRequested = true
-                    continue
-                }
-                is CaptureDecision.Keep -> {
+            try {
+                val decision = try {
+                    CaptureGate.decide(event, capture)
+                } catch (gateError: Throwable) {
                     dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
-                    Log.i(TAG, "Trading event ${event.id} stays on the phone (${decision.reason})")
+                    Log.i(TAG, "Trading event ${event.id} stays on the phone (gate-error)")
                     continue
                 }
-            }
 
-            val result: KotlinResult<MarksyInsight> = try {
-                client.capture(event.id, message)
-            } catch (cancellation: CancellationException) {
-                dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                throw cancellation
-            } catch (t: Throwable) {
-                KotlinResult.failure(t)
-            }
+                val message = when (decision) {
+                    is CaptureDecision.Send -> decision.message
+                    CaptureDecision.Wait -> {
+                        dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                        retryRequested = true
+                        continue
+                    }
+                    is CaptureDecision.Keep -> {
+                        dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
+                        Log.i(TAG, "Trading event ${event.id} stays on the phone (${decision.reason})")
+                        continue
+                    }
+                }
 
-            result.fold(
+                val result: KotlinResult<MarksyInsight> = try {
+                    client.capture(event.id, message)
+                } catch (cancellation: CancellationException) {
+                    dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                    throw cancellation
+                } catch (t: Throwable) {
+                    KotlinResult.failure(t)
+                }
+
+                result.fold(
                 onSuccess = { insight ->
                     val receivedAt = System.currentTimeMillis()
                     val updated = dao.markDeliveredWithInsight(
@@ -163,7 +172,13 @@ internal class TradingDeliveryRun(
                         Log.w(TAG, "Trading event ${event.id} permanently rejected")
                     }
                 }
-            )
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Log.w(TAG, "Trading delivery storage operation failed for row ${event.id}; retrying")
+                retryRequested = true
+            }
         }
         return retryRequested
     }

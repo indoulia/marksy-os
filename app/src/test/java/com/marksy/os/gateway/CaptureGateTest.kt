@@ -247,6 +247,25 @@ class CaptureGateTest {
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), CaptureGate.decide(smsWithGroupFlag, context))
     }
 
+    // B4 fix round 1: restore the guard test for inconsistent routing flags.
+    @Test
+    fun aRowWithInconsistentTradingFlagsIsNotSent() {
+        val inconsistent = NotificationEventEntity(
+            sourcePackage = "com.upstox.pro", sourceName = "Upstox", sourceKey = "k-1", eventFingerprint = "k-1",
+            title = "RENUKA call", body = "BUY RENUKA CMP 23.62 SL 22.25 TGT 26",
+            postedAt = 2_000L, category = "MESSAGES", priority = 100, confidence = 0.96f,
+            isTrading = true, deliveryState = DeliveryState.PENDING.name, chatGroup = null
+        )
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), CaptureGate.decide(inconsistent, context))
+    }
+
+    // B4 fix round 1: restore the guard test for missing idempotency key.
+    @Test
+    fun aRowWithABlankSourceKeyIsNotSent() {
+        val noKey = event(key = "")
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_TRADING), CaptureGate.decide(noKey, context))
+    }
+
     private fun send(event: NotificationEventEntity) = (CaptureGate.decide(event, context) as CaptureDecision.Send).message
 
     private fun event(

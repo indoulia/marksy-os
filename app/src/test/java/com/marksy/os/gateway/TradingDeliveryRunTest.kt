@@ -53,6 +53,31 @@ class TradingDeliveryRunTest {
         assertEquals(1, dao.findPendingTrading(5).size)
     }
 
+    // A row whose gate throws must be marked NOT_APPLICABLE, not left IN_FLIGHT blocking all delivery.
+    @Test
+    fun aRowWhoseGateThrowsIsMarkedLocalInsteadOfStalling() = runBlocking {
+        dao.insert(row("k1", 1L))
+        dao.insert(row("k2", 2L))
+
+        var captureCount = 0
+        val testClient = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                captureCount++
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+
+        // Empty salt causes gate to throw require(); this tests that gate errors don't stall the run.
+        TradingDeliveryRun(dao, testClient, capture.copy(deviceSalt = "")).drain()
+
+        // Both rows should be processed and marked NOT_APPLICABLE; no network calls made.
+        assertEquals(0, dao.findPendingTrading(50).size)
+        assertEquals(0, captureCount)
+        assertEquals("NOT_APPLICABLE", dao.findById(1L)?.deliveryState)
+        assertEquals("NOT_APPLICABLE", dao.findById(2L)?.deliveryState)
+    }
+
     private fun row(key: String, postedAt: Long) = NotificationEventEntity(
         sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = key, eventFingerprint = "f-$key",
         title = "Call $key", body = "BUY RENUKA CMP 23 SL 22", postedAt = postedAt, category = "TRADING", priority = 10,
