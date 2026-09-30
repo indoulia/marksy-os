@@ -8,6 +8,7 @@ import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.notification.WhatsAppSenderWatchlist
 import kotlinx.coroutines.CancellationException
 import kotlin.Result as KotlinResult
 
@@ -46,7 +47,30 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        return if (TradingDeliveryRun(dao, client) { isStopped }.drain()) Result.retry() else Result.success()
+        val capture = loadCaptureContext(client, now)
+        if (capture == null) {
+            Log.i(TAG, "Trading delivery deferred: no signed-in customer id")
+            return Result.success()
+        }
+
+        return if (TradingDeliveryRun(dao, client, capture) { isStopped }.drain()) Result.retry() else Result.success()
+    }
+
+    private suspend fun loadCaptureContext(client: MarksyGatewayClient, now: Long): CaptureContext? {
+        val username = AuthSessionStore(applicationContext).getUserId()?.takeIf { it.isNotBlank() } ?: return null
+        val store = CaptureStore(applicationContext)
+        if (store.isCaptureListStale(now)) {
+            client.captureList()
+                .onSuccess { store.saveCapturePackages(it, now) }
+                .onFailure { Log.w(TAG, "Capture list refresh failed; using the cached list") }
+        }
+        return CaptureContext(
+            capturePackages = store.capturePackages(),
+            chatAllowList = WhatsAppSenderWatchlist.get(applicationContext),
+            chatSenders = store.chatSenders(),
+            username = username,
+            deviceSalt = store.deviceSalt()
+        )
     }
 }
 
@@ -54,6 +78,7 @@ class TradingDeliveryWorker(
 internal class TradingDeliveryRun(
     private val dao: NotificationEventDao,
     private val client: MarksyGatewayClient,
+    private val capture: CaptureContext,
     private val isStopped: () -> Boolean = { false }
 ) {
     // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
@@ -80,15 +105,22 @@ internal class TradingDeliveryRun(
                 return false
             }
 
-            val request = event.toMarksyTradingEventRequest()
-            if (request == null) {
-                dao.updateInFlightDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
-                Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
-                continue
+            val message = when (val decision = CaptureGate.decide(event, capture)) {
+                is CaptureDecision.Send -> decision.message
+                CaptureDecision.Wait -> {
+                    dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                    retryRequested = true
+                    continue
+                }
+                is CaptureDecision.Keep -> {
+                    dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
+                    Log.i(TAG, "Trading event ${event.id} stays on the phone (${decision.reason})")
+                    continue
+                }
             }
 
             val result: KotlinResult<MarksyInsight> = try {
-                client.analyze(request)
+                client.capture(event.id, message)
             } catch (cancellation: CancellationException) {
                 dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
                 throw cancellation

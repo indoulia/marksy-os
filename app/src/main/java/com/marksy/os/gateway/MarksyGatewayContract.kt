@@ -1,20 +1,5 @@
 package com.marksy.os.gateway
 
-/** Android-side transport contract for trading events. */
-data class MarksyTradingEventRequest(
-    val contractVersion: Int = 1,
-    val eventId: Long,
-    val source: String,
-    val sourcePackage: String,
-    val title: String,
-    val body: String,
-    val category: String,
-    val priority: Int,
-    val confidence: Float,
-    val occurredAt: Long,
-    val idempotencyKey: String
-)
-
 /**
  * Marksy's response is kept richer than the current UI needs so future screens
  * can expose the complete comparison/evaluation without another transport change.

@@ -1,9 +1,11 @@
 package com.marksy.os.gateway
 
-import com.marksy.os.data.local.NotificationEventEntity
-
 interface MarksyGatewayClient {
-    suspend fun analyze(request: MarksyTradingEventRequest): Result<MarksyInsight>
+    /** Records one captured message as the signed-in customer's receipt (tip-ledger spec §5.1). */
+    suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight>
+
+    /** The app packages the server wants captured. */
+    suspend fun captureList(): Result<Set<String>>
 }
 
 /**
@@ -11,26 +13,9 @@ interface MarksyGatewayClient {
  * It prevents accidental network traffic rather than inventing an endpoint.
  */
 class UnconfiguredMarksyGatewayClient : MarksyGatewayClient {
-    override suspend fun analyze(request: MarksyTradingEventRequest): Result<MarksyInsight> =
-        Result.failure(
-            IllegalStateException("Marksy Gateway endpoint is not configured")
-        )
-}
+    override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> = notConfigured()
 
-fun NotificationEventEntity.toMarksyTradingEventRequest(): MarksyTradingEventRequest? {
-    // The routing flag and category must agree before anything can leave the device.
-    if (!isTrading || category != "TRADING" || sourceKey.isBlank()) return null
+    override suspend fun captureList(): Result<Set<String>> = notConfigured()
 
-    return MarksyTradingEventRequest(
-        eventId = id,
-        source = sourceName,
-        sourcePackage = sourcePackage,
-        title = title,
-        body = body,
-        category = category,
-        priority = priority,
-        confidence = confidence,
-        occurredAt = postedAt,
-        idempotencyKey = sourceKey
-    )
+    private fun <T> notConfigured(): Result<T> = Result.failure(IllegalStateException("Marksy Gateway endpoint is not configured"))
 }
