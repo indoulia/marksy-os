@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,7 +15,6 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -106,10 +107,11 @@ internal fun ScorecardDetailContent(
                 }
                 if (d.recent.isNotEmpty()) item(key = "recent") { RecentCalls(d.recent) { openTip = it } }
                 if (d.topSymbols.isNotEmpty()) item(key = "symbols") {
-                    Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         CardTitle("Most called")
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            d.topSymbols.forEach { SymbolChip(it) { onOpenStock(it.symbol) } }
+                        // One 48dp-tall scrolling row is the touch target, so each chip stays tight.
+                        LazyRow(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            items(d.topSymbols, key = { it.symbol }) { s -> SymbolChip(s) { onOpenStock(s.symbol) } }
                         }
                     }
                 }
@@ -271,8 +273,8 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
 @Composable
 private fun ReturnsCard(series: List<SeriesPointDto>) {
     var range by remember { mutableStateOf(ReturnRange.ALL) }
-    val points = remember(series, range) { ScorecardGraphics.window(series, range) }
-    val calls = remember(series, range) { series.takeLast((points.size - 1).coerceAtLeast(0)).sumOf { it.n } }
+    val points = remember(series, range) { ScorecardGraphics.window(series, range).let { if (it.size == 1) it + it else it } }
+    val calls = remember(series, range) { series.takeLast(ScorecardGraphics.window(series, range).size).sumOf { it.n } }
     val realised = points.map { it.first }
     val promised = points.map { it.second }
     val tint = ScorecardGraphics.returnTone(realised.lastOrNull())
@@ -289,7 +291,7 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             }
         }
         Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-            if (points.size < 2) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+            if (points.isEmpty()) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
             else Canvas(Modifier.fillMaxSize()) {
                 val (lo, hi) = ScorecardGraphics.bounds(realised, promised)
                 val pad = 6.dp.toPx()
@@ -311,14 +313,14 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp, 3.dp).background(tint))
                 Spacer(Modifier.width(6.dp))
-                Text("Realised${realised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("Avg realised${realised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Canvas(Modifier.size(14.dp, 3.dp)) {
                     drawLine(MarksyTheme.SecondaryCyan, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Promised${promised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("Avg promised${promised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
             }
             Spacer(Modifier.weight(1f))
             if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
@@ -348,8 +350,7 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
 
 @Composable
 private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
-    val tint = ScorecardGraphics.tone(realizationPct)
-    val share = realizationPct?.let { (it / 100).coerceIn(0.0, 1.0).toFloat() } ?: 0f
+    val (share, tint) = ScorecardGraphics.gauge(realizationPct)
     Column(modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Delivered vs promised", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Start))
         Spacer(Modifier.weight(1f))
@@ -360,7 +361,8 @@ private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
             drawArc(MarksyTheme.SurfaceRaised, 180f, 180f, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
             if (share > 0f) drawArc(tint, 180f, 180f * share, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
         }
-        Text(realizationPct?.let { String.format(Locale.US, "%.0f%%", it) } ?: "—", color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+        Text(
+            realizationPct?.let { String.format(Locale.US, "%.0f%%", it) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.RedUrgent else MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -389,7 +391,7 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
         t.outcome == "FAILURE" -> MarksyTheme.RedUrgent
         else -> MarksyTheme.TextMuted
     }
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
             Text(t.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -425,16 +427,25 @@ private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
         else -> Triple(MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg, MarksyTheme.RedUrgent.copy(alpha = .3f))
     }
     val shape = RoundedCornerShape(14.dp)
-    Text(
-        s.symbol, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-        modifier = Modifier.minimumInteractiveComponentSize().clip(shape).background(bg).border(1.dp, edge, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp)
-    )
+    Row(
+        Modifier.clip(shape).background(bg).border(1.dp, edge, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(s.symbol, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(
+            "${s.calls}", color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, lineHeight = 10.sp,
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(fg.copy(alpha = .16f)).padding(horizontal = 5.dp, vertical = 1.dp)
+        )
+    }
 }
 
 @Composable
 private fun CallerRow(c: CallerScorecardDto, onClick: () -> Unit) {
     val h = c.scorecard
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically
+    ) {
         TrustRing(h.trustScore, 36.dp, 4.dp, 12.sp, caption = false)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(c.name, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

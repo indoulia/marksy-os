@@ -106,16 +106,30 @@ object ScorecardGraphics {
         return (0 until points).map { walk[Math.round(it.toDouble() * (walk.size - 1) / (points - 1)).toInt()] }
     }
 
-    /** The series in percentage points within [range], rebased so the window starts at zero. */
+    /** Running average (realised, promised) in percent at each point in [range]; a shorter range averages only its own closes. */
     fun window(series: List<SeriesPointDto>, range: ReturnRange): List<Pair<Double, Double>> {
         val end = series.lastOrNull()?.let { instant(it.at) }
         val start = range.days?.let { d -> end?.minus(Duration.ofDays(d)) }
-        val inside = if (start == null) series else series.filter { p -> instant(p.at)?.let { !it.isBefore(start) } ?: true }
-        val before = if (start == null) null else series.lastOrNull { p -> instant(p.at)?.isBefore(start) == true }
-        val baseR = before?.realisedCum ?: 0.0
-        val baseP = before?.promisedCum ?: 0.0
-        if (inside.isEmpty()) return emptyList()
-        return listOf(0.0 to 0.0) + inside.map { (it.realisedCum - baseR) * 100 to (it.promisedCum - baseP) * 100 }
+        val first = if (start == null) 0 else series.indexOfFirst { p -> instant(p.at)?.let { !it.isBefore(start) } ?: true }
+        if (series.isEmpty() || first < 0) return emptyList()
+        var closes = 0
+        val counted = series.map { closes += it.n; closes }
+        val base = series.getOrNull(first - 1)
+        val baseN = counted.getOrNull(first - 1) ?: 0
+        return (first until series.size).map { i ->
+            val p = series[i]
+            val n = (counted[i] - baseN).coerceAtLeast(1)
+            // The whole series takes the server's means; a window (or an older backend) divides its own sums.
+            if (base == null) (p.realisedAvg ?: (p.realisedCum / n)) * 100 to (p.promisedAvg ?: (p.promisedCum / n)) * 100
+            else (p.realisedCum - base.realisedCum) / n * 100 to (p.promisedCum - base.promisedCum) / n * 100
+        }
+    }
+
+    /** The delivered-vs-promised arc: its share of the half turn and colour; a shortfall below zero draws red by its size. */
+    fun gauge(realizationPct: Double?): Pair<Float, Color> = when {
+        realizationPct == null -> 0f to MarksyTheme.TextMuted
+        realizationPct < 0 -> (-realizationPct / 100).coerceIn(0.0, 1.0).toFloat() to MarksyTheme.RedUrgent
+        else -> (realizationPct / 100).coerceIn(0.0, 1.0).toFloat() to tone(realizationPct)
     }
 
     private fun instant(iso: String) = runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull()

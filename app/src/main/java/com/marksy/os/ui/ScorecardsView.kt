@@ -146,7 +146,7 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
     val ret = e.body.performance.avgActualReturn
     Row(
         Modifier.fillMaxWidth().clip(ScoreCardShape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, ScoreCardShape)
-            .clickable(onClick = onClick).padding(12.dp),
+            .clickable(onClick = onClick).padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 12.dp + OneHandRowEndClearance),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically
     ) {
         TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, 16.sp, caption = false)

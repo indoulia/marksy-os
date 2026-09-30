@@ -8,8 +8,10 @@ data class TrustBandDto(val low: Double, val high: Double)
 
 data class HorizonHitDto(val horizon: String, val hitRatePct: Double?, val completed: Int)
 
-/** One cumulative return point; both sums are fractions, as every ledger return is. */
-data class SeriesPointDto(val at: String, val realisedCum: Double, val promisedCum: Double, val n: Int)
+/** One return point: sums and running means since the series start, all fractions; the means are null from an older backend. */
+data class SeriesPointDto(
+    val at: String, val realisedCum: Double, val promisedCum: Double, val n: Int, val realisedAvg: Double? = null, val promisedAvg: Double? = null
+)
 
 data class TopSymbolDto(val symbol: String, val calls: Int, val avgActualReturn: Double?)
 
@@ -39,7 +41,10 @@ data class ScorecardDetailDto(
             },
             byHorizon = json.optJSONArray("byHorizon").all().map { HorizonHitDto(it.textOrNull("horizon") ?: "", it.doubleOrNull("hitRatePct"), it.intOrNull("completed") ?: 0) },
             series = json.optJSONArray("series").all().map {
-                SeriesPointDto(it.textOrNull("at") ?: "", it.doubleOrNull("realisedCum") ?: 0.0, it.doubleOrNull("promisedCum") ?: 0.0, it.intOrNull("n") ?: 0)
+                SeriesPointDto(
+                    it.textOrNull("at") ?: "", it.doubleOrNull("realisedCum") ?: 0.0, it.doubleOrNull("promisedCum") ?: 0.0, it.intOrNull("n") ?: 0,
+                    it.doubleOrNull("realisedAvg"), it.doubleOrNull("promisedAvg")
+                )
             },
             recent = json.optJSONArray("recent").all().map(LedgerTipDto::parse),
             topSymbols = json.optJSONArray("topSymbols").all().map { TopSymbolDto(it.textOrNull("symbol") ?: "", it.intOrNull("calls") ?: 0, it.doubleOrNull("avgActualReturn")) },
