@@ -535,8 +535,10 @@ class MainActivity : ComponentActivity() {
                         } else {
                         // Market pages carry a small LIVE mark on the title, only while NSE is in session.
                         val titleLive = (selectedTab == 2 || selectedTab == 3) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
-                            Text(
+                        // Bottom-bar pages drop their name (the selected tab already shows it); the note takes its slot.
+                        val tabPage = !hostOpen && selectedTab in 1 until tabs.size
+                        Row(Modifier.weight(1f), verticalAlignment = if (tabPage) Alignment.CenterVertically else Alignment.Top) {
+                            if (!tabPage) Text(
                                 screenTitle.orEmpty(),
                                 color = MarksyTheme.TextPrimary,
                                 fontSize = 20.sp,
@@ -545,10 +547,11 @@ class MainActivity : ComponentActivity() {
                                 softWrap = false
                             )
                             titleNote?.let {
-                                Spacer(Modifier.width(4.dp))
+                                if (!tabPage) Spacer(Modifier.width(4.dp))
                                 // The title keeps its width; a long note wraps, then ellipsizes.
                                 Text(
-                                    it, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                    it, color = MarksyTheme.PrimaryEmerald, fontSize = if (tabPage) 15.sp else 10.sp, lineHeight = if (tabPage) 18.sp else 12.sp,
+                                    fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                                 )
                             }
@@ -814,6 +817,9 @@ class MainActivity : ComponentActivity() {
                     openRules = { showRules = true },
                     openDigest = { showDigest = true },
                     openBriefing = { showBriefing = true },
+                    watchlist = watchlist,
+                    watchlists = watchlists,
+                    watchItems = watchItems,
                     padding = padding
                 )
             }
@@ -903,9 +909,13 @@ class MainActivity : ComponentActivity() {
     openRules: () -> Unit,
     openDigest: () -> Unit,
     openBriefing: () -> Unit,
+    watchlist: com.marksy.os.watchlist.WatchlistRepository,
+    watchlists: List<com.marksy.os.data.local.WatchlistEntity>,
+    watchItems: List<com.marksy.os.data.local.WatchlistItemEntity>,
     padding: PaddingValues
 ) {
     var showClear by remember { mutableStateOf(false) }
+    var managingWatchlists by remember { mutableStateOf(false) }
     var showZonePicker by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -1006,9 +1016,11 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Watchlists", "${watchlists.size} LISTS", "Delete a watchlist and the stocks in it.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { managingWatchlists = true }, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Manage Watchlists", color = Color.Black, fontSize = 12.sp) } } }
         item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
     }
     if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
+    if (managingWatchlists) com.marksy.os.ui.ManageWatchlistsDialog(watchlist, watchlists, watchItems) { managingWatchlists = false }
     if (showClear) com.marksy.os.ui.MarksyDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } })
 }
 
