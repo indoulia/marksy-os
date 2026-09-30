@@ -32,6 +32,13 @@ interface MarketApiClient {
     /** The signed-in reader's watched IPOs; watching is server-side so it follows the account. */
     suspend fun trackedIpos(): List<IpoTrackedItemDto> = emptyList()
     suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto = throw MarketApiException("IPO watching is not supported")
+    /** Tip ledger (spec §9) under the bearer session; `filter` is a §8.3 query string from `ScorecardQuery.filterParams`. */
+    suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = MyTipPageDto(emptyList(), null)
+    suspend fun myScorecard(filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecardSummary(filter: String): ScorecardSummaryDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun tipDetail(tipId: String): TipDetailDto = throw MarketApiException("Tip detail is not supported")
 }
 
 class MarketApiException(message: String) : IOException(message)
@@ -108,6 +115,26 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto =
         IpoTrackingStateDto.parse(execute("$base/ipos/${encode(id)}/tracking", method = if (tracking) "POST" else "DELETE").getJSONObject("data"))
 
+    override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
+        val params = listOfNotNull("pageSize=$MY_TIPS_PAGE_SIZE", status?.let { "status=${encode(it)}" }, cursor?.let { "cursor=${encode(it)}" })
+        return MyTipPageDto.parse(getEnvelope("$base/me/tips?" + params.joinToString("&")))
+    }
+
+    override suspend fun myScorecard(filter: String): ScorecardDto = ScorecardDto.parse(getData("$base/me/scorecard" + query(filter)))
+
+    override suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto =
+        EntityScorecardListDto.parse(getData("$base/scorecards?entity=${encode(entity)}" + (if (filter.isEmpty()) "" else "&$filter")))
+
+    override suspend fun scorecardSummary(filter: String): ScorecardSummaryDto =
+        ScorecardSummaryDto.parse(getData("$base/scorecards/summary" + query(filter)))
+
+    override suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto =
+        ScorecardDto.parse(getData("$base/scorecards/${encode(entity)}/$id" + query(filter)))
+
+    override suspend fun tipDetail(tipId: String): TipDetailDto = TipDetailDto.parse(getData("$base/tips/${encode(tipId)}"))
+
+    private fun query(filter: String) = if (filter.isEmpty()) "" else "?$filter"
+
     private suspend fun getEnvelope(url: String): JSONObject = execute(url)
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
@@ -170,6 +197,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
         const val READ_TIMEOUT_MS = 20_000
         const val MAX_RESPONSE_CHARS = 4_000_000
         const val IPO_MAX_RESPONSE_CHARS = 16_000_000
+        const val MY_TIPS_PAGE_SIZE = 50
         val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
         fun normalizeBaseUrl(value: String): String {
