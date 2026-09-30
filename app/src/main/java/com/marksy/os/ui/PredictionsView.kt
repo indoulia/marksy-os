@@ -36,7 +36,7 @@ import java.util.Locale
 
 /** A cursor-paged list that grows as its last row scrolls into view. */
 @Stable
-private class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<Pair<List<T>, String?>>) {
+internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<Pair<List<T>, String?>>) {
     var items by mutableStateOf<List<T>>(emptyList())
     var state by mutableStateOf<MarketDataState<Unit>>(MarketDataState.Loading)
     var hasMore by mutableStateOf(true)

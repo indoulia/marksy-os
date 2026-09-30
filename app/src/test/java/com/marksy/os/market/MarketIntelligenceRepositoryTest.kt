@@ -11,14 +11,15 @@ private class FakeMarketApiClient(
     private val liveQuotesResponse: LiveQuotesResponseDto? = null,
     private val predictionPage: ActivePredictionPageDto? = null,
     private val ipoList: List<IpoListItemDto> = emptyList(),
-    private val health: LiveFeedHealthDto? = null
+    private val health: LiveFeedHealthDto? = null,
+    private val ledgerError: Throwable? = null
 ) : MarketApiClient {
     override suspend fun marketSummary(): MarketSummaryDto = summaryError?.let { throw it } ?: summary!!
     override suspend fun liveQuotes(symbols: List<String>?): LiveQuotesResponseDto = liveQuotesResponse!!
     override suspend fun liveFeedHealth(): LiveFeedHealthDto = health!!
     override suspend fun indexHistory(name: String, range: String): IndexHistoryDto = throw NotImplementedError()
     override suspend fun sectors(): List<SectorOptionDto> = emptyList()
-    override suspend fun instrument(symbol: String): InstrumentLifecycleDto = throw NotImplementedError()
+    override suspend fun instrument(symbol: String, includeCalls: Boolean): InstrumentLifecycleDto = throw NotImplementedError()
     override suspend fun activePredictions(cursor: String?): ActivePredictionPageDto = predictionPage!!
     override suspend fun activePrediction(id: Int): ActivePredictionDto = throw NotImplementedError()
     override suspend fun ipos(stage: String?, query: String?): List<IpoListItemDto> = ipoList
@@ -26,6 +27,9 @@ private class FakeMarketApiClient(
     override suspend fun ipoStageCounts(): IpoStageCountsDto = throw NotImplementedError()
     override suspend fun ipoDetail(id: String): IpoDetailDto = throw NotImplementedError()
     override suspend fun ipoHistory(id: String): List<IpoHistoryEntryDto> = emptyList()
+    override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = ledgerError?.let { throw it } ?: MyTipPageDto(emptyList(), null)
+    override suspend fun myScorecard(filter: String): ScorecardDto = throw ledgerError ?: NotImplementedError()
+    override suspend fun tipDetail(tipId: String): TipDetailDto = throw ledgerError ?: NotImplementedError()
 }
 
 private fun summary(marketStatus: String = "MARKET_HOURS") = MarketSummaryDto(
@@ -82,6 +86,16 @@ class MarketIntelligenceRepositoryTest {
 
         assertTrue(state is MarketDataState.Error)
         assertTrue((state as MarketDataState.Error).message.contains("422"))
+    }
+
+    // 4b review M1: ledger screens show copy for 401, 403 and 404, and a signed-out reader gets the sign-in state, never raw HTTP.
+    @Test
+    fun ledgerHttpErrorsBecomeCopy() = runBlocking {
+        fun repo(message: String, status: Int) = MarketIntelligenceRepository(FakeMarketApiClient(ledgerError = MarketApiException(message, status)))
+        assertEquals(MarketDataState.Unavailable, repo("Marksy Market API returned HTTP 401: expired", 401).myTips(null))
+        assertEquals(MarketDataState.Unavailable, repo("Not signed in to Marksy", 401).tipDetail("t1"))
+        assertEquals(MarketDataState.Error("Your account doesn't have access to tip records yet"), repo("Marksy Market API returned HTTP 403", 403).tipDetail("t1"))
+        assertEquals(MarketDataState.Error("Not available yet"), repo("Marksy Market API returned HTTP 404", 404).myScorecard(ScorecardQuery()))
     }
 
     @Test

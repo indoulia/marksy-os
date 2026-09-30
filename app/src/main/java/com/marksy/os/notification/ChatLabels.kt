@@ -55,16 +55,25 @@ object ChatLabels {
         return Regex("(?<![$WORD])(?:$alternation)(?![$WORD])", RegexOption.IGNORE_CASE)
     }
 
-    /** Strips a sender's "Name: " line prefix and masks every known sender via [mask], wherever it appears in the row. */
-    fun withoutSenders(body: String, title: String, senders: Collection<String>, mask: Regex?): String {
-        val lines = body.lines()
-        val names = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
-        val linePrefixNames = names.filter { name -> title.contains(name) || lines.any { it.startsWith("$name$SENDER_SUFFIX") } }
-        if (mask == null && linePrefixNames.isEmpty()) return body
-        return lines.joinToString("\n") { line ->
-            val unprefixed = linePrefixNames.firstOrNull { line.startsWith("$it$SENDER_SUFFIX") }
-                ?.let { line.removePrefix("$it$SENDER_SUFFIX") } ?: line
-            if (mask != null) mask.replace(unprefixed, MASK_SENDER) else unprefixed
-        }
+    /** Strips every "Name: " line prefix, recorded sender or not, and masks every known sender via [mask], wherever it appears. */
+    fun withoutSenders(body: String, mask: Regex?): String = withoutLinePrefixes(body).let { if (mask != null) mask.replace(it, MASK_SENDER) else it }
+
+    /** Every line without its "Name: " prefix (4b review I2); "CMP : 23.62" or "Target: Rs 1500" is a call level and stays. */
+    fun withoutLinePrefixes(body: String): String = body.lines().joinToString("\n") { line ->
+        val prefix = LINE_PREFIX.find(line)?.value ?: return@joinToString line
+        val rest = line.substring(prefix.length)
+        if (isLevelSeparator(prefix.dropLast(SENDER_SUFFIX.length), rest)) line else rest
     }
+
+    // A level word before a price, with nothing, emoji or a side word ahead of it ("BUY RENUKA CMP"); "Ravi SL" is a sender.
+    private fun isLevelSeparator(head: String, rest: String): Boolean {
+        val level = LEVEL_WORD_END.find(head) ?: return false
+        val before = head.substring(0, level.range.first)
+        return PRICE_START.containsMatchIn(rest) && (before.none { it.isLetterOrDigit() } || SIDE_WORD.containsMatchIn(before))
+    }
+
+    private val LINE_PREFIX = Regex("^[^:\\n]{1,40}: ")
+    private val LEVEL_WORD_END = Regex("""\b(?:entry|targets?|tgt|sl|stop[\s-]*loss|cmp|ltp|above|below|around|near)\s*$""", RegexOption.IGNORE_CASE)
+    private val PRICE_START = Regex("""^\s*(?:rs\.?|₹|inr)?\s*\d""", RegexOption.IGNORE_CASE)
+    private val SIDE_WORD = Regex("""\b(?:buy|sell|accumulate|exit|kharido|becho|short|long)\b""", RegexOption.IGNORE_CASE)
 }

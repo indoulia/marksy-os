@@ -5,6 +5,9 @@ import com.marksy.os.data.Metric
 import com.marksy.os.data.MetricsRecorder
 import com.marksy.os.data.RuleRunner
 import com.marksy.os.data.local.MarksyDatabase
+import com.marksy.os.gateway.CaptureContext
+import com.marksy.os.gateway.CaptureDecision
+import com.marksy.os.gateway.CaptureGate
 import com.marksy.os.intelligence.EventIntelligencePipeline
 import com.marksy.os.intelligence.RuleEngine
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +16,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -85,7 +89,9 @@ class IngestionPipelineTest {
         assertTrue(db.notificationEventDao().getById(r.eventId)!!.archived)
         assertEquals(1, db.ruleExecutionDao().count("wa"))
 
-        pipeline.ingest(raw("com.zerodha.kite3", "z1", "Order executed", "BUY INFY at 1500"))
+        // 4b review C1/I3: only a candidate wakes delivery, so a broker's research call does and its own execution does not.
+        pipeline.ingest(raw("com.zerodha.kite3", "z1", "Research call", "BUY INFY CMP 1500 SL 1450 TGT 1600"))
+        pipeline.ingest(raw("com.zerodha.kite3", "z2", "Order executed", "BUY INFY at 1500"))
         assertEquals(1, trading)
     }
 
@@ -113,15 +119,56 @@ class IngestionPipelineTest {
         assertEquals(IngestionPipeline.Result.Empty, pipeline.ingest(raw("com.a", "x2", " ", "")))
     }
 
-    // Regression: a tip posted after "Good morning" in the same chat notification was never treated as trading.
+    // Regression kept from the trade-call rule: a tip posted after "Good morning" in a chat notification must go, as its own capture.
     @Test
-    fun chatUpdateThatAddsATradeCallBecomesTradingAndIsDelivered() = runBlocking {
-        pipeline.ingest(raw("org.telegram.messenger", "chat", "Tips Group", "Good morning all"))
-        val r = pipeline.ingest(raw("org.telegram.messenger", "chat", "Tips Group", "Good morning all\nBUY RENUKA CMP 23.62 SL 22.25 TGT 26"))
-        val e = db.notificationEventDao().getById((r as IngestionPipeline.Result.Updated).eventId)!!
-        assertEquals("TRADING", e.category)
-        assertEquals("PENDING", e.deliveryState)
-        assertEquals(1, trading)
+    fun aNewMessageInADeliveredChatIsItsOwnCaptureAndALocalChatStillFolds() = runBlocking {
+        val dao = db.notificationEventDao()
+        val group = raw("org.telegram.messenger", "chat", "Tips Group", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26").copy(groupConversation = true)
+        val sent = (pipeline.ingest(group) as IngestionPipeline.Result.Stored).eventId
+        assertEquals("PENDING", dao.getById(sent)!!.deliveryState)
+        dao.claimPendingTrading(sent, 1, t0)
+        dao.updateInFlightDeliveryState(sent, "DELIVERED", 1, t0)
+
+        val next = pipeline.ingest(group.copy(body = "BUY RENUKA CMP 23.62 SL 22.25 TGT 26\nBUY IDEA CMP 9.5 SL 8.9 TGT 11")) as IngestionPipeline.Result.Stored
+        val added = dao.getById(next.eventId)!!
+        assertEquals("BUY IDEA CMP 9.5 SL 8.9 TGT 11", added.body)
+        assertEquals("PENDING", added.deliveryState)
+        assertEquals(2, trading)
+
+        // 4b review I3: group chatter never queues or wakes delivery; I2: a call it gains later splits off on its own.
+        val quiet = raw("org.telegram.messenger", "quiet", "Swing Group", "Good morning all").copy(groupConversation = true)
+        val local = (pipeline.ingest(quiet) as IngestionPipeline.Result.Stored).eventId
+        assertEquals("NOT_APPLICABLE", dao.getById(local)!!.deliveryState)
+        assertTrue(pipeline.ingest(quiet.copy(body = "Good morning all\nHow was the weekend?")) is IngestionPipeline.Result.Updated)
+        assertEquals(2, trading)
+        val tip = pipeline.ingest(quiet.copy(body = "Good morning all\nHow was the weekend?\nBUY TATASTEEL CMP 152 SL 147 TGT 162")) as IngestionPipeline.Result.Stored
+        assertEquals("BUY TATASTEEL CMP 152 SL 147 TGT 162", dao.getById(tip.eventId)!!.body)
+        assertEquals("PENDING", dao.getById(tip.eventId)!!.deliveryState)
+        assertEquals("NOT_APPLICABLE", dao.getById(local)!!.deliveryState)
+        assertEquals(3, trading)
+
+        val oneToOne = raw("org.telegram.messenger", "dm", "Rahul", "hi").copy(groupConversation = false)
+        val direct = (pipeline.ingest(oneToOne) as IngestionPipeline.Result.Stored).eventId
+        assertTrue(pipeline.ingest(oneToOne.copy(body = "hi\nBUY IDEA CMP 9.5 SL 8.9 TGT 11")) is IngestionPipeline.Result.Updated)
+        assertEquals("NOT_APPLICABLE", dao.getById(direct)!!.deliveryState)
+        assertEquals(3, trading)
+    }
+
+    // 4b review I2: a local group row that gains a call sends only the new line, with no sender name, recorded or not.
+    @Test
+    fun aLocalGroupRowThatGainsACallSendsOnlyTheCallAndNoNames() = runBlocking {
+        val dao = db.notificationEventDao()
+        val group = raw("org.telegram.messenger", "g1", "Tips Group", "Priya: hi\nRK: ok").copy(groupConversation = true)
+        val local = (pipeline.ingest(group) as IngestionPipeline.Result.Stored).eventId
+        val split = pipeline.ingest(group.copy(body = "Priya: hi\nRK: ok\nAmit: BUY IDEA CMP 9.5 SL 8.9 TGT 11")) as IngestionPipeline.Result.Stored
+        assertEquals("NOT_APPLICABLE", dao.getById(local)!!.deliveryState)
+        val row = dao.getById(split.eventId)!!
+        assertEquals("PENDING", row.deliveryState)
+
+        val context = CaptureContext(capturePackages = emptySet(), chatAllowList = setOf("tips group"), chatSenders = setOf("RK"), username = "user-1", deviceSalt = "salt")
+        val text = (CaptureGate.decide(row, context) as CaptureDecision.Send).message.text
+        assertEquals("BUY IDEA CMP 9.5 SL 8.9 TGT 11", text)
+        listOf("Priya", "RK", "Amit").forEach { assertFalse(it, text.contains(it)) }
     }
 
     // Regression: a second call reusing the first call's notification slot was folded into it and never sent.

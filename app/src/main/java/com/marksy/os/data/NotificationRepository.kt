@@ -64,7 +64,9 @@ class NotificationRepository(
             val result = com.marksy.os.notification.NotificationClassifier.classify(event.sourcePackage, event.title, event.body)
             if (result.category.name != event.category) {
                 val trading = result.category == com.marksy.os.notification.NotificationClassifier.Category.TRADING
-                changed += dao.updateClassification(event.id, result.category.name, result.priority, result.confidence, trading)
+                // 4b review C1/I3: a newly TRADING row is queued only if the capture gate's text rules make it a candidate.
+                val queue = trading && com.marksy.os.gateway.CaptureGate.queues(event.sourcePackage, result.category.name, event.chatGroup, event.title, event.body)
+                changed += dao.updateClassification(event.id, result.category.name, result.priority, result.confidence, trading, queue)
             }
         }
         com.marksy.os.ai.DiagLog.i("MarksyClassifier", "reclassified $changed stored event(s) for v${com.marksy.os.notification.NotificationClassifier.VERSION}")
@@ -74,7 +76,7 @@ class NotificationRepository(
     /** Moves items whose moment has passed (EventExpiry) out of the active views; history keeps them. */
     suspend fun retireExpired(nowMillis: Long = System.currentTimeMillis()): Int {
         val open = dao.findRetirable()
-        val reasons = com.marksy.os.intelligence.EventExpiry.superseded(open.filter { it.category == "TRADING" }).toMutableMap()
+        val reasons = mutableMapOf<Long, String>()
         open.forEach { e ->
             if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.of(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
         }

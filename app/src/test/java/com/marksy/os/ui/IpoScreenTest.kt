@@ -19,7 +19,7 @@ private class FixtureIpoClient(
     override suspend fun liveFeedHealth() = throw NotImplementedError()
     override suspend fun indexHistory(name: String, range: String) = throw NotImplementedError()
     override suspend fun sectors() = emptyList<SectorOptionDto>()
-    override suspend fun instrument(symbol: String) = throw NotImplementedError()
+    override suspend fun instrument(symbol: String, includeCalls: Boolean) = throw NotImplementedError()
     override suspend fun activePredictions(cursor: String?) = throw NotImplementedError()
     override suspend fun activePrediction(id: Int) = throw NotImplementedError()
     override suspend fun ipos(stage: String?, query: String?) = list

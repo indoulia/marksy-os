@@ -24,79 +24,80 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.marksy.os.market.InstrumentPredictionEntryDto
+import com.marksy.os.market.InstrumentCallsDto
+import com.marksy.os.market.LedgerCalls
+import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MarksyAnalysis
-import com.marksy.os.market.MarksyCallView
-import com.marksy.os.market.MarksyCalls
+import com.marksy.os.market.ScorecardHeadlineDto
 import org.json.JSONObject
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-private fun pct(v: Double) = "${Math.round(if (v <= 1.0) v * 100 else v)}%"
-private fun signed(v: Double) = String.format(Locale.US, "%+.1f%%", v)
-private fun humanize(s: String) = s.lowercase().split('_').joinToString(" ").replaceFirstChar { it.uppercase() }
-private fun day(asOf: String): String = runCatching { LocalDate.parse(asOf.take(10)).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())) }.getOrDefault(asOf.take(10))
+internal fun toneColor(tone: LedgerCalls.Tone): Color = when (tone) {
+    LedgerCalls.Tone.POSITIVE -> MarksyTheme.PrimaryEmerald
+    LedgerCalls.Tone.NEGATIVE -> MarksyTheme.RedUrgent
+    LedgerCalls.Tone.NEUTRAL -> MarksyTheme.TextSecondary
+    LedgerCalls.Tone.MUTED -> MarksyTheme.TextMuted
+}
 
-/** Marksy's call on this stock, shown under the price: the open call in full, otherwise one line over the history. */
+/** Every call on this stock, grouped per Marksy engine then per channel with its record (spec §10); states come from the ledger tip. */
 @Composable
-internal fun MarksyCallCard(view: MarksyCallView, livePrice: Double?, analysis: JSONObject?) {
+internal fun CallsBox(calls: InstrumentCallsDto, livePrice: Double?, analysis: JSONObject?, onOpenTip: (String) -> Unit) {
     val shape = RoundedCornerShape(14.dp)
-    when (view) {
-        MarksyCallView.None -> return
-        is MarksyCallView.Active -> Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.PrimaryEmerald, shape).padding(12.dp)) {
-            val p = view.primary
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("MARKSY CALL", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                Text(
-                    listOfNotNull(" · ${p.horizonDays}-day", MarksyCalls.daysLeft(p)?.let { " · $it days left" }).joinToString(""),
-                    color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f)
-                )
-                Text(
-                    humanize(p.lifecycleState), color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MarksyTheme.BadgeTradingBg).padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Levels(p)
-            p.targetPrice?.let { t -> p.stopLoss?.let { s -> ProgressBar(s, p.entryPrice, t, livePrice ?: p.currentPrice) } }
-            Text(
-                "Probability ${pct(p.probabilityAtPublication)} · Confidence ${pct(p.confidenceAtPublication)} · published ${day(p.asOf)}",
-                color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp)
-            )
-            if (p.lifecycleDetail.isNotBlank()) Text(p.lifecycleDetail, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            view.others.forEach { o ->
-                Text(
-                    "Also open: ${o.horizonDays}-day call from ${day(o.asOf)} · target ${o.targetPrice?.let(::money) ?: "–"} · stop ${o.stopLoss?.let(::money) ?: "–"}",
-                    color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            AnalysisSection(analysis)
-            if (view.history.isNotEmpty()) HistorySection(view.history, title = null)
+    val leading = remember(calls) { LedgerCalls.leadingMarksyCall(calls) != null }
+    Column(
+        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface)
+            .border(1.dp, if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape).padding(12.dp)
+    ) {
+        Text("MARKSY", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Black)
+        calls.engines.forEach { e -> CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip) }
+        AnalysisSection(analysis)
+        if (calls.channels.isNotEmpty()) {
+            Text("EXTERNAL", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 10.dp))
         }
-        is MarksyCallView.HistoryOnly -> Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape).padding(horizontal = 12.dp, vertical = 4.dp)) {
-            HistorySection(view.history, title = "No active Marksy call")
-            AnalysisSection(analysis, title = "Marksy analysis (latest call)")
+        calls.channels.forEach { c -> CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip) }
+    }
+}
+
+@Composable
+private fun CallGroup(
+    name: String, kind: String?, record: ScorecardHeadlineDto, tips: List<LedgerTipDto>, withCaller: Boolean,
+    livePrice: Double?, onOpenTip: (String) -> Unit
+) {
+    val (open, past) = remember(tips) { tips.partition(LedgerCalls::isActive) }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                name + (kind?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+            )
+            Text(LedgerCalls.recordText(record), color = MarksyTheme.TextSecondary, fontSize = 10.sp, maxLines = 1)
+        }
+        if (tips.isEmpty()) Text("No call on this stock", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        open.forEach { t -> OpenCall(t, withCaller, livePrice) { onOpenTip(t.tipId) } }
+        if (past.isNotEmpty()) Collapsible("Past calls (${past.size})", summary = null) {
+            past.forEach { t ->
+                Text(
+                    LedgerCalls.pastLine(t, withCaller), color = toneColor(LedgerCalls.tone(t)), fontSize = 11.sp, maxLines = 2,
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenTip(t.tipId) }.padding(vertical = 3.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Levels(p: InstrumentPredictionEntryDto) {
-    fun from(v: Double) = if (p.entryPrice > 0) " (${signed((v - p.entryPrice) / p.entryPrice * 100)})" else ""
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        listOf("Entry" to "₹${money(p.entryPrice)}", "Target" to (p.targetPrice?.let { "₹${money(it)}${from(it)}" } ?: "–"), "Stop" to (p.stopLoss?.let { "₹${money(it)}${from(it)}" } ?: "–"))
-            .forEachIndexed { i, (label, v) ->
-                Column(Modifier.weight(1f)) {
-                    Text(label, color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                    Text(v, color = when (i) { 1 -> MarksyTheme.PrimaryEmerald; 2 -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextPrimary }, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
-                }
-            }
+private fun OpenCall(t: LedgerTipDto, withCaller: Boolean, livePrice: Double?, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(top = 6.dp)) {
+        Text(LedgerCalls.headline(t, withCaller), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+        val entry = LedgerCalls.entryMid(t)
+        if (t.target != null && t.stopLoss != null && entry != null) ProgressBar(t.stopLoss, entry, t.target, livePrice)
+        LedgerCalls.progressText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
     }
 }
 
 /** Stop on the left, target on the right, the entry tick and today's price between them. */
 @Composable
-private fun ProgressBar(stop: Double, entry: Double, target: Double, price: Double?) {
+internal fun ProgressBar(stop: Double, entry: Double, target: Double, price: Double?) {
     if (target == stop) return
     fun at(v: Double) = ((v - stop) / (target - stop)).coerceIn(0.0, 1.0).toFloat()
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -110,13 +111,13 @@ private fun ProgressBar(stop: Double, entry: Double, target: Double, price: Doub
         Row(Modifier.fillMaxWidth()) {
             Text("Stop", color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.weight(1f))
             price?.let { Text("Now ₹${money(it)}", color = MarksyTheme.TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
-            Text("Target", color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            Text("Target", color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
     }
 }
 
 @Composable
-private fun Collapsible(title: String, summary: String?, preview: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun Collapsible(title: String, summary: String?, preview: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     var open by rememberSaveable(title) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -177,33 +178,5 @@ private fun FactPill(label: String, value: String) {
     Row(Modifier.clip(RoundedCornerShape(8.dp)).background(MarksyTheme.SurfaceRaised).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("$label ", color = MarksyTheme.TextMuted, fontSize = 10.sp)
         Text(value, color = if (value.startsWith("+")) MarksyTheme.PrimaryEmerald else if (value.startsWith("-")) MarksyTheme.RedUrgent else MarksyTheme.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun HistorySection(history: List<InstrumentPredictionEntryDto>, title: String?) {
-    val r = MarksyCalls.record(history)
-    val summary = listOfNotNull(
-        "${r.total} past call${if (r.total == 1) "" else "s"}",
-        r.hit.takeIf { it > 0 }?.let { "$it succeeded" },
-        r.stopped.takeIf { it > 0 }?.let { "$it failed" },
-        r.expired.takeIf { it > 0 }?.let { "$it expired" },
-        r.invalidated.takeIf { it > 0 }?.let { "$it invalidated" },
-        r.averageReturn?.let { "avg ${signed(it)}" }
-    ).joinToString(" · ")
-    Collapsible(title ?: "Past calls", summary = if (title == null) null else summary) {
-        if (title == null) Text(summary, color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-        history.forEach { h ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("${day(h.asOf)} · ${h.horizonDays}-day", color = MarksyTheme.TextPrimary, fontSize = 12.sp)
-                    Text("₹${money(h.entryPrice)} → ${h.targetPrice?.let { "₹" + money(it) } ?: "–"} · stop ${h.stopLoss?.let { "₹" + money(it) } ?: "–"}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(humanize(MarksyCalls.outcome(h)), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    h.realizedReturnPct?.let { Text(signed(it), color = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 11.sp) }
-                }
-            }
-        }
     }
 }

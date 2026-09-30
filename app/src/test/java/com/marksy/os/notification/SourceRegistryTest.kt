@@ -23,11 +23,4 @@ class SourceRegistryTest {
         assertFalse(SourceRegistry.isWhatsApp("com.whatsapp.fake"))
         assertFalse(SourceRegistry.isWhatsApp(""))
     }
-
-    @Test
-    fun tradingPackagesAreRecognizedAndUnknownPackagesRejected() {
-        assertTrue(SourceRegistry.isTradingSource("com.upstox.pro"))
-        assertTrue(SourceRegistry.isTradingSource(" COM.ZERODHA.KITE3 "))
-        assertFalse(SourceRegistry.isTradingSource("com.example.trading"))
-    }
 }

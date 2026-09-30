@@ -44,7 +44,8 @@ object MarksyContainer {
             ruleRunner = rules(context),
             intelligence = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao())),
             onTradingCaptured = onTradingCaptured,
-            onStored = { event -> plan(app).captureFromEvent(event) }
+            onStored = { event -> plan(app).captureFromEvent(event) },
+            chatAllowList = { com.marksy.os.notification.WhatsAppSenderWatchlist.get(app) }
         )
     }
 

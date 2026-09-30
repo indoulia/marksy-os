@@ -58,6 +58,8 @@ fun MarketScreen(
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
     var alerting by remember { mutableStateOf<TradeIntent?>(null) }
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
+    var openTip by remember { mutableStateOf<String?>(null) }
+    openTip?.let { TipDetailDialog(repository, it, onOpenStock = null) { openTip = null } }
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
@@ -89,15 +91,15 @@ fun MarketScreen(
                 } else {
                     val refresh = rememberRefreshState()
                     val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol, refresh.key) {
-                        value = repository.instrument(symbol)
+                        value = repository.instrument(symbol, includeCalls = true)
                         refresh.done()
                     }
                     var range by rememberSaveable(symbol) { mutableStateOf(com.marksy.os.upstox.ChartRange.D1) }
                     var minutes by rememberSaveable(symbol, range) { mutableStateOf<Int?>(null) }
                     val live = rememberStockLive(symbol, range, refresh.key, minutes)
                     val fundamentals = rememberStockFundamentals(live.key, refresh.key)
-                    val predictions = when (val st = state) { is com.marksy.os.market.MarketDataState.Loaded -> st.value.predictions; is com.marksy.os.market.MarketDataState.Stale -> st.value.predictions; else -> null }
-                    val analysisId = remember(predictions) { predictions?.let(com.marksy.os.market.MarksyCalls::analysisId) }
+                    val instrument = when (val st = state) { is com.marksy.os.market.MarketDataState.Loaded -> st.value; is com.marksy.os.market.MarketDataState.Stale -> st.value; else -> null }
+                    val analysisId = remember(instrument) { instrument?.let { com.marksy.os.market.LedgerCalls.analysisRecommendationId(it.calls, it.predictions) } }
                     val analysis by produceState<org.json.JSONObject?>(null, analysisId, refresh.key) {
                         value = analysisId?.let { (repository.recommendation(it) as? com.marksy.os.market.MarketDataState.Loaded)?.value }
                     }
@@ -106,17 +108,17 @@ fun MarketScreen(
                             .map { Regex("\\b${Regex.escape(it)}\\b", RegexOption.IGNORE_CASE) }
                     }
                     val mentions = remember(stockEvents, words) { stockEvents.filter { e -> words.any { it.containsMatchIn("${e.title} ${e.body}") } } }
-                    val call = (predictions?.let(com.marksy.os.market.MarksyCalls::view) as? com.marksy.os.market.MarksyCallView.Active)?.primary
+                    val call = remember(instrument) { com.marksy.os.market.LedgerCalls.leadingMarksyCall(instrument?.calls) }
                     SideEffect {
                         stockTrade = TradeIntent(
-                            symbol, if (call?.targetPrice != null && call.targetPrice < call.entryPrice) TradeSide.SELL else TradeSide.BUY,
-                            live.quote?.lastPrice, call?.targetPrice, call?.stopLoss
+                            symbol, if (call?.direction == "SELL") TradeSide.SELL else TradeSide.BUY,
+                            live.quote?.lastPrice, call?.target, call?.stopLoss
                         )
                     }
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
                             minutes = minutes, onMinutesSelected = { minutes = it },
-                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis)
+                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis, onOpenTip = { openTip = it })
                     }
                 }
             }

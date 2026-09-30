@@ -36,8 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.market.InstrumentLifecycleDto
-import com.marksy.os.market.MarksyCallView
-import com.marksy.os.market.MarksyCalls
+import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.ChartRange
@@ -78,12 +77,9 @@ fun StockDetailScreen(
     fundamentals: StockFundamentals = StockFundamentals(),
     onOpenSymbol: (String) -> Unit = {},
     analysis: org.json.JSONObject? = null,
-    ratingSource: com.marksy.os.rating.RatingSource = com.marksy.os.rating.LocalRatingSource
+    onOpenTip: (String) -> Unit = {}
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
-    val ist = java.time.ZoneId.of("Asia/Kolkata")
-    val ratingInputs = remember(live, fundamentals, instrument) { StockRatingInputs.from(live, fundamentals, instrument?.predictions, java.time.LocalDate.now(ist), ist) }
-    val rating by androidx.compose.runtime.produceState<com.marksy.os.rating.RatingResult?>(null, ratingInputs) { value = ratingSource.rating(symbol.orEmpty(), ratingInputs) }
     // A new symbol (e.g. a tapped peer) opens at its header, not at the previous stock's scroll position.
     val listState = rememberSaveable(symbol, saver = LazyListState.Saver) { LazyListState() }
     LazyColumn(
@@ -93,11 +89,11 @@ fun StockDetailScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { PriceHeader(instrument, symbol, live) }
-        val calls = instrument?.let { MarksyCalls.view(it.predictions) } ?: MarksyCallView.None
-        if (calls != MarksyCallView.None) item { MarksyCallCard(calls, live.quote?.lastPrice, analysis) }
-        rating?.let { r -> item { MarksyRatingCard(r) } }
+        // Channels are listed only with a call here, but every engine is, so an engine-only box needs a tip.
+        val calls = instrument?.calls?.takeIf { c -> c.engines.any { it.tips.isNotEmpty() } || c.channels.isNotEmpty() }
+        calls?.let { c -> item(key = "calls") { CallsBox(c, live.quote?.lastPrice, analysis, onOpenTip) } }
         live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
-        val levels = (calls as? MarksyCallView.Active)?.primary?.let { p -> listOfNotNull(p.targetPrice?.let { "Target" to it }, "Entry" to p.entryPrice, p.stopLoss?.let { "Stop" to it }) }.orEmpty()
+        val levels = LedgerCalls.chartLevels(LedgerCalls.leadingMarksyCall(instrument?.calls))
         if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels, minutes, onMinutesSelected) }
         live.quote?.let { q ->
             item { StatsCard(q, live) }

@@ -41,7 +41,7 @@ class TradingDeliveryRunTest {
 
         TradingDeliveryRun(dao, client, capture).drain()
 
-        assertEquals(0, dao.findPendingTrading(50).size)
+        assertEquals(0, dao.findPendingCapture(50).size)
     }
 
     // A row put back to PENDING must end the run with a retry, not spin the drain loop.
@@ -52,7 +52,7 @@ class TradingDeliveryRunTest {
         val retry = TradingDeliveryRun(dao, client, capture.copy(capturePackages = null)).drain()
 
         assertTrue(retry)
-        assertEquals(1, dao.findPendingTrading(5).size)
+        assertEquals(1, dao.findPendingCapture(5).size)
     }
 
     // A row whose gate throws must be marked NOT_APPLICABLE, not left IN_FLIGHT blocking all delivery.
@@ -79,13 +79,13 @@ class TradingDeliveryRunTest {
         TradingDeliveryRun(dao, testClient, capture, decide = decideFn).drain()
 
         // Row 1 should be NOT_APPLICABLE (gate threw); row 2 should be delivered.
-        assertEquals(0, dao.findPendingTrading(50).size)
+        assertEquals(0, dao.findPendingCapture(50).size)
         assertEquals(1, captureCount)  // Only row 2 reached capture
         assertEquals("NOT_APPLICABLE", dao.findById(1L)?.deliveryState)
         assertEquals("DELIVERED", dao.findById(2L)?.deliveryState)
     }
 
-    // Finding C2: chatSenders is re-read after each findPendingTrading call, so a row inserted mid-run still gets its sender masked.
+    // Finding C2: chatSenders is re-read after each findPendingCapture call, so a row inserted mid-run still gets its sender masked.
     @Test
     fun aChatRowThatArrivesMidRunUsesTheSenderRecordedAtThatMoment() = runBlocking {
         dao.insert(row("k1", 1L))

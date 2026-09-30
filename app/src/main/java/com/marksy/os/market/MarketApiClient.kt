@@ -16,7 +16,7 @@ interface MarketApiClient {
     suspend fun liveFeedHealth(): LiveFeedHealthDto
     suspend fun indexHistory(name: String, range: String): IndexHistoryDto
     suspend fun sectors(): List<SectorOptionDto>
-    suspend fun instrument(symbol: String): InstrumentLifecycleDto
+    suspend fun instrument(symbol: String, includeCalls: Boolean = false): InstrumentLifecycleDto
     suspend fun activePredictions(cursor: String? = null): ActivePredictionPageDto
     suspend fun activePrediction(id: Int): ActivePredictionDto
     suspend fun ipos(stage: String? = null, query: String? = null): List<IpoListItemDto>
@@ -32,9 +32,17 @@ interface MarketApiClient {
     /** The signed-in reader's watched IPOs; watching is server-side so it follows the account. */
     suspend fun trackedIpos(): List<IpoTrackedItemDto> = emptyList()
     suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto = throw MarketApiException("IPO watching is not supported")
+    /** Tip ledger (spec §9) under the bearer session; `filter` is a §8.3 query string from `ScorecardQuery.filterParams`. */
+    suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = MyTipPageDto(emptyList(), null)
+    suspend fun myScorecard(filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecardSummary(filter: String): ScorecardSummaryDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
+    suspend fun tipDetail(tipId: String): TipDetailDto = throw MarketApiException("Tip detail is not supported")
 }
 
-class MarketApiException(message: String) : IOException(message)
+/** [status] is the HTTP status, or 401 when no session exists, so a screen can word the failure instead of showing it. */
+class MarketApiException(message: String, val status: Int? = null) : IOException(message)
 
 /** HTTPS-enforced, `X-API-Key`-authenticated client for the `marksy-api` market-intelligence
  * surface, structurally mirroring `MarksyTipsApiClient` (raw `HttpURLConnection`, `{data, meta}`
@@ -59,8 +67,12 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun sectors(): List<SectorOptionDto> =
         SectorOptionDto.parseList(getDataArray("$base/market/sectors"))
 
-    override suspend fun instrument(symbol: String): InstrumentLifecycleDto =
-        InstrumentLifecycleDto.parse(getData("$base/instruments/${encode(symbol)}"))
+    override suspend fun instrument(symbol: String, includeCalls: Boolean): InstrumentLifecycleDto =
+        InstrumentLifecycleDto.parse(getData(instrumentUrl(symbol, includeCalls)))
+
+    // Split out so the URL (incl. the include=calls flag) is checkable without a live server.
+    internal fun instrumentUrl(symbol: String, includeCalls: Boolean): String =
+        "$base/instruments/${encode(symbol)}" + if (includeCalls) "?include=calls" else ""
 
     override suspend fun activePredictions(cursor: String?): ActivePredictionPageDto {
         val query = cursor?.let { "?cursor=${encode(it)}" } ?: ""
@@ -108,12 +120,32 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto =
         IpoTrackingStateDto.parse(execute("$base/ipos/${encode(id)}/tracking", method = if (tracking) "POST" else "DELETE").getJSONObject("data"))
 
+    override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
+        val params = listOfNotNull("pageSize=$MY_TIPS_PAGE_SIZE", status?.let { "status=${encode(it)}" }, cursor?.let { "cursor=${encode(it)}" })
+        return MyTipPageDto.parse(getEnvelope("$base/me/tips?" + params.joinToString("&")))
+    }
+
+    override suspend fun myScorecard(filter: String): ScorecardDto = ScorecardDto.parse(getData("$base/me/scorecard" + query(filter)))
+
+    override suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto =
+        EntityScorecardListDto.parse(getData("$base/scorecards?entity=${encode(entity)}" + (if (filter.isEmpty()) "" else "&$filter")))
+
+    override suspend fun scorecardSummary(filter: String): ScorecardSummaryDto =
+        ScorecardSummaryDto.parse(getData("$base/scorecards/summary" + query(filter)))
+
+    override suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto =
+        ScorecardDto.parse(getData("$base/scorecards/${encode(entity)}/$id" + query(filter)))
+
+    override suspend fun tipDetail(tipId: String): TipDetailDto = TipDetailDto.parse(getData("$base/tips/${encode(tipId)}"))
+
+    private fun query(filter: String) = if (filter.isEmpty()) "" else "?$filter"
+
     private suspend fun getEnvelope(url: String): JSONObject = execute(url)
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
     private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS, method: String = "GET"): JSONObject {
-        val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy")
+        val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy", 401)
         return withContext(Dispatchers.IO) {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
@@ -142,7 +174,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
                 }.orEmpty()
                 if (code !in 200..299) {
                     val detail = errorDetail(response)
-                    if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail")
+                    if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail", code)
                     throw IOException("Marksy Market API returned HTTP $code$detail")
                 }
                 return@withContext JSONObject(response).also { envelope ->
@@ -170,6 +202,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
         const val READ_TIMEOUT_MS = 20_000
         const val MAX_RESPONSE_CHARS = 4_000_000
         const val IPO_MAX_RESPONSE_CHARS = 16_000_000
+        const val MY_TIPS_PAGE_SIZE = 50
         val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
         fun normalizeBaseUrl(value: String): String {

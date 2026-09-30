@@ -102,7 +102,9 @@ class AskMarksySearchTest {
     fun sitemapNavigatesToPagesAndTabs() {
         fun nav(text: String) = ask(Store(), text).also { assertEquals(text, Intent.NAVIGATE, it.query.intent) }.action!!
         assertEquals(AskMarksy.Action("Open Plan · Reminders", Page.PLAN, "Reminders", auto = true), nav("open reminders"))
-        assertEquals("Calls" to Page.TRADING, nav("go to trade calls").let { it.arg to it.page })
+        assertEquals("My tips" to Page.TRADING, nav("go to trade calls").let { it.arg to it.page })
+        assertEquals("My tips" to Page.TRADING, nav("open my tips").let { it.arg to it.page })
+        assertEquals("Scorecards" to Page.TRADING, nav("open scorecards").let { it.arg to it.page })
         assertEquals("IPOS" to Page.MARKET, nav("take me to IPOs").let { it.arg to it.page })
         assertEquals("Board" to Page.PLAN, nav("open my to do board").let { it.arg to it.page })
         assertEquals(Page.SETTINGS, nav("open settings").page)

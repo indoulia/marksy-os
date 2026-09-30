@@ -1,7 +1,6 @@
 package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.NotificationEventEntity
-import com.marksy.os.notification.TradeCallParser
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -30,21 +29,12 @@ object EventExpiry {
         return when (event.category) {
             "OTP" -> Expiry(otpValidUntil(text, posted, zone), "${REASON_PREFIX}OTP validity passed")
             "PROMOTIONS" -> Expiry(posted + DAY, "${REASON_PREFIX}promotion older than a day")
-            "TRADING" -> TradeCallParser.parse(event.title, event.body)
-                ?.let { Expiry(callExpiry(it.horizon, it.horizonSessions, posted), "${REASON_PREFIX}call horizon passed") }
-                ?: Expiry(posted + 7 * DAY, "${REASON_PREFIX}trading update older than a week")
+            "TRADING" -> Expiry(posted + 7 * DAY, "${REASON_PREFIX}trading update older than a week")
             "MARKET" -> Expiry(nextSessionClose(posted), "${REASON_PREFIX}market session closed")
             "DELIVERY" -> if (deliveryToday.containsMatchIn(text)) Expiry(endOfDay(posted, zone), "${REASON_PREFIX}delivery day ended") else null
             else -> null
         }
     }
-
-    /** Older open calls on a symbol that has a newer call, whatever the source or side; the newest stays. */
-    fun superseded(trading: List<NotificationEventEntity>): Map<Long, String> =
-        trading.mapNotNull { e -> TradeCallParser.parse(e.title, e.body)?.let { e to it.symbol } }
-            .groupBy({ it.second }, { it.first })
-            .flatMap { (symbol, calls) -> calls.sortedByDescending { it.postedAt }.drop(1).map { it.id to "${REASON_PREFIX}newer call for $symbol" } }
-            .toMap()
 
     private fun otpValidUntil(text: String, posted: Long, zone: ZoneId): Long {
         validFor.find(text)?.let { m ->
@@ -67,16 +57,6 @@ object EventExpiry {
             return until.toInstant().toEpochMilli()
         }
         return posted + 30 * MINUTE
-    }
-
-    /** The close of the [sessions]-th session after the posting one (weekdays; holidays not known here). */
-    private fun callExpiry(horizon: String?, sessions: Int?, posted: Long): Long {
-        val h = horizon?.lowercase().orEmpty()
-        return when {
-            "intraday" in h -> nextSessionClose(posted)
-            sessions != null -> (0 until sessions).fold(nextSessionClose(posted)) { close, _ -> nextSessionClose(close + 1) }
-            else -> posted + 30 * DAY
-        }
     }
 
     private fun nextSessionClose(posted: Long): Long {

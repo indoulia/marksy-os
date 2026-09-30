@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.StockMentions
-import com.marksy.os.notification.TradeCallParser
 import com.marksy.os.upstox.UpstoxInstruments
 
 /** Whether a ticker is in the instrument master; false for everything until the (cached) master loads. */
@@ -42,11 +41,10 @@ fun rememberSymbolCheck(): (String) -> Boolean {
 
 private val STOCK_CATEGORIES = setOf("MARKET", "TRADING")
 
-/** Stocks a market or trading event is about: the parsed call's symbol first, then tickers in its text. */
+/** Stocks a market or trading event, or one Marksy recorded as a tip, is about: the tickers named in its text. */
 fun stocksIn(event: NotificationEventEntity, isSymbol: (String) -> Boolean): List<String> {
-    if (event.category !in STOCK_CATEGORIES && !event.isTrading) return emptyList()
-    val call = TradeCallParser.parse(event.title, event.body)?.symbol?.takeIf(isSymbol)
-    return (listOfNotNull(call) + StockMentions.find("${event.title} ${event.body}", isSymbol)).distinct().take(3)
+    if (event.category !in STOCK_CATEGORIES && !event.isTrading && event.marksyTipId == null) return emptyList()
+    return StockMentions.find("${event.title} ${event.body}", isSymbol)
 }
 
 /** Small emerald ticker pills that open the stock page. */

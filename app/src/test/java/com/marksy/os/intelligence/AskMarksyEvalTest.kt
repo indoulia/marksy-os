@@ -141,7 +141,7 @@ class AskMarksyEvalTest {
         Case("take me to my inbox", Intent.NAVIGATE, opens(Page.INBOX, null)),
         Case("open kanban board", Intent.NAVIGATE, opens(Page.PLAN, "Board")),
         Case("show market news", Intent.NAVIGATE, opens(Page.MARKET, "UPDATES")),
-        Case("open trade calls", Intent.NAVIGATE, opens(Page.TRADING, "Calls")),
+        Case("open trade calls", Intent.NAVIGATE, opens(Page.TRADING, "My tips")),
         // Help, attention
         Case("what can you do", Intent.HELP),
         Case("help", Intent.HELP),
@@ -169,7 +169,7 @@ class AskMarksyEvalTest {
         Case("reliance stock", Intent.STOCK, opens(Page.STOCK, "RELIANCE")),
         Case("how's infosys doing today", Intent.STOCK, opens(Page.STOCK, "INFY")),
         Case("show me the market", Intent.NAVIGATE, opens(Page.MARKET, "OVERVIEW")),
-        Case("go to calls", Intent.NAVIGATE, opens(Page.TRADING, "Calls")),
+        Case("go to calls", Intent.NAVIGATE, opens(Page.TRADING, "My tips")),
         Case("open plan", Intent.NAVIGATE, opens(Page.PLAN, null)),
         Case("open birthdays", Intent.PLAN, says("Aisha's birthday")),
         // Round 3: phrasings Gemma got wrong on device

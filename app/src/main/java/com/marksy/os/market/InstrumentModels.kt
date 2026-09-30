@@ -73,7 +73,8 @@ data class InstrumentLifecycleDto(
     val market: InstrumentMarketDto,
     val predictionCount: Int,
     val openPredictionCount: Int,
-    val predictions: List<InstrumentPredictionEntryDto>
+    val predictions: List<InstrumentPredictionEntryDto>,
+    val calls: InstrumentCallsDto? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = InstrumentLifecycleDto(
@@ -85,7 +86,8 @@ data class InstrumentLifecycleDto(
             market = InstrumentMarketDto.parse(json.optJSONObject("market") ?: JSONObject()),
             predictionCount = json.intOrNull("predictionCount") ?: 0,
             openPredictionCount = json.intOrNull("openPredictionCount") ?: 0,
-            predictions = json.optJSONArray("predictions").objects().map(InstrumentPredictionEntryDto::parse)
+            predictions = json.optJSONArray("predictions").objects().map(InstrumentPredictionEntryDto::parse),
+            calls = json.optJSONObject("calls")?.let(InstrumentCallsDto::parse)
         )
     }
 }
