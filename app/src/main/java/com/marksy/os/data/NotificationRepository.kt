@@ -74,7 +74,7 @@ class NotificationRepository(
     /** Moves items whose moment has passed (EventExpiry) out of the active views; history keeps them. */
     suspend fun retireExpired(nowMillis: Long = System.currentTimeMillis()): Int {
         val open = dao.findRetirable()
-        val reasons = com.marksy.os.intelligence.EventExpiry.superseded(open.filter { it.category == "TRADING" }).toMutableMap()
+        val reasons = mutableMapOf<Long, String>()
         open.forEach { e ->
             if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.of(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
         }

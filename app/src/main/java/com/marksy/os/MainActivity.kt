@@ -745,11 +745,6 @@ class MainActivity : ComponentActivity() {
                         onFilterSelected = { tradingFilter = it },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
-                        setupReports = remember(inboxEvents) {
-                            inboxEvents.filter { "marksy-tips/" in it.body }.sortedByDescending { it.postedAt }
-                                .mapNotNull { e -> com.marksy.os.market.DailySetups.parse(e.body)?.takeIf { it.setups.isNotEmpty() }?.let { com.marksy.os.ui.SetupReport(e.id, e.postedAt, it) } }
-                                .take(3)
-                        },
                         tipsStatus = tipsStatus,
                         onTipsStatusChange = { tipsStatus = it },
                         scorecardQuery = scorecardQuery,

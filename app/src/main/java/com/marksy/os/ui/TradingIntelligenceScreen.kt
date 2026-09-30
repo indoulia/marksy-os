@@ -40,7 +40,6 @@ fun TradingIntelligenceScreen(
     onFilterSelected: (String) -> Unit = {},
     onOpenStock: (String) -> Unit = {},
     marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
-    setupReports: List<SetupReport> = emptyList(),
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
     onTipsStatusChange: (MyTipsStatus) -> Unit = {},
     scorecardQuery: ScorecardQuery = ScorecardQuery(),
@@ -61,7 +60,7 @@ fun TradingIntelligenceScreen(
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(marketRepository, scorecardQuery, OneHandListBottomPadding)
-            selectedFilter == TAB_PICKS -> SetupsView(marketRepository, setupReports, OneHandListBottomPadding, onOpenStock)
+            selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             else -> CapturedList(insights, onOpenStock)
         }
     }

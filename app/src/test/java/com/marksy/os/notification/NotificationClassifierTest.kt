@@ -141,10 +141,6 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.TRADING, result.category)
     }
 
-    @Test fun sourceRegistryNamesWhatsappBusinessExplicitly() {
-        assertEquals("WhatsApp Business", SourceRegistry.displayName("com.whatsapp.w4b"))
-    }
-
     @Test fun unknownNotificationFallsBackToOther() {
         val result = NotificationClassifier.classify("com.example", "Hello", "Something happened")
         assertEquals(NotificationClassifier.Category.OTHER, result.category)

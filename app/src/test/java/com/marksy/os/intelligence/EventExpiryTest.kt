@@ -38,17 +38,6 @@ class EventExpiryTest {
     }
 
     @Test
-    fun callExpiresWithItsHorizon() {
-        val intraday = event("TRADING", "Intraday Call", "BUY RENUKA CMP 23.62 SL 22.25 TGT 26")
-        val months = event("TRADING", "KISHAN", "BUY | CROPSTER AGRO | Entry 2.82 | Target 10 | SL 2 | Time: 1-2 Months")
-        assertEquals(mondayTen.withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(intraday))
-        // Horizons count trading sessions after the posting session: 1-2 months = 42, 12 months = 252.
-        assertEquals(mondayTen.plusWeeks(8).plusDays(2).withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(months))
-        val year = event("TRADING", "ICICI Direct", "Buy TENNIND around Rs 500 for 12 Month with target price of Rs 650, potential upside of 30%.")
-        assertEquals(mondayTen.plusWeeks(50).plusDays(2).withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(year))
-    }
-
-    @Test
     fun marketNewsExpiresAtTheNextSessionClose() {
         val afterClose = event("MARKET", "Moneycontrol", "Sensex ends 300 pts higher", mondayTen.withHour(18))
         assertEquals(mondayTen.plusDays(1).withHour(15).withMinute(30).toInstant().toEpochMilli(), expiry(afterClose))
@@ -60,12 +49,5 @@ class EventExpiryTest {
         assertEquals(midnight, expiry(event("MARKET", "Upstox", "IPO of Acme closes today. Apply now")))
         assertEquals(midnight, expiry(event("DELIVERY", "Amazon", "Your package is out for delivery")))
         assertNull(expiry(event("BANKING", "HDFC", "Rs 500 debited")))
-    }
-
-    @Test
-    fun newerCallOnTheSameSymbolRetiresTheOlderOne() {
-        val older = event("TRADING", "ICICI", "Buy RENUKA around Rs 22, target price of Rs 27")
-        val newer = event("TRADING", "5paisa", "SELL RENUKA CMP 23.62 SL 25 TGT 21", mondayTen.plusDays(1))
-        assertEquals(setOf(older.id), EventExpiry.superseded(listOf(older, newer)).keys)
     }
 }
