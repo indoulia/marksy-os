@@ -53,7 +53,7 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        return if (TradingDeliveryRun(dao, client, capture) { isStopped }.drain()) Result.retry() else Result.success()
+        return if (TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }).drain()) Result.retry() else Result.success()
     }
 
     private suspend fun loadCaptureContext(client: MarksyGatewayClient, now: Long): CaptureContext? {
@@ -79,7 +79,8 @@ internal class TradingDeliveryRun(
     private val dao: NotificationEventDao,
     private val client: MarksyGatewayClient,
     private val capture: CaptureContext,
-    private val isStopped: () -> Boolean = { false }
+    private val isStopped: () -> Boolean = { false },
+    private val decide: (NotificationEventEntity, CaptureContext) -> CaptureDecision = CaptureGate::decide
 ) {
     // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
     suspend fun drain(): Boolean {
@@ -107,7 +108,9 @@ internal class TradingDeliveryRun(
 
             try {
                 val decision = try {
-                    CaptureGate.decide(event, capture)
+                    decide(event, capture)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
                 } catch (gateError: Throwable) {
                     dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
                     Log.i(TAG, "Trading event ${event.id} stays on the phone (gate-error)")

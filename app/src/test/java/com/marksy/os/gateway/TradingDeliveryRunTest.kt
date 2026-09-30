@@ -68,14 +68,19 @@ class TradingDeliveryRunTest {
             override suspend fun captureList() = Result.success(emptySet<String>())
         }
 
-        // Empty salt causes gate to throw require(); this tests that gate errors don't stall the run.
-        TradingDeliveryRun(dao, testClient, capture.copy(deviceSalt = "")).drain()
+        // Injected decide throws for row 1 only; row 2 delegates to CaptureGate.decide.
+        val decideFn = { event: NotificationEventEntity, ctx: CaptureContext ->
+            if (event.id == 1L) throw IllegalStateException("Simulated gate error")
+            CaptureGate.decide(event, ctx)
+        }
 
-        // Both rows should be processed and marked NOT_APPLICABLE; no network calls made.
+        TradingDeliveryRun(dao, testClient, capture, decide = decideFn).drain()
+
+        // Row 1 should be NOT_APPLICABLE (gate threw); row 2 should be delivered.
         assertEquals(0, dao.findPendingTrading(50).size)
-        assertEquals(0, captureCount)
+        assertEquals(1, captureCount)  // Only row 2 reached capture
         assertEquals("NOT_APPLICABLE", dao.findById(1L)?.deliveryState)
-        assertEquals("NOT_APPLICABLE", dao.findById(2L)?.deliveryState)
+        assertEquals("DELIVERED", dao.findById(2L)?.deliveryState)
     }
 
     private fun row(key: String, postedAt: Long) = NotificationEventEntity(
