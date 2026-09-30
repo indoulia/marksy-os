@@ -2,7 +2,9 @@ package com.marksy.os.market
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LedgerCallsTest {
@@ -50,6 +52,37 @@ class LedgerCallsTest {
         assertEquals("Received via SMS, app · 2 others got it", LedgerCalls.receivedVia(received))
         assertEquals("Received via WhatsApp", LedgerCalls.receivedVia(received.copy(receivedVia = listOf(receipt("WHATSAPP")), alsoReceivedBy = 0)))
     }
+
+    // Spec §7 and Phase 6: the Predictions tab and Setups read the tip, so a withdrawn loss never reads "Invalidated".
+    @Test
+    fun aWithdrawnLosingPredictionReadsAsAFailedExitNotAnInvalidation() {
+        val withdrawn = prediction("INVALIDATED", ledgerJson("SOURCE_EXIT", "FAILURE", "-0.030000"))
+        val pending = prediction("INVALIDATED", ledgerJson("ACTIVE"))
+        val closed = ClosedPredictionDto.parse(JSONObject(
+            """{"id": 7, "symbol": "RENUKA", "outcome": "HORIZON_EXPIRED", "realizedReturn": "0.01",
+               "ledger": ${ledgerJson("SOURCE_EXIT", "FAILURE", "-0.030000")}}"""
+        ))
+
+        assertFalse(LedgerCalls.isLive(withdrawn))
+        assertEquals("Exited · Failed · -3.00%", LedgerCalls.endedLine(withdrawn))
+        assertNull(LedgerCalls.lifecycleWord(withdrawn))
+        assertEquals("Withdrawn · result pending", LedgerCalls.endedLine(pending))
+        assertTrue(LedgerCalls.isLive(prediction("ACTIONABLE_NOW", ledgerJson("ACTIVE"))))
+        assertFalse(LedgerCalls.isLive(prediction("ACTIONABLE_NOW", ledgerJson("TARGET_HIT", "SUCCESS", "0.050000"))))
+        assertEquals("Exited · Failed", LedgerCalls.closedLabel(closed))
+        assertEquals(-0.03, LedgerCalls.closedReturn(closed)!!, 1e-9)
+        assertFalse(LedgerCalls.isLive(prediction("INVALIDATED", null)))
+        assertEquals("INVALIDATED", LedgerCalls.lifecycleWord(prediction("INVALIDATED", null)))
+    }
+
+    private fun prediction(lifecycleState: String, ledger: String?) = ActivePredictionDto.parse(JSONObject(
+        """{"predictionId": 7, "symbol": "RENUKA", "lifecycleState": "$lifecycleState", "ledger": ${ledger ?: "null"}}"""
+    ))
+
+    private fun ledgerJson(status: String, outcome: String? = null, actual: String? = null) =
+        """{"tipId": "t-7", "symbol": "RENUKA", "direction": "BUY", "firstSeenAt": "2026-09-21T11:00:00Z",
+           "status": "$status", "outcome": ${outcome?.let { "\"$it\"" } ?: "null"},
+           "actualReturn": ${actual?.let { "\"$it\"" } ?: "null"}}"""
 
     private fun point(ret: Double?, basis: String) = ProgressPointDto("2026-09-22", 2, "ENTERED", "ACTIVE", ret, ret, ret?.let { 0.0 }, 5.0, 4.0, "DAILY", basis)
 

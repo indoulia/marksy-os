@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.ClosedPredictionDto
+import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PerformanceSummaryDto
@@ -68,9 +69,9 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     LaunchedEffect(showClosed) { if (showClosed && closed.items.isEmpty()) closed.more() }
     val quotes = rememberUpstoxQuotes(remember(open.items) { open.items.map { it.symbol }.distinct() })
     val paged = if (showClosed) closed else open
-    // Invalidated calls stay listed for honesty but never count or rank as open.
-    val (live, invalidated) = remember(open.items) { open.items.partition { it.lifecycleState !in INVALIDATED } }
-    var showInvalidated by rememberSaveable { mutableStateOf(false) }
+    // Ended calls stay listed, shown by default, with their ledger result; they never count or rank as open.
+    val (live, ended) = remember(open.items) { open.items.partition(LedgerCalls::isLive) }
+    var showEnded by rememberSaveable { mutableStateOf(true) }
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
@@ -92,17 +93,17 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
             else -> {
                 if (showClosed) items(closed.items, key = { "c-${it.id}" }) { ClosedCallRow(it) { onOpenStock(it.symbol) } }
                 else {
-                    if (live.isEmpty() && !open.hasMore) item { EmptyState("No live Marksy calls", "Every open call has been invalidated; new calls appear here as Marksy makes them.") }
+                    if (live.isEmpty() && !open.hasMore) item { EmptyState("No live Marksy calls", "Every open call has ended; new calls appear here as Marksy makes them.") }
                     items(live, key = { "o-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol]?.lastPrice) { onOpenStock(p.symbol) } }
-                    if (invalidated.isNotEmpty()) item(key = "inv-toggle") {
+                    if (ended.isNotEmpty()) item(key = "ended-toggle") {
                         Text(
-                            "${if (showInvalidated) "Hide" else "Show"} ${invalidated.size} invalidated call${if (invalidated.size == 1) "" else "s"}",
+                            "${if (showEnded) "Hide" else "Show"} ${ended.size} ended call${if (ended.size == 1) "" else "s"}",
                             color = MarksyTheme.TextSecondary, fontSize = 12.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showInvalidated = !showInvalidated }.padding(horizontal = 4.dp, vertical = 6.dp)
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showEnded = !showEnded }.padding(horizontal = 4.dp, vertical = 6.dp)
                         )
                     }
-                    if (showInvalidated) items(invalidated, key = { "i-${it.predictionId}" }) { p ->
-                        Box(Modifier.alpha(0.55f)) { OpenCallRow(p, quotes[p.symbol]?.lastPrice) { onOpenStock(p.symbol) } }
+                    if (showEnded) items(ended, key = { "e-${it.predictionId}" }) { p ->
+                        Box(Modifier.alpha(0.55f)) { OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
                     }
                 }
                 if (paged.hasMore) item(key = "more-$showClosed-${paged.items.size}") {
@@ -177,7 +178,7 @@ internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: Strin
                 p.remainingTradingDays?.let { "$it day${if (it == 1) "" else "s"} left" } ?: "${p.horizon}-day call",
                 if (note == null) PicksBasis.day(p.scanSessionDate)?.let { "$it call" } else null,
                 "conf ${(if (p.confidence <= 1) p.confidence * 100 else p.confidence).toInt()}%",
-                p.lifecycleState.takeIf { it != "UNAVAILABLE" }?.let(::words),
+                LedgerCalls.lifecycleWord(p)?.let(::words),
                 p.lifecycleDetail
             ).joinToString(" · "),
             color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp)
@@ -210,7 +211,15 @@ private fun CallRange(stop: Double, entry: Double, target: Double, price: Double
 @Composable
 private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
     val o = c.outcome.orEmpty().uppercase()
-    val tint = when { "TARGET" in o || "SUCCESS" in o -> MarksyTheme.PrimaryEmerald; "STOP" in o || "FAIL" in o -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextSecondary }
+    val tone = c.ledger?.let(LedgerCalls::tone)
+    val tint = when {
+        tone == LedgerCalls.Tone.POSITIVE -> MarksyTheme.PrimaryEmerald
+        tone == LedgerCalls.Tone.NEGATIVE -> MarksyTheme.RedUrgent
+        tone != null -> MarksyTheme.TextSecondary
+        "TARGET" in o || "SUCCESS" in o -> MarksyTheme.PrimaryEmerald
+        "STOP" in o || "FAIL" in o -> MarksyTheme.RedUrgent
+        else -> MarksyTheme.TextSecondary
+    }
     val shape = RoundedCornerShape(12.dp)
     Row(
         Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
@@ -220,7 +229,7 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(c.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text(c.outcome?.let(::words) ?: "Closed", color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+                Text(LedgerCalls.closedLabel(c) ?: c.outcome?.let(::words) ?: "Closed", color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
             }
             Text(
                 listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.take(10), c.excludedReason?.let { "not scored" })
@@ -228,11 +237,10 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
                 color = MarksyTheme.TextMuted, fontSize = 11.sp
             )
         }
-        c.realizedReturn?.let { Text(returnPct(it), color = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+        LedgerCalls.closedReturn(c)?.let { Text(returnPct(it), color = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
-internal val INVALIDATED = setOf("INVALIDATED", "DATA_UNRESOLVED")
 private fun words(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 private fun share(f: Double) = "${(f * 100).toInt()}%"
 // Returns arrive as fractions (0.032 = 3.2%).

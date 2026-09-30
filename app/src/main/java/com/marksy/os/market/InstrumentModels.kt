@@ -116,7 +116,8 @@ data class ActivePredictionDto(
     val lastPriceAt: String? = null,
     val scanSessionDate: String? = null,
     val publishedAt: String? = null,
-    val dataBasis: String? = null
+    val dataBasis: String? = null,
+    val ledger: LedgerTipDto? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = ActivePredictionDto(
@@ -143,7 +144,8 @@ data class ActivePredictionDto(
             lastPriceAt = json.textOrNull("lastPriceAt"),
             scanSessionDate = json.textOrNull("scanSessionDate"),
             publishedAt = json.textOrNull("publishedAt"),
-            dataBasis = json.textOrNull("dataBasis")
+            dataBasis = json.textOrNull("dataBasis"),
+            ledger = json.optJSONObject("ledger")?.let(LedgerTipDto::parse)
         )
     }
 }

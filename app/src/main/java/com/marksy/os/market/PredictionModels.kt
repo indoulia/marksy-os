@@ -12,7 +12,8 @@ data class ClosedPredictionDto(
     val realizedReturn: Double?,
     val outcome: String?,
     /** Set when the row is excluded from current evaluation (a known-contaminated cohort). */
-    val excludedReason: String?
+    val excludedReason: String?,
+    val ledger: LedgerTipDto? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = ClosedPredictionDto(
@@ -23,7 +24,8 @@ data class ClosedPredictionDto(
             predictedReturn = json.doubleOrNull("predictedReturn"),
             realizedReturn = json.doubleOrNull("realizedReturn"),
             outcome = json.textOrNull("outcome"),
-            excludedReason = json.textOrNull("historicalExclusionReason") ?: json.textOrNull("historicalEvaluationStatus")
+            excludedReason = json.textOrNull("historicalExclusionReason") ?: json.textOrNull("historicalEvaluationStatus"),
+            ledger = json.optJSONObject("ledger")?.let(LedgerTipDto::parse)
         )
     }
 }
