@@ -37,6 +37,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -326,19 +327,21 @@ private fun WatchDialog(
 
 /** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */
 @Composable
-internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, compact: Boolean = false, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     val fill by androidx.compose.animation.animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
     Text(
         text,
         color = when { selected -> Color.Black; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
-        fontSize = 12.sp,
+        fontSize = if (compact) 10.sp else 12.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        modifier = Modifier.clip(shape)
+        maxLines = 1,
+        // A compact pill keeps its look but reserves a 48dp touch target around it.
+        modifier = (if (compact) Modifier.minimumInteractiveComponentSize() else Modifier).clip(shape)
             .background(fill)
             .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = if (compact) 3.dp else 6.dp)
     )
 }
 

@@ -1,13 +1,15 @@
 package com.marksy.os.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -20,6 +22,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -33,10 +36,12 @@ import com.marksy.os.market.HorizonBucket
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.ScorecardBodyDto
-import com.marksy.os.market.ScorecardDto
 import com.marksy.os.market.ScorecardEntity
+import com.marksy.os.market.ScorecardNav
 import com.marksy.os.market.ScorecardPeriod
 import com.marksy.os.market.ScorecardQuery
+import com.marksy.os.market.ScorecardSource
+import com.marksy.os.market.ScorecardSources
 import com.marksy.os.market.ScorecardSummaryDto
 import com.marksy.os.market.ScorecardText
 import java.time.Instant
@@ -44,32 +49,66 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 internal val ScorecardQuerySaver = Saver<ScorecardQuery, String>(save = { it.encode() }, restore = { ScorecardQuery.decode(it) })
+internal val ScorecardTrailSaver = Saver<List<ScorecardSource>, String>(save = { ScorecardNav.encode(it) }, restore = { ScorecardNav.decode(it) })
 
-/** Scorecards (spec §8): own record, Marksy vs external, then channels or callers by trust under one §8.3 filter; all server numbers. */
+private val PeriodChips = listOf(
+    ScorecardPeriod.LIFETIME to "Lifetime", ScorecardPeriod.LAST_30_DAYS to "30 days", ScorecardPeriod.LAST_7_DAYS to "7 days",
+    ScorecardPeriod.THIS_MONTH to "This month", ScorecardPeriod.CUSTOM to "Custom"
+)
+
+/** Scorecards (spec §8): Marksy vs external, then channels, callers or engines by trust under one §8.3 filter; a row opens its source. */
 @Composable
-internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: ScorecardQuery, bottomPadding: Dp) {
-    val mine by produceState<MarketDataState<ScorecardDto>>(MarketDataState.Loading, query) { value = repository.myScorecard(query) }
+internal fun ScorecardsView(
+    repository: MarketIntelligenceRepository, query: ScorecardQuery, bottomPadding: Dp,
+    onQueryChange: (ScorecardQuery) -> Unit = {}, onEditFilter: (ScorecardQuery) -> Unit = {},
+    trail: List<ScorecardSource> = emptyList(), onTrailChange: (List<ScorecardSource>) -> Unit = {}, onOpenStock: (String) -> Unit = {}
+) {
     val split by produceState<MarketDataState<ScorecardSummaryDto>>(MarketDataState.Loading, query) { value = repository.scorecardSummary(query) }
     val ranked by produceState<MarketDataState<EntityScorecardListDto>>(MarketDataState.Loading, query) { value = repository.scorecards(query.entity, query) }
-    var detail by remember { mutableStateOf<EntityScorecardDto?>(null) }
-    detail?.let { e -> ScorecardDetailDialog(repository, query, e) { detail = null } }
     val followed by MarketIntelligenceRepository.followed.collectAsState()
     LaunchedEffect(Unit) { repository.follows() }
     val toggleFollow = rememberFollowToggle(repository)
+    val listState = rememberLazyListState()
+
+    val source = trail.lastOrNull()
+    if (source != null) {
+        BackHandler { onTrailChange(ScorecardNav.back(trail)) }
+        ScorecardDetailScreen(
+            repository, source, query, bottomPadding, followed, toggleFollow,
+            onOpenSource = { onTrailChange(ScorecardNav.open(trail, it)) }, onOpenStock = onOpenStock
+        )
+        return
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
     ) {
-        (mine as? MarketDataState.Loaded)?.value?.let { card -> item(key = "mine") { ScoreTile("Your record", ScorecardText.range(card.filter), card.body) } }
-        (split as? MarketDataState.Loaded)?.value?.let { s ->
-            item(key = "split") {
+        item(key = "segments") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ScoreTile("Marksy", null, s.marksy, Modifier.weight(1f))
-                    ScoreTile("External", null, s.external, Modifier.weight(1f))
+                    ScorecardEntity.entries.forEach { e -> Pill(e.label, selected = query.entity == e) { onQueryChange(query.copy(entity = e)) } }
+                }
+                val chips = PeriodChips.toMutableList().apply { if (none { it.first == query.period }) add(1, query.period to query.period.label) }
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    chips.forEach { (p, label) ->
+                        Pill(label, selected = query.period == p, compact = true) {
+                            if (p == ScorecardPeriod.CUSTOM) onEditFilter(query.copy(period = p)) else onQueryChange(query.copy(period = p, startDate = null, endDate = null))
+                        }
+                    }
                 }
             }
+        }
+        (split as? MarketDataState.Loaded)?.value?.let { s ->
+            item(key = "split") {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SummaryCard("Marksy", s.marksy, Modifier.weight(1f))
+                    SummaryCard("External", s.external, Modifier.weight(1f))
+                }
+            }
+            item(key = "legend") { OutcomeLegend() }
         }
         when (val r = ranked) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading scorecards...") }
@@ -78,7 +117,9 @@ internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: Sco
             is MarketDataState.Empty -> item { EmptyState("No ${query.entity.label.lowercase()} with calls in this period", "Widen the period or clear the horizon.") }
             is MarketDataState.Loaded -> items(r.value.items, key = { "${it.entity}-${it.id}" }) { e ->
                 val key = Follows.key(e)
-                EntityRow(e, Follows.isFollowing(followed, key, e.following), onToggleFollow = { toggleFollow(key, e.name, it) }) { detail = e }
+                SourceRow(e, Follows.isFollowing(followed, key, e.following), onToggleFollow = { toggleFollow(key, e.name, it) }) {
+                    onTrailChange(ScorecardNav.open(trail, ScorecardSource.of(e)))
+                }
             }
             else -> Unit
         }
@@ -86,74 +127,46 @@ internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: Sco
 }
 
 @Composable
-private fun ScoreTile(title: String, subtitle: String?, body: ScorecardBodyDto, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text(ScorecardText.trust(body.trust), color = if (body.trust.trustScore != null) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier = Modifier) {
+    val c = body.counts
+    Column(modifier.scoreCard(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        TrustRing(body.trust.trustScore, 84.dp, 8.dp, 26.sp)
+        Text(name, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        OutcomeBar(c.successful, c.failed, c.expired, c.open)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1, modifier = Modifier.weight(1f))
+            ReturnBadge(body.performance.avgActualReturn, fontSize = 12.sp)
         }
-        subtitle?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
-        Text(ScorecardText.summary(body), color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
 @Composable
-private fun EntityRow(e: EntityScorecardDto, following: Boolean, onToggleFollow: (Boolean) -> Unit, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp)
+private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow: (Boolean) -> Unit, onClick: () -> Unit) {
+    val c = e.body.counts
+    val ret = e.body.performance.avgActualReturn
+    Row(
+        Modifier.fillMaxWidth().clip(ScoreCardShape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, ScoreCardShape)
+            .clickable(onClick = onClick).padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                e.name + (e.channelName?.takeIf { it != e.name }?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary, fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
-            )
-            Text(ScorecardText.trust(e.body.trust), color = if (e.body.trust.trustScore != null) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
-        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(ScorecardText.summary(e.body), color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            FollowPill(following, onToggleFollow)
-        }
-    }
-}
-
-/** One entity's full §8.1/§8.2 card; a channel also lists its callers, narrowed to it (§8.3). */
-@Composable
-private fun ScorecardDetailDialog(repository: MarketIntelligenceRepository, query: ScorecardQuery, entity: EntityScorecardDto, onDismiss: () -> Unit) {
-    val card by produceState<MarketDataState<ScorecardDto>>(MarketDataState.Loading, entity, query) {
-        value = repository.scorecard(ScorecardEntity.fromParam(entity.entity), entity.id, query)
-    }
-    val callers by produceState<MarketDataState<EntityScorecardListDto>>(MarketDataState.Loading, entity, query) {
-        value = if (entity.entity == ScorecardEntity.CHANNEL.param) repository.scorecards(ScorecardEntity.CALLER, query.copy(channelId = entity.id)) else MarketDataState.Empty
-    }
-    MarksyDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(entity.name, color = MarksyTheme.TextPrimary) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                when (val c = card) {
-                    is MarketDataState.Loaded -> {
-                        Text(ScorecardText.range(c.value.filter), color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                        ScorecardText.details(c.value.body).forEach { (label, value) ->
-                            Row {
-                                Text(label, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                Text(value, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                    is MarketDataState.Error -> Text(c.message, color = MarksyTheme.TextSecondary)
-                    else -> MarksyLoader("Loading...")
-                }
-                (callers as? MarketDataState.Loaded)?.value?.items?.takeIf { it.isNotEmpty() }?.let { list ->
-                    Text("Callers in ${entity.name}", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-                    list.forEach { c -> Text("${c.name} · ${ScorecardText.trust(c.body.trust)} · ${ScorecardText.summary(c.body)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp) }
-                }
+        TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, 16.sp, caption = false)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(e.name, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                TagChip(ScorecardSources.chip(e))
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.SemiBold) } }
-    )
+            OutcomeBar(c.successful, c.failed, c.expired, c.open)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                FollowPill(following, onToggleFollow, compact = true)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val spark = remember(c) { ScorecardGraphics.sparkline(c.successful, c.failed, c.expired) }
+            Sparkline(spark, ScorecardGraphics.returnTone(ret), Modifier.size(64.dp, 22.dp))
+            ReturnBadge(ret)
+        }
+    }
 }
 
 /** Which list, and the §8.3 period and horizon; Apply stays off until a custom range has both ends in order. */

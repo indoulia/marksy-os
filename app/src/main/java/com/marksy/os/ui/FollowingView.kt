@@ -37,9 +37,9 @@ import kotlinx.coroutines.launch
 
 /** Follow / Following as a Marksy pill; hidden while the server's follow state is unknown. */
 @Composable
-internal fun FollowPill(following: Boolean?, onToggle: (Boolean) -> Unit) {
+internal fun FollowPill(following: Boolean?, onToggle: (Boolean) -> Unit, compact: Boolean = false) {
     following ?: return
-    Pill(if (following) "Following" else "Follow", selected = following) { onToggle(!following) }
+    Pill(if (following) "Following" else "Follow", selected = following, compact = compact) { onToggle(!following) }
 }
 
 /** Saves a follow on the server: the shared set changes at once, settles on the reply, and a refusal toasts. */

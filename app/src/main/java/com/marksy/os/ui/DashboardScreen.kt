@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -82,25 +83,11 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            MarksyTheme.PrimaryEmerald,
-                                            MarksyTheme.AccentGreen
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "M",
-                                color = Color.Black,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 18.sp
+                        Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))) {
+                            // The launcher foreground pads its mark for the adaptive mask; scaling crops to the mark.
+                            androidx.compose.foundation.Image(
+                                androidx.compose.ui.res.painterResource(com.marksy.os.R.mipmap.ic_launcher_foreground), contentDescription = "Marksy",
+                                modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.6f, scaleY = 1.6f)
                             )
                         }
                         Spacer(Modifier.width(10.dp))

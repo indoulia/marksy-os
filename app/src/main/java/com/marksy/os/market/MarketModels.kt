@@ -19,6 +19,8 @@ internal fun JSONObject.intOrNull(name: String): Int? =
 
 internal fun JSONObject.boolOrFalse(name: String): Boolean = optBoolean(name, false)
 
+internal fun JSONObject.boolOrNull(name: String): Boolean? = if (!has(name) || isNull(name)) null else optBoolean(name)
+
 internal fun JSONArray?.objects(): List<JSONObject> =
     if (this == null) emptyList() else (0 until minOf(length(), MAX_ITEMS)).mapNotNull { optJSONObject(it) }
 
