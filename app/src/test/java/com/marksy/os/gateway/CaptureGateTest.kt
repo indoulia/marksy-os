@@ -131,7 +131,12 @@ class CaptureGateTest {
             "order sent to exchange" to "Your BUY order for 10 RELIANCE has been sent to exchange",
             "gtt is active" to "Your GTT for BUY 10 RELIANCE is active. Target 1500, Stop loss 1420",
             "hinglish possessive order" to "Aapka BUY order RELIANCE ke liye execute ho gaya",
-            "devanagari possessive order" to "आपका BUY ऑर्डर RELIANCE execute हो गया"
+            "devanagari possessive order" to "आपका BUY ऑर्डर RELIANCE execute हो गया",
+            "order submitted, no marker" to "BUY order for 10 RELIANCE submitted",
+            "devanagari oblique possessive" to "आपके BUY ऑर्डर RELIANCE execute किए गए. Target 1500, SL 1420",
+            "devanagari alternate spelling" to "आपका BUY आर्डर RELIANCE पूरा हुआ",
+            "hinglish oblique possessive" to "Aapke BUY order RELIANCE ke liye placed. Target 1500, SL 1420",
+            "plural positions" to "Your positions: BUY 10 RELIANCE average price 1450, SL 1420, Target 1500"
         ).forEach { (description, body) -> assertEquals(description, ownOrder, CaptureGate.decide(event(title = neutralTitle, body = body), context)) }
 
         val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",

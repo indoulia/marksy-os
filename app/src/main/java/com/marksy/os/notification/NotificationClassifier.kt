@@ -144,17 +144,17 @@ object NotificationClassifier {
         Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
     )
     private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
-    // R2: a possessive order phrase is strong evidence on its own, no status word needed; aapka/apka/aapki/apki cover common Hinglish spellings.
-    private val possessiveOrderPhrase = Regex("""\b(?:your|aapka|apka|aapki|apki)\b.{0,40}?\b(?:orders?|gtt|position|trades?|sip)\b""", RegexOption.IGNORE_CASE)
-    // R2: Devanagari has no \b word-boundary support, so this pattern uses none.
-    private val devanagariPossessivePhrase = Regex("""आपक[ाी].{0,40}?(?:ऑर्डर|order)""")
-    // R1: leading boundary only (no trailing \b) so inflections like "opened"/"successfully" still count; "oversold" still can't match "sold" (nothing precedes it).
+    // A possessive order phrase alone marks the customer's own order; research calls don't say "your order".
+    private val possessiveOrderPhrase = Regex("""\b(?:your|aapka|apka|aapki|apki|aapke|apke)\b.{0,40}?\b(?:orders?|gtt|positions?|trades?|sip)\b""", RegexOption.IGNORE_CASE)
+    // No \b: JVM and ICU disagree on word boundaries around Devanagari combining marks.
+    private val devanagariPossessivePhrase = Regex("""आपक[ाीे].{0,40}?(?:ऑर्डर|आर्डर|अॉर्डर|order)""")
+    // Leading \b only: inflections ("opened", "successfully") count, while "oversold" can't match "sold".
     private val orderStatus = Regex(
         """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit|submitted)""",
         RegexOption.IGNORE_CASE
     )
     private val strongExecution = listOf(
-        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending|submitted)\b""", RegexOption.IGNORE_CASE),
         Regex("""(?:executed|filled)\s+(?:at|@)""", RegexOption.IGNORE_CASE),
         Regex("""\bbought\s+\d+\s+shares?\b""", RegexOption.IGNORE_CASE),
         Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
