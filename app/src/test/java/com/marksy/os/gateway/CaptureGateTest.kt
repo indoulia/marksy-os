@@ -52,6 +52,12 @@ class CaptureGateTest {
         ) as CaptureDecision.Send).message
         assertEquals("TELEGRAM" to "StockTips", telegram.medium to telegram.channelLabel)
         assertFalse(telegram.text.contains("Rahul"))
+
+        // 4b pre-merge: a "Name SL: " prefix is a sender, not a level; a level prefix is spared only after nothing, emoji or a side word.
+        fun group(body: String) = send(event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = body)).text
+        assertEquals("1450 buy INFY, SL 1400 TGT 1500", group("Ravi SL: 1450 buy INFY, SL 1400 TGT 1500"))
+        assertEquals("BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26", group("BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26"))
+        assertEquals("BUY LCCPROJECT\n🎯 Target : Rs 173.08\nEntry: Rs 144.24", group("BUY LCCPROJECT\n🎯 Target : Rs 173.08\nEntry: Rs 144.24"))
     }
 
     @Test
@@ -144,6 +150,34 @@ class CaptureGateTest {
         assertEquals(ownOrder, CaptureGate.decide(brokerSms, context))
         val researchCall = event(title = "Research call", body = "Buy order: RENUKA above 24, target 26, stop loss 22")
         assertTrue(CaptureGate.decide(researchCall, context) is CaptureDecision.Send)
+
+        // 4b pre-merge: broker wording for GTT, OCO, bracket, cover, super and AMO orders, and a side with a quantity, is an own order.
+        listOf(
+            "GTT: BUY 10 INFY @ 1450, SL 1400, target 1500 created",
+            "GTT created: BUY 10 INFY @ 1450 SL 1400 TGT 1500",
+            "Forever OCO order created: SELL 5 TCS @ 3900 SL 3950 TGT 3800",
+            "Super order created: BUY 10 INFY @ 1450 SL 1400 TGT 1500",
+            "Bracket order: BUY 10 INFY @ 1450 SL 1400 TGT 1500 confirmed",
+            "Buy order for 10 RELIANCE @ 1450 SL 1420 TGT 1500 confirmed",
+            "Buy order for 10 RELIANCE @ 1450 SL 1420 TGT 1500 accepted",
+            "BUY INFY 10 @ 1450 SL 1400 TGT 1500 order successful",
+            "Cover order BUY 10 INFY @ 1450 SL 1400 TGT 1500 is open",
+            "Order complete: BUY 10 INFY @ 1450, SL 1400, target 1500",
+            "Executed: BUY 10 INFY @ 1450 SL 1400 TGT 1500",
+            "Stop loss hit: SELL 10 RELIANCE @ 1420 (entry 1450)",
+            "Target hit! SELL 10 INFY @ 1500, entry 1450",
+            "Your AMO BUY INFY @ 1450 SL 1400 is queued"
+        ).forEach { body ->
+            val rows = listOf(
+                event(title = "Upstox", body = body),
+                event(pkg = "com.zerodha.kite3", source = "Zerodha", title = "Zerodha", body = body),
+                event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S", body = body).copy(category = "OTHER", isTrading = false)
+            )
+            rows.forEach { row ->
+                assertEquals("${row.title}: $body", ownOrder, CaptureGate.decide(row, context))
+                assertFalse("${row.title}: $body", CaptureGate.queues(row.sourcePackage, row.category, row.chatGroup, row.title, row.body))
+            }
+        }
     }
 
     @Test
@@ -163,7 +197,8 @@ class CaptureGateTest {
         stillGo.forEach { body ->
             assertTrue(body, CaptureGate.decide(event(title = "Research call", body = body), context) is CaptureDecision.Send)
         }
-        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), CaptureGate.decide(event(title = "Research call", body = levelFreeExit), context))
+        // 4b pre-merge: "trade ... completed" is own-order evidence now, so an app keeps this exit as an own order before the signal check.
+        assertEquals(CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = levelFreeExit), context))
         nowOwnOrderToo.forEach { body ->
             assertEquals(body, CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = body), context))
         }
@@ -217,6 +252,9 @@ class CaptureGateTest {
         val groupCall = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true).copy(category = "MESSAGES", isTrading = false)
         assertTrue(CaptureGate.decide(groupCall, context) is CaptureDecision.Send)
         assertTrue(decide("OTHER", "Your KYC is complete. Download the app", pkg = sms, title = "JD-ZERODH-S") is CaptureDecision.Keep)
+        // 4b pre-merge: a watchlist or set alert is the customer's own, even when it reads like a call.
+        assertEquals(ownAccount, decide("MARKET", "Watchlist alert: INFY BUY above 1450, SL 1400"))
+        assertEquals(ownAccount, decide("OTHER", "Watchlist alert: INFY BUY above 1450, SL 1400", pkg = sms, title = "JD-ZERODH-S"))
 
         // 4b review C1: account alerts carry no call and never leave, as MARKET or TRADING, at capture or delivery.
         listOf(

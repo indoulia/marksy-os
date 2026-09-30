@@ -62,10 +62,18 @@ object ChatLabels {
     fun withoutLinePrefixes(body: String): String = body.lines().joinToString("\n") { line ->
         val prefix = LINE_PREFIX.find(line)?.value ?: return@joinToString line
         val rest = line.substring(prefix.length)
-        if (LEVEL_WORD_END.containsMatchIn(prefix.dropLast(SENDER_SUFFIX.length)) && PRICE_START.containsMatchIn(rest)) line else rest
+        if (isLevelSeparator(prefix.dropLast(SENDER_SUFFIX.length), rest)) line else rest
+    }
+
+    // A level word before a price, with nothing, emoji or a side word ahead of it ("BUY RENUKA CMP"); "Ravi SL" is a sender.
+    private fun isLevelSeparator(head: String, rest: String): Boolean {
+        val level = LEVEL_WORD_END.find(head) ?: return false
+        val before = head.substring(0, level.range.first)
+        return PRICE_START.containsMatchIn(rest) && (before.none { it.isLetterOrDigit() } || SIDE_WORD.containsMatchIn(before))
     }
 
     private val LINE_PREFIX = Regex("^[^:\\n]{1,40}: ")
     private val LEVEL_WORD_END = Regex("""\b(?:entry|targets?|tgt|sl|stop[\s-]*loss|cmp|ltp|above|below|around|near)\s*$""", RegexOption.IGNORE_CASE)
     private val PRICE_START = Regex("""^\s*(?:rs\.?|₹|inr)?\s*\d""", RegexOption.IGNORE_CASE)
+    private val SIDE_WORD = Regex("""\b(?:buy|sell|accumulate|exit|kharido|becho|short|long)\b""", RegexOption.IGNORE_CASE)
 }

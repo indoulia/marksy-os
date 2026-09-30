@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 10
+    const val VERSION = 11
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -138,7 +138,10 @@ object NotificationClassifier {
         Regex("""\bavg\.?\s*price\b""", RegexOption.IGNORE_CASE),
         Regex("""\baverage\s+price\b""", RegexOption.IGNORE_CASE),
         Regex("""\byou\s+have\b""", RegexOption.IGNORE_CASE),
-        Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
+        Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE),
+        // 4b pre-merge: broker order types a tipster's call never names.
+        Regex("""\b(?:gtt|oco|amo|forever)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\b(?:bracket|cover|super)\s+orders?\b""", RegexOption.IGNORE_CASE)
     )
     private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
     // A possessive order phrase alone marks the customer's own order; research calls don't say "your order".
@@ -147,11 +150,14 @@ object NotificationClassifier {
     private val devanagariPossessivePhrase = Regex("""आपक[ाीे].{0,40}?(?:ऑर्डर|आर्डर|अॉर्डर|order)""")
     // Leading \b only: inflections ("opened", "successfully") count, while "oversold" can't match "sold".
     private val orderStatus = Regex(
-        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit|submitted)""",
+        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit|submitted|queued|done)""",
         RegexOption.IGNORE_CASE
     )
     private val strongExecution = listOf(
-        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending|submitted)\b""", RegexOption.IGNORE_CASE),
+        Regex(
+            """\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending|submitted|created|confirmed|accepted|complete|completed|successful|open|hit|done|queued)\b""",
+            RegexOption.IGNORE_CASE
+        ),
         Regex("""(?:executed|filled)\s+(?:at|@)""", RegexOption.IGNORE_CASE),
         Regex("""\bbought\s+\d+\s+shares?\b""", RegexOption.IGNORE_CASE),
         Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
@@ -165,9 +171,16 @@ object NotificationClassifier {
         "sent to exchange", "is active", "execute ho gaya", "ho gaya", "insufficient margin"
     )
 
+    // 4b pre-merge: a notification that opens with its execution status ("Executed: BUY 10 INFY") is an own order.
+    private val leadingExecution = Regex("""^(?:executed|order complete|order completed|order executed)\s*[:!-]""")
+    // A side, an integer quantity and an upper-case symbol ("SELL 10 RELIANCE") is an order; a call prices a symbol instead. Original case.
+    private val sideQuantitySymbol = Regex("""\b(?i:buy|sell|bought|sold)\s+\d+\s+(?:(?i:shares?)\s+(?:(?i:of)\s+)?)?[A-Z][A-Z0-9&-]+""")
+
     fun isOwnOrderEvent(title: String, body: String): Boolean {
         val text = "$title $body".lowercase()
         val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
+            listOf(title, body).any { leadingExecution.containsMatchIn(it.trim().lowercase()) } ||
+            sideQuantitySymbol.containsMatchIn("$title $body") ||
             (hardCustomerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)) ||
             possessiveOrderPhrase.containsMatchIn(text) ||
             devanagariPossessivePhrase.containsMatchIn(text) ||
@@ -182,7 +195,9 @@ object NotificationClassifier {
         Regex("""\bprice\s+alerts?\b|\balerts?\s+triggered\b|\bp\s*&\s*l\b|\bpnl\b|\bportfolios?\b|\bholdings?\b|\bnet\s*worth\b"""),
         Regex("""\bdividends?\b|\bpayouts?\b|\bredemptions?\b|\ballot(?:ted|ments?)\b|\bbids?\s+placed\b|\bmargin\s+shortfall\b|\bfunds?\s+added\b|\bcontract\s+notes?\b"""),
         Regex("""\bsips?\b.{0,60}?\bdue\b"""),
-        Regex("""\byou(?:\s+(?:own|hold|earned|have)|'ve|’ve)\b""")
+        Regex("""\byou(?:\s+(?:own|hold|earned|have)|'ve|’ve)\b"""),
+        // 4b pre-merge: an alert the customer set is theirs, even when it reads like a call.
+        Regex("""\bwatchlist\s+alerts?\b|\balerts?\s+set\b|\bsmart\s+alerts?\b|\byour\s+alerts?\b""")
     )
 
     fun isOwnAccountEvent(title: String, body: String): Boolean = "$title $body".lowercase().let { text -> ownAccountEvents.any { it.containsMatchIn(text) } }
