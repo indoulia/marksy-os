@@ -160,7 +160,9 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
 - A stated entry range starts ACTIVE with `entry_status = WAITING`. A BUY is entered when a bar's low ≤
   `entry_high`; a SELL when a bar's high ≥ `entry_low`.
 - No stated entry: the entry is the price at `first_seen_at` (intraday) or else the session 1 open, stored
-  once with `entry_basis = FIRST_SEEN_PRICE`; the tip starts ENTERED.
+  once with `entry_basis = FIRST_SEEN_PRICE`; the tip starts ENTERED. If that price is already past the
+  target, the tip stays void (`ENTRY_BEYOND_LEVELS`); if it is already past the stop-loss instead, the tip is
+  entered and closes STOP_LOSS_HIT that same session, exiting at that same price per §6.4 rule 2.
 - `entry_mid = (entry_low + entry_high) / 2`. Return fields stay null while WAITING.
 - Not entered by the close of session min(5, N) → INVALIDATED (`NEVER_ENTERED`).
 - Target touched while still WAITING → INVALIDATED (`TARGET_BEFORE_ENTRY`).
