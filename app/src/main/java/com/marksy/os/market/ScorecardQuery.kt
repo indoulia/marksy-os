@@ -18,11 +18,7 @@ enum class HorizonBucket(val label: String) {
 enum class ScorecardEntity(val label: String, val param: String) {
     CHANNEL("Channels", "channel"), CALLER("Callers", "caller"),
     // Marksy's engines are callers; the list is the callers list kept to the Marksy channel.
-    ENGINE("Engines", "caller");
-
-    companion object {
-        fun fromParam(param: String): ScorecardEntity = entries.firstOrNull { it.param == param } ?: CHANNEL
-    }
+    ENGINE("Engines", "caller")
 }
 
 /** What the Scorecards tab shows: which list, and the §8.3 filter every card on it shares. */

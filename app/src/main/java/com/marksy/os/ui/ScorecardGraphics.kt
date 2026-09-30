@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.SeriesPointDto
+import com.marksy.os.market.TrustBandDto
 import java.time.Duration
 import java.time.OffsetDateTime
 
@@ -46,6 +47,15 @@ object ScorecardGraphics {
         score >= 30 -> MarksyTheme.YellowImportant
         else -> MarksyTheme.RedUrgent
     }
+
+    /** The hero bar as 0-1 shares: the Wilson hit-rate interval, and the observed hit rate that always falls inside it. */
+    data class HitRateBar(val low: Float, val high: Float, val marker: Float?)
+
+    fun hitRateBand(band: TrustBandDto?, hitRatePct: Double?): HitRateBar? = band?.let {
+        HitRateBar(it.low.toFloat().coerceIn(0f, 1f), it.high.toFloat().coerceIn(0f, 1f), hitRatePct?.let { h -> (h / 100).toFloat().coerceIn(0f, 1f) })
+    }
+
+    fun hitRateRangeText(band: TrustBandDto): String = "Hit-rate range ${Math.round(band.low * 100)}–${Math.round(band.high * 100)}%"
 
     fun returnTone(fraction: Double?): Color = when {
         fraction == null -> MarksyTheme.TextMuted

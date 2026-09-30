@@ -75,27 +75,35 @@ object ScorecardNav {
     }.getOrDefault(emptyList())
 }
 
-/** What a scorecard row says about its source beyond the name, from the fields the list carries. */
+/** What a scorecard row says about its source beyond the name: the server's `channelType`/`engine`, else a name match. */
 object ScorecardSources {
-    // marksy-api reserves the channel name "Marksy" for its engines' channel.
+    // Fallback for a backend without `engine`: marksy-api reserves the channel name "Marksy" for its engines' channel.
     private const val MARKSY_CHANNEL = "Marksy"
+    private const val MARKSY_TYPE = "MARKSY"
+    private val TYPE_LABEL = mapOf(
+        MARKSY_TYPE to "Engine", "BROKER_APP" to "Broker", "NEWS_PORTAL" to "News", "SMS_SENDER" to "SMS",
+        "WHATSAPP_GROUP" to "WhatsApp group", "TELEGRAM_CHANNEL" to "Telegram", "YOUTUBE" to "YouTube"
+    )
 
-    fun isEngine(card: EntityScorecardDto): Boolean = card.entity == ScorecardEntity.CALLER.param && card.channelName.equals(MARKSY_CHANNEL, ignoreCase = true)
+    fun typeLabel(type: String?): String? = type?.let(TYPE_LABEL::get)
 
-    fun chip(card: EntityScorecardDto): String = when {
+    fun isEngine(card: EntityScorecardDto): Boolean =
+        card.entity == ScorecardEntity.CALLER.param && (card.engine ?: card.channelName.equals(MARKSY_CHANNEL, ignoreCase = true))
+
+    fun chip(card: EntityScorecardDto): String = typeLabel(card.channelType) ?: when {
         card.entity == ScorecardEntity.CHANNEL.param -> if (card.name.equals(MARKSY_CHANNEL, ignoreCase = true)) "Engine" else "External"
         isEngine(card) -> "Engine"
         else -> card.channelName ?: "Caller"
     }
 
-    /** The detail hero's type line: the channel's type from its latest call, or a caller's channel. */
+    /** The detail hero's type line: the card's type, else the latest call's channel type. */
     fun kind(d: ScorecardDetailDto): String {
-        val channel = d.recent.firstNotNullOfOrNull { it.channel }
+        val type = d.card.channelType ?: d.recent.firstNotNullOfOrNull { it.channel }?.type
+        val engine = d.card.engine ?: (type == MARKSY_TYPE || d.card.channelName.equals(MARKSY_CHANNEL, ignoreCase = true))
         return when {
-            d.entity == ScorecardEntity.CHANNEL.param && channel?.type == "MARKSY" -> "Engines"
-            d.entity == ScorecardEntity.CHANNEL.param -> channel?.type?.let(LedgerCalls::channelType)?.replaceFirstChar { it.uppercase() } ?: "Channel"
-            d.card.channelName.equals(MARKSY_CHANNEL, ignoreCase = true) -> "Marksy · Engine"
-            else -> listOfNotNull(d.card.channelName, "Caller").joinToString(" · ")
+            d.entity == ScorecardEntity.CHANNEL.param -> if (engine) "Engines" else typeLabel(type) ?: "Channel"
+            engine -> "Marksy · Engine"
+            else -> listOfNotNull(d.card.channelName, typeLabel(type)).joinToString(" · ").ifEmpty { "Caller" }
         }
     }
 }

@@ -3,6 +3,7 @@ package com.marksy.os.ui
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.ProgressPointDto
 import com.marksy.os.market.SeriesPointDto
+import com.marksy.os.market.TrustBandDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -21,6 +22,21 @@ class ScorecardGraphicsTest {
         assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(30.0))
         assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(59.0))
         assertEquals(MarksyTheme.PrimaryEmerald, ScorecardGraphics.tone(60.0))
+    }
+
+    @Test
+    fun theHeroBarIsTheHitRateIntervalWithTheObservedRateInsideIt() {
+        val band = TrustBandDto(0.017302, 0.198211)
+        val bar = ScorecardGraphics.hitRateBand(band, hitRatePct = 6.25)!!
+
+        assertEquals(.017302f, bar.low, 1e-6f)
+        assertEquals(.198211f, bar.high, 1e-6f)
+        assertEquals(.0625f, bar.marker!!, 1e-6f)
+        assertTrue(bar.marker in bar.low..bar.high)
+        assertEquals("Hit-rate range 2–20%", ScorecardGraphics.hitRateRangeText(band))
+        assertNull(ScorecardGraphics.hitRateBand(null, 6.25))
+        assertNull(ScorecardGraphics.hitRateBand(band, null)!!.marker)
+        ScorecardGraphics.hitRateBand(TrustBandDto(-0.1, 1.2), 140.0)!!.let { assertEquals(Triple(0f, 1f, 1f), Triple(it.low, it.high, it.marker)) }
     }
 
     @Test

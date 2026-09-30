@@ -37,6 +37,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -335,7 +336,8 @@ internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = tr
         fontSize = if (compact) 10.sp else 12.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         maxLines = 1,
-        modifier = Modifier.clip(shape)
+        // A compact pill keeps its look but reserves a 48dp touch target around it.
+        modifier = (if (compact) Modifier.minimumInteractiveComponentSize() else Modifier).clip(shape)
             .background(fill)
             .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)

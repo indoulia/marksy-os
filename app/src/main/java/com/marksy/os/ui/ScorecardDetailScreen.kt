@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -141,15 +142,15 @@ private fun Hero(d: ScorecardDetailDto, name: String, following: Boolean, onTogg
                 Text(name, color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 26.sp)
                 Text(listOfNotNull(ScorecardSources.kind(d), since).joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            TrustBandBar(d.trustBand, d.card.body.trust)
+            HitRateBandBar(d.trustBand, d.card.body.performance.hitRatePct, d.card.body.trust)
             FollowPill(following, onToggleFollow)
         }
     }
 }
 
 @Composable
-private fun TrustBandBar(band: TrustBandDto?, trust: ScorecardTrustDto) {
-    val score = trust.trustScore?.toDouble()
+private fun HitRateBandBar(band: TrustBandDto?, hitRatePct: Double?, trust: ScorecardTrustDto) {
+    val bar = ScorecardGraphics.hitRateBand(band, hitRatePct)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Canvas(Modifier.fillMaxWidth().height(14.dp)) {
             val mid = size.height / 2
@@ -157,9 +158,9 @@ private fun TrustBandBar(band: TrustBandDto?, trust: ScorecardTrustDto) {
             val r = h / 2
             drawLine(MarksyTheme.SurfaceRaised, Offset(r, mid), Offset(size.width - r, mid), h, StrokeCap.Round)
             val span = size.width - h
-            if (band != null) {
-                drawLine(ScorecardGraphics.tone(score), Offset(r + span * band.low.toFloat().coerceIn(0f, 1f), mid), Offset(r + span * band.high.toFloat().coerceIn(0f, 1f), mid), h, StrokeCap.Round)
-                score?.let { s -> (r + span * (s / 100).toFloat().coerceIn(0f, 1f)).let { x -> drawLine(MarksyTheme.TextPrimary, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) } }
+            if (bar != null) {
+                drawLine(ScorecardGraphics.tone(hitRatePct), Offset(r + span * bar.low, mid), Offset(r + span * bar.high, mid), h, StrokeCap.Round)
+                bar.marker?.let { m -> (r + span * m).let { x -> drawLine(MarksyTheme.TextPrimary, Offset(x, 0f), Offset(x, size.height), 2.dp.toPx()) } }
             } else if (trust.minimumCompleted > 0) {
                 val done = (trust.completed.toFloat() / trust.minimumCompleted).coerceIn(0f, 1f)
                 if (done > 0f) drawLine(MarksyTheme.TextMuted, Offset(r, mid), Offset(r + span * done, mid), h, StrokeCap.Round)
@@ -168,9 +169,9 @@ private fun TrustBandBar(band: TrustBandDto?, trust: ScorecardTrustDto) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (band != null) {
                 Text("0", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                Text("Trust range ${Math.round(band.low * 100)}–${Math.round(band.high * 100)}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                Text(ScorecardGraphics.hitRateRangeText(band), color = MarksyTheme.TextMuted, fontSize = 10.sp)
                 Text("100", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-            } else Text("${trust.completed}/${trust.minimumCompleted} completed for a trust score", color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1)
+            } else Text("${trust.completed}/${trust.minimumCompleted} completed for a hit-rate range", color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1)
         }
     }
 }
@@ -371,7 +372,7 @@ private fun RecentCalls(recent: List<LedgerTipDto>, onOpen: (String) -> Unit) {
             CardTitle("Recent calls")
             Spacer(Modifier.weight(1f))
             if (recent.size > RECENT_PREVIEW) Text(
-                if (all) "Show less" else "See all", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp,
+                if (all) "Show less" else "Show all recent", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 2.dp)
             )
         }
@@ -426,7 +427,7 @@ private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Text(
         s.symbol, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-        modifier = Modifier.clip(shape).background(bg).border(1.dp, edge, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp)
+        modifier = Modifier.minimumInteractiveComponentSize().clip(shape).background(bg).border(1.dp, edge, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp)
     )
 }
 

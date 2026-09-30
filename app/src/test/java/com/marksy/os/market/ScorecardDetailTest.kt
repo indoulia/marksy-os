@@ -79,6 +79,33 @@ class ScorecardDetailTest {
     }
 
     @Test
+    fun rowsAndCardsReadTheServersChannelTypeAndEngineFlag() {
+        val row = EntityScorecardDto.parse(JSONObject("""{"entity": "caller", "id": 3, "name": "Un*****aj", "channelName": "Fa********up",
+            "channelType": "WHATSAPP_GROUP", "engine": false}"""))
+        val engine = EntityScorecardDto.parse(JSONObject("""{"entity": "caller", "id": 1, "name": "Prediction engine", "channelName": "Renamed",
+            "channelType": "MARKSY", "engine": true}"""))
+        val old = EntityScorecardDto.parse(JSONObject("""{"entity": "caller", "id": 1, "name": "Prediction engine", "channelName": "Marksy"}"""))
+
+        assertEquals("WHATSAPP_GROUP" to false, row.channelType to row.engine)
+        assertNull(old.channelType)
+        assertNull(old.engine)
+        assertEquals("WhatsApp group", ScorecardSources.chip(row))
+        // The server's flag wins over the name; the name match is only for an older backend without the fields.
+        assertTrue(ScorecardSources.isEngine(engine))
+        assertFalse(ScorecardSources.isEngine(old.copy(engine = false)))
+        assertTrue(ScorecardSources.isEngine(old))
+        assertEquals(
+            listOf("Engine", "Broker", "News", "SMS", "WhatsApp group", "Telegram", "YouTube"),
+            listOf("MARKSY", "BROKER_APP", "NEWS_PORTAL", "SMS_SENDER", "WHATSAPP_GROUP", "TELEGRAM_CHANNEL", "YOUTUBE").map { t -> ScorecardSources.chip(row.copy(channelType = t)) }
+        )
+
+        val card = ScorecardDetailDto.parse(detail("channel", "null").apply { getJSONObject("card").put("channelType", "TELEGRAM_CHANNEL").put("engine", false) })
+        assertEquals("TELEGRAM_CHANNEL", card.card.channelType)
+        assertEquals(false, card.card.engine)
+        assertEquals("Telegram", ScorecardSources.kind(card))
+    }
+
+    @Test
     fun enginesAreTheCallersOfTheMarksyChannel() {
         fun card(entity: String, name: String, channel: String?) = EntityScorecardDto(entity, 1, name, 7, channel, ScorecardBodyDto.parse(JSONObject()))
 
