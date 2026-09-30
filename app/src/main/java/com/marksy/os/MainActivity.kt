@@ -130,7 +130,6 @@ class MainActivity : ComponentActivity() {
         pendingOpen = intent?.getStringExtra(EXTRA_OPEN)
         lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
-        com.marksy.os.ui.RatingCalibrator.load(applicationContext)
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)

@@ -102,31 +102,3 @@ internal fun PredictionValidationCard(repo: MarketIntelligenceRepository) {
         }
     }
 }
-
-/** Tune the Marksy rating on this device against how past calls actually did; adopted only if it wins on held-out calls. */
-@Composable
-internal fun RatingCalibrationCard(repo: MarketIntelligenceRepository) {
-    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    val latest by RatingCalibrator.latest.collectAsStateWithLifecycle()
-    val running by RatingCalibrator.progress.collectAsStateWithLifecycle()
-    val error by RatingCalibrator.error.collectAsStateWithLifecycle()
-    val s = latest ?: remember(latest) { RatingCalibrator.read(context) }
-    HealthCard(
-        when {
-            s == null -> "Marksy rating · V1 weights (not calibrated)"
-            s.adopted -> "Marksy rating · calibrated on ${s.samples} calls"
-            else -> "Marksy rating · V1 kept (calibration didn't beat it)"
-        },
-        if (s?.adopted == true) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-        "point-in-time Upstox history + marksy-api closed calls · short-term weights only"
-    ) {
-        s?.let {
-            Line(String.format(Locale.US, "Held-out %d calls: rank correlation V1 %.2f → tuned %.2f · trend %.2f, seasonality %.2f", it.testSamples, it.baseTest, it.test, it.trend, it.seasonality))
-            Line("Run ${java.text.SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(java.util.Date(it.ranAt))}")
-        }
-        error?.let { Text(it, color = MarksyTheme.YellowImportant, fontSize = 11.sp) }
-        Row(Modifier.padding(top = 6.dp)) {
-            running?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp) } ?: Pill("Calibrate now") { RatingCalibrator.start(context, repo) }
-        }
-    }
-}
