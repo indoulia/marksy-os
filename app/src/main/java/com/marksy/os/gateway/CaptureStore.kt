@@ -1,6 +1,8 @@
 package com.marksy.os.gateway
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONException
 import java.util.UUID
 
 /** Device-local tip-capture state (tip-ledger spec §5.1); none of it is ever sent as stored. */
@@ -22,16 +24,48 @@ class CaptureStore(context: Context) {
         prefs.edit().putStringSet(KEY_PACKAGES, packages).putLong(KEY_FETCHED_AT, now).apply()
     }
 
-    fun chatSenders(): Set<String> = prefs.getStringSet(KEY_SENDERS, emptySet()).orEmpty().toSet()
+    fun chatSenders(): Set<String> = orderedSenders().toSet()
 
+    /**
+     * Finding M2: senders are an ORDERED list (oldest first), not a Set, so eviction over the cap drops the
+     * oldest name, not an arbitrary one. A re-seen name moves to the end. A legacy StringSet (pre-fix) is
+     * migrated to this format on first read.
+     */
+    private fun orderedSenders(): List<String> = synchronized(LOCK) {
+        when (val raw = prefs.all[KEY_SENDERS]) {
+            is String -> decodeSenders(raw)
+            is Set<*> -> raw.filterIsInstance<String>().also { migrated ->
+                prefs.edit().putString(KEY_SENDERS, encodeSenders(migrated)).commit()
+            }
+            else -> emptyList()
+        }
+    }
+
+    /**
+     * Finding C2(b): persisted with commit(), not apply(), so a per-batch re-read (finding C2a) that runs
+     * on another thread right after this call is guaranteed to see it.
+     */
     fun rememberChatSenders(senders: Collection<String>) = synchronized(LOCK) {
-        val fresh = senders.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-        val known = chatSenders()
-        if (known.containsAll(fresh)) return@synchronized
-        // Over the cap the newest names win; an evicted name only matters to an old undelivered row.
-        val merged = if (known.size + fresh.size <= MAX_SENDERS) known + fresh
-        else fresh + known.take((MAX_SENDERS - fresh.size).coerceAtLeast(0))
-        prefs.edit().putStringSet(KEY_SENDERS, merged).apply()
+        val fresh = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (fresh.isEmpty()) return@synchronized
+        val ordered = orderedSenders().toMutableList()
+        fresh.forEach { name ->
+            ordered.remove(name)
+            ordered.add(name)
+        }
+        val trimmed = if (ordered.size > MAX_SENDERS) ordered.takeLast(MAX_SENDERS) else ordered
+        prefs.edit().putString(KEY_SENDERS, encodeSenders(trimmed)).commit()
+    }
+
+    private fun encodeSenders(list: List<String>): String = JSONArray(list).toString()
+
+    private fun decodeSenders(json: String): List<String> {
+        val array = try {
+            JSONArray(json)
+        } catch (_: JSONException) {
+            return emptyList()
+        }
+        return (0 until array.length()).map { array.optString(it) }.filter { it.isNotBlank() }
     }
 
     private companion object {

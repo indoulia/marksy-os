@@ -53,7 +53,12 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        return if (TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }).drain()) Result.retry() else Result.success()
+        // Finding C2(a): re-read chatSenders right after each findPendingTrading call (inside drain()),
+        // not once for the whole run, so a chat row inserted mid-run still masks its own sender.
+        val store = CaptureStore(applicationContext)
+        return if (
+            TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }, chatSenders = store::chatSenders).drain()
+        ) Result.retry() else Result.success()
     }
 
     private suspend fun loadCaptureContext(client: MarksyGatewayClient, now: Long): CaptureContext? {
@@ -80,19 +85,26 @@ internal class TradingDeliveryRun(
     private val client: MarksyGatewayClient,
     private val capture: CaptureContext,
     private val isStopped: () -> Boolean = { false },
-    private val decide: (NotificationEventEntity, CaptureContext) -> CaptureDecision = CaptureGate::decide
+    private val decide: (NotificationEventEntity, CaptureContext) -> CaptureDecision = CaptureGate::decide,
+    // Finding C2(a): defaults to the run's initial snapshot (no-op refresh) for callers that don't care;
+    // the worker passes a live CaptureStore.chatSenders reference so each batch gets a fresh read.
+    private val chatSenders: () -> Set<String> = { capture.chatSenders }
 ) {
     // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
     suspend fun drain(): Boolean {
         while (!isStopped()) {
             val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
             if (pending.isEmpty()) return false
-            if (deliverBatch(pending)) return true
+            // Re-read right after the query, before this batch is decided: a row inserted mid-run has its
+            // sender recorded (and committed, finding C2b) before the row itself is inserted, so this read
+            // is guaranteed to already include it.
+            val batchCapture = capture.copy(chatSenders = chatSenders())
+            if (deliverBatch(pending, batchCapture)) return true
         }
         return false
     }
 
-    private suspend fun deliverBatch(pending: List<NotificationEventEntity>): Boolean {
+    private suspend fun deliverBatch(pending: List<NotificationEventEntity>, capture: CaptureContext): Boolean {
         var retryRequested = false
         for (event in pending) {
             if (isStopped()) return false
@@ -113,7 +125,8 @@ internal class TradingDeliveryRun(
                     throw cancellation
                 } catch (gateError: Throwable) {
                     dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
-                    Log.i(TAG, "Trading event ${event.id} stays on the phone (gate-error)")
+                    // Finding M3: the exception's class name is diagnosable; its message never is (could carry notification content).
+                    Log.i(TAG, "Trading event ${event.id} stays on the phone (gate-error: ${gateError::class.java.simpleName})")
                     continue
                 }
 

@@ -8,11 +8,13 @@ import com.marksy.os.data.local.NotificationEventEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -83,9 +85,63 @@ class TradingDeliveryRunTest {
         assertEquals("DELIVERED", dao.findById(2L)?.deliveryState)
     }
 
+    // Finding C2: chatSenders is re-read right after each findPendingTrading call (inside drain()), so a
+    // chat row inserted mid-run -- from a sender recorded only at that moment -- still gets it masked.
+    @Test
+    fun aChatRowThatArrivesMidRunUsesTheSenderRecordedAtThatMoment() = runBlocking {
+        dao.insert(row("k1", 1L))
+        val recordedSenders = mutableSetOf<String>()
+        val sentTexts = mutableMapOf<Long, String>()
+        var midRunRowId = -1L
+        val testClient = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sentTexts[eventId] = message.text
+                if (recordedSenders.isEmpty()) {
+                    // Simulate the listener: the sender is recorded (and committed) right as the chat row
+                    // is captured, strictly before that row is inserted (finding C2b's guarantee).
+                    recordedSenders += "Amit"
+                    midRunRowId = dao.insert(chatRow("k2", 2L))
+                }
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val groupContext = capture.copy(chatAllowList = setOf("stocktips"))
+
+        TradingDeliveryRun(dao, testClient, groupContext, chatSenders = { recordedSenders.toSet() }).drain()
+
+        assertTrue(sentTexts.containsKey(midRunRowId))
+        val midRunText = sentTexts.getValue(midRunRowId)
+        assertFalse(midRunText.contains("Amit"))
+    }
+
+    // Finding M3: the gate-error log line names the exception's class, never its message (which could carry
+    // notification content).
+    @Test
+    fun aGateErrorLogsTheExceptionClassNameNeverItsMessage() = runBlocking {
+        ShadowLog.stream = null
+        ShadowLog.clear()
+        dao.insert(row("k1", 1L))
+        val secretMessage = "leaked notification body: BUY RELIANCE"
+        val decideFn = { _: NotificationEventEntity, _: CaptureContext -> throw IllegalStateException(secretMessage) }
+
+        TradingDeliveryRun(dao, client, capture, decide = decideFn).drain()
+
+        val messages = ShadowLog.getLogs().map { it.msg }
+        assertTrue(messages.any { it.contains("gate-error") && it.contains("IllegalStateException") })
+        assertFalse(messages.any { it.contains(secretMessage) })
+    }
+
     private fun row(key: String, postedAt: Long) = NotificationEventEntity(
         sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = key, eventFingerprint = "f-$key",
         title = "Call $key", body = "BUY RENUKA CMP 23 SL 22", postedAt = postedAt, category = "TRADING", priority = 10,
         confidence = 1f, isTrading = true, deliveryState = DeliveryState.PENDING.name
+    )
+
+    private fun chatRow(key: String, postedAt: Long) = NotificationEventEntity(
+        sourcePackage = "com.whatsapp", sourceName = "WhatsApp", sourceKey = key, eventFingerprint = "f-$key",
+        title = "StockTips: Amit", body = "Amit: BUY RENUKA CMP 23 SL 22 TGT 26", postedAt = postedAt,
+        category = "TRADING", priority = 10, confidence = 1f, isTrading = true,
+        deliveryState = DeliveryState.PENDING.name, chatGroup = true
     )
 }

@@ -73,9 +73,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
-        if (CaptureMedium.of(packageName).isChat) {
-            CaptureStore(applicationContext).rememberChatSenders(NotificationTextExtractor.senders(extras))
-        }
+        val isChat = CaptureMedium.of(packageName).isChat
+        // Read on this thread (extras must not be held across a suspension); recorded on the launch below.
+        val senders = if (isChat) NotificationTextExtractor.senders(extras) else emptyList()
         OriginalAppLauncher.remember(sbn)
 
         val raw = RawCapture(
@@ -90,6 +90,10 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         )
 
         serviceScope.launch {
+            // Finding C2(b): record this row's senders (committed synchronously, CaptureStore.kt) before
+            // inserting the row, so a delivery run's per-batch chatSenders re-read (finding C2a) is
+            // guaranteed to already include them once this row is visible to findPendingTrading.
+            if (isChat) CaptureStore(applicationContext).rememberChatSenders(senders)
             val result = ingestion.ingest(raw)
             if (result is IngestionPipeline.Result.Failed) {
                 // Not stored, so never dismiss it.

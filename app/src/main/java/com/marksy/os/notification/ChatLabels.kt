@@ -11,15 +11,14 @@ object ChatLabels {
     private const val MIN_MASKED_SENDER_LENGTH = 2
     // \p{M} so a combining mark (e.g. a Devanagari matra) right after a name still counts as part of the same word.
     private const val WORD = "\\p{L}\\p{M}\\p{N}_"
-    // TRAI DLT sender ids: the operator/circle prefix and type suffix vary per message, the 6-character header does not.
-    private val DLT_HEADER = Regex("^[A-Za-z]{2}-([A-Za-z0-9]{6})(?:-[PSTGpstg])?$")
-    private val BARE_SENDER_HEADER = Regex("^[A-Za-z0-9]{6}$")
+    // TRAI DLT sender ids: the operator/circle prefix and type suffix vary per message, the 6-character header
+    // does not. Uppercase-only and case-sensitive (final-review finding C1): a mixed-case contact name such as
+    // "Mr-Suresh" must never read as a sender id, and the bare 6-character form was dropped entirely, since a
+    // 6-letter contact name (e.g. "Suresh") passed it too.
+    private val DLT_HEADER = Regex("^[A-Z]{2}-([A-Z0-9]{6})(?:-[PSTG])?$")
 
-    /** Fix round 1 finding C1: an SMS title must look like a sender id before it is even considered for capture. */
-    fun isSenderIdShaped(title: String): Boolean {
-        val value = title.trim()
-        return DLT_HEADER.matches(value) || BARE_SENDER_HEADER.matches(value)
-    }
+    /** Finding C1 (fix round 1 / final review): an SMS title must look like a sender id before capture. */
+    fun isSenderIdShaped(title: String): Boolean = DLT_HEADER.matches(title.trim())
 
     /** The allow-listed group a title names: "Rahul @ StockTips" (Telegram), "StockTips: Rahul" (WhatsApp) or "StockTips". */
     fun allowListedChat(title: String, allowList: Collection<String>, chatSenders: Collection<String> = emptySet()): String? {
@@ -42,12 +41,30 @@ object ChatLabels {
 
     fun smsSender(title: String): String {
         val value = title.trim()
-        return DLT_HEADER.matchEntire(value)?.groupValues?.get(1)?.uppercase(Locale.ROOT) ?: value
+        return DLT_HEADER.matchEntire(value)?.groupValues?.get(1) ?: value
     }
 
     fun allowListedSmsSender(title: String, allowList: Collection<String>): String? {
         val sender = smsSender(title)
         return sender.takeIf { it.isNotBlank() && WhatsAppSenderWatchlist.matches(allowList.map(::smsSender), it) }
+    }
+
+    // Finding M1: one alternation regex over every known sender (not one Regex object per sender, up to
+    // 5000), longest name first so an overlapping shorter name never wins early. Cached and rebuilt only
+    // when the sender list actually changes -- at most once per batch, since the gate re-reads chatSenders
+    // once per batch (finding C2a), not once per row. This is a singleton cache, so it assumes sequential
+    // batch processing, which WorkManager's ExistingWorkPolicy.KEEP already guarantees (no concurrent runs).
+    @Volatile private var cachedMaskableNames: List<String> = emptyList()
+    @Volatile private var cachedMask: Regex? = null
+
+    private fun maskFor(maskableNames: List<String>): Regex? {
+        if (maskableNames.isEmpty()) return null
+        if (maskableNames != cachedMaskableNames) {
+            val alternation = maskableNames.joinToString("|") { Regex.escape(it) }
+            cachedMask = Regex("(?<![$WORD])(?:$alternation)(?![$WORD])", RegexOption.IGNORE_CASE)
+            cachedMaskableNames = maskableNames
+        }
+        return cachedMask
     }
 
     /**
@@ -59,13 +76,12 @@ object ChatLabels {
         val lines = body.lines()
         val names = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
         val linePrefixNames = names.filter { name -> title.contains(name) || lines.any { it.startsWith("$name$SENDER_SUFFIX") } }
-        val masks = names.filter { it.length >= MIN_MASKED_SENDER_LENGTH }
-            .map { Regex("(?<![$WORD])${Regex.escape(it)}(?![$WORD])", RegexOption.IGNORE_CASE) }
-        if (masks.isEmpty() && linePrefixNames.isEmpty()) return body
+        val mask = maskFor(names.filter { it.length >= MIN_MASKED_SENDER_LENGTH })
+        if (mask == null && linePrefixNames.isEmpty()) return body
         return lines.joinToString("\n") { line ->
             val unprefixed = linePrefixNames.firstOrNull { line.startsWith("$it$SENDER_SUFFIX") }
                 ?.let { line.removePrefix("$it$SENDER_SUFFIX") } ?: line
-            masks.fold(unprefixed) { text, mask -> mask.replace(text, MASK_SENDER) }
+            if (mask != null) mask.replace(unprefixed, MASK_SENDER) else unprefixed
         }
     }
 }

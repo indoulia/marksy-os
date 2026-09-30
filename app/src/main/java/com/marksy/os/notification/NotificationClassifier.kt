@@ -131,11 +131,13 @@ object NotificationClassifier {
     private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
     private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
 
-    // The customer's own orders never leave the phone (spec §5.1); customer-marker + status based, not vocabulary
-    // matching alone, so it does not fire on a tipster's own call update (fix round 1, finding C2).
-    private val customerMarkers = listOf(
-        Regex("""\byour\b""", RegexOption.IGNORE_CASE),
-        Regex("""\byou\s+have\b""", RegexOption.IGNORE_CASE),
+    // The customer's own orders never leave the phone (spec §5.1). Final-review finding C3: strong
+    // evidence ((a) STRONG_EXECUTION, (b) a HARD customer marker + status, (c) one of the classifier's own
+    // execution terms below) returns own-order immediately, before the call veto is even considered -- a
+    // tipster's own call update ("trade confirmation ... BUY ... SL ... TGT") must still stay local when it
+    // also carries genuine execution evidence. Only the WEAK rule ("your" + a status word) is vetoed by
+    // looksLikeCall, since "your" alone is common in ordinary call chatter too.
+    private val hardCustomerMarkers = listOf(
         Regex("""\bqty\b""", RegexOption.IGNORE_CASE),
         Regex("""\bquantity\b""", RegexOption.IGNORE_CASE),
         Regex("""\border\s*(?:no|id|number)\b""", RegexOption.IGNORE_CASE),
@@ -143,10 +145,12 @@ object NotificationClassifier {
         Regex("""#\d"""),
         Regex("""\bavg\.?\s*price\b""", RegexOption.IGNORE_CASE),
         Regex("""\baverage\s+price\b""", RegexOption.IGNORE_CASE),
+        Regex("""\byou\s+have\b""", RegexOption.IGNORE_CASE),
         Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
     )
+    private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
     // Unbounded (no \b) so an inflection such as "opened"/"rejected" still counts as its status word; "hit" added
-    // for a stop-loss trigger ("Stop loss order ... hit at ...") -- not in the brief's list, kept local per the
+    // for a stop-loss trigger ("Stop loss order ... hit at ...") -- not in any brief's list, kept local per the
     // ambiguous-case rule (fix round 1, finding C2; see task-B3-report.md Fix round 1 for the trace).
     private val orderStatus = Regex(
         """(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit)""",
@@ -159,6 +163,13 @@ object NotificationClassifier {
         Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
         Regex("""\btrades?\s+executed\b""", RegexOption.IGNORE_CASE)
     )
+    // Split from the TRADING rule's own term list above: execution/status vocabulary, never a tipster's call
+    // vocabulary ("buy order", "sell order", "stop loss", "target hit", "market alert" stay out on purpose).
+    private val classifierExecutionTerms = listOf(
+        "trade confirmation", "order executed", "order filled", "trade executed",
+        "executed at", "filled at", "quantity executed", "position opened", "position closed",
+        "order rejected", "order cancelled", "order canceled"
+    )
 
     /** A trade call reads like a call (side + symbol + levels); an own-order notification never does. */
     private fun looksLikeCall(title: String, body: String, text: String): Boolean =
@@ -166,9 +177,12 @@ object NotificationClassifier {
 
     fun isOwnOrderEvent(title: String, body: String): Boolean {
         val text = "$title $body".lowercase()
+        val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
+            (hardCustomerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)) ||
+            classifierExecutionTerms.any { text.containsRuleTerm(it) }
+        if (strongEvidence) return true
         if (looksLikeCall(title, body, text)) return false
-        val ownMarker = customerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)
-        return ownMarker || strongExecution.any { it.containsMatchIn(text) }
+        return weakCustomerMarker.containsMatchIn(text) && orderStatus.containsMatchIn(text)
     }
 
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")

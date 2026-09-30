@@ -8,7 +8,7 @@ import java.net.URI
 import java.net.URL
 
 /** Direct client for the confirmed Marksy Tips API. */
-class MarksyTipsApiClient(
+open class MarksyTipsApiClient(
     private val authRepository: com.marksy.os.gateway.AuthRepository,
     baseUrl: String = DEFAULT_MARKSY_API_BASE_URL
 ) : MarksyGatewayClient {
@@ -18,7 +18,16 @@ class MarksyTipsApiClient(
         val data = execute("POST", "$apiBaseUrl/tips/ingest-text", message.toJson()).getJSONObject("data")
         val kind = data.str("kind").ifBlank { "RECORDED" }.boundedText(MAX_STATUS_CHARS)
         val tipId = data.str("tipId").trim()
-        Result.success(if (tipId.isBlank()) recordedOnly(eventId, kind) else fetchTip(tipId, eventId, kind))
+        val insight = if (tipId.isBlank()) recordedOnly(eventId, kind) else try {
+            fetchTip(tipId, eventId, kind)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (fetchError: Throwable) {
+            // Finding M5: the POST already recorded the tip server-side; a failed comparison fetch
+            // (a 4xx such as 404, or an IO error) must not fail the row -- it stays a recorded receipt.
+            recordedOnly(eventId, kind)
+        }
+        Result.success(insight)
     } catch (cancellation: CancellationException) {
         throw cancellation
     } catch (error: Throwable) {
@@ -88,7 +97,8 @@ class MarksyTipsApiClient(
         )
     }
 
-    private suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
+    // internal open: a test seam so a fake HTTP layer can be substituted without a real (HTTPS-only) server.
+    internal open suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
         // Not a MarksyTerminalException: a lapsed/never-established session is retryable --
         // the user may sign back in before the next delivery attempt. Treating it as terminal
         // would permanently FAIL every queued trading tip the moment a session expires.

@@ -115,7 +115,10 @@ class CaptureGateTest {
             "Order No. executed" to "Order No. 2026093012345: RELIANCE BUY 10 Executed",
             "Executed at symbol" to "executed @ 1450",
             "Bought shares" to "Bought 10 shares of RELIANCE",
-            "SIP processed" to "SIP of Rs. 5000 in XYZ processed"
+            "SIP processed" to "SIP of Rs. 5000 in XYZ processed",
+            // Final-review finding C3: strong evidence returns own-order before the call veto is even considered.
+            "Trade confirmation with bought" to "Trade confirmation: Bought 10 RELIANCE @ 1450",
+            "Own order that also reads like a call" to "Your BUY order for 10 RELIANCE is executed at 1450. Target 1500, SL 1420"
         ).forEach { (title, body) -> assertEquals(title, ownOrder, CaptureGate.decide(event(title = title, body = body), context)) }
 
         val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",
@@ -130,7 +133,6 @@ class CaptureGateTest {
         listOf(
             "Target 26 achieved. Trade completed, book profits",
             "Our RELIANCE trade: Stop loss triggered, exit now",
-            "Wait for trade confirmation above 1450, then BUY RELIANCE SL 1420 TGT 1500",
             "Buy order to be placed above 24, target 26, SL 22",
             "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
         ).forEach { body ->
@@ -140,6 +142,11 @@ class CaptureGateTest {
             val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true)
             assertTrue(body, CaptureGate.decide(group, context) is CaptureDecision.Send)
         }
+
+        // Final-review finding C3: this string now carries strong evidence ("trade confirmation"), so it
+        // is own-order and stays local even though it also reads like a call (accepted per the ruling).
+        val flipped = "Wait for trade confirmation above 1450, then BUY RELIANCE SL 1420 TGT 1500"
+        assertEquals(CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = flipped), context))
     }
 
     @Test
@@ -166,16 +173,24 @@ class CaptureGateTest {
     @Test
     fun smsLeavesOnlyWhenTheTitleIsShapedLikeASenderId() {
         // Even an allow-listed person name or foreign number must stay local: the title itself must look like a sender id.
-        val withPhoneAllowed = context.copy(chatAllowList = context.chatAllowList + "+44 7911 123456")
+        val extended = context.copy(chatAllowList = context.chatAllowList + setOf("+44 7911 123456", "upstox"))
         fun decide(title: String) = CaptureGate.decide(
             event(pkg = "com.google.android.apps.messaging", source = "Messages", title = title),
-            withPhoneAllowed
+            extended
         )
 
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Rahul"))
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("+44 7911 123456"))
-        val sent = (decide("JD-ZERODH-S") as CaptureDecision.Send).message
-        assertEquals("ZERODH", sent.channelLabel)
+        // Final-review finding C1: sender ids are case-sensitive and uppercase-only; the bare 6-character
+        // form was dropped entirely, since a 6-letter contact name ("Suresh") passed it too.
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Suresh"))
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("SURESH"))
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Mr-Suresh"))
+        assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("ZERODH"))
+
+        assertEquals("ZERODH", (decide("JD-ZERODH-S") as CaptureDecision.Send).message.channelLabel)
+        assertEquals("ZERODH", (decide("VM-ZERODH") as CaptureDecision.Send).message.channelLabel)
+        assertEquals("UPSTOX", (decide("AD-UPSTOX-S") as CaptureDecision.Send).message.channelLabel)
     }
 
     @Test
