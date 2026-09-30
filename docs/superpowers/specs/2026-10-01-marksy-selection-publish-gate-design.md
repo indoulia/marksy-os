@@ -1,6 +1,7 @@
 # Marksy selection publish gate — design
 
-Status: draft for review · 2026-10-01 · Repo: marksy-api (owner). marksy-os and admin-app: no change this phase.
+Status: approved 2026-10-01 with the review decisions in §20 · Repo: marksy-api (owner). marksy-os and admin-app:
+no change this phase.
 
 ## 1. Goal and separation
 
@@ -26,8 +27,9 @@ evaluated inside selection-gate validation; the gate never reads a target, stop 
 
 1. **Gate before publication.** The gate runs inside `app/recommendations.py::record_recommendation` before the
    `Prediction` row is built. A prediction is not a public call by default. Only a valid `PUBLISH` decision for
-   the exact model version and horizon can yield `publication_state = PUBLISHED`, and only a `PUBLISHED`
-   prediction may reach `register_prediction` (the ledger tip, today line 144).
+   the exact model version and horizon, for a model whose publication capability is `PUBLISHABLE` (§13.1), can
+   yield `publication_state = PUBLISHED`, and only a `PUBLISHED` prediction may reach `register_prediction` (the
+   ledger tip, today line 144).
 2. **Fail closed.** A missing, stale, invalid or mismatched decision, or any error while authorising, yields
    `NO_EDGE` and `SHADOW`. Never publication.
 3. **Per model and horizon.** Decisions are independent per `(model_version, horizon_sessions)`. A pass at 5
@@ -49,6 +51,10 @@ evaluated inside selection-gate validation; the gate never reads a target, stop 
     formula version, result, configuration, dataset/model version, validation period and failing reason needed
     to reproduce the decision.
 11. **No history rewrite.** Existing predictions, tips, ADT-001/002 assessments and ledger outcomes are untouched.
+12. **Gate decision is not publication.** A `PUBLISH` decision means the model earned authorisation under the
+    selection criteria. It never grants a model permission to publish on its own: publication also requires the
+    model's publication capability to be `PUBLISHABLE`. SEL-001 is `SHADOW_ONLY` until trade-geometry validation
+    is implemented and separately approved.
 
 ## 4. Scope
 
@@ -83,7 +89,7 @@ Out: target/stop/horizon learning; publishing SEL-001 calls (needs trade geometr
 4. FV-001's `REQUIRED_FEATURE_COLUMNS` (`sma20_distance`, `volume_ratio_20d`, `atr_percent`) non-NaN at `D`.
 5. The scan's record contracts pass (`evaluate_record_contracts`, as `evaluate_stock` applies them).
 6. Median of `close × volume` over the 20 official bars ending at `D` ≥ `selection_min_median_traded_value_20d`
-   (default ₹10,000,000), on corporate-action-adjusted bars.
+   (default ₹100,000, i.e. ₹1 lakh, per review decision 3), on corporate-action-adjusted bars.
 
 A stock with an official bar at `D` that fails a rule is **excluded** with the first failing reason:
 `NOT_EQUITY`, `RIGHTS_ENTITLEMENT`, `TOO_FEW_BARS`, `INVALID_MARKET_DATA`, `DATA_CONTRACT_VIOLATION`,
@@ -179,8 +185,9 @@ live, restricted to `U(D)`.
 ### 10.1 Windows
 
 - **Held-out month `H(h)`**: the latest calendar month `M` (by IST session date), not the current month, all of
-  whose sessions have `i(D)+h ≤` the last index of `S`. Window rows: sessions in `M`; protected span: from the
-  first session of `M` through the exit session of its last session.
+  whose sessions have `i(D)+h ≤` the last index of `S`. A month is never used until every one of its sessions
+  has its exit session `D+h` in `S`; `H(3)` and `H(5)` may therefore differ. Window rows: sessions in `M`;
+  protected span: from the first session of `M` through the exit session of its last session.
 - **Walk-forward test months**: every calendar month from `selection_wf_first_test_month` (default 2018-01)
   through the month before `H(h)`.
 - **Refit cadence**: quarterly. The model for calendar quarter `q` is fitted on rows whose exit session index is
@@ -327,6 +334,22 @@ first failure returns `NO_EDGE` with its reason:
 Any exception → `NO_EDGE / AUTHORIZATION_ERROR` (logged). BASELINE-001 horizons 1 and 7, which the gate never
 evaluates, always resolve to `NO_DECISION_ON_RECORD`.
 
+### 13.1 Publication capability
+
+`authorize_publication` answers only the selection question. Whether a model may publish at all is a separate,
+code-reviewed constant, `PUBLICATION_CAPABILITY` in `app/selection_gate/capability.py`:
+
+- `BASELINE-001` → `PUBLISHABLE` (it already carries the live trade geometry)
+- `SEL-001` → `SHADOW_ONLY` (no trade geometry yet; changing this needs the geometry phase and its own approval)
+- any other model version → `SHADOW_ONLY` (fail closed)
+
+`publication_capability(model_version) -> str` reads it. It is not a setting and not in the config snapshot:
+changing it means a reviewed code change and a deploy. It never alters a gate decision row. A decision for
+SEL-001 can be `PUBLISH` while SEL-001 still publishes nothing.
+
+Effective publication for a prediction = gate decision `PUBLISH` **and** capability `PUBLISHABLE` **and** the
+stock is in `U(D)` (§14.1).
+
 ## 14. Publish-path enforcement and public surfaces
 
 ### 14.1 `record_recommendation`
@@ -334,14 +357,17 @@ evaluates, always resolve to `NO_DECISION_ON_RECORD`.
 Before the `Prediction(...)` constructor (today `app/recommendations.py:116`):
 
 1. `auth = authorize_publication(model_version=…, horizon_sessions=horizon_days, at=created_at)`.
-2. If `auth.state == PUBLISH`, check that the stock is in `U(D)` for the prediction's session (same `SEU-001`
-   code); not in it, or not computable, gives `NO_EDGE / OUTSIDE_GATE_UNIVERSE`. Live, rule 2 of §6 accepts the
+2. If `auth.state == PUBLISH`, check `publication_capability(model_version) == PUBLISHABLE`, else
+   `SHADOW_ONLY_CAPABILITY`.
+3. If both pass, check that the stock is in `U(D)` for the prediction's session (same `SEU-001`
+   code); not in it, or not computable, gives `OUTSIDE_GATE_UNIVERSE`. Live, rule 2 of §6 accepts the
    bar the scan used for `D` (the 16:15 IST scan's provisional bar); this is the only live deviation from §6, and
    the existing 08:30 IST official-candle confirmation (EPIC-853) still invalidates a call the official bar
    contradicts.
-3. `publication_state = PUBLISHED` iff both pass, else `SHADOW`; `publish_gate_decision_id` and
-   `publish_gate_reason` are recorded either way.
-4. `register_prediction` / `sync_prediction_from_tip` (line 144) run **only** when `PUBLISHED`.
+4. `publication_state = PUBLISHED` iff all three pass, else `SHADOW`. `publish_gate_decision_id` is recorded
+   whenever a decision was found. `publish_gate_reason` is the first failing reason (the gate's `NO_EDGE` reason,
+   `SHADOW_ONLY_CAPABILITY` or `OUTSIDE_GATE_UNIVERSE`), and null when published.
+5. `register_prediction` / `sync_prediction_from_tip` (line 144) run **only** when `PUBLISHED`.
 
 ### 14.2 Downstream side effects
 
@@ -362,11 +388,13 @@ disposition. A single predicate `published_only(query)` is used everywhere.
 `meta.publishGate` is a list, one entry per pair in `selection_gate_reported_pairs` (default BASELINE-001 × {1,3,5,7},
 SEL-001 × {3,5}):
 - `modelVersion`, `horizonSessions`
-- `state` (`PUBLISH`/`NO_EDGE`)
-- `reason` (e.g. `NO_EDGE — CONFIDENCE_THRESHOLD_NOT_MET`, null when publishing), `stage`
+- `gateDecision` (`PUBLISH`/`NO_EDGE`), `reason` (e.g. `NO_EDGE — CONFIDENCE_THRESHOLD_NOT_MET`, null on
+  `PUBLISH`), `stage`
+- `publicationCapability` (`PUBLISHABLE`/`SHADOW_ONLY`)
+- `publishing` (bool: `gateDecision == PUBLISH` and `publicationCapability == PUBLISHABLE`)
 - `decisionId`, `decidedAt`, `validUntil`
 
-With every pair `NO_EDGE`, `data` is empty.
+With no pair `publishing`, `data` is empty.
 
 ## 15. Shadow behaviour
 
@@ -387,9 +415,10 @@ and any ranking inclusion. Its outcome for learning comes from `SEL-DS-001` labe
 
 ### 15.3 SEL-001 publication
 
-Not built in this phase. A SEL-001 `PUBLISH` decision is recorded and reported, but no public SEL-001 call is
-created until the trade-geometry phase adds a publish path. That path must call `authorize_publication` with the
-live artefact hash.
+Not built in this phase. SEL-001's capability is `SHADOW_ONLY` (§13.1). A SEL-001 `PUBLISH` decision is recorded
+and reported, but no public SEL-001 call is created until the trade-geometry phase adds a publish path, and its
+capability is changed with separate approval. That path must call `authorize_publication` with the live artefact
+hash.
 
 ## 16. Execution (Kubernetes)
 
@@ -399,7 +428,9 @@ CronJob `market-agent-selection-gate`:
   `activeDeadlineSeconds: 21600`, `ttlSecondsAfterFinished: 604800`
 - the `wait-for-db` initContainer, and `DATABASE_URL` from `market-agent-secrets`, as `learning-cycle-cronjob.yaml` does
 - command `python -m scripts.run_selection_gate`
-- resources: requests `cpu: 1, memory: 3Gi`; limits `cpu: 2, memory: 6Gi`
+- resources: requests `cpu: 1, memory: 3Gi`; limits `cpu: 2, memory: 6Gi` (approved). They live only in the
+  manifest, so an environment changes them with a kustomize patch and no code change; `--shard-cutoffs` trades
+  memory for time
 
 CronJob `market-agent-selection-shadow`: same shape; schedule `5 3 * * 1-5`, `activeDeadlineSeconds: 1800`,
 limit `memory: 2Gi`.
@@ -429,7 +460,7 @@ It prints the report (§19) to stdout as text and a JSON document.
 - `selection_max_unresolved_share = 0.02`
 - `selection_min_session_stocks = 100`
 - `selection_min_history_bars = 60`
-- `selection_min_median_traded_value_20d = 10000000`
+- `selection_min_median_traded_value_20d = 100000`
 - `selection_min_benchmark_stocks = 100`
 - `selection_min_plausible_return = -0.60`
 - `selection_max_plausible_return = 1.50`
@@ -476,16 +507,22 @@ Authorisation (fail closed): no decision; latest `NO_EDGE` after an earlier `PUB
 field; artefact hash mismatch; tampered numbers (`DECISION_INVALID`); exception inside → `NO_EDGE` every time.
 Also: a `PUBLISH` at h=5 does not authorise h=3.
 
+Capability:
+- `BASELINE-001` is `PUBLISHABLE`; `SEL-001` and an unknown model version are `SHADOW_ONLY`
+
 Publish path:
 - no decision → prediction `SHADOW`, no `Tip` row, no publication, not ranked
-- valid `PUBLISH` and in-universe → `PUBLISHED` with a tip
+- valid `PUBLISH`, `PUBLISHABLE` and in-universe → `PUBLISHED` with a tip
+- valid `PUBLISH` for a `SHADOW_ONLY` model → `SHADOW / SHADOW_ONLY_CAPABILITY`, the decision id recorded, and
+  the decision row unchanged
 - `PUBLISH` but out of universe → `SHADOW / OUTSIDE_GATE_UNIVERSE`
 - insert without `publication_state` fails
 
 Public surfaces: a seeded `SHADOW` prediction, fully ranked, lifecycle open, with a generation, is absent from
 every public route (parametrised over `/predictions/active`, `/predictions/active/{id}`, `/recommendations`,
 `/opportunities`, `/dashboard/snapshot`, `/instruments/{symbol}` and the other audited readers). `meta.publishGate`
-reports each pair's state and reason.
+reports each pair's gate decision, reason, capability and `publishing`, and a SEL-001 `PUBLISH` decision shows
+`publishing: false`.
 
 Shadow:
 - shadow predictions continue when publication is blocked (the scan still writes `SHADOW` rows)
@@ -517,17 +554,18 @@ Review report (before merge or deploy):
 - **Tests:** names and results.
 - **Gate results:** for each of the four pairs, every §12.1 stage field plus the decision and reasons.
 
-## 20. Open questions for review
+## 20. Review decisions (approved 2026-10-01)
 
-1. **SEL-001 publishing.** SEL-001 stays shadow-only this phase even if it passes (§15.3), because publishing
-   needs trade geometry. Recommended.
-2. **VPS capacity.** The gate job asks for up to 6Gi and 2 CPUs for a few hours monthly. The VPS RAM/CPU headroom
-   next to the API, Postgres and CronJobs is unknown; the limits need confirming or lowering (shard size trades
-   memory for time).
-3. **Liquidity floor.** ₹1 crore median daily traded value (20 sessions) is proposed. The live scan has no floor,
-   so a BASELINE-001 call outside `U(D)` is `SHADOW` even if BASELINE-001 passed.
-4. **Decision validity.** 45 days with a monthly run on the 11th; a missed run means `DECISION_STALE`, so no
-   publication, until the next run.
-5. **Held-out lag.** For h=5 the exam month is the latest fully resolved month (on 11 October that is September).
-6. **Existing open calls.** Predictions and tips created before rollout stay `PUBLISHED` and run to their own end
-   in the ledger. Only new predictions are gated.
+1. **SEL-001 publishing.** SHADOW-only this phase even if it passes the gate; its capability is `SHADOW_ONLY`
+   (§13.1) until trade-geometry validation is implemented and separately approved.
+2. **VPS capacity.** 6Gi / 2 CPU limits approved for the monthly gate job; resources stay configurable per
+   environment (§16).
+3. **Liquidity floor.** ₹1 lakh median 20-session traded value, applied identically offline and live. A
+   BASELINE-001 candidate below the floor is `SHADOW`; nothing bypasses `SEU-001`.
+4. **Decision validity.** 45 days, fail closed: an expired or missing decision means no publication until a fresh
+   valid decision exists.
+5. **Held-out lag.** The latest fully resolved month for the horizon; a month is unused until all its `D+h` exit
+   sessions exist (§10.1).
+6. **Existing calls.** Pre-rollout predictions and tips are untouched and finish their existing lifecycle.
+7. **Gate decision vs publication.** `PUBLISH` is selection authorisation only; actual publication also needs a
+   `PUBLISHABLE` capability (invariant 12, §13.1).
