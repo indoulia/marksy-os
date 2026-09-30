@@ -21,7 +21,7 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun liveQuotes(symbols: List<String>? = null): MarketDataState<LiveQuotesResponseDto> =
         fetch { it.liveQuotes(symbols) }
 
-    suspend fun instrument(symbol: String): MarketDataState<InstrumentLifecycleDto> = fetch { it.instrument(symbol) }
+    suspend fun instrument(symbol: String, includeCalls: Boolean = false): MarketDataState<InstrumentLifecycleDto> = fetch { it.instrument(symbol, includeCalls) }
 
     suspend fun sectors(): MarketDataState<List<SectorOptionDto>> = fetch(emptyCheck = { it.isEmpty() }) { it.sectors() }
 

@@ -16,7 +16,7 @@ interface MarketApiClient {
     suspend fun liveFeedHealth(): LiveFeedHealthDto
     suspend fun indexHistory(name: String, range: String): IndexHistoryDto
     suspend fun sectors(): List<SectorOptionDto>
-    suspend fun instrument(symbol: String): InstrumentLifecycleDto
+    suspend fun instrument(symbol: String, includeCalls: Boolean = false): InstrumentLifecycleDto
     suspend fun activePredictions(cursor: String? = null): ActivePredictionPageDto
     suspend fun activePrediction(id: Int): ActivePredictionDto
     suspend fun ipos(stage: String? = null, query: String? = null): List<IpoListItemDto>
@@ -66,8 +66,12 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun sectors(): List<SectorOptionDto> =
         SectorOptionDto.parseList(getDataArray("$base/market/sectors"))
 
-    override suspend fun instrument(symbol: String): InstrumentLifecycleDto =
-        InstrumentLifecycleDto.parse(getData("$base/instruments/${encode(symbol)}"))
+    override suspend fun instrument(symbol: String, includeCalls: Boolean): InstrumentLifecycleDto =
+        InstrumentLifecycleDto.parse(getData(instrumentUrl(symbol, includeCalls)))
+
+    // Split out so the URL (incl. the include=calls flag) is checkable without a live server.
+    internal fun instrumentUrl(symbol: String, includeCalls: Boolean): String =
+        "$base/instruments/${encode(symbol)}" + if (includeCalls) "?include=calls" else ""
 
     override suspend fun activePredictions(cursor: String?): ActivePredictionPageDto {
         val query = cursor?.let { "?cursor=${encode(it)}" } ?: ""

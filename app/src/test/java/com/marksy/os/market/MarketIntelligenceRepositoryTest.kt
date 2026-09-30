@@ -18,7 +18,7 @@ private class FakeMarketApiClient(
     override suspend fun liveFeedHealth(): LiveFeedHealthDto = health!!
     override suspend fun indexHistory(name: String, range: String): IndexHistoryDto = throw NotImplementedError()
     override suspend fun sectors(): List<SectorOptionDto> = emptyList()
-    override suspend fun instrument(symbol: String): InstrumentLifecycleDto = throw NotImplementedError()
+    override suspend fun instrument(symbol: String, includeCalls: Boolean): InstrumentLifecycleDto = throw NotImplementedError()
     override suspend fun activePredictions(cursor: String?): ActivePredictionPageDto = predictionPage!!
     override suspend fun activePrediction(id: Int): ActivePredictionDto = throw NotImplementedError()
     override suspend fun ipos(stage: String?, query: String?): List<IpoListItemDto> = ipoList

@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.marksy.os.gateway.AuthApiClient
 import com.marksy.os.gateway.AuthRepository
 import com.marksy.os.gateway.AuthSessionStore
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,5 +37,22 @@ class RealMarketApiClientTest {
         assertThrows(IllegalArgumentException::class.java) {
             RealMarketApiClient(authRepository = fakeAuthRepository, baseUrl = "http://insecure.example.com/api/v1")
         }
+    }
+
+    @Test
+    fun instrumentUrlCarriesIncludeCallsOnlyWhenAsked() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val fakeAuthRepository = AuthRepository(
+            client = object : AuthApiClient {
+                override suspend fun login(userId: String, password: String) = throw NotImplementedError()
+                override suspend fun refresh(currentToken: String) = throw NotImplementedError()
+                override suspend fun logout(currentToken: String) = throw NotImplementedError()
+            },
+            store = AuthSessionStore(context)
+        )
+        val client = RealMarketApiClient(authRepository = fakeAuthRepository, baseUrl = "https://example.com/api/v1")
+
+        assertEquals("https://example.com/api/v1/instruments/RELIANCE", client.instrumentUrl("RELIANCE", includeCalls = false))
+        assertEquals("https://example.com/api/v1/instruments/RELIANCE?include=calls", client.instrumentUrl("RELIANCE", includeCalls = true))
     }
 }
