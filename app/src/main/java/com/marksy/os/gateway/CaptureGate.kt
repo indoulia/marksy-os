@@ -37,12 +37,7 @@ data class CaptureContext(
     val username: String,
     val deviceSalt: String
 ) {
-    /**
-     * Round-2 finding N1: replaces ChatLabels' removed global mask cache. Each `CaptureContext` instance
-     * (one per batch, via `TradingDeliveryRun.drain()`'s per-batch `.copy(chatSenders = ...)`) builds and
-     * memoizes its own mask exactly once, from its own `chatSenders` -- no state is shared across batches
-     * or threads. Not a constructor property, so `.copy()` always yields a fresh, unbuilt cache.
-     */
+    // Not a constructor property, so each per-batch .copy() gets its own fresh, unbuilt cache -- no state shared across batches or threads.
     val senderMask: Regex? by lazy { ChatLabels.buildSenderMask(chatSenders) }
 }
 

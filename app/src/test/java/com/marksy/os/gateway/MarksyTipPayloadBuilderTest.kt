@@ -4,14 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-// Finding M4: symbolOf is still live (TradingIntelligenceScreen.kt), but its regression coverage was
-// deleted with the retired MarksyTipPayloadFixtureTest. These 3 assertions are ported from it (see
-// `git show 2c8e6ff:app/src/test/java/com/marksy/os/gateway/MarksyTipPayloadFixtureTest.kt`), adapted
-// from the old MarksyTradingEventRequest-based API to the current symbolOf(title, body) signature.
+// Finding M4: 3 assertions ported from the deleted MarksyTipPayloadFixtureTest (git show 2c8e6ff:...), adapted to symbolOf(title, body).
 class MarksyTipPayloadBuilderTest {
 
-    // "Stock Alert" must not yield ALERT: the labelled-symbol capture is case-sensitive, and the
-    // all-caps noise-word fallback never matches a mixed-case token like "Alert" either.
+    // "Stock Alert" must not yield ALERT: the labelled-symbol capture is case-sensitive.
     @Test
     fun stockAlertDoesNotBecomeTheWordAlert() {
         val symbol = MarksyTipPayloadBuilder.symbolOf("Stock Alert", "BUY RELIANCE order executed")

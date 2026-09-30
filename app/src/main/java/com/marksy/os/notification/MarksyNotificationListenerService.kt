@@ -91,14 +91,12 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         )
 
         serviceScope.launch {
-            // Finding C2(b): record this row's senders (committed synchronously, CaptureStore.kt) before
-            // inserting the row, so a delivery run's per-batch chatSenders re-read (finding C2a) is
-            // guaranteed to already include them once this row is visible to findPendingTrading.
+            // Record the sender before inserting the row, so a later per-batch re-read is guaranteed to already include it.
             if (isChat) {
                 try {
                     CaptureStore(applicationContext).rememberChatSenders(senders)
                 } catch (e: Exception) {
-                    // Finding N4: fail closed -- no row is ever created with an unrecorded sender.
+                    // Fail closed: no row is ever created with an unrecorded sender.
                     Log.e(TAG, "Failed to record chat senders (${e::class.java.simpleName}); skipping this notification")
                     return@launch
                 }

@@ -93,38 +93,46 @@ class CaptureGateTest {
         assertTrue(decide("com.whatsapp", "StockTips", true) is CaptureDecision.Send)
     }
 
+    // R3: every case uses the neutral title "Upstox" -- own-order evidence must come from the body alone.
     @Test
     fun theCustomersOwnOrderNotificationsNeverLeaveThePhone() {
         val ownOrder = CaptureDecision.Keep(CaptureGate.OWN_ORDER)
+        val neutralTitle = "Upstox"
         listOf(
-            "Order update" to "Your order to BUY 10 RELIANCE is executed",
-            "Order filled" to "BUY 10 TCS filled at 3900",
-            "Order placed" to "Your SELL order for 5 INFY has been placed",
-            "Order cancelled" to "Your BUY order for 5 INFY was cancelled",
-            "Order rejected" to "RMS: insufficient margin for RELIANCE",
-            "GTT triggered" to "Your GTT for RELIANCE has been triggered",
-            // Finding C2: customer-marker + status based recognition (fix round 1).
-            "Order executed with price" to "Your BUY order for 10 RELIANCE @ 1450.50 is executed",
-            "Order placed with rupee note" to "Your SELL order for 5 INFY at Rs. 1500 has been placed",
-            "Order traded with avg price" to "BUY order traded: 10 RELIANCE, average price 1450",
-            "Order successful with qty avg price" to "Your Buy Order for RELIANCE is Successful. Qty 10, Avg Price 1450.50",
-            "Order open at exchange" to "Your SELL order for 5 INFY is open at exchange",
-            "Position opened" to "Position opened: BUY 10 RELIANCE @ 1450",
-            "Stop loss order hit with qty" to "Stop loss order for RELIANCE hit at 1420.50, qty 10",
-            "Trades executed" to "Trades executed for your account",
-            "Order No. executed" to "Order No. 2026093012345: RELIANCE BUY 10 Executed",
-            "Executed at symbol" to "executed @ 1450",
-            "Bought shares" to "Bought 10 shares of RELIANCE",
-            "SIP processed" to "SIP of Rs. 5000 in XYZ processed",
-            // Final-review finding C3: strong evidence returns own-order before the call veto is even considered.
-            "Trade confirmation with bought" to "Trade confirmation: Bought 10 RELIANCE @ 1450",
-            "Own order that also reads like a call" to "Your BUY order for 10 RELIANCE is executed at 1450. Target 1500, SL 1420",
-            // Round 2, C3 residual: a possessive order phrase ("your ... order/gtt") plus any status word.
-            "Bracket order placed" to "Your bracket order to BUY 10 RELIANCE at 1450 has been placed. Target 1500, Stoploss 1420",
-            "GTT triggered with levels" to "Your GTT for RELIANCE has been triggered: BUY 10 @ 1450, target 1500, SL 1420",
-            "Order pending with levels" to "Your SELL order for 5 INFY at 1500 is pending. SL 1520, Target 1450",
-            "Order executed with full description" to "Your BUY order for 10 shares of RELIANCE INDUSTRIES LTD (NSE, CNC, LIMIT @ 1450.00, Target 1500, SL 1420, validity DAY) has been executed"
-        ).forEach { (title, body) -> assertEquals(title, ownOrder, CaptureGate.decide(event(title = title, body = body), context)) }
+            "order executed" to "Your order to BUY 10 RELIANCE is executed",
+            "order filled" to "BUY 10 TCS filled at 3900",
+            "order placed" to "Your SELL order for 5 INFY has been placed",
+            "order cancelled" to "Your BUY order for 5 INFY was cancelled",
+            "order rejected (insufficient margin)" to "RMS: insufficient margin for RELIANCE",
+            "gtt triggered" to "Your GTT for RELIANCE has been triggered",
+            "order executed with price" to "Your BUY order for 10 RELIANCE @ 1450.50 is executed",
+            "order placed with rupee note" to "Your SELL order for 5 INFY at Rs. 1500 has been placed",
+            "order traded with avg price" to "BUY order traded: 10 RELIANCE, average price 1450",
+            "order successful with qty avg price" to "Your Buy Order for RELIANCE is Successful. Qty 10, Avg Price 1450.50",
+            "order open at exchange" to "Your SELL order for 5 INFY is open at exchange",
+            "position opened" to "Position opened: BUY 10 RELIANCE @ 1450",
+            "stop loss order hit with qty" to "Stop loss order for RELIANCE hit at 1420.50, qty 10",
+            "trades executed" to "Trades executed for your account",
+            "order no. executed" to "Order No. 2026093012345: RELIANCE BUY 10 Executed",
+            "executed at symbol" to "executed @ 1450",
+            "bought shares" to "Bought 10 shares of RELIANCE",
+            "sip processed" to "SIP of Rs. 5000 in XYZ processed",
+            "trade confirmation with bought" to "Trade confirmation: Bought 10 RELIANCE @ 1450",
+            "own order that also reads like a call" to "Your BUY order for 10 RELIANCE is executed at 1450. Target 1500, SL 1420",
+            "bracket order placed" to "Your bracket order to BUY 10 RELIANCE at 1450 has been placed. Target 1500, Stoploss 1420",
+            "gtt triggered with levels" to "Your GTT for RELIANCE has been triggered: BUY 10 @ 1450, target 1500, SL 1420",
+            "order pending with levels" to "Your SELL order for 5 INFY at 1500 is pending. SL 1520, Target 1450",
+            "order executed with full description" to "Your BUY order for 10 shares of RELIANCE INDUSTRIES LTD (NSE, CNC, LIMIT @ 1450.00, Target 1500, SL 1420, validity DAY) has been executed",
+            // R1: inflected status words ("submitted"/"opened"/"successfully") must still count as own-order evidence.
+            "order successfully submitted" to "Your BUY order for RELIANCE was successfully submitted",
+            "order submitted successfully" to "Your SELL order request for INFY submitted successfully",
+            "position has been opened" to "Your position has been opened. Stop loss 1420",
+            // R2: a possessive order phrase alone is strong evidence; Hinglish and Devanagari spellings too.
+            "order sent to exchange" to "Your BUY order for 10 RELIANCE has been sent to exchange",
+            "gtt is active" to "Your GTT for BUY 10 RELIANCE is active. Target 1500, Stop loss 1420",
+            "hinglish possessive order" to "Aapka BUY order RELIANCE ke liye execute ho gaya",
+            "devanagari possessive order" to "आपका BUY ऑर्डर RELIANCE execute हो गया"
+        ).forEach { (description, body) -> assertEquals(description, ownOrder, CaptureGate.decide(event(title = neutralTitle, body = body), context)) }
 
         val brokerSms = event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S",
             body = "Your order to BUY 10 RELIANCE is executed at 1450")
@@ -139,19 +147,13 @@ class CaptureGateTest {
             "Target 26 achieved. Trade completed, book profits",
             "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
         )
-        // Round 2, finding C3 residual (b): "placed"/"triggered" were added to STRONG_EXECUTION's first
-        // pattern's status set, so "trade ... triggered" and "order ... placed" now count as strong
-        // evidence on their own (no possessive "your" needed). That is a direct, mechanical consequence of
-        // implementing (b) exactly as specified; it conflicts with these two having been "must still go"
-        // strings, and is resolved toward keeping the data local, per the standing ambiguous-case rule (see
-        // task-B3-report.md, "Final fix wave round 2", for the trace and discussion).
+        // These two now carry strong own-order evidence ("trade ... triggered", "order ... placed") on their own; see task-B3-report.md round 2.
         val nowOwnOrderToo = listOf(
             "Our RELIANCE trade: Stop loss triggered, exit now",
             "Buy order to be placed above 24, target 26, SL 22"
         )
         (stillGo + nowOwnOrderToo).forEach { body ->
-            // A group row is never subject to the own-order check (it only applies outside chat media), so
-            // it still sends regardless of the strings above.
+            // A group row is never subject to the own-order check, so it still sends regardless.
             val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true)
             assertTrue(body, CaptureGate.decide(group, context) is CaptureDecision.Send)
         }
@@ -162,8 +164,7 @@ class CaptureGateTest {
             assertEquals(body, CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = body), context))
         }
 
-        // Fix round 1, finding C3: this string carries strong evidence ("trade confirmation"), so it is
-        // own-order and stays local even though it also reads like a call (accepted per that round's ruling).
+        // This string carries strong evidence ("trade confirmation"), so it stays local though it also reads like a call.
         val flipped = "Wait for trade confirmation above 1450, then BUY RELIANCE SL 1420 TGT 1500"
         assertEquals(CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = flipped), context))
     }
@@ -200,8 +201,7 @@ class CaptureGateTest {
 
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Rahul"))
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("+44 7911 123456"))
-        // Final-review finding C1: sender ids are case-sensitive and uppercase-only; the bare 6-character
-        // form was dropped entirely, since a 6-letter contact name ("Suresh") passed it too.
+        // Sender ids are case-sensitive and uppercase-only; the bare 6-character form was dropped, since a 6-letter name ("Suresh") passed it too.
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Suresh"))
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("SURESH"))
         assertEquals(CaptureDecision.Keep(CaptureGate.SMS_NOT_SENDER_ID), decide("Mr-Suresh"))
@@ -212,45 +212,47 @@ class CaptureGateTest {
         assertEquals("UPSTOX", (decide("AD-UPSTOX-S") as CaptureDecision.Send).message.channelLabel)
     }
 
-    // Round 2 finding N2: production allow-list entries are stored lowercased; the entry must still be
-    // normalized to uppercase before extraction, or an otherwise-valid DLT-shaped title never matches.
+    // R3: the allow list holds ONLY the lowercased entry, so this can only pass with the uppercase-before-extraction fix.
     @Test
     fun smsAllowListMatchesADltEntryStoredLowercased() {
-        val lowercasedEntry = context.copy(chatAllowList = context.chatAllowList + "jd-zerodh-s")
+        val onlyLowercasedEntry = context.copy(chatAllowList = setOf("jd-zerodh-s"))
 
         val sent = (CaptureGate.decide(
             event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "VM-ZERODH"),
-            lowercasedEntry
+            onlyLowercasedEntry
         ) as CaptureDecision.Send).message
 
         assertEquals("ZERODH", sent.channelLabel)
     }
 
-    // Round 2 finding N1: ChatLabels keeps no shared mask cache; each CaptureContext (one per batch) builds
-    // its own mask from its own chatSenders, so two different sender sets used back to back (or
-    // interleaved) each mask exactly their own names, never the other's.
+    // R3: each name is mentioned MID-line (not a "Name: " prefix, which prefix-stripping alone would remove regardless of the mask).
     @Test
     fun interleavedBatchesEachMaskOnlyTheirOwnSenders() {
         val contextA = context.copy(chatSenders = setOf("Alice"))
         val contextB = context.copy(chatSenders = setOf("Bob"))
-        val rowA = event(
+        val rowA = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "RENUKA call via Alice hit target")
+        val rowB = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "RENUKA call via Bob hit target")
+        val mixedRow = event(
             pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true,
-            body = "Alice: BUY RENUKA CMP 23 SL 22 TGT 26"
-        )
-        val rowB = event(
-            pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true,
-            body = "Bob: BUY RENUKA CMP 23 SL 22 TGT 26"
+            body = "RENUKA call via Alice, cross-check Bob hit target"
         )
 
         val sentA1 = (CaptureGate.decide(rowA, contextA) as CaptureDecision.Send).message
         val sentB1 = (CaptureGate.decide(rowB, contextB) as CaptureDecision.Send).message
         val sentB2 = (CaptureGate.decide(rowB, contextB) as CaptureDecision.Send).message
         val sentA2 = (CaptureGate.decide(rowA, contextA) as CaptureDecision.Send).message
+        val sentMixedUnderA = (CaptureGate.decide(mixedRow, contextA) as CaptureDecision.Send).message
+        val sentMixedUnderB = (CaptureGate.decide(mixedRow, contextB) as CaptureDecision.Send).message
 
         assertFalse(sentA1.text.contains("Alice"))
         assertFalse(sentA2.text.contains("Alice"))
         assertFalse(sentB1.text.contains("Bob"))
         assertFalse(sentB2.text.contains("Bob"))
+        // The cross-contamination proof: each context's mask acts only on its own sender, never the other's.
+        assertFalse(sentMixedUnderA.text.contains("Alice"))
+        assertTrue(sentMixedUnderA.text.contains("Bob"))
+        assertFalse(sentMixedUnderB.text.contains("Bob"))
+        assertTrue(sentMixedUnderB.text.contains("Alice"))
     }
 
     @Test

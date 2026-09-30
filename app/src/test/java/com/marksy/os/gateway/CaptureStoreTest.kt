@@ -41,8 +41,7 @@ class CaptureStoreTest {
         assertTrue(remembered.contains("sender5001"))
     }
 
-    // Finding M2: touching (re-seeing) a name moves it to the end, so it survives an eviction that would
-    // otherwise have dropped it as the oldest.
+    // Finding M2: touching (re-seeing) a name moves it to the end, so it survives an eviction that would otherwise have dropped it.
     @Test
     fun reSeeingAnOldNameMovesItToTheEndAndSavesItFromEviction() {
         val store = CaptureStore(context)

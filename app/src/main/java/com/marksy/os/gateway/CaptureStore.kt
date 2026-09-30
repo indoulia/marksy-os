@@ -26,11 +26,7 @@ class CaptureStore(context: Context) {
 
     fun chatSenders(): Set<String> = orderedSenders().toSet()
 
-    /**
-     * Finding M2: senders are an ORDERED list (oldest first), not a Set, so eviction over the cap drops the
-     * oldest name, not an arbitrary one. A re-seen name moves to the end. A legacy StringSet (pre-fix) is
-     * migrated to this format on first read.
-     */
+    // An ORDERED list (oldest first), not a Set, so eviction drops the oldest name; migrates a legacy StringSet on first read.
     private fun orderedSenders(): List<String> = synchronized(LOCK) {
         when (val raw = prefs.all[KEY_SENDERS]) {
             is String -> decodeSenders(raw)
@@ -41,16 +37,12 @@ class CaptureStore(context: Context) {
         }
     }
 
-    /**
-     * Finding C2(b): persisted with commit(), not apply(), so a per-batch re-read (finding C2a) that runs
-     * on another thread right after this call is guaranteed to see it.
-     */
+    // commit() (not apply()) so a per-batch re-read on another thread is guaranteed to see it.
     fun rememberChatSenders(senders: Collection<String>) = synchronized(LOCK) {
         val fresh = senders.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (fresh.isEmpty()) return@synchronized
         val ordered = orderedSenders().toMutableList()
-        // Finding N3: skip the JSON rewrite and commit() when fresh is already the tail, in the same
-        // order -- e.g. the same sender posting again with nothing new to record.
+        // Skip the rewrite/commit when fresh is already the tail, in the same order.
         if (ordered.size >= fresh.size && ordered.takeLast(fresh.size) == fresh) return@synchronized
         fresh.forEach { name ->
             ordered.remove(name)

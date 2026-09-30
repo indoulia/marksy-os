@@ -131,12 +131,7 @@ object NotificationClassifier {
     private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
     private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
 
-    // The customer's own orders never leave the phone (spec §5.1). Final-review finding C3: strong
-    // evidence ((a) STRONG_EXECUTION, (b) a HARD customer marker + status, (c) one of the classifier's own
-    // execution terms below) returns own-order immediately, before the call veto is even considered -- a
-    // tipster's own call update ("trade confirmation ... BUY ... SL ... TGT") must still stay local when it
-    // also carries genuine execution evidence. Only the WEAK rule ("your" + a status word) is vetoed by
-    // looksLikeCall, since "your" alone is common in ordinary call chatter too.
+    // Strong evidence of the customer's own order returns own-order before the call veto even runs (spec §5.1).
     private val hardCustomerMarkers = listOf(
         Regex("""\bqty\b""", RegexOption.IGNORE_CASE),
         Regex("""\bquantity\b""", RegexOption.IGNORE_CASE),
@@ -149,31 +144,28 @@ object NotificationClassifier {
         Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
     )
     private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
-    // Round-2 finding C3 residual (a): "your ... order/gtt/position/trade" is strong evidence when paired
-    // with any status word. The weak rule below required the same pairing but let looksLikeCall veto it,
-    // which let a genuine own-order notification that also reads like a call (an entry, target and stop
-    // loss spelled out) slip through as a call.
-    private val possessiveOrderPhrase = Regex("""\byour\b.{0,40}?\b(?:orders?|gtt|position|trades?)\b""", RegexOption.IGNORE_CASE)
-    // Whole-word boundaries (round-2 finding C3 residual (c)) so "oversold" doesn't match "sold". "hit" stays
-    // (fix round 1, finding C2) for a stop-loss trigger, always used as a standalone word in practice.
+    // R2: a possessive order phrase is strong evidence on its own, no status word needed; aapka/apka/aapki/apki cover common Hinglish spellings.
+    private val possessiveOrderPhrase = Regex("""\b(?:your|aapka|apka|aapki|apki)\b.{0,40}?\b(?:orders?|gtt|position|trades?|sip)\b""", RegexOption.IGNORE_CASE)
+    // R2: Devanagari has no \b word-boundary support, so this pattern uses none.
+    private val devanagariPossessivePhrase = Regex("""आपक[ाी].{0,40}?(?:ऑर्डर|order)""")
+    // R1: leading boundary only (no trailing \b) so inflections like "opened"/"successfully" still count; "oversold" still can't match "sold" (nothing precedes it).
     private val orderStatus = Regex(
-        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit)\b""",
+        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit|submitted)""",
         RegexOption.IGNORE_CASE
     )
     private val strongExecution = listOf(
-        // Round-2 finding C3 residual (b): placed/triggered/modified/pending added to this pattern's status set.
         Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending)\b""", RegexOption.IGNORE_CASE),
         Regex("""(?:executed|filled)\s+(?:at|@)""", RegexOption.IGNORE_CASE),
         Regex("""\bbought\s+\d+\s+shares?\b""", RegexOption.IGNORE_CASE),
         Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
         Regex("""\btrades?\s+executed\b""", RegexOption.IGNORE_CASE)
     )
-    // Split from the TRADING rule's own term list above: execution/status vocabulary, never a tipster's call
-    // vocabulary ("buy order", "sell order", "stop loss", "target hit", "market alert" stay out on purpose).
+    // Execution/status vocabulary, never a tipster's call vocabulary ("buy order", "stop loss", "target hit" stay out on purpose).
     private val classifierExecutionTerms = listOf(
         "trade confirmation", "order executed", "order filled", "trade executed",
         "executed at", "filled at", "quantity executed", "position opened", "position closed",
-        "order rejected", "order cancelled", "order canceled"
+        "order rejected", "order cancelled", "order canceled",
+        "sent to exchange", "is active", "execute ho gaya", "ho gaya", "insufficient margin"
     )
 
     /** A trade call reads like a call (side + symbol + levels); an own-order notification never does. */
@@ -184,7 +176,8 @@ object NotificationClassifier {
         val text = "$title $body".lowercase()
         val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
             (hardCustomerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)) ||
-            (possessiveOrderPhrase.containsMatchIn(text) && orderStatus.containsMatchIn(text)) ||
+            possessiveOrderPhrase.containsMatchIn(text) ||
+            devanagariPossessivePhrase.containsMatchIn(text) ||
             classifierExecutionTerms.any { text.containsRuleTerm(it) }
         if (strongEvidence) return true
         if (looksLikeCall(title, body, text)) return false

@@ -85,8 +85,7 @@ class TradingDeliveryRunTest {
         assertEquals("DELIVERED", dao.findById(2L)?.deliveryState)
     }
 
-    // Finding C2: chatSenders is re-read right after each findPendingTrading call (inside drain()), so a
-    // chat row inserted mid-run -- from a sender recorded only at that moment -- still gets it masked.
+    // Finding C2: chatSenders is re-read after each findPendingTrading call, so a row inserted mid-run still gets its sender masked.
     @Test
     fun aChatRowThatArrivesMidRunUsesTheSenderRecordedAtThatMoment() = runBlocking {
         dao.insert(row("k1", 1L))
@@ -97,8 +96,7 @@ class TradingDeliveryRunTest {
             override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
                 sentTexts[eventId] = message.text
                 if (recordedSenders.isEmpty()) {
-                    // Simulate the listener: the sender is recorded (and committed) right as the chat row
-                    // is captured, strictly before that row is inserted (finding C2b's guarantee).
+                    // Simulate the listener recording the sender strictly before the row is inserted (finding C2b).
                     recordedSenders += "Amit"
                     midRunRowId = dao.insert(chatRow("k2", 2L))
                 }
@@ -115,8 +113,7 @@ class TradingDeliveryRunTest {
         assertFalse(midRunText.contains("Amit"))
     }
 
-    // Finding M3: the gate-error log line names the exception's class, never its message (which could carry
-    // notification content).
+    // Finding M3: the gate-error log line names the exception's class, never its message.
     @Test
     fun aGateErrorLogsTheExceptionClassNameNeverItsMessage() = runBlocking {
         ShadowLog.stream = null
