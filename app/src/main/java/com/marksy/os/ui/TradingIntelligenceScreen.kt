@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.StockMentions
+import com.marksy.os.market.ScorecardQuery
 
 @Composable
 fun TradingIntelligenceScreen(
@@ -41,8 +42,12 @@ fun TradingIntelligenceScreen(
     marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
     setupReports: List<SetupReport> = emptyList(),
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
-    onTipsStatusChange: (MyTipsStatus) -> Unit = {}
+    onTipsStatusChange: (MyTipsStatus) -> Unit = {},
+    scorecardQuery: ScorecardQuery = ScorecardQuery(),
+    onScorecardQueryChange: (ScorecardQuery) -> Unit = {}
 ) {
+    var filteringScorecards by remember { mutableStateOf(false) }
+    if (filteringScorecards) ScorecardFilterDialog(scorecardQuery, onApply = { onScorecardQueryChange(it); filteringScorecards = false }) { filteringScorecards = false }
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
         Modifier
@@ -55,6 +60,7 @@ fun TradingIntelligenceScreen(
         when {
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
+            selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(marketRepository, scorecardQuery, OneHandListBottomPadding)
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, setupReports, OneHandListBottomPadding, onOpenStock)
             else -> CapturedList(insights, onOpenStock)
         }
@@ -64,7 +70,8 @@ fun TradingIntelligenceScreen(
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
         actions = listOfNotNull(
-            if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null
+            if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
+            if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, "Filter scorecards") { filteringScorecards = true } else null
         )
     )
     }
@@ -90,12 +97,19 @@ private fun CapturedList(insights: List<TradingInsight>, onOpenStock: (String) -
 private const val TAB_PICKS = "Setups"
 private const val TAB_PREDICTIONS = "Predictions"
 private const val TAB_TIPS = "My tips"
+private const val TAB_SCORECARDS = "Scorecards"
 private const val TAB_CAPTURED = "Captured"
-val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_CAPTURED)
+val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_SCORECARDS, TAB_CAPTURED)
 
-/** Title superscript: the tab, plus Marksy's scan session on its tabs and the status on My tips. */
-fun tradingTitleNote(filter: String, scan: com.marksy.os.market.LatestScanDto?, tipsStatus: MyTipsStatus = MyTipsStatus.OPEN): String = when (filter) {
+/** Title superscript: the tab, plus Marksy's scan session, the My tips status, or the scorecard filter. */
+fun tradingTitleNote(
+    filter: String,
+    scan: com.marksy.os.market.LatestScanDto?,
+    tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
+    scorecards: ScorecardQuery = ScorecardQuery()
+): String = when (filter) {
     TAB_TIPS -> "$filter · ${tipsStatus.label}"
+    TAB_SCORECARDS -> "$filter · ${scorecards.entity.label} · ${scorecards.label()}"
     else -> filter + (if (filter == TAB_PICKS || filter == TAB_PREDICTIONS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
 }
 

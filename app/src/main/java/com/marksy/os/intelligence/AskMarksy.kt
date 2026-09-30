@@ -612,6 +612,8 @@ object AskMarksy {
         "predictions" to act(Page.TRADING, "Predictions", "Predictions"), "marksy calls" to act(Page.TRADING, "Predictions", "Predictions"),
         "calls" to act(Page.TRADING, "My tips", "My tips"), "trade calls" to act(Page.TRADING, "My tips", "My tips"), "trading calls" to act(Page.TRADING, "My tips", "My tips"),
         "my tips" to act(Page.TRADING, "My tips", "My tips"), "tips" to act(Page.TRADING, "My tips", "My tips"),
+        "scorecards" to act(Page.TRADING, "Scorecards", "Scorecards"), "scorecard" to act(Page.TRADING, "Scorecards", "Scorecards"),
+        "track record" to act(Page.TRADING, "Scorecards", "Scorecards"),
         "captured" to act(Page.TRADING, "Captured", "Captured"), "captured trades" to act(Page.TRADING, "Captured", "Captured"),
         "market" to act(Page.MARKET, "OVERVIEW"), "overview" to act(Page.MARKET, "OVERVIEW", "Overview"), "market overview" to act(Page.MARKET, "OVERVIEW", "Overview"),
         "indices" to act(Page.MARKET, "OVERVIEW", "Overview"), "stocks" to act(Page.MARKET, "STOCKS", "Stocks"), "stock search" to act(Page.MARKET, "STOCKS", "Stocks"),

@@ -237,6 +237,7 @@ class MainActivity : ComponentActivity() {
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
         var tradingFilter by rememberSaveable { mutableStateOf(TradingFilters.first()) }
         var tipsStatus by rememberSaveable { mutableStateOf(com.marksy.os.ui.MyTipsStatus.OPEN) }
+        var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
@@ -383,7 +384,7 @@ class MainActivity : ComponentActivity() {
             showPlan -> planView
             hostOpen -> null
             selectedTab == 2 -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus)
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, scorecardQuery)
             selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             else -> null
         }
@@ -750,7 +751,9 @@ class MainActivity : ComponentActivity() {
                                 .take(3)
                         },
                         tipsStatus = tipsStatus,
-                        onTipsStatusChange = { tipsStatus = it }
+                        onTipsStatusChange = { tipsStatus = it },
+                        scorecardQuery = scorecardQuery,
+                        onScorecardQueryChange = { scorecardQuery = it }
                     )
                 }
                 selectedTab == 4 -> MarketScreen(
