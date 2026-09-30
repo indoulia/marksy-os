@@ -153,7 +153,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun unfollow(key: FollowKey): FollowListDto =
         FollowListDto.parse(execute("$base/me/follows/${encode(key.type)}/${key.id}", method = "DELETE").getJSONObject("data"))
 
-    override suspend fun tipAlerts(): List<TipAlertDto> = TipAlertDto.parseList(getData("$base/alerts"))
+    override suspend fun tipAlerts(): List<TipAlertDto> = TipAlertDto.parseList(getData("$base/alerts?limit=${TipAlertDto.PAGE}"))
 
     override suspend fun markAlertRead(id: Long) { execute("$base/alerts/$id/read", method = "POST") }
 

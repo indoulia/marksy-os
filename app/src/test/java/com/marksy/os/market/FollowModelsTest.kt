@@ -54,6 +54,10 @@ class FollowModelsTest {
         ], "unreadCount": 2}"""))
 
         assertEquals(listOf(3L to "TIP_NEW", 1L to "TIP_CLOSED"), alerts.map { it.id to it.alertType })
+        val older = TipAlertDto.parseList(JSONObject("""{"alerts": [
+            {"id": 1, "alertType": "TIP_NEW", "message": "a", "triggeredAt": "2026-09-29T10:00:00Z", "unread": true},
+            {"id": 2, "alertType": "TIP_NEW", "message": "b", "triggeredAt": "2026-09-30T10:00:00Z", "unread": true}]}"""))
+        assertEquals(listOf(2L, 1L), older.map { it.id })
         assertEquals(listOf(true, false), alerts.map { it.unread })
         assertEquals(1_790_740_800_000L, alerts[0].triggeredAt)
         assertEquals("uuid-1", alerts[1].tipId)

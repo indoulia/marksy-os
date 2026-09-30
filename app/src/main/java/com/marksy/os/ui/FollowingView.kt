@@ -1,6 +1,9 @@
 package com.marksy.os.ui
 
+import android.Manifest
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +23,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
+import com.marksy.os.alerts.TipAlertNotifier
+import com.marksy.os.alerts.TipAlertWorker
 import com.marksy.os.market.FollowDto
 import com.marksy.os.market.FollowKey
 import com.marksy.os.market.FollowListDto
@@ -42,11 +47,17 @@ internal fun FollowPill(following: Boolean?, onToggle: (Boolean) -> Unit) {
 internal fun rememberFollowToggle(repository: MarketIntelligenceRepository): (FollowKey, String, Boolean) -> Unit {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    return remember(repository, scope, context) {
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    return remember(repository, scope, context, permission) {
         { key, name, follow ->
             scope.launch {
-                if (repository.setFollowing(key, follow) !is MarketDataState.Loaded) {
-                    Toast.makeText(context, "Couldn't ${if (follow) "follow" else "unfollow"} $name", Toast.LENGTH_SHORT).show()
+                val result = repository.setFollowing(key, follow)
+                if (result !is MarketDataState.Loaded) {
+                    Toast.makeText(context, Follows.failureText(result, follow, name), Toast.LENGTH_SHORT).show()
+                } else if (follow) {
+                    TipAlertWorker.schedule(context)
+                    // I5: asked once, on the first follow, so a followed source's calls can reach the shade.
+                    if (TipAlertNotifier.shouldAskPermission(context)) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
         }

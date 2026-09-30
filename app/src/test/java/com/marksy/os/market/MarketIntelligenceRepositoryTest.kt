@@ -34,7 +34,8 @@ private class FakeMarketApiClient(
     override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = ledgerError?.let { throw it } ?: MyTipPageDto(emptyList(), null)
     override suspend fun myScorecard(filter: String): ScorecardDto = throw ledgerError ?: NotImplementedError()
     override suspend fun tipDetail(tipId: String): TipDetailDto = throw ledgerError ?: NotImplementedError()
-    override suspend fun follows(): FollowListDto = followList
+    var followReads = 0
+    override suspend fun follows(): FollowListDto = followList.also { followReads++ }
     override suspend fun follow(key: FollowKey): FollowDto {
         seenWhileSaving += MarketIntelligenceRepository.followed.value
         followError?.let { throw it }
@@ -237,5 +238,24 @@ class MarketIntelligenceRepositoryTest {
         assertEquals(setOf(FollowKey.caller(9)), MarketIntelligenceRepository.followed.value)
         assertEquals(MarketDataState.Unavailable, repo(401).also { it.follows() }.setFollowing(FollowKey.caller(9), follow = false))
         assertEquals(setOf(FollowKey.caller(9)), MarketIntelligenceRepository.followed.value)
+    }
+
+    @Test
+    fun theFollowLimitIsWordedAndAnUnknownSetIsReReadBeforeToggling() = runBlocking {
+        val client = FakeMarketApiClient(
+            followList = FollowListDto(listOf(followOf(FollowKey.caller(9))), 200),
+            followError = MarketApiException("Marksy Market API returned HTTP 422", 422)
+        )
+        val repository = MarketIntelligenceRepository(client)
+        MarketIntelligenceRepository.forgetFollows()
+
+        val refused = repository.setFollowing(FollowKey.channel(3), follow = true)
+
+        assertEquals(MarketDataState.Error(Follows.LIMIT_TEXT), refused)
+        assertEquals(1, client.followReads)
+        assertEquals(setOf(FollowKey.caller(9)), client.seenWhileSaving.single()!! - FollowKey.channel(3))
+        assertEquals(setOf(FollowKey.caller(9)), MarketIntelligenceRepository.followed.value)
+        assertEquals("You can follow up to 200 sources", Follows.failureText(refused, follow = true, name = "Upstox"))
+        assertEquals("Couldn't unfollow Upstox", Follows.failureText(MarketDataState.Error("x"), follow = false, name = "Upstox"))
     }
 }

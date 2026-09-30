@@ -120,6 +120,7 @@ class MainActivity : ComponentActivity() {
         const val OPEN_ASK = "ask"
         const val OPEN_BRIEFING = "briefing"
         const val OPEN_SETUPS = "setups"
+        const val OPEN_FOLLOWING = "following"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -133,6 +134,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
         TradingDeliveryScheduler.schedule(applicationContext)
         EventIntelligenceWorker.schedule(applicationContext)
+        com.marksy.os.alerts.TipAlertWorker.schedule(applicationContext)
         lifecycleScope.launch { runCatching { MarksyContainer.actions(applicationContext).recover() } }
         // OTPs expire in minutes, so retire while the app is on screen, not only in the daily worker.
         lifecycleScope.launch {
@@ -413,6 +415,10 @@ class MainActivity : ComponentActivity() {
                 OPEN_ASK -> showAsk = true
                 OPEN_BRIEFING -> { showAsk = false; showBriefing = true }
                 OPEN_SETUPS -> { showAsk = false; showBriefing = false; tradingFilter = TradingFilters.first(); selectedTab = 3 }
+                OPEN_FOLLOWING -> {
+                    showAsk = false; showBriefing = false
+                    tradingFilter = com.marksy.os.ui.TradingTipsFilter; tipsStatus = com.marksy.os.ui.MyTipsStatus.FOLLOWING; selectedTab = 3
+                }
             }
             pendingOpen = null
         }

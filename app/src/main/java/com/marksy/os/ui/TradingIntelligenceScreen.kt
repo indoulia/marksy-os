@@ -99,6 +99,8 @@ private const val TAB_TIPS = "My tips"
 private const val TAB_SCORECARDS = "Scorecards"
 private const val TAB_CAPTURED = "Captured"
 val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_SCORECARDS, TAB_CAPTURED)
+/** The My tips filter, for a tip-alert notification that opens My tips · Following. */
+const val TradingTipsFilter = TAB_TIPS
 
 /** Title superscript: the tab, plus Marksy's scan session, the My tips status, or the scorecard filter. */
 fun tradingTitleNote(

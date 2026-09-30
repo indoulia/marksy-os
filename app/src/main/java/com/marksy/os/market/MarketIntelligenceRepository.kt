@@ -75,9 +75,15 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     /** Optimistic in [followed] while saving, then the server's answer; a failure undoes only this key. */
     suspend fun setFollowing(key: FollowKey, follow: Boolean): MarketDataState<Set<FollowKey>> {
+        // M4: a toggle settles on the server's whole set, so read it first when it was never read.
+        if (_followed.value == null) follows()
         _followed.value = Follows.toggled(_followed.value, key, follow)
         val result = fetch(ledger = true) { c ->
-            if (follow) Follows.followed(_followed.value, key, c.follow(key)) else Follows.keys(c.unfollow(key))
+            try {
+                if (follow) Follows.followed(_followed.value, key, c.follow(key)) else Follows.keys(c.unfollow(key))
+            } catch (limit: MarketApiException) {
+                throw if (limit.status == 422) MarketApiException(Follows.LIMIT_TEXT, 422) else limit
+            }
         }
         _followed.value = if (result is MarketDataState.Loaded) result.value else Follows.toggled(_followed.value, key, !follow)
         return result
@@ -144,5 +150,6 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
         private val _followed = MutableStateFlow<Set<FollowKey>?>(null)
         /** The last follow set the server returned (null until read); memory only, re-read on every follow screen. */
         val followed: StateFlow<Set<FollowKey>?> = _followed
+        internal fun forgetFollows() { _followed.value = null }  // tests only: the state before any server read
     }
 }

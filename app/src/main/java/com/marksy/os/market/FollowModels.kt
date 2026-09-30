@@ -51,6 +51,7 @@ data class FollowListDto(val items: List<FollowDto>, val limit: Int) {
 data class TipAlertDto(val id: Long, val alertType: String, val message: String, val tipId: String?, val triggeredAt: Long, val unread: Boolean) {
     companion object {
         val TYPES = setOf("TIP_NEW", "TIP_ENTERED", "TIP_CLOSED")
+        const val PAGE = 50
 
         fun parseList(json: JSONObject): List<TipAlertDto> = json.optJSONArray("alerts").objects()
             .filter { it.textOrNull("alertType") in TYPES }
@@ -62,11 +63,18 @@ data class TipAlertDto(val id: Long, val alertType: String, val message: String,
                     unread = it.boolOrFalse("unread")
                 )
             }
+            .sortedWith(compareByDescending<TipAlertDto> { it.triggeredAt }.thenByDescending { it.id })
+            .take(PAGE)
     }
 }
 
 /** The follow set is always the server's; these only apply an optimistic change and settle it on the server's answer. */
 object Follows {
+    const val LIMIT_TEXT = "You can follow up to 200 sources"
+
+    fun failureText(result: MarketDataState<*>, follow: Boolean, name: String): String =
+        (result as? MarketDataState.Error)?.message?.takeIf { it == LIMIT_TEXT } ?: "Couldn't ${if (follow) "follow" else "unfollow"} $name"
+
     fun keys(list: FollowListDto): Set<FollowKey> = list.items.mapTo(LinkedHashSet()) { it.key }
 
     fun key(card: EntityScorecardDto): FollowKey = FollowKey(if (card.entity == ScorecardEntity.CHANNEL.param) FollowKey.CHANNEL else FollowKey.CALLER, card.id)
