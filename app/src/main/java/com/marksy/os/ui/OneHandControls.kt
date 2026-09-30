@@ -100,34 +100,7 @@ fun BoxScope.OneHandControls(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (filtersOpen) {
-            Column(
-                Modifier
-                    .shadow(10.dp, RoundedCornerShape(16.dp))
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MarksyTheme.SurfaceRaised)
-                    .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
-                    .verticalScroll(rememberScrollState())
-                    .padding(6.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                filters.forEach { (key, label) ->
-                    val selected = key == selectedFilter
-                    Text(
-                        label,
-                        color = if (selected) Color.Black else MarksyTheme.TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selected) MarksyTheme.PrimaryEmerald else Color.Transparent)
-                            .clickable { onFilterSelected(key); filtersOpen = false }
-                            .padding(horizontal = 18.dp, vertical = 10.dp)
-                    )
-                }
-            }
-        }
+        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
             // With a filter applied the button becomes X: one tap closes the list and resets the filter.
             val showClose = filtersOpen || filterActive
@@ -150,6 +123,52 @@ fun BoxScope.OneHandControls(
         }
         actions.forEach { action ->
             FloatingRoundButton(action.icon, action.label, false) { filtersOpen = false; action.onClick() }
+        }
+    }
+}
+
+/** Bottom-left twin of the filter button, for a page's second switcher (e.g. which watchlist). */
+@Composable
+fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: String?, onSelected: (String) -> Unit, icon: ImageVector, label: String) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    if (open) {
+        Box(Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = false })
+    }
+    Column(
+        Modifier.align(Alignment.BottomStart).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (open) FloatingMenuPanel(options, selected, Alignment.Start) { onSelected(it); open = false }
+        FloatingRoundButton(if (open) Icons.Default.Close else icon, label, false) { open = !open }
+    }
+}
+
+@Composable
+private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, onPick: (String) -> Unit) {
+    Column(
+        Modifier
+            .shadow(10.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(MarksyTheme.SurfaceRaised)
+            .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(6.dp),
+        horizontalAlignment = align,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        options.forEach { (key, label) ->
+            val on = key == selected
+            Text(
+                label,
+                color = if (on) Color.Black else MarksyTheme.TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent)
+                    .clickable { onPick(key) }
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
+            )
         }
     }
 }
