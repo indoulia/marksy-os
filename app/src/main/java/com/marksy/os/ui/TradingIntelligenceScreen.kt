@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.StockMentions
 import com.marksy.os.market.ScorecardQuery
+import com.marksy.os.market.ScorecardSource
 
 @Composable
 fun TradingIntelligenceScreen(
@@ -43,10 +44,15 @@ fun TradingIntelligenceScreen(
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
     onTipsStatusChange: (MyTipsStatus) -> Unit = {},
     scorecardQuery: ScorecardQuery = ScorecardQuery(),
-    onScorecardQueryChange: (ScorecardQuery) -> Unit = {}
+    onScorecardQueryChange: (ScorecardQuery) -> Unit = {},
+    scorecardTrail: List<ScorecardSource> = emptyList(),
+    onScorecardTrailChange: (List<ScorecardSource>) -> Unit = {}
 ) {
-    var filteringScorecards by remember { mutableStateOf(false) }
-    if (filteringScorecards) ScorecardFilterDialog(scorecardQuery, onApply = { onScorecardQueryChange(it); filteringScorecards = false }) { filteringScorecards = false }
+    var filteringScorecards by remember { mutableStateOf<ScorecardQuery?>(null) }
+    filteringScorecards?.let { initial -> ScorecardFilterDialog(initial, onApply = { onScorecardQueryChange(it); filteringScorecards = null }) { filteringScorecards = null } }
+    val followed by com.marksy.os.market.MarketIntelligenceRepository.followed.collectAsState()
+    val toggleFollow = marketRepository?.let { rememberFollowToggle(it) }
+    val openSource = scorecardTrail.lastOrNull()?.takeIf { selectedFilter == TAB_SCORECARDS }
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
         Modifier
@@ -59,7 +65,10 @@ fun TradingIntelligenceScreen(
         when {
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
-            selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(marketRepository, scorecardQuery, OneHandListBottomPadding)
+            selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(
+                marketRepository, scorecardQuery, OneHandListBottomPadding, onScorecardQueryChange, onEditFilter = { filteringScorecards = it },
+                trail = scorecardTrail, onTrailChange = onScorecardTrailChange, onOpenStock = onOpenStock
+            )
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             else -> CapturedList(insights, onOpenStock)
         }
@@ -70,7 +79,11 @@ fun TradingIntelligenceScreen(
         onFilterSelected = onFilterSelected,
         actions = listOfNotNull(
             if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
-            if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, "Filter scorecards") { filteringScorecards = true } else null
+            openSource?.let { s -> followed?.let { set -> toggleFollow?.let { toggle ->
+                val on = s.followKey in set
+                FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggle(s.followKey, s.name, !on) }
+            } } },
+            if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards") { filteringScorecards = scorecardQuery } else null
         )
     )
     }
@@ -107,10 +120,11 @@ fun tradingTitleNote(
     filter: String,
     scan: com.marksy.os.market.LatestScanDto?,
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
-    scorecards: ScorecardQuery = ScorecardQuery()
+    scorecards: ScorecardQuery = ScorecardQuery(),
+    sourceOpen: Boolean = false
 ): String = when (filter) {
     TAB_TIPS -> "$filter · ${tipsStatus.label}"
-    TAB_SCORECARDS -> "$filter · ${scorecards.entity.label} · ${scorecards.label()}"
+    TAB_SCORECARDS -> if (sourceOpen) "$filter · ${scorecards.label()}" else "$filter · ${scorecards.entity.label} · ${scorecards.label()}"
     else -> filter + (if (filter == TAB_PICKS || filter == TAB_PREDICTIONS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
 }
 

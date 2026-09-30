@@ -240,6 +240,7 @@ class MainActivity : ComponentActivity() {
         var tradingFilter by rememberSaveable { mutableStateOf(TradingFilters.first()) }
         var tipsStatus by rememberSaveable { mutableStateOf(com.marksy.os.ui.MyTipsStatus.OPEN) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
+        var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
@@ -386,7 +387,7 @@ class MainActivity : ComponentActivity() {
             showPlan -> planView
             hostOpen -> null
             selectedTab == 2 -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, scorecardQuery)
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             else -> null
         }
@@ -539,12 +540,15 @@ class MainActivity : ComponentActivity() {
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
+                                softWrap = false
                             )
                             titleNote?.let {
                                 Spacer(Modifier.width(4.dp))
-                                Text(it, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                // The title keeps its width; a long note wraps, then ellipsizes.
+                                Text(
+                                    it, color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                                )
                             }
                             if (titleLive) {
                                 Spacer(Modifier.width(4.dp))
@@ -748,13 +752,15 @@ class MainActivity : ComponentActivity() {
                     TradingIntelligenceScreen(
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
-                        onFilterSelected = { tradingFilter = it },
+                        onFilterSelected = { tradingFilter = it; scorecardTrail = emptyList() },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                         tipsStatus = tipsStatus,
                         onTipsStatusChange = { tipsStatus = it },
                         scorecardQuery = scorecardQuery,
-                        onScorecardQueryChange = { scorecardQuery = it }
+                        onScorecardQueryChange = { if (it.entity != scorecardQuery.entity) scorecardTrail = emptyList(); scorecardQuery = it },
+                        scorecardTrail = scorecardTrail,
+                        onScorecardTrailChange = { scorecardTrail = it }
                     )
                 }
                 selectedTab == 4 -> MarketScreen(

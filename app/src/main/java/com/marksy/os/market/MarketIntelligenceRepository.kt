@@ -62,10 +62,17 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
         query.filterParams()?.let { f -> fetch(ledger = true) { it.scorecardSummary(f) } } ?: incompleteRange
 
     suspend fun scorecards(entity: ScorecardEntity, query: ScorecardQuery): MarketDataState<EntityScorecardListDto> =
-        query.filterParams()?.let { f -> fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { it.scorecards(entity.param, f) } } ?: incompleteRange
+        query.filterParams()?.let { f ->
+            fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { c ->
+                c.scorecards(entity.param, f).let { l -> if (entity == ScorecardEntity.ENGINE) l.copy(items = l.items.filter(ScorecardSources::isEngine)) else l }
+            }
+        } ?: incompleteRange
 
     suspend fun scorecard(entity: ScorecardEntity, id: Int, query: ScorecardQuery): MarketDataState<ScorecardDto> =
         query.filterParams()?.let { f -> fetch(ledger = true) { it.scorecard(entity.param, id, f) } } ?: incompleteRange
+
+    suspend fun scorecardDetail(source: ScorecardSource, query: ScorecardQuery): MarketDataState<ScorecardDetailDto> =
+        query.filterParams()?.let { f -> fetch(ledger = true) { it.scorecardDetail(source.entity, source.id, f) } } ?: incompleteRange
 
     suspend fun tipDetail(tipId: String): MarketDataState<TipDetailDto> = fetch(ledger = true) { it.tipDetail(tipId) }
 
