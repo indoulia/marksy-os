@@ -69,6 +69,30 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     suspend fun tipDetail(tipId: String): MarketDataState<TipDetailDto> = fetch(ledger = true) { it.tipDetail(tipId) }
 
+    /** Re-reads the customer's follows from the server and publishes them as [followed]. */
+    suspend fun follows(): MarketDataState<FollowListDto> =
+        fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { c -> c.follows().also { _followed.value = Follows.keys(it) } }
+
+    /** Optimistic in [followed] while saving, then the server's answer; a failure undoes only this key. */
+    suspend fun setFollowing(key: FollowKey, follow: Boolean): MarketDataState<Set<FollowKey>> {
+        // M4: a toggle settles on the server's whole set, so read it first when it was never read.
+        if (_followed.value == null) follows()
+        _followed.value = Follows.toggled(_followed.value, key, follow)
+        val result = fetch(ledger = true) { c ->
+            try {
+                if (follow) Follows.followed(_followed.value, key, c.follow(key)) else Follows.keys(c.unfollow(key))
+            } catch (limit: MarketApiException) {
+                throw if (limit.status == 422) MarketApiException(Follows.LIMIT_TEXT, 422) else limit
+            }
+        }
+        _followed.value = if (result is MarketDataState.Loaded) result.value else Follows.toggled(_followed.value, key, !follow)
+        return result
+    }
+
+    suspend fun tipAlerts(): MarketDataState<List<TipAlertDto>> = fetch(emptyCheck = { it.isEmpty() }, ledger = true) { it.tipAlerts() }
+
+    suspend fun markAlertRead(id: Long): MarketDataState<Unit> = fetch(ledger = true) { it.markAlertRead(id) }
+
     private val incompleteRange = MarketDataState.Error("Pick a start and an end date")
 
     // 4b review M1: the ledger screens word a session or access failure; signed out or 401 is the existing sign-in state.
@@ -123,5 +147,9 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
         private val _latestScan = MutableStateFlow<LatestScanDto?>(null)
         /** The newest discovery scan seen behind Marksy's picks, for the Trading title note. */
         val latestScan: StateFlow<LatestScanDto?> = _latestScan
+        private val _followed = MutableStateFlow<Set<FollowKey>?>(null)
+        /** The last follow set the server returned (null until read); memory only, re-read on every follow screen. */
+        val followed: StateFlow<Set<FollowKey>?> = _followed
+        internal fun forgetFollows() { _followed.value = null }  // tests only: the state before any server read
     }
 }

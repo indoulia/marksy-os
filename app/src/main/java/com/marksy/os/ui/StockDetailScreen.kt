@@ -77,7 +77,9 @@ fun StockDetailScreen(
     fundamentals: StockFundamentals = StockFundamentals(),
     onOpenSymbol: (String) -> Unit = {},
     analysis: org.json.JSONObject? = null,
-    onOpenTip: (String) -> Unit = {}
+    onOpenTip: (String) -> Unit = {},
+    followed: Set<com.marksy.os.market.FollowKey>? = null,
+    onToggleFollow: ((com.marksy.os.market.FollowKey, String, Boolean) -> Unit)? = null
 ) {
     val instrument = (state as? MarketDataState.Loaded)?.value ?: (state as? MarketDataState.Stale)?.value
     // A new symbol (e.g. a tapped peer) opens at its header, not at the previous stock's scroll position.
@@ -91,7 +93,7 @@ fun StockDetailScreen(
         item { PriceHeader(instrument, symbol, live) }
         // Channels are listed only with a call here, but every engine is, so an engine-only box needs a tip.
         val calls = instrument?.calls?.takeIf { c -> c.engines.any { it.tips.isNotEmpty() } || c.channels.isNotEmpty() }
-        calls?.let { c -> item(key = "calls") { CallsBox(c, live.quote?.lastPrice, analysis, onOpenTip) } }
+        calls?.let { c -> item(key = "calls") { CallsBox(c, live.quote?.lastPrice, analysis, onOpenTip, followed, onToggleFollow) } }
         live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
         val levels = LedgerCalls.chartLevels(LedgerCalls.leadingMarksyCall(instrument?.calls))
         if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels, minutes, onMinutesSelected) }

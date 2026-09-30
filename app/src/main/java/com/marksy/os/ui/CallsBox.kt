@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.marksy.os.market.FollowKey
 import com.marksy.os.market.InstrumentCallsDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
@@ -40,7 +41,12 @@ internal fun toneColor(tone: LedgerCalls.Tone): Color = when (tone) {
 
 /** Every call on this stock, grouped per Marksy engine then per channel with its record (spec §10); states come from the ledger tip. */
 @Composable
-internal fun CallsBox(calls: InstrumentCallsDto, livePrice: Double?, analysis: JSONObject?, onOpenTip: (String) -> Unit) {
+internal fun CallsBox(
+    calls: InstrumentCallsDto, livePrice: Double?, analysis: JSONObject?, onOpenTip: (String) -> Unit,
+    followed: Set<FollowKey>? = null, onToggleFollow: ((FollowKey, String, Boolean) -> Unit)? = null
+) {
+    fun follow(key: FollowKey, name: String) =
+        FollowState(followed?.takeIf { onToggleFollow != null }?.contains(key)) { onToggleFollow?.invoke(key, name, it) }
     val shape = RoundedCornerShape(14.dp)
     val leading = remember(calls) { LedgerCalls.leadingMarksyCall(calls) != null }
     Column(
@@ -48,28 +54,37 @@ internal fun CallsBox(calls: InstrumentCallsDto, livePrice: Double?, analysis: J
             .border(1.dp, if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape).padding(12.dp)
     ) {
         Text("MARKSY", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        calls.engines.forEach { e -> CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip) }
+        calls.engines.forEach { e ->
+            CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip, follow(FollowKey.caller(e.callerId), e.name))
+        }
         AnalysisSection(analysis)
         if (calls.channels.isNotEmpty()) {
             Text("EXTERNAL", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 10.dp))
         }
-        calls.channels.forEach { c -> CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip) }
+        calls.channels.forEach { c ->
+            CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip, follow(FollowKey.channel(c.channelId), c.name))
+        }
     }
 }
+
+private class FollowState(val following: Boolean?, val onToggle: (Boolean) -> Unit)
 
 @Composable
 private fun CallGroup(
     name: String, kind: String?, record: ScorecardHeadlineDto, tips: List<LedgerTipDto>, withCaller: Boolean,
-    livePrice: Double?, onOpenTip: (String) -> Unit
+    livePrice: Double?, onOpenTip: (String) -> Unit, follow: FollowState
 ) {
     val (open, past) = remember(tips) { tips.partition(LedgerCalls::isActive) }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                name + (kind?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
-            )
-            Text(LedgerCalls.recordText(record), color = MarksyTheme.TextSecondary, fontSize = 10.sp, maxLines = 1)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    name + (kind?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(LedgerCalls.recordText(record), color = MarksyTheme.TextSecondary, fontSize = 10.sp, maxLines = 1)
+            }
+            FollowPill(follow.following, follow.onToggle)
         }
         if (tips.isEmpty()) Text("No call on this stock", color = MarksyTheme.TextMuted, fontSize = 11.sp)
         open.forEach { t -> OpenCall(t, withCaller, livePrice) { onOpenTip(t.tipId) } }

@@ -39,6 +39,12 @@ interface MarketApiClient {
     suspend fun scorecardSummary(filter: String): ScorecardSummaryDto = throw MarketApiException("Scorecards are not supported")
     suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
     suspend fun tipDetail(tipId: String): TipDetailDto = throw MarketApiException("Tip detail is not supported")
+    /** Follows live on the server (`/me/follows`); the app never keeps its own list. */
+    suspend fun follows(): FollowListDto = FollowListDto(emptyList(), 0)
+    suspend fun follow(key: FollowKey): FollowDto = throw MarketApiException("Follows are not supported")
+    suspend fun unfollow(key: FollowKey): FollowListDto = throw MarketApiException("Follows are not supported")
+    suspend fun tipAlerts(): List<TipAlertDto> = emptyList()
+    suspend fun markAlertRead(id: Long) = Unit
 }
 
 /** [status] is the HTTP status, or 401 when no session exists, so a screen can word the failure instead of showing it. */
@@ -138,13 +144,26 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
 
     override suspend fun tipDetail(tipId: String): TipDetailDto = TipDetailDto.parse(getData("$base/tips/${encode(tipId)}"))
 
+    override suspend fun follows(): FollowListDto = FollowListDto.parse(getData("$base/me/follows"))
+
+    override suspend fun follow(key: FollowKey): FollowDto = FollowDto.parse(
+        execute("$base/me/follows", method = "POST", body = JSONObject().put("entityType", key.type).put("entityId", key.id).toString()).getJSONObject("data")
+    )
+
+    override suspend fun unfollow(key: FollowKey): FollowListDto =
+        FollowListDto.parse(execute("$base/me/follows/${encode(key.type)}/${key.id}", method = "DELETE").getJSONObject("data"))
+
+    override suspend fun tipAlerts(): List<TipAlertDto> = TipAlertDto.parseList(getData("$base/alerts?limit=${TipAlertDto.PAGE}"))
+
+    override suspend fun markAlertRead(id: Long) { execute("$base/alerts/$id/read", method = "POST") }
+
     private fun query(filter: String) = if (filter.isEmpty()) "" else "?$filter"
 
     private suspend fun getEnvelope(url: String): JSONObject = execute(url)
     private suspend fun getData(url: String): JSONObject = execute(url).getJSONObject("data")
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
-    private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS, method: String = "GET"): JSONObject {
+    private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS, method: String = "GET", body: String? = null): JSONObject {
         val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy", 401)
         return withContext(Dispatchers.IO) {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -155,7 +174,13 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("Authorization", "Bearer $token")
                 doInput = true
-                if (method == "POST") { doOutput = true; setFixedLengthStreamingMode(0) }
+                if (method == "POST") {
+                    val bytes = body?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
+                    if (body != null) setRequestProperty("Content-Type", "application/json")
+                    doOutput = true
+                    setFixedLengthStreamingMode(bytes.size)
+                    if (bytes.isNotEmpty()) outputStream.use { it.write(bytes) }
+                }
             }
             try {
                 val code = connection.responseCode

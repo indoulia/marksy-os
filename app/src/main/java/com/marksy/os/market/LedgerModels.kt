@@ -329,7 +329,8 @@ data class ScorecardDto(
     val channelId: Int?,
     val channelName: String?,
     val filter: ScorecardFilterEchoDto,
-    val body: ScorecardBodyDto
+    val body: ScorecardBodyDto,
+    val following: Boolean = false
 ) {
     companion object {
         fun parse(json: JSONObject) = ScorecardDto(
@@ -341,16 +342,20 @@ data class ScorecardDto(
             channelId = json.intOrNull("channelId"),
             channelName = json.textOrNull("channelName"),
             filter = ScorecardFilterEchoDto.parse(json.optJSONObject("filter") ?: JSONObject()),
-            body = ScorecardBodyDto.parse(json)
+            body = ScorecardBodyDto.parse(json),
+            following = json.boolOrFalse("following")
         )
     }
 }
 
-data class EntityScorecardDto(val entity: String, val id: Int, val name: String, val channelId: Int?, val channelName: String?, val body: ScorecardBodyDto) {
+data class EntityScorecardDto(
+    val entity: String, val id: Int, val name: String, val channelId: Int?, val channelName: String?, val body: ScorecardBodyDto,
+    val following: Boolean = false
+) {
     companion object {
         fun parse(json: JSONObject) = EntityScorecardDto(
             json.textOrNull("entity") ?: "", json.count("id"), json.textOrNull("name") ?: "",
-            json.intOrNull("channelId"), json.textOrNull("channelName"), ScorecardBodyDto.parse(json)
+            json.intOrNull("channelId"), json.textOrNull("channelName"), ScorecardBodyDto.parse(json), json.boolOrFalse("following")
         )
     }
 }
