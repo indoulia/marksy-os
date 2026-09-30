@@ -162,7 +162,6 @@ fun WatchlistScreen(
     val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
     val adder = LocalWatchlistAdder.current
     var creating by rememberSaveable { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<WatchlistEntity?>(null) }
     var moving by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
@@ -193,10 +192,8 @@ fun WatchlistScreen(
             filters = MarketSections,
             selectedFilter = MarketTab.WATCHLIST.name,
             onFilterSelected = onSectionSelected,
-            actions = listOfNotNull(
-                list?.let { l -> FloatingAction(Icons.Default.Delete, "Delete ${l.name}") { deleting = l } },
-                FloatingAction(Icons.Default.Add, "New watchlist") { creating = true }
-            )
+            // Delete lives in Settings (ManageWatchlistsDialog), away from easy taps.
+            actions = listOf(FloatingAction(Icons.Default.Add, "New watchlist") { creating = true })
         )
     }
 
@@ -225,19 +222,44 @@ fun WatchlistScreen(
         onDismiss = { creating = false },
         onCreate = { name -> repository.createList(name)?.also { creating = false; onViewSelected(it.toString()) } }
     )
-    deleting?.let { l ->
-        WatchDialog(
-            title = "Delete ${l.name}?",
-            confirmLabel = "Delete",
-            confirmEnabled = true,
-            confirmColor = MarksyTheme.RedUrgent,
-            onConfirm = { deleting = null; scope.launch { repository.deleteList(l.id) }; onViewSelected("") },
-            onDismiss = { deleting = null }
-        ) {
-            val n = counts[l.id] ?: 0
-            Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
-        }
-    }
+}
+
+/** Settings' watchlist manager: deleting a list takes this trip and a confirmation. */
+@Composable
+fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>, onDismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
+    var deleting by remember { mutableStateOf<WatchlistEntity?>(null) }
+    val target = deleting
+    if (target != null) WatchDialog(
+        title = "Delete ${target.name}?",
+        confirmLabel = "Delete",
+        confirmEnabled = true,
+        confirmColor = MarksyTheme.RedUrgent,
+        onConfirm = { deleting = null; scope.launch { repository.deleteList(target.id) } },
+        onDismiss = { deleting = null }
+    ) {
+        val n = counts[target.id] ?: 0
+        Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+    } else MarksyDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Watchlists") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (lists.isEmpty()) Text("No watchlists yet.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+                rankedWatchlists(lists, items).forEach { w ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(w.name, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text("${counts[w.id] ?: 0}/${WatchlistRepository.MAX_STOCKS} stocks", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { deleting = w }) { Text("Delete", color = MarksyTheme.RedUrgent) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+    )
 }
 
 @Composable
