@@ -49,8 +49,27 @@ class ReclassificationTest {
         assertEquals("DELIVERED", dao.getById(delivered)!!.deliveryState)
 
         // Second launch: already at this classifier version, so nothing is re-run.
-        dao.updateClassification(call, "OTHER", 10, .5f, false)
+        dao.updateClassification(call, "OTHER", 10, .5f, isTrading = false, queue = false)
         repo.reclassifyIfClassifierChanged(prefs)
         assertEquals("OTHER", dao.getById(call)!!.category)
+    }
+
+    // 4b review M2: a reclassified row that already left the phone is never queued again, and only a candidate is queued at all.
+    @Test fun reclassifyingNeverRequeuesASentRowOrAnExecution() = runBlocking {
+        val dao = db.notificationEventDao()
+        val sent = dao.insert(event("com.upstox.pro", "Research call", "BUY RENUKA CMP 23 SL 22 TGT 26", "MARKET", false, "DELIVERED"))
+        val inFlight = dao.insert(event("com.upstox.pro", "Research", "BUY IDEA CMP 9.5 SL 8.9 TGT 11", "MARKET", false, "IN_FLIGHT"))
+        val local = dao.insert(event("com.upstox.pro", "Idea", "BUY INFY CMP 1500 SL 1450 TGT 1600", "MARKET", false, "NOT_APPLICABLE"))
+
+        listOf(sent, inFlight, local).forEach { dao.updateClassification(it, "TRADING", 100, .96f, isTrading = true, queue = true) }
+
+        assertEquals("DELIVERED", dao.getById(sent)!!.deliveryState)
+        assertEquals("IN_FLIGHT", dao.getById(inFlight)!!.deliveryState)
+        assertEquals("PENDING", dao.getById(local)!!.deliveryState)
+
+        val execution = dao.insert(event("com.zerodha.kite3", "Order executed", "BUY 10 INFY at 1500", "OTHER", false, "NOT_APPLICABLE"))
+        NotificationRepository(dao).reclassifyIfClassifierChanged(prefs)
+        assertEquals("TRADING", dao.getById(execution)!!.category)
+        assertEquals("NOT_APPLICABLE", dao.getById(execution)!!.deliveryState)
     }
 }

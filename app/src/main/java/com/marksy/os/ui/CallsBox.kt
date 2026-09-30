@@ -38,8 +38,7 @@ internal fun toneColor(tone: LedgerCalls.Tone): Color = when (tone) {
     LedgerCalls.Tone.MUTED -> MarksyTheme.TextMuted
 }
 
-/** Every call on this stock by who made it (spec §10): a group per Marksy engine, then per external channel, each
- * with its lifetime record. States and returns are the ledger tip's, never a monitor event's. */
+/** Every call on this stock, grouped per Marksy engine then per channel with its record (spec §10); states come from the ledger tip. */
 @Composable
 internal fun CallsBox(calls: InstrumentCallsDto, livePrice: Double?, analysis: JSONObject?, onOpenTip: (String) -> Unit) {
     val shape = RoundedCornerShape(14.dp)

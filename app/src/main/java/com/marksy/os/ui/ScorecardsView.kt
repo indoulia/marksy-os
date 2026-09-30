@@ -44,8 +44,7 @@ import java.time.ZoneOffset
 
 internal val ScorecardQuerySaver = Saver<ScorecardQuery, String>(save = { it.encode() }, restore = { ScorecardQuery.decode(it) })
 
-/** Scorecards (spec §8): the customer's own record, Marksy against external calls, then every channel or caller
- * ranked by trust, all under one §8.3 filter. Every number is the server's; the phone never computes a window. */
+/** Scorecards (spec §8): own record, Marksy vs external, then channels or callers by trust under one §8.3 filter; all server numbers. */
 @Composable
 internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: ScorecardQuery, bottomPadding: Dp) {
     val mine by produceState<MarketDataState<ScorecardDto>>(MarketDataState.Loading, query) { value = repository.myScorecard(query) }

@@ -41,7 +41,8 @@ interface MarketApiClient {
     suspend fun tipDetail(tipId: String): TipDetailDto = throw MarketApiException("Tip detail is not supported")
 }
 
-class MarketApiException(message: String) : IOException(message)
+/** [status] is the HTTP status, or 401 when no session exists, so a screen can word the failure instead of showing it. */
+class MarketApiException(message: String, val status: Int? = null) : IOException(message)
 
 /** HTTPS-enforced, `X-API-Key`-authenticated client for the `marksy-api` market-intelligence
  * surface, structurally mirroring `MarksyTipsApiClient` (raw `HttpURLConnection`, `{data, meta}`
@@ -144,7 +145,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     private suspend fun getDataArray(url: String): org.json.JSONArray = execute(url).getJSONArray("data")
 
     private suspend fun execute(url: String, maxChars: Int = MAX_RESPONSE_CHARS, method: String = "GET"): JSONObject {
-        val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy")
+        val token = authRepository.currentToken() ?: throw MarketApiException("Not signed in to Marksy", 401)
         return withContext(Dispatchers.IO) {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
@@ -173,7 +174,7 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
                 }.orEmpty()
                 if (code !in 200..299) {
                     val detail = errorDetail(response)
-                    if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail")
+                    if (code in 400..499) throw MarketApiException("Marksy Market API returned HTTP $code$detail", code)
                     throw IOException("Marksy Market API returned HTTP $code$detail")
                 }
                 return@withContext JSONObject(response).also { envelope ->

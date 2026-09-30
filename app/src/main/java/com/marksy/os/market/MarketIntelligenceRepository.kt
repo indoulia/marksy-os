@@ -53,23 +53,31 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun ipoHistory(id: String): MarketDataState<List<IpoHistoryEntryDto>> = fetch { it.ipoHistory(id) }
 
     suspend fun myTips(status: String?, cursor: String? = null): MarketDataState<MyTipPageDto> =
-        fetch(emptyCheck = { it.items.isEmpty() }) { it.myTips(status, cursor) }
+        fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { it.myTips(status, cursor) }
 
     suspend fun myScorecard(query: ScorecardQuery): MarketDataState<ScorecardDto> =
-        query.filterParams()?.let { f -> fetch { it.myScorecard(f) } } ?: incompleteRange
+        query.filterParams()?.let { f -> fetch(ledger = true) { it.myScorecard(f) } } ?: incompleteRange
 
     suspend fun scorecardSummary(query: ScorecardQuery): MarketDataState<ScorecardSummaryDto> =
-        query.filterParams()?.let { f -> fetch { it.scorecardSummary(f) } } ?: incompleteRange
+        query.filterParams()?.let { f -> fetch(ledger = true) { it.scorecardSummary(f) } } ?: incompleteRange
 
     suspend fun scorecards(entity: ScorecardEntity, query: ScorecardQuery): MarketDataState<EntityScorecardListDto> =
-        query.filterParams()?.let { f -> fetch(emptyCheck = { it.items.isEmpty() }) { it.scorecards(entity.param, f) } } ?: incompleteRange
+        query.filterParams()?.let { f -> fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { it.scorecards(entity.param, f) } } ?: incompleteRange
 
     suspend fun scorecard(entity: ScorecardEntity, id: Int, query: ScorecardQuery): MarketDataState<ScorecardDto> =
-        query.filterParams()?.let { f -> fetch { it.scorecard(entity.param, id, f) } } ?: incompleteRange
+        query.filterParams()?.let { f -> fetch(ledger = true) { it.scorecard(entity.param, id, f) } } ?: incompleteRange
 
-    suspend fun tipDetail(tipId: String): MarketDataState<TipDetailDto> = fetch { it.tipDetail(tipId) }
+    suspend fun tipDetail(tipId: String): MarketDataState<TipDetailDto> = fetch(ledger = true) { it.tipDetail(tipId) }
 
     private val incompleteRange = MarketDataState.Error("Pick a start and an end date")
+
+    // 4b review M1: the ledger screens word a session or access failure; signed out or 401 is the existing sign-in state.
+    private fun ledgerCopy(error: IOException): MarketDataState<Nothing>? = when ((error as? MarketApiException)?.status) {
+        401 -> MarketDataState.Unavailable
+        403 -> MarketDataState.Error("Your account doesn't have access to tip records yet")
+        404 -> MarketDataState.Error("Not available yet")
+        else -> null
+    }
 
     /** The Overview freshness footer's source. `Stale` here means the feed's own reported
      * `feedState`/`fallbackActive` say it is degraded — never a client-invented age threshold. */
@@ -92,6 +100,7 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     private suspend fun <T> fetch(
         emptyCheck: (T) -> Boolean = { false },
+        ledger: Boolean = false,
         call: suspend (MarketApiClient) -> T
     ): MarketDataState<T> {
         val activeClient = client ?: return MarketDataState.Unavailable
@@ -102,7 +111,7 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: IOException) {
-                MarketDataState.Error(error.message ?: "Market data unavailable")
+                (if (ledger) ledgerCopy(error) else null) ?: MarketDataState.Error(error.message ?: "Market data unavailable")
             } catch (error: JSONException) {
                 MarketDataState.Error(error.message ?: "Market data unavailable")
             }

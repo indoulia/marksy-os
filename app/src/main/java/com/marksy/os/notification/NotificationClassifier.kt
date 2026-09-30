@@ -176,10 +176,26 @@ object NotificationClassifier {
         return weakCustomerMarker.containsMatchIn(text) && orderStatus.containsMatchIn(text)
     }
 
-    // The customer's own holdings, portfolio and account alerts never leave the phone (spec §2.11).
-    private val ownAccountEvents = Regex("""\byour\s+(?:stocks?|holdings?|portfolio|positions?|watchlist|funds?|margin|account|a/c|demat|sips?|mandates?|pledges?|ledger|p&l|pnl|investments?)\b|\bcontract\s+note\b""")
+    // The customer's own holdings, portfolio and account alerts never leave the phone, with or without "your" (spec §2.11, 4b review C1b).
+    private val ownAccountEvents = listOf(
+        Regex("""\byour\s+(?:stocks?|holdings?|portfolio|positions?|watchlist|funds?|margin|account|a/c|demat|sips?|mandates?|pledges?|ledger|p&l|pnl|investments?)\b"""),
+        Regex("""\bprice\s+alerts?\b|\balerts?\s+triggered\b|\bp\s*&\s*l\b|\bpnl\b|\bportfolios?\b|\bholdings?\b|\bnet\s*worth\b"""),
+        Regex("""\bdividends?\b|\bpayouts?\b|\bredemptions?\b|\ballot(?:ted|ments?)\b|\bbids?\s+placed\b|\bmargin\s+shortfall\b|\bfunds?\s+added\b|\bcontract\s+notes?\b"""),
+        Regex("""\bsips?\b.{0,60}?\bdue\b"""),
+        Regex("""\byou(?:\s+(?:own|hold|earned|have)|'ve|’ve)\b""")
+    )
 
-    fun isOwnAccountEvent(title: String, body: String): Boolean = ownAccountEvents.containsMatchIn("$title $body".lowercase())
+    fun isOwnAccountEvent(title: String, body: String): Boolean = "$title $body".lowercase().let { text -> ownAccountEvents.any { it.containsMatchIn(text) } }
+
+    // 4b review M3: a 4-8 digit number that is no price (no level word, ₹ or @ before it) beside OTP, TPIN or code words.
+    private val codeWords = Regex("""\b(?:otp|tpin|m?pin|passcode|password|code)\b""")
+    private val standaloneNumber = Regex("""(?<![\d.,])\d{4,8}(?![\d.,]*\d)""")
+    private val priceBefore = Regex("""(?:\b(?:cmp|ltp|sl|tgt|targets?|entry|stop[\s-]*loss|above|below|around|near|at|rs\.?|inr)|₹|@)[\s:=\-]*$""")
+
+    fun carriesOneTimeCode(title: String, body: String): Boolean = carriesOneTimeCode("$title $body".lowercase())
+
+    private fun carriesOneTimeCode(text: String): Boolean = codeWords.containsMatchIn(text) &&
+        standaloneNumber.findAll(text).any { m -> !priceBefore.containsMatchIn(text.substring(maxOf(0, m.range.first - 16), m.range.first)) }
 
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
@@ -190,7 +206,7 @@ object NotificationClassifier {
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
-        val otpText = if (priceLevels.findAll(notificationText).count() >= 2) notificationText.replace(otpWarning, " ") else notificationText
+        val otpText = if (priceLevels.findAll(notificationText).count() >= 2 && !carriesOneTimeCode(notificationText)) notificationText.replace(otpWarning, " ") else notificationText
         if (otpRule.terms.any { term -> otpText.containsRuleTerm(term) }) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
@@ -198,8 +214,7 @@ object NotificationClassifier {
         // A broker package is a source hint, not proof that the notification is
         // a trade. Require an actual trading signal before routing it to Marksy.
         val tradingRule = rules.first { it.category == Category.TRADING }
-        // Broker and market-news apps: an execution is TRADING, a call-to-action is the app's own marketing, and
-        // everything else (calls, holdings alerts, research views, IPO notices, market moves) is MARKET.
+        // Broker and market-news apps: an execution is TRADING, a call-to-action is PROMOTIONS, anything else (calls included) MARKET.
         if (normalizedPackage in tradingPackages || normalizedPackage in marketPackages) {
             val execution = normalizedPackage in tradingPackages && tradingRule.terms.any { term -> notificationText.containsRuleTerm(term) }
             if (execution) return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)

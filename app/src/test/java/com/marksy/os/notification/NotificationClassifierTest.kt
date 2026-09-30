@@ -190,5 +190,10 @@ class NotificationClassifierTest {
         val otp = NotificationClassifier.classify("com.google.android.apps.messaging", "JD-ZERODH-S", "Use 482913 to log in. Never share your OTP with anyone.")
         assertTrue(tip.category != NotificationClassifier.Category.OTP)
         assertEquals(NotificationClassifier.Category.OTP, otp.category)
+        // 4b review M3: a standalone code keeps the footer, so a TPIN with call levels is an OTP; a price after a level is no code.
+        val tpin = NotificationClassifier.classify("com.google.android.apps.messaging", "JD-ZERODH-S", "482913 is your TPIN code to authorise SELL of INFY at LTP 1450 SL 1400. Never share your OTP.")
+        val pricedTip = NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN", "BUY RELIANCE CMP 1450 SL 1400 TGT 1500. Never share your OTP with anyone.")
+        assertEquals(NotificationClassifier.Category.OTP, tpin.category)
+        assertTrue(pricedTip.category != NotificationClassifier.Category.OTP)
     }
 }

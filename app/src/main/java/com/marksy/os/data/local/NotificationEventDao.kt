@@ -25,9 +25,9 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE category = :category")
     suspend fun findByCategory(category: String): List<NotificationEventEntity>
 
-    // A newly trading row becomes deliverable; intelligence is recomputed for the new category.
-    @Query("UPDATE notification_events SET category = :category, priority = :priority, confidence = :confidence, isTrading = :isTrading, deliveryState = CASE WHEN :isTrading THEN 'PENDING' ELSE deliveryState END, intelligenceVersion = 0 WHERE id = :eventId AND isTrading = 0")
-    suspend fun updateClassification(eventId: Long, category: String, priority: Int, confidence: Float, isTrading: Boolean): Int
+    // A candidate (CaptureGate.queues) becomes deliverable unless it already left the phone (4b review M2); intelligence is recomputed.
+    @Query("UPDATE notification_events SET category = :category, priority = :priority, confidence = :confidence, isTrading = :isTrading, deliveryState = CASE WHEN :queue AND deliveryState NOT IN ('IN_FLIGHT', 'DELIVERED') THEN 'PENDING' ELSE deliveryState END, intelligenceVersion = 0 WHERE id = :eventId AND isTrading = 0")
+    suspend fun updateClassification(eventId: Long, category: String, priority: Int, confidence: Float, isTrading: Boolean, queue: Boolean): Int
 
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
@@ -56,10 +56,6 @@ interface NotificationEventDao {
     // Queued by CaptureGate.queues at capture, whatever the category; the gate decides again at delivery.
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findPendingCapture(limit: Int): List<NotificationEventEntity>
-
-    // A local row that gains a market signal goes back through CaptureGate.decide, never straight out.
-    @Query("UPDATE notification_events SET deliveryState = 'PENDING' WHERE id = :eventId AND archived = 0 AND deliveryState = 'NOT_APPLICABLE'")
-    suspend fun requeueLocal(eventId: Long): Int
 
     @Query("SELECT id FROM notification_events WHERE sourcePackage = :sourcePackage AND sourceKey = :sourceKey LIMIT 1")
     suspend fun findIdBySourceKey(sourcePackage: String, sourceKey: String): Long?

@@ -6,8 +6,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** How a ledger tip reads on the phone. Every state, outcome and return is the server's (spec §6.6, §7); this only
- * words it, so a withdrawn losing Marksy call reads as a failed exit, never as a neutral invalidation. */
+/** Words a ledger tip's server state, outcome and returns (spec §6.6, §7): a withdrawn losing call is a failed exit, not an invalidation. */
 object LedgerCalls {
     const val STATUS_ACTIVE = "ACTIVE"
     private const val DATA_BASIS_PROVISIONAL = "PROVISIONAL"

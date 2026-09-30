@@ -124,7 +124,9 @@ class IngestionPipeline(
     private val onTradingCaptured: () -> Unit = {},
     /** Newly stored event (e.g. a bill due becomes a plan reminder); failures never affect capture. */
     private val onStored: suspend (NotificationEventEntity) -> Unit = {},
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    /** The chat and SMS allow-list when it is cheap to read; null leaves that check to delivery. */
+    private val chatAllowList: () -> Set<String>? = { null }
 ) {
     sealed class Result {
         data class Stored(val eventId: Long) : Result()
@@ -146,7 +148,6 @@ class IngestionPipeline(
         return try {
             val result = NotificationClassifier.classify(raw.sourcePackage, raw.title, raw.body)
             val isTrading = result.category == NotificationClassifier.Category.TRADING
-            val queued = CaptureGate.queues(raw.sourcePackage, result.category.name, raw.groupConversation)
             val fingerprint = EventFingerprint.create(raw.sourcePackage, result.category.name, raw.title, raw.body, raw.postedAt)
             // Ingestion-level dedup: same source key, or same content within the fingerprint window.
             val scopes = arrayOf(MetricsRecorder.connector(input.connectorId), MetricsRecorder.source(raw.sourcePackage))
@@ -166,19 +167,17 @@ class IngestionPipeline(
                     return Result.Duplicate
                 }
                 dao.updateContent(existing.id, title, body, maxOf(existing.postedAt, raw.postedAt))
-                // A broker row can gain an execution (TRADING); a local chat or SMS row can gain a call after small talk.
+                // A broker row can gain an execution (TRADING); an updated row is never queued again, only its new lines (4b review I2).
                 val updated = if (existing.isTrading) null else NotificationClassifier.classify(raw.sourcePackage, title, body)
-                if (updated?.category == NotificationClassifier.Category.TRADING &&
-                    dao.updateClassification(existing.id, updated.category.name, updated.priority, updated.confidence, true) == 1
-                ) runCatching(onTradingCaptured)
-                if (existing.deliveryState == DeliveryState.NOT_APPLICABLE.name &&
-                    CaptureGate.requeuesOnUpdate(raw.sourcePackage, existing.category, existing.chatGroup, existing.body, body) &&
-                    dao.requeueLocal(existing.id) == 1
-                ) runCatching(onTradingCaptured)
+                if (updated?.category == NotificationClassifier.Category.TRADING) {
+                    dao.updateClassification(existing.id, updated.category.name, updated.priority, updated.confidence, isTrading = true, queue = false)
+                }
                 runCatching { intelligence?.process(existing.id) }
-                // Lines added after the row left the phone are a new receipt; a row kept local keeps folding.
+                // Lines added after the row left the phone, or a call joining a local row, are a capture of their own.
                 val added = if (raw.replaceOnUpdate) raw.body else NotificationTextExtractor.added(existing.body, raw.body)
-                if (existing.deliveryState in SENT_STATES && added.isNotBlank()) {
+                val ownCapture = added.isNotBlank() && (existing.deliveryState in SENT_STATES || existing.deliveryState == DeliveryState.NOT_APPLICABLE.name &&
+                    CaptureGate.requeuesOnUpdate(raw.sourcePackage, existing.category, existing.chatGroup, title, body, added, chatAllowList()))
+                if (ownCapture) {
                     val call = raw.copy(sourceKey = "${raw.sourceKey}#${Integer.toHexString(added.hashCode())}", title = title, body = added)
                     (ingestNow(call, adapted = true) as? Result.Stored)?.let { return it }
                 }
@@ -188,6 +187,8 @@ class IngestionPipeline(
                 metrics.count(Metric.DUPLICATE, *scopes)
                 return Result.Duplicate
             }
+            // 4b review I3: only a candidate goes PENDING or wakes delivery.
+            val queued = CaptureGate.queues(raw.sourcePackage, result.category.name, raw.groupConversation, raw.title, raw.body, chatAllowList())
             val base = NotificationEventEntity(
                 sourcePackage = raw.sourcePackage, sourceName = raw.sourceName, sourceKey = raw.sourceKey, eventFingerprint = fingerprint,
                 title = raw.title, body = raw.body, postedAt = raw.postedAt, category = result.category.name, priority = result.priority,

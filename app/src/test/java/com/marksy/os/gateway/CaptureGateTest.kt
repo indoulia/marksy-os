@@ -61,7 +61,7 @@ class CaptureGateTest {
         val whatsapp = (CaptureGate.decide(
             event(
                 pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips: Amit", group = true,
-                body = "Amit: Rahul's RENUKA call hit target"
+                body = "Amit: Rahul's BUY RENUKA CMP 23 SL 22 TGT 26"
             ),
             withBothSenders
         ) as CaptureDecision.Send).message
@@ -73,7 +73,7 @@ class CaptureGateTest {
         val telegram = (CaptureGate.decide(
             event(
                 pkg = "org.telegram.messenger", source = "Telegram", title = "StockTips", group = true,
-                body = "Amit: thanks RK"
+                body = "Amit: BUY RENUKA CMP 23 SL 22 TGT 26, thanks RK"
             ),
             withShortHandle
         ) as CaptureDecision.Send).message
@@ -147,24 +147,23 @@ class CaptureGateTest {
     }
 
     @Test
-    fun researchCallsAndSourceExitsStillGo() {
-        val stillGo = listOf(
-            "Target 26 achieved. Trade completed, book profits",
-            "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
-        )
+    fun researchCallsStillGoButLevelFreeSourceExitsStayLocal() {
+        val stillGo = listOf("BUY RENUKA CMP 23.62 SL 22.25 TGT 26")
+        // 4b review C1(c)/I1: no side word with two priced levels, so this exit stays local from apps and groups alike (M6).
+        val levelFreeExit = "Target 26 achieved. Trade completed, book profits"
         // These two now carry strong own-order evidence ("trade ... triggered", "order ... placed") on their own; see task-B3-report.md round 2.
         val nowOwnOrderToo = listOf(
             "Our RELIANCE trade: Stop loss triggered, exit now",
             "Buy order to be placed above 24, target 26, SL 22"
         )
-        (stillGo + nowOwnOrderToo).forEach { body ->
-            // A group row is never subject to the own-order check, so it still sends regardless.
-            val group = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true)
-            assertTrue(body, CaptureGate.decide(group, context) is CaptureDecision.Send)
-        }
+        // A group row is never subject to the own-order check, so a call still sends regardless; a level-free exit does not.
+        fun group(body: String) = CaptureGate.decide(event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", body = body, group = true), context)
+        (stillGo + nowOwnOrderToo[1]).forEach { body -> assertTrue(body, group(body) is CaptureDecision.Send) }
+        listOf(levelFreeExit, nowOwnOrderToo[0]).forEach { body -> assertEquals(body, CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), group(body)) }
         stillGo.forEach { body ->
             assertTrue(body, CaptureGate.decide(event(title = "Research call", body = body), context) is CaptureDecision.Send)
         }
+        assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), CaptureGate.decide(event(title = "Research call", body = levelFreeExit), context))
         nowOwnOrderToo.forEach { body ->
             assertEquals(body, CaptureDecision.Keep(CaptureGate.OWN_ORDER), CaptureGate.decide(event(title = "Research call", body = body), context))
         }
@@ -204,7 +203,10 @@ class CaptureGateTest {
         val ownAccount = CaptureDecision.Keep(CaptureGate.OWN_ACCOUNT)
         val notACandidate = CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE)
 
+        // The three broker research-call shapes: 5paisa, Upstox and ICICI Direct.
         assertTrue(decide("MARKET", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26") is CaptureDecision.Send)
+        assertTrue(decide("MARKET", "🛠️ Entry : Rs 144.24 🎯 Target : Rs 173.08 🛑 Stoploss : Rs 129.81", title = "📈BUY LCCPROJECT with 20.0% upside potential") is CaptureDecision.Send)
+        assertTrue(decide("MARKET", "Buy INDGN around Rs 609 for 12 Month with target price of Rs 750, potential upside of 23.15%.", title = "ICICI Direct") is CaptureDecision.Send)
         assertEquals(ownAccount, decide("MARKET", "Your stock NATSEC has touched 52 week low of 780.0"))
         assertEquals(ownAccount, decide("MARKET", "RELIANCE in your holdings is up 3% today"))
         assertEquals(ownAccount, decide("MARKET", "Your P&L statement for September is ready"))
@@ -214,16 +216,56 @@ class CaptureGateTest {
         assertTrue(decide("OTHER", "BUY | CROPSTER AGRO | Entry ₹2.82 | Target ₹10 | SL ₹2", pkg = sms, title = "JD-ZERODH-S") is CaptureDecision.Send)
         val groupCall = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true).copy(category = "MESSAGES", isTrading = false)
         assertTrue(CaptureGate.decide(groupCall, context) is CaptureDecision.Send)
-        // 4b ruling: chat and SMS candidacy needs a market signal, so allow-listed chatter stays local.
-        assertEquals(notACandidate, CaptureGate.decide(groupCall.copy(body = "Good morning all, see you at the meetup"), context))
-        assertEquals(notACandidate, decide("OTHER", "Your KYC is complete. Download the app", pkg = sms, title = "JD-ZERODH-S"))
+        assertTrue(decide("OTHER", "Your KYC is complete. Download the app", pkg = sms, title = "JD-ZERODH-S") is CaptureDecision.Keep)
 
-        assertTrue(CaptureGate.queues("com.upstox.pro", "MARKET", null))
-        assertFalse(CaptureGate.queues("com.facebook.orca", "MESSAGES", null))
-        assertTrue(CaptureGate.queues("org.telegram.messenger", "MESSAGES", true))
-        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", false))
-        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", null))
-        assertFalse(CaptureGate.queues(sms, "OTP", null))
+        // 4b review C1: account alerts carry no call and never leave, as MARKET or TRADING, at capture or delivery.
+        listOf(
+            "Price alert: RELIANCE crossed 1450",
+            "Alert triggered: INFY is above ₹1,520.00",
+            "Today's P&L: +₹4,523 (1.2%)",
+            "Portfolio up 2.3% today. Current value ₹5,23,400",
+            "You own 10 shares of ITC",
+            "You earned a dividend of ₹120 from ITC",
+            "Net worth update: ₹12,40,000",
+            "Margin shortfall of ₹2,300 in your account",
+            "Payout of ₹5,000 processed",
+            "IPO allotment status for XYZ",
+            "Bid placed for XYZ IPO",
+            "SIP of ₹5,000 in ABC fund is due tomorrow",
+            "Redemption of ₹10,000 processed",
+            "INFY hit 52-week high. You hold 12 shares",
+            "Tax P&L report is ready",
+            "Stop loss triggered for RELIANCE at 1,400"
+        ).forEach { body ->
+            listOf("MARKET", "TRADING").forEach { category ->
+                assertTrue("$category $body", decide(category, body) is CaptureDecision.Keep)
+                assertTrue("$category $body", decide(category, body, title = "Zerodha") is CaptureDecision.Keep)
+                assertFalse("$category $body", CaptureGate.queues("com.upstox.pro", category, null, "Upstox", body))
+            }
+        }
+        // I1: an allow-listed group's chatter needs a side and two priced levels, read without "Name: " prefixes.
+        listOf("RK: movie entry at 7, meet at PVR", "Priya: Buy milk on the way, entry gate closes at 9", "RK: target reached?", "Good morning all, see you at the meetup").forEach { body ->
+            assertEquals(body, notACandidate, CaptureGate.decide(groupCall.copy(body = body), context))
+            assertFalse(body, CaptureGate.queues("com.whatsapp", "MESSAGES", true, "StockTips", body))
+        }
+        // M3: a one-time code beside call-shaped text is never a candidate.
+        val tpin = "482913 is your TPIN code to authorise SELL of INFY at LTP 1450 SL 1400. Never share your OTP."
+        assertTrue(decide("OTHER", tpin, pkg = sms, title = "JD-ZERODH-S") is CaptureDecision.Keep)
+        assertTrue(decide("MARKET", tpin) is CaptureDecision.Keep)
+        assertFalse(CaptureGate.queues(sms, "OTHER", null, "JD-ZERODH-S", tpin))
+
+        val call = "BUY RENUKA CMP 23.62 SL 22.25 TGT 26"
+        assertTrue(CaptureGate.queues("com.upstox.pro", "MARKET", null, "Upstox", call))
+        assertFalse(CaptureGate.queues("com.facebook.orca", "MESSAGES", null, "Rahul", call))
+        assertTrue(CaptureGate.queues("org.telegram.messenger", "MESSAGES", true, "StockTips", "Rahul: $call"))
+        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", false, "Rahul", call))
+        assertFalse(CaptureGate.queues("org.telegram.messenger", "MESSAGES", null, "StockTips", call))
+        assertFalse(CaptureGate.queues(sms, "OTP", null, "JD-ZERODH-S", "Your OTP is 482913"))
+        // I3: the chat allow-list applies at capture when it is known.
+        assertFalse(CaptureGate.queues("com.whatsapp", "MESSAGES", true, "Family Group", call, context.chatAllowList))
+        assertTrue(CaptureGate.queues("com.whatsapp", "MESSAGES", true, "StockTips", call, context.chatAllowList))
+        assertTrue(CaptureGate.queues(sms, "OTHER", null, "JD-ZERODH-S", call, context.chatAllowList))
+        assertFalse(CaptureGate.queues(sms, "OTHER", null, "Amit", call, context.chatAllowList))
     }
 
     @Test
@@ -266,11 +308,11 @@ class CaptureGateTest {
     fun interleavedBatchesEachMaskOnlyTheirOwnSenders() {
         val contextA = context.copy(chatSenders = setOf("Alice"))
         val contextB = context.copy(chatSenders = setOf("Bob"))
-        val rowA = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "RENUKA call via Alice hit target")
-        val rowB = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "RENUKA call via Bob hit target")
+        val rowA = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "BUY RENUKA CMP 23 SL 22 TGT 26 via Alice")
+        val rowB = event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true, body = "BUY RENUKA CMP 23 SL 22 TGT 26 via Bob")
         val mixedRow = event(
             pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips", group = true,
-            body = "RENUKA call via Alice, cross-check Bob hit target"
+            body = "BUY RENUKA CMP 23 SL 22 TGT 26 via Alice, cross-check Bob"
         )
 
         val sentA1 = (CaptureGate.decide(rowA, contextA) as CaptureDecision.Send).message
