@@ -36,20 +36,16 @@ class MarksyTipsApiClientTest {
             store = AuthSessionStore(context)
         )
         val client = MarksyTipsApiClient(authRepository, baseUrl = "https://marksy.indoulia.com/api/v1")
-        val request = MarksyTradingEventRequest(
-            eventId = 1L,
-            source = "Upstox",
-            sourcePackage = "com.upstox.pro",
-            title = "Order update",
-            body = "Symbol: RELIANCE BUY order executed at 1450",
-            category = "TRADING",
-            priority = 3,
-            confidence = 0.99f,
-            occurredAt = 1_700_000_000_000L,
-            idempotencyKey = "key-1"
+        val message = CapturedMessage(
+            deviceEventKey = "n1-key",
+            medium = "APP_NOTIFICATION",
+            appPackage = "com.upstox.pro",
+            channelLabel = "Upstox",
+            text = "Symbol: RELIANCE BUY order executed at 1450",
+            devicePostedAt = "2023-11-14T22:13:20Z"
         )
 
-        val result = client.analyze(request)
+        val result = client.capture(1L, message)
 
         assertTrue(result.isFailure)
         val error = requireNotNull(result.exceptionOrNull())

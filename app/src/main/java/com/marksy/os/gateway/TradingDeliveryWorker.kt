@@ -8,6 +8,7 @@ import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventDao
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.notification.WhatsAppSenderWatchlist
 import kotlinx.coroutines.CancellationException
 import kotlin.Result as KotlinResult
 
@@ -46,7 +47,35 @@ class TradingDeliveryWorker(
             return Result.success()
         }
 
-        return if (TradingDeliveryRun(dao, client) { isStopped }.drain()) Result.retry() else Result.success()
+        val capture = loadCaptureContext(client, now)
+        if (capture == null) {
+            Log.i(TAG, "Trading delivery deferred: no signed-in customer id")
+            return Result.success()
+        }
+
+        // Finding C2(a): re-read chatSenders right after each findPendingTrading call (inside drain()),
+        // not once for the whole run, so a chat row inserted mid-run still masks its own sender.
+        val store = CaptureStore(applicationContext)
+        return if (
+            TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }, chatSenders = store::chatSenders).drain()
+        ) Result.retry() else Result.success()
+    }
+
+    private suspend fun loadCaptureContext(client: MarksyGatewayClient, now: Long): CaptureContext? {
+        val username = AuthSessionStore(applicationContext).getUserId()?.takeIf { it.isNotBlank() } ?: return null
+        val store = CaptureStore(applicationContext)
+        if (store.isCaptureListStale(now)) {
+            client.captureList()
+                .onSuccess { store.saveCapturePackages(it, now) }
+                .onFailure { Log.w(TAG, "Capture list refresh failed; using the cached list") }
+        }
+        return CaptureContext(
+            capturePackages = store.capturePackages(),
+            chatAllowList = WhatsAppSenderWatchlist.get(applicationContext),
+            chatSenders = store.chatSenders(),
+            username = username,
+            deviceSalt = store.deviceSalt()
+        )
     }
 }
 
@@ -54,19 +83,28 @@ class TradingDeliveryWorker(
 internal class TradingDeliveryRun(
     private val dao: NotificationEventDao,
     private val client: MarksyGatewayClient,
-    private val isStopped: () -> Boolean = { false }
+    private val capture: CaptureContext,
+    private val isStopped: () -> Boolean = { false },
+    private val decide: (NotificationEventEntity, CaptureContext) -> CaptureDecision = CaptureGate::decide,
+    // Finding C2(a): defaults to the run's initial snapshot (no-op refresh) for callers that don't care;
+    // the worker passes a live CaptureStore.chatSenders reference so each batch gets a fresh read.
+    private val chatSenders: () -> Set<String> = { capture.chatSenders }
 ) {
     // Every handled call leaves PENDING, so this ends; a retry stops it so the backoff can run.
     suspend fun drain(): Boolean {
         while (!isStopped()) {
             val pending = dao.findPendingTrading(TradingDeliveryPolicy.BATCH_SIZE)
             if (pending.isEmpty()) return false
-            if (deliverBatch(pending)) return true
+            // Re-read right after the query, before this batch is decided: a row inserted mid-run has its
+            // sender recorded (and committed, finding C2b) before the row itself is inserted, so this read
+            // is guaranteed to already include it.
+            val batchCapture = capture.copy(chatSenders = chatSenders())
+            if (deliverBatch(pending, batchCapture)) return true
         }
         return false
     }
 
-    private suspend fun deliverBatch(pending: List<NotificationEventEntity>): Boolean {
+    private suspend fun deliverBatch(pending: List<NotificationEventEntity>, capture: CaptureContext): Boolean {
         var retryRequested = false
         for (event in pending) {
             if (isStopped()) return false
@@ -80,23 +118,42 @@ internal class TradingDeliveryRun(
                 return false
             }
 
-            val request = event.toMarksyTradingEventRequest()
-            if (request == null) {
-                dao.updateInFlightDeliveryState(event.id, DeliveryState.FAILED.name, attempts, System.currentTimeMillis())
-                Log.w(TAG, "Trading event ${event.id} rejected by local gateway mapping")
-                continue
-            }
+            try {
+                val decision = try {
+                    decide(event, capture)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (gateError: Throwable) {
+                    dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
+                    // Finding M3: the exception's class name is diagnosable; its message never is (could carry notification content).
+                    Log.i(TAG, "Trading event ${event.id} stays on the phone (gate-error: ${gateError::class.java.simpleName})")
+                    continue
+                }
 
-            val result: KotlinResult<MarksyInsight> = try {
-                client.analyze(request)
-            } catch (cancellation: CancellationException) {
-                dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
-                throw cancellation
-            } catch (t: Throwable) {
-                KotlinResult.failure(t)
-            }
+                val message = when (decision) {
+                    is CaptureDecision.Send -> decision.message
+                    CaptureDecision.Wait -> {
+                        dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                        retryRequested = true
+                        continue
+                    }
+                    is CaptureDecision.Keep -> {
+                        dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
+                        Log.i(TAG, "Trading event ${event.id} stays on the phone (${decision.reason})")
+                        continue
+                    }
+                }
 
-            result.fold(
+                val result: KotlinResult<MarksyInsight> = try {
+                    client.capture(event.id, message)
+                } catch (cancellation: CancellationException) {
+                    dao.updateInFlightDeliveryState(event.id, DeliveryState.PENDING.name, attempts, System.currentTimeMillis())
+                    throw cancellation
+                } catch (t: Throwable) {
+                    KotlinResult.failure(t)
+                }
+
+                result.fold(
                 onSuccess = { insight ->
                     val receivedAt = System.currentTimeMillis()
                     val updated = dao.markDeliveredWithInsight(
@@ -131,7 +188,13 @@ internal class TradingDeliveryRun(
                         Log.w(TAG, "Trading event ${event.id} permanently rejected")
                     }
                 }
-            )
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Log.w(TAG, "Trading delivery storage operation failed for row ${event.id}; retrying")
+                retryRequested = true
+            }
         }
         return retryRequested
     }

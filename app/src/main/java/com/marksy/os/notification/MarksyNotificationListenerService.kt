@@ -10,6 +10,7 @@ import com.marksy.os.connector.IngestionPipeline
 import com.marksy.os.connector.RawCapture
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.RetentionScheduler
+import com.marksy.os.gateway.CaptureStore
 import com.marksy.os.gateway.TradingDeliveryScheduler
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import kotlinx.coroutines.CoroutineScope
@@ -54,7 +55,8 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         try {
             captureUnsafe(sbn)
         } catch (e: Exception) {
-            Log.e(TAG, "Skipped notification from ${sbn.packageName}", e)
+            // Log hygiene (round 2): the exception's class name is diagnosable; the object/message never is.
+            Log.e(TAG, "Skipped notification from ${sbn.packageName} (${e::class.java.simpleName})")
         }
     }
 
@@ -72,6 +74,9 @@ class MarksyNotificationListenerService : NotificationListenerService() {
         val title = NotificationTextExtractor.extractTitle(extras)
         val text = NotificationTextExtractor.extract(extras)
         if (title.isBlank() && text.isBlank()) return
+        val isChat = CaptureMedium.of(packageName).isChat
+        // Read on this thread (extras must not be held across a suspension); recorded on the launch below.
+        val senders = if (isChat) NotificationTextExtractor.senders(extras) else emptyList()
         OriginalAppLauncher.remember(sbn)
 
         val raw = RawCapture(
@@ -81,10 +86,21 @@ class MarksyNotificationListenerService : NotificationListenerService() {
             sourceKey = sbn.key,
             title = title,
             body = text,
-            postedAt = sbn.postTime
+            postedAt = sbn.postTime,
+            groupConversation = NotificationTextExtractor.groupConversation(extras)
         )
 
         serviceScope.launch {
+            // Record the sender before inserting the row, so a later per-batch re-read is guaranteed to already include it.
+            if (isChat) {
+                try {
+                    CaptureStore(applicationContext).rememberChatSenders(senders)
+                } catch (e: Exception) {
+                    // Fail closed: no row is ever created with an unrecorded sender.
+                    Log.e(TAG, "Failed to record chat senders (${e::class.java.simpleName}); skipping this notification")
+                    return@launch
+                }
+            }
             val result = ingestion.ingest(raw)
             if (result is IngestionPipeline.Result.Failed) {
                 // Not stored, so never dismiss it.

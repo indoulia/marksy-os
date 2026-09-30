@@ -15,6 +15,7 @@ object NotificationTextExtractor {
     const val MAX_BODY_LENGTH = 4000
     const val MAX_LINE_LENGTH = 1000
     const val MAX_LINE_COUNT = 50
+    private const val EXTRA_IS_GROUP_CONVERSATION = "android.isGroupConversation"
 
     fun extractTitle(extras: Bundle): String =
         stripMarkup(extras.getCharSequence("android.title")?.toString().orEmpty()).trim().take(MAX_TITLE_LENGTH)
@@ -93,20 +94,24 @@ object NotificationTextExtractor {
         take(MAX_LINE_COUNT).map { it.trim().take(MAX_LINE_LENGTH) }.filter { it.isNotBlank() }.toList()
 
     @Suppress("DEPRECATION")
-    private fun messageLines(extras: Bundle): Sequence<String> {
+    private fun messageBundles(extras: Bundle): Sequence<Bundle> {
         val raw: Array<Parcelable>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             extras.getParcelableArray("android.messages", Parcelable::class.java)
         } else {
             extras.getParcelableArray("android.messages")
         }
-        return raw.orEmpty().asSequence().mapNotNull { item ->
-            val message = item as? Bundle ?: return@mapNotNull null
-            val body = message.getCharSequence("text")?.toString()?.trim().orEmpty()
-            if (body.isBlank()) return@mapNotNull null
-            val sender = message.getCharSequence("sender")?.toString()?.trim()
-                ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) senderPerson(message)?.name?.toString()?.trim() else null
-            if (sender.isNullOrBlank()) body else "$sender: $body"
-        }
+        return raw.orEmpty().asSequence().mapNotNull { it as? Bundle }
+    }
+
+    private fun senderName(message: Bundle): String? =
+        message.getCharSequence("sender")?.toString()?.trim()
+            ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) senderPerson(message)?.name?.toString()?.trim() else null
+
+    private fun messageLines(extras: Bundle): Sequence<String> = messageBundles(extras).mapNotNull { message ->
+        val body = message.getCharSequence("text")?.toString()?.trim().orEmpty()
+        if (body.isBlank()) return@mapNotNull null
+        val sender = senderName(message)
+        if (sender.isNullOrBlank()) body else "$sender: $body"
     }
 
     @Suppress("DEPRECATION")
@@ -117,4 +122,16 @@ object NotificationTextExtractor {
         } else {
             message.getParcelable("sender_person")
         }
+
+    /** Distinct MessagingStyle sender names, as they appear in the extracted body. */
+    fun senders(extras: Bundle): List<String> =
+        messageBundles(extras).mapNotNull { senderName(it)?.let(::stripMarkup)?.trim() }
+            .filter { it.isNotBlank() }.distinct().toList()
+
+    /** The notification's group flag; before it existed, MessagingStyle marked a group by its conversation title. */
+    fun groupConversation(extras: Bundle): Boolean? = when {
+        extras.containsKey(EXTRA_IS_GROUP_CONVERSATION) -> extras.getBoolean(EXTRA_IS_GROUP_CONVERSATION)
+        messageBundles(extras).any() && !extras.getCharSequence("android.conversationTitle").isNullOrBlank() -> true
+        else -> null
+    }
 }

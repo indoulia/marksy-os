@@ -2,6 +2,7 @@ package com.marksy.os.notification
 
 import android.os.Bundle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -151,6 +152,38 @@ class NotificationTextExtractorTest {
         }
 
         assertEquals("Mom: Dinner tonight?\nDad: See you at 8", NotificationTextExtractor.extract(extras))
+    }
+
+    // Tip capture strips these from chat text before anything leaves the phone.
+    @Test
+    fun sendersListsEachMessagingStyleSenderOnce() {
+        val extras = Bundle().apply {
+            putParcelableArray("android.messages", arrayOf(
+                Bundle().apply { putCharSequence("sender", "Mom"); putCharSequence("text", "Dinner tonight?") },
+                Bundle().apply { putCharSequence("sender", "Dad"); putCharSequence("text", "See you at 8") },
+                Bundle().apply { putCharSequence("sender", "Mom"); putCharSequence("text", "Bring bread") }
+            ))
+        }
+
+        assertEquals(listOf("Mom", "Dad"), NotificationTextExtractor.senders(extras))
+    }
+
+    // Tip capture sends group chats only; a notification that doesn't say is unknown, never a group.
+    @Test
+    fun groupConversationComesFromTheNotificationAndIsNullWhenItDoesNotSay() {
+        val messages = arrayOf(Bundle().apply { putCharSequence("sender", "Rahul"); putCharSequence("text", "BUY RENUKA") })
+
+        assertEquals(true, NotificationTextExtractor.groupConversation(Bundle().apply { putBoolean("android.isGroupConversation", true) }))
+        assertEquals(false, NotificationTextExtractor.groupConversation(Bundle().apply {
+            putBoolean("android.isGroupConversation", false)
+            putCharSequence("android.conversationTitle", "StockTips")
+        }))
+        assertEquals(true, NotificationTextExtractor.groupConversation(Bundle().apply {
+            putParcelableArray("android.messages", messages)
+            putCharSequence("android.conversationTitle", "StockTips")
+        }))
+        assertNull(NotificationTextExtractor.groupConversation(Bundle().apply { putParcelableArray("android.messages", messages) }))
+        assertNull(NotificationTextExtractor.groupConversation(Bundle().apply { putCharSequence("android.title", "Rahul") }))
     }
 
     @Test

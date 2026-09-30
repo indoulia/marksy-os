@@ -37,7 +37,9 @@ data class RawCapture(
     val body: String,
     val postedAt: Long,
     /** Pull connectors send the provider's current full record, so an update replaces content instead of appending lines. */
-    val replaceOnUpdate: Boolean = false
+    val replaceOnUpdate: Boolean = false,
+    /** MessagingStyle's group flag; null when the notification doesn't say. */
+    val groupConversation: Boolean? = null
 )
 
 /** Source-specific clean-up before classification. Must be pure and must not drop content silently. */
@@ -185,7 +187,8 @@ class IngestionPipeline(
                 sourcePackage = raw.sourcePackage, sourceName = raw.sourceName, sourceKey = raw.sourceKey, eventFingerprint = fingerprint,
                 title = raw.title, body = raw.body, postedAt = raw.postedAt, category = result.category.name, priority = result.priority,
                 confidence = result.confidence, isTrading = isTrading,
-                deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name
+                deliveryState = if (isTrading) DeliveryState.PENDING.name else DeliveryState.NOT_APPLICABLE.name,
+                chatGroup = raw.groupConversation
             )
             val applied = RuleApplication.apply(rules(), base)
             val id = dao.insert(applied.event)

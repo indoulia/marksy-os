@@ -8,39 +8,51 @@ import java.net.URI
 import java.net.URL
 
 /** Direct client for the confirmed Marksy Tips API. */
-class MarksyTipsApiClient(
+open class MarksyTipsApiClient(
     private val authRepository: com.marksy.os.gateway.AuthRepository,
     baseUrl: String = DEFAULT_MARKSY_API_BASE_URL
 ) : MarksyGatewayClient {
     private val apiBaseUrl = normalizeBaseUrl(baseUrl)
 
-    override suspend fun analyze(request: MarksyTradingEventRequest): Result<MarksyInsight> {
-        return try {
-            val payload = MarksyTipPayloadBuilder.from(request)
-                ?: throw IllegalArgumentException("Trading notification does not contain a safe symbol candidate")
-            val created = postTip(payload)
-            if (created.status.equals("FAILED", ignoreCase = true)) {
-                throw MarksyTerminalException("Marksy rejected the trading tip")
-            }
-            Result.success(fetchTip(created.tipId, request.eventId, created.status))
+    override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> = try {
+        val data = execute("POST", "$apiBaseUrl/tips/ingest-text", message.toJson()).getJSONObject("data")
+        val kind = data.str("kind").ifBlank { "RECORDED" }.boundedText(MAX_STATUS_CHARS)
+        val tipId = data.str("tipId").trim()
+        val insight = if (tipId.isBlank()) recordedOnly(eventId, kind) else try {
+            fetchTip(tipId, eventId, kind)
         } catch (cancellation: CancellationException) {
             throw cancellation
-        } catch (error: Throwable) {
-            Result.failure(error)
+        } catch (fetchError: Throwable) {
+            // Finding M5: the POST already recorded the tip server-side; a failed comparison fetch
+            // (a 4xx such as 404, or an IO error) must not fail the row -- it stays a recorded receipt.
+            recordedOnly(eventId, kind)
         }
+        Result.success(insight)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
+    override suspend fun captureList(): Result<Set<String>> = try {
+        Result.success(parseCaptureList(execute("GET", "$apiBaseUrl/channels/capture-list").getJSONObject("data")))
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (error: Throwable) {
+        Result.failure(error)
     }
 
     suspend fun marketSnapshot(): MarketSnapshot =
         MarketSnapshot.parse(execute("GET", "$apiBaseUrl/dashboard/snapshot?limit=10").getJSONObject("data"))
 
-    private suspend fun postTip(payload: MarksyTipPayload): CreatedTip {
-        val data = execute("POST", "$apiBaseUrl/tips", payload.toJson()).getJSONObject("data")
-        val tipId = data.optString("tipId").trim()
-        if (tipId.isBlank()) throw IOException("Marksy Tips API returned a successful response without tipId")
-        return CreatedTip(tipId, data.optString("status", "UNKNOWN").boundedText(MAX_STATUS_CHARS))
-    }
+    // UNPARSED and orphan EXIT receipts have no tip, so there is no comparison to fetch.
+    private fun recordedOnly(eventId: Long, kind: String) = MarksyInsight(
+        eventId = eventId,
+        summary = if (kind == "EXIT") "Exit recorded; no open call to close" else "Recorded by Marksy; not read as a call yet",
+        action = kind
+    )
 
-    private suspend fun fetchTip(tipId: String, eventId: Long, createdStatus: String): MarksyInsight {
+    private suspend fun fetchTip(tipId: String, eventId: Long, kind: String): MarksyInsight {
         val data = execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data")
         val comparison = data.optJSONObject("comparison")
         val marksyView = data.optJSONObject("marksyView")
@@ -56,7 +68,7 @@ class MarksyTipsApiClient(
         return MarksyInsight(
             eventId = eventId,
             summary = summary,
-            action = (recommendation ?: createdStatus).boundedText(MAX_LONG_TEXT_CHARS),
+            action = (recommendation ?: kind).boundedText(MAX_LONG_TEXT_CHARS),
             confidence = marksyView?.finiteDouble("confidence")?.toFloat()?.coerceIn(0f, 1f)
                 ?: marksyView?.finiteDouble("probability")?.toFloat()?.coerceIn(0f, 1f),
             verdict = verdict,
@@ -85,7 +97,8 @@ class MarksyTipsApiClient(
         )
     }
 
-    private suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
+    // internal open: a test seam so a fake HTTP layer can be substituted without a real (HTTPS-only) server.
+    internal open suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
         // Not a MarksyTerminalException: a lapsed/never-established session is retryable --
         // the user may sign back in before the next delivery attempt. Treating it as terminal
         // would permanently FAIL every queued trading tip the moment a session expires.
@@ -138,7 +151,6 @@ class MarksyTipsApiClient(
         message?.let { ": ${it.take(MAX_ERROR_DETAIL_CHARS)}" } ?: ""
     } catch (_: Exception) { "" }
 
-    private data class CreatedTip(val tipId: String, val status: String)
 }
 
 private const val CONNECT_TIMEOUT_MS = 10_000

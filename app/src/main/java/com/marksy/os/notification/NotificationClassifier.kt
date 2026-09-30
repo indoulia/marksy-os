@@ -130,6 +130,60 @@ object NotificationClassifier {
     private val callSide = Regex("""\b(buy|sell|short(?![\s-]*term)|accumulate)\b""")
     private val callLevels = Regex("""\b(cmp|ltp|sl|tgt|target|targets|stoploss|stop-loss|entry)\b""")
     private fun isTradeCall(text: String): Boolean = callSide.containsMatchIn(text) && callLevels.findAll(text).count() >= 2
+
+    // Strong evidence of the customer's own order returns own-order before the call veto even runs (spec §5.1).
+    private val hardCustomerMarkers = listOf(
+        Regex("""\bqty\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bquantity\b""", RegexOption.IGNORE_CASE),
+        Regex("""\border\s*(?:no|id|number)\b""", RegexOption.IGNORE_CASE),
+        Regex("""\border\s*#"""),
+        Regex("""#\d"""),
+        Regex("""\bavg\.?\s*price\b""", RegexOption.IGNORE_CASE),
+        Regex("""\baverage\s+price\b""", RegexOption.IGNORE_CASE),
+        Regex("""\byou\s+have\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bposition\s+(?:opened|closed)\b""", RegexOption.IGNORE_CASE)
+    )
+    private val weakCustomerMarker = Regex("""\byour\b""", RegexOption.IGNORE_CASE)
+    // A possessive order phrase alone marks the customer's own order; research calls don't say "your order".
+    private val possessiveOrderPhrase = Regex("""\b(?:your|aapka|apka|aapki|apki|aapke|apke)\b.{0,40}?\b(?:orders?|gtt|positions?|trades?|sip)\b""", RegexOption.IGNORE_CASE)
+    // No \b: JVM and ICU disagree on word boundaries around Devanagari combining marks.
+    private val devanagariPossessivePhrase = Regex("""आपक[ाीे].{0,40}?(?:ऑर्डर|आर्डर|अॉर्डर|order)""")
+    // Leading \b only: inflections ("opened", "successfully") count, while "oversold" can't match "sold".
+    private val orderStatus = Regex(
+        """\b(?:executed|filled|traded|placed|rejected|cancell?ed|modified|triggered|completed?|confirmed|successful|accepted|open|pending|processed|created|bought|sold|hit|submitted)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val strongExecution = listOf(
+        Regex("""\b(?:orders?|trades?|gtt)\b.{0,80}?\b(?:executed|filled|traded|rejected|cancell?ed|placed|triggered|modified|pending|submitted)\b""", RegexOption.IGNORE_CASE),
+        Regex("""(?:executed|filled)\s+(?:at|@)""", RegexOption.IGNORE_CASE),
+        Regex("""\bbought\s+\d+\s+shares?\b""", RegexOption.IGNORE_CASE),
+        Regex("""\bsip\b.{0,60}?\bprocessed\b""", RegexOption.IGNORE_CASE),
+        Regex("""\btrades?\s+executed\b""", RegexOption.IGNORE_CASE)
+    )
+    // Execution/status vocabulary, never a tipster's call vocabulary ("buy order", "stop loss", "target hit" stay out on purpose).
+    private val classifierExecutionTerms = listOf(
+        "trade confirmation", "order executed", "order filled", "trade executed",
+        "executed at", "filled at", "quantity executed", "position opened", "position closed",
+        "order rejected", "order cancelled", "order canceled",
+        "sent to exchange", "is active", "execute ho gaya", "ho gaya", "insufficient margin"
+    )
+
+    /** A trade call reads like a call (side + symbol + levels); an own-order notification never does. */
+    private fun looksLikeCall(title: String, body: String, text: String): Boolean =
+        isTradeCall(text) || TradeCallParser.parse(title, body) != null
+
+    fun isOwnOrderEvent(title: String, body: String): Boolean {
+        val text = "$title $body".lowercase()
+        val strongEvidence = strongExecution.any { it.containsMatchIn(text) } ||
+            (hardCustomerMarkers.any { it.containsMatchIn(text) } && orderStatus.containsMatchIn(text)) ||
+            possessiveOrderPhrase.containsMatchIn(text) ||
+            devanagariPossessivePhrase.containsMatchIn(text) ||
+            classifierExecutionTerms.any { text.containsRuleTerm(it) }
+        if (strongEvidence) return true
+        if (looksLikeCall(title, body, text)) return false
+        return weakCustomerMarker.containsMatchIn(text) && orderStatus.containsMatchIn(text)
+    }
+
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
     fun classify(packageName: String, title: String, body: String): Result {

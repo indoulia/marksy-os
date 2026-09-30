@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -148,6 +148,13 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        // Tip capture sends group chats only; rows captured before this have unknown group-ness and stay local.
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                addColumn(database, "chatGroup", "INTEGER")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -157,7 +164,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                     .also { INSTANCE = it }
             }
