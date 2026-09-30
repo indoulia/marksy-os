@@ -29,8 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.StockMentions
-import com.marksy.os.market.ScorecardQuery
-import com.marksy.os.market.ScorecardSource
 
 @Composable
 fun TradingIntelligenceScreen(
@@ -42,24 +40,10 @@ fun TradingIntelligenceScreen(
     onOpenStock: (String) -> Unit = {},
     marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
-    onTipsStatusChange: (MyTipsStatus) -> Unit = {},
-    scorecardQuery: ScorecardQuery = ScorecardQuery(),
-    onScorecardQueryChange: (ScorecardQuery) -> Unit = {},
-    scorecardTrail: List<ScorecardSource> = emptyList(),
-    onScorecardTrailChange: (List<ScorecardSource>) -> Unit = {}
+    onTipsStatusChange: (MyTipsStatus) -> Unit = {}
 ) {
-    var filteringScorecards by remember { mutableStateOf<ScorecardQuery?>(null) }
-    filteringScorecards?.let { initial -> ScorecardFilterDialog(initial, onApply = { onScorecardQueryChange(it); filteringScorecards = null }) { filteringScorecards = null } }
-    val followed by com.marksy.os.market.MarketIntelligenceRepository.followed.collectAsState()
-    val toggleFollow = marketRepository?.let { rememberFollowToggle(it) }
-    val openSource = scorecardTrail.lastOrNull()?.takeIf { selectedFilter == TAB_SCORECARDS }
     val actions = listOfNotNull(
-        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
-        openSource?.let { s -> followed?.let { set -> toggleFollow?.let { toggle ->
-            val on = s.followKey in set
-            FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggle(s.followKey, s.name, !on) }
-        } } },
-        if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards") { filteringScorecards = scorecardQuery } else null
+        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null
     )
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
@@ -73,11 +57,6 @@ fun TradingIntelligenceScreen(
         when {
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
-            selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(
-                // The tab button plus this page's actions.
-                marketRepository, scorecardQuery, oneHandStackBottomPadding(1 + actions.size), onScorecardQueryChange, onEditFilter = { filteringScorecards = it },
-                trail = scorecardTrail, onTrailChange = onScorecardTrailChange, onOpenStock = onOpenStock
-            )
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             else -> CapturedList(insights, onOpenStock)
         }
@@ -111,22 +90,18 @@ private fun CapturedList(insights: List<TradingInsight>, onOpenStock: (String) -
 private const val TAB_PICKS = "Setups"
 private const val TAB_PREDICTIONS = "Predictions"
 private const val TAB_TIPS = "My tips"
-private const val TAB_SCORECARDS = "Scorecards"
 private const val TAB_CAPTURED = "Captured"
-val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_SCORECARDS, TAB_CAPTURED)
+val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_CAPTURED)
 /** The My tips filter, for a tip-alert notification that opens My tips · Following. */
 const val TradingTipsFilter = TAB_TIPS
 
-/** Title superscript: the tab, plus Marksy's scan session, the My tips status, or the scorecard filter. */
+/** Title superscript: the tab, plus Marksy's scan session or the My tips status. */
 fun tradingTitleNote(
     filter: String,
     scan: com.marksy.os.market.LatestScanDto?,
-    tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
-    scorecards: ScorecardQuery = ScorecardQuery(),
-    sourceOpen: Boolean = false
+    tipsStatus: MyTipsStatus = MyTipsStatus.OPEN
 ): String = when (filter) {
     TAB_TIPS -> "$filter · ${tipsStatus.label}"
-    TAB_SCORECARDS -> if (sourceOpen) "$filter · ${scorecards.label()}" else "$filter · ${scorecards.entity.label} · ${scorecards.label()}"
     else -> filter + (if (filter == TAB_PICKS || filter == TAB_PREDICTIONS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
 }
 

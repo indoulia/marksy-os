@@ -31,8 +31,11 @@ import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.MarketIntelligenceRepository
 
-// Predictions live on Trading (Marksy picks), so Market covers the market itself.
-enum class MarketTab(val label: String) { OVERVIEW("Overview"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
+// Watchlist is Market's home; Predictions live on Trading (Marksy picks).
+enum class MarketTab(val label: String) { WATCHLIST("Watchlist"), PORTFOLIO("Portfolio"), OVERVIEW("Overview"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
+
+/** Market's section filter, shared with WatchlistScreen, which MainActivity shows for WATCHLIST. */
+val MarketSections = MarketTab.entries.map { it.name to it.label }
 
 /** Section and symbol are hoisted so the Stocks search can sit in the app header. */
 @Composable
@@ -65,6 +68,10 @@ fun MarketScreen(
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         when (tab) {
+            MarketTab.WATCHLIST -> Unit
+            MarketTab.PORTFOLIO -> Box(Modifier.padding(18.dp)) {
+                EmptyState("Portfolio — coming soon", "Your holdings and their performance will show here.")
+            }
             MarketTab.OVERVIEW -> {
                 val refresh = rememberRefreshState()
                 val cached = repository.lastOverview
@@ -137,7 +144,7 @@ fun MarketScreen(
             }
         }
         OneHandControls(
-            filters = MarketTab.entries.map { it.name to it.label },
+            filters = MarketSections,
             selectedFilter = tab.name,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
             actions = listOfNotNull(

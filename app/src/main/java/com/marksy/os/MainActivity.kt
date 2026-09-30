@@ -241,7 +241,7 @@ class MainActivity : ComponentActivity() {
         var tipsStatus by rememberSaveable { mutableStateOf(com.marksy.os.ui.MyTipsStatus.OPEN) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
-        var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
+        var marketTabName by rememberSaveable { mutableStateOf(MarketTab.WATCHLIST.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
         // Back from a stock returns to where it was opened: earlier stocks (peers), then the page it came from.
@@ -353,10 +353,11 @@ class MainActivity : ComponentActivity() {
         val tabs = listOf(
             "Home" to Icons.Default.Home,
             "Inbox" to Icons.Default.Inbox,
-            "Watchlist" to Icons.Default.Visibility,
+            "Market" to Icons.Default.QueryStats,
             "Trading" to Icons.Default.ShowChart,
-            "Market" to Icons.Default.QueryStats
+            "Trust" to Icons.Default.VerifiedUser
         )
+        val onWatchlist = selectedTab == 2 && marketTabName == MarketTab.WATCHLIST.name
         // The page title lives in the same bar as the Ask/profile icons -- one header row per
         // screen, like Home's -- instead of a second title row underneath.
         // One word each, so the header keeps room for its icons.
@@ -376,9 +377,9 @@ class MainActivity : ComponentActivity() {
             showAsk -> "Ask"
             showPlan -> "Plan"
             selectedTab == 1 -> "Inbox"
-            selectedTab == 2 -> "Watchlist"
+            selectedTab == 2 -> "Market"
             selectedTab == 3 -> "Trading"
-            selectedTab == 4 -> "Market"
+            selectedTab == 4 -> "Trust"
             selectedTab == tabs.size -> "Settings"
             else -> null
         }
@@ -386,16 +387,17 @@ class MainActivity : ComponentActivity() {
         val titleNote = when {
             showPlan -> planView
             hostOpen -> null
-            selectedTab == 2 -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
-            selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
+            onWatchlist -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
+            selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus)
+            selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             else -> null
         }
         // Pages whose search sits behind a header icon; the field covers the header while open.
         val searchPage = when {
             hostOpen -> null
-            selectedTab == 2 && watchView != com.marksy.os.ui.WATCH_VIEW_PORTFOLIO -> 2
-            selectedTab == 4 && marketTabName == MarketTab.STOCKS.name -> 4
+            onWatchlist -> 2
+            selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> 4
             else -> null
         }
         fun closeHeaderSearch() {
@@ -408,7 +410,7 @@ class MainActivity : ComponentActivity() {
         fun openStockFrom(symbol: String, origin: String) {
             stockReturn = origin; stockReturnMarketTab = marketTabName; stockTrail = emptyList()
             showAsk = false; showBriefing = false; showTimeline = false; showCalendar = false; showInsights = false; showDigest = false
-            marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 4
+            marketTabName = MarketTab.STOCKS.name; marketSymbol = symbol; stockQuery = symbol; selectedTab = 2
         }
         fun stockOrigin() = when { showAsk -> "ask"; showBriefing -> "briefing"; else -> selectedTab.toString() }
         LaunchedEffect(pendingOpen) {
@@ -471,9 +473,9 @@ class MainActivity : ComponentActivity() {
             repository = watchlist,
             lists = watchlists,
             items = watchItems,
-            currentListId = if (selectedTab == 2 && !hostOpen) com.marksy.os.ui.watchlistCurrentId(watchView, watchlists) else null,
+            currentListId = if (onWatchlist && !hostOpen) com.marksy.os.ui.watchlistCurrentId(watchView, watchlists, watchItems) else null,
             onAdded = { listId, message ->
-                if (selectedTab == 2 && !hostOpen) { watchView = listId.toString(); closeHeaderSearch() }
+                if (onWatchlist && !hostOpen) { watchView = listId.toString(); closeHeaderSearch() }
                 else scope.launch { snackbar.showSnackbar(message, duration = SnackbarDuration.Short) }
             }
         ) {
@@ -532,7 +534,7 @@ class MainActivity : ComponentActivity() {
                             )
                         } else {
                         // Market pages carry a small LIVE mark on the title, only while NSE is in session.
-                        val titleLive = (selectedTab == 3 || selectedTab == 4) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
+                        val titleLive = (selectedTab == 2 || selectedTab == 3) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.Top) {
                             Text(
                                 screenTitle.orEmpty(),
@@ -590,6 +592,8 @@ class MainActivity : ComponentActivity() {
                                 showRules = false; showDigest = false; showGatewaySettings = false
                                 showLearning = false; showMemory = false; showHealth = false; showValidation = false; showBriefing = false; showUpstox = false; showAsk = false; showPlan = false
                                 stockReturn = null; stockTrail = emptyList()
+                                // Watchlist always opens on the fullest list.
+                                if (index == 2) watchView = ""
                                 selectedTab = index
                             },
                             icon = { Icon(icon, contentDescription = label) },
@@ -673,8 +677,9 @@ class MainActivity : ComponentActivity() {
                             AskMarksy.Page.INBOX -> { inboxFilterName = a.arg ?: SmartInboxModel.Filter.ALL.name; selectedTab = 1 }
                             AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); showPlan = true }
                             AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
-                            AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.OVERVIEW.name; selectedTab = 4 }
-                            AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.STOCKS.name; selectedTab = 4 }
+                            AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.WATCHLIST.name; selectedTab = 2 }
+                            AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.STOCKS.name; selectedTab = 2 }
+                            AskMarksy.Page.TRUST -> selectedTab = 4
                             AskMarksy.Page.SETTINGS -> selectedTab = tabs.size
                         }
                     }
@@ -706,7 +711,7 @@ class MainActivity : ComponentActivity() {
                     market = market,
                     liveIndices = upstoxLive,
                     todayDigest = todayDigest,
-                    onOpenTrading = { marketTabName = MarketTab.OVERVIEW.name; selectedTab = 4 },
+                    onOpenTrading = { marketTabName = MarketTab.OVERVIEW.name; selectedTab = 2 },
                     onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveWithUndo,
@@ -738,7 +743,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 )
-                selectedTab == 2 -> com.marksy.os.ui.WatchlistScreen(
+                onWatchlist -> com.marksy.os.ui.WatchlistScreen(
                     repository = watchlist,
                     lists = watchlists,
                     items = watchItems,
@@ -746,28 +751,25 @@ class MainActivity : ComponentActivity() {
                     view = watchView,
                     onViewSelected = { watchView = it },
                     query = watchQuery,
-                    onOpenStock = { openStockFrom(it, "2") }
+                    onOpenStock = { openStockFrom(it, "2") },
+                    onSectionSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null }
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
                         tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
-                        onFilterSelected = { tradingFilter = it; scorecardTrail = emptyList() },
+                        onFilterSelected = { tradingFilter = it },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                         tipsStatus = tipsStatus,
-                        onTipsStatusChange = { tipsStatus = it },
-                        scorecardQuery = scorecardQuery,
-                        onScorecardQueryChange = { if (it.entity != scorecardQuery.entity) scorecardTrail = emptyList(); scorecardQuery = it },
-                        scorecardTrail = scorecardTrail,
-                        onScorecardTrailChange = { scorecardTrail = it }
+                        onTipsStatusChange = { tipsStatus = it }
                     )
                 }
-                selectedTab == 4 -> MarketScreen(
+                selectedTab == 2 -> MarketScreen(
                     repository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                     padding = padding,
                     tabName = marketTabName,
-                    onTabSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null },
+                    onTabSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null; if (it == MarketTab.WATCHLIST.name) watchView = "" },
                     selectedSymbol = marketSymbol,
                     onSymbolSelected = {
                         val from = marketSymbol
@@ -779,6 +781,15 @@ class MainActivity : ComponentActivity() {
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
                     onEventSelected = openEvent,
+                    onOpenStock = { openStockFrom(it, "2") }
+                )
+                selectedTab == 4 -> com.marksy.os.ui.TrustScreen(
+                    repository = remember { MarksyContainer.marketIntelligence(applicationContext) },
+                    padding = padding,
+                    query = scorecardQuery,
+                    onQueryChange = { if (it.entity != scorecardQuery.entity) scorecardTrail = emptyList(); scorecardQuery = it },
+                    trail = scorecardTrail,
+                    onTrailChange = { scorecardTrail = it },
                     onOpenStock = { openStockFrom(it, "4") }
                 )
                 else -> MoreScreen(

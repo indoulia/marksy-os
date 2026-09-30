@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,12 +73,17 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-const val WATCH_VIEW_PORTFOLIO = "portfolio"
+/** Lists by stock count, fullest first; ties keep creation order. */
+fun rankedWatchlists(lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): List<WatchlistEntity> {
+    val counts = items.groupingBy { it.watchlistId }.eachCount()
+    return lists.sortedByDescending { counts[it.id] ?: 0 }
+}
 
-private fun currentList(view: String, lists: List<WatchlistEntity>): WatchlistEntity? =
-    if (view == WATCH_VIEW_PORTFOLIO) null else lists.firstOrNull { it.id.toString() == view } ?: lists.firstOrNull()
+// "" (or a deleted list's id) opens the fullest list.
+private fun currentList(view: String, lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): WatchlistEntity? =
+    lists.firstOrNull { it.id.toString() == view } ?: rankedWatchlists(lists, items).firstOrNull()
 
-fun watchlistCurrentId(view: String, lists: List<WatchlistEntity>): Long? = currentList(view, lists)?.id
+fun watchlistCurrentId(view: String, lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): Long? = currentList(view, lists, items)?.id
 
 /** What stock rows need to show and open the add popup; a CompositionLocal so rows deep in any screen reach it. */
 class WatchlistAdder(val watched: Set<String>, val open: (String) -> Unit)
@@ -132,14 +138,13 @@ fun WatchlistAddHost(
     }
 }
 
-/** Title superscript: the open list and how full it is, or Portfolio. */
+/** Title superscript: the open list and how full it is. */
 fun watchlistLabel(view: String, lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): String? {
-    if (view == WATCH_VIEW_PORTFOLIO) return "Portfolio"
-    val list = currentList(view, lists) ?: return null
+    val list = currentList(view, lists, items) ?: return null
     return "${list.name} ${items.count { it.watchlistId == list.id }}/${WatchlistRepository.MAX_STOCKS}"
 }
 
-/** Watchlist tab: named lists of up to 15 stocks each, plus a Portfolio placeholder. Search lives in the app header. */
+/** Market's home: named lists of up to 15 stocks each; a left quick menu switches lists. Search lives in the app header. */
 @Composable
 fun WatchlistScreen(
     repository: WatchlistRepository,
@@ -149,10 +154,11 @@ fun WatchlistScreen(
     view: String,
     onViewSelected: (String) -> Unit,
     query: String,
-    onOpenStock: (String) -> Unit
+    onOpenStock: (String) -> Unit,
+    onSectionSelected: (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val list = currentList(view, lists)
+    val list = currentList(view, lists, items)
     val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
     val adder = LocalWatchlistAdder.current
     var creating by rememberSaveable { mutableStateOf(false) }
@@ -164,9 +170,6 @@ fun WatchlistScreen(
         val q = query.trim()
         when {
             q.length >= 2 -> StockSuggestions(q, inner, onSymbolSelected = { adder?.open(it) }, emptyHint = "Try the company's NSE symbol, e.g. HAL.")
-            view == WATCH_VIEW_PORTFOLIO -> Box(Modifier.padding(18.dp)) {
-                EmptyState("Portfolio — coming soon", "Your holdings and their performance will show here.")
-            }
             list == null -> Box(Modifier.padding(18.dp)) {
                 EmptyState("No watchlists yet", "Tap + to create one, e.g. Defence or SmallCap, then tap search above to add stocks.")
             }
@@ -179,11 +182,17 @@ fun WatchlistScreen(
                 onMove = { moving = it }
             )
         }
+        if (lists.size > 1) OneHandQuickMenu(
+            options = rankedWatchlists(lists, items).map { it.id.toString() to "${it.name}  ${counts[it.id] ?: 0}" },
+            selected = list?.id?.toString(),
+            onSelected = onViewSelected,
+            icon = Icons.Default.Bookmarks,
+            label = "Switch watchlist"
+        )
         OneHandControls(
-            // With no lists yet, "" stands for the empty Watchlists page so the filter button isn't in its reset (X) state.
-            filters = (if (lists.isEmpty()) listOf("" to "Watchlists") else lists.map { it.id.toString() to it.name }) + (WATCH_VIEW_PORTFOLIO to "Portfolio"),
-            selectedFilter = list?.id?.toString() ?: if (view == WATCH_VIEW_PORTFOLIO) view else "",
-            onFilterSelected = onViewSelected,
+            filters = MarketSections,
+            selectedFilter = MarketTab.WATCHLIST.name,
+            onFilterSelected = onSectionSelected,
             actions = listOfNotNull(
                 list?.let { l -> FloatingAction(Icons.Default.Delete, "Delete ${l.name}") { deleting = l } },
                 FloatingAction(Icons.Default.Add, "New watchlist") { creating = true }

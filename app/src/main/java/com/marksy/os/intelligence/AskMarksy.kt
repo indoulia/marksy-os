@@ -19,7 +19,7 @@ import java.util.Locale
 object AskMarksy {
     enum class Intent { PAYMENTS, DELIVERIES, FROM_PERSON, BILLS_DUE, IMPORTANT, MISSED, TRADING, SOURCE, SEARCH, PLAN, STOCK, NAVIGATE, HELP }
 
-    enum class Page(val title: String) { HOME("Home"), INBOX("Inbox"), PLAN("Plan"), TRADING("Trading"), MARKET("Market"), STOCK("Market"), SETTINGS("Settings") }
+    enum class Page(val title: String) { HOME("Home"), INBOX("Inbox"), PLAN("Plan"), TRADING("Trading"), MARKET("Market"), STOCK("Market"), TRUST("Trust"), SETTINGS("Settings") }
 
     /** A page to open for the answer; [arg] is the tab, filter or symbol that page takes. [auto] opens it without a tap. */
     data class Action(val label: String, val page: Page, val arg: String? = null, val auto: Boolean = false)
@@ -612,8 +612,8 @@ object AskMarksy {
         "predictions" to act(Page.TRADING, "Predictions", "Predictions"), "marksy calls" to act(Page.TRADING, "Predictions", "Predictions"),
         "calls" to act(Page.TRADING, "My tips", "My tips"), "trade calls" to act(Page.TRADING, "My tips", "My tips"), "trading calls" to act(Page.TRADING, "My tips", "My tips"),
         "my tips" to act(Page.TRADING, "My tips", "My tips"), "tips" to act(Page.TRADING, "My tips", "My tips"),
-        "scorecards" to act(Page.TRADING, "Scorecards", "Scorecards"), "scorecard" to act(Page.TRADING, "Scorecards", "Scorecards"),
-        "track record" to act(Page.TRADING, "Scorecards", "Scorecards"),
+        "scorecards" to act(Page.TRUST), "scorecard" to act(Page.TRUST), "track record" to act(Page.TRUST),
+        "trust" to act(Page.TRUST), "trust score" to act(Page.TRUST), "trust scores" to act(Page.TRUST),
         "captured" to act(Page.TRADING, "Captured", "Captured"), "captured trades" to act(Page.TRADING, "Captured", "Captured"),
         "market" to act(Page.MARKET, "OVERVIEW"), "overview" to act(Page.MARKET, "OVERVIEW", "Overview"), "market overview" to act(Page.MARKET, "OVERVIEW", "Overview"),
         "indices" to act(Page.MARKET, "OVERVIEW", "Overview"), "stocks" to act(Page.MARKET, "STOCKS", "Stocks"), "stock search" to act(Page.MARKET, "STOCKS", "Stocks"),
