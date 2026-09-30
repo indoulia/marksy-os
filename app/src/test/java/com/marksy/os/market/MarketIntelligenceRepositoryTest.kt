@@ -12,8 +12,12 @@ private class FakeMarketApiClient(
     private val predictionPage: ActivePredictionPageDto? = null,
     private val ipoList: List<IpoListItemDto> = emptyList(),
     private val health: LiveFeedHealthDto? = null,
-    private val ledgerError: Throwable? = null
+    private val ledgerError: Throwable? = null,
+    private val followList: FollowListDto = FollowListDto(emptyList(), 200),
+    private val followError: Throwable? = null,
+    private val canonical: (FollowKey) -> FollowKey = { it }
 ) : MarketApiClient {
+    val seenWhileSaving = mutableListOf<Set<FollowKey>?>()
     override suspend fun marketSummary(): MarketSummaryDto = summaryError?.let { throw it } ?: summary!!
     override suspend fun liveQuotes(symbols: List<String>?): LiveQuotesResponseDto = liveQuotesResponse!!
     override suspend fun liveFeedHealth(): LiveFeedHealthDto = health!!
@@ -30,7 +34,22 @@ private class FakeMarketApiClient(
     override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = ledgerError?.let { throw it } ?: MyTipPageDto(emptyList(), null)
     override suspend fun myScorecard(filter: String): ScorecardDto = throw ledgerError ?: NotImplementedError()
     override suspend fun tipDetail(tipId: String): TipDetailDto = throw ledgerError ?: NotImplementedError()
+    override suspend fun follows(): FollowListDto = followList
+    override suspend fun follow(key: FollowKey): FollowDto {
+        seenWhileSaving += MarketIntelligenceRepository.followed.value
+        followError?.let { throw it }
+        return followOf(canonical(key))
+    }
+    override suspend fun unfollow(key: FollowKey): FollowListDto {
+        seenWhileSaving += MarketIntelligenceRepository.followed.value
+        followError?.let { throw it }
+        return FollowListDto(followList.items.filter { it.key != canonical(key) }, 200)
+    }
 }
+
+private val noRecord = ScorecardHeadlineDto(0, 0, 0, 0, 0, 0, 0, null, null, null, null)
+
+private fun followOf(key: FollowKey) = FollowDto(key, "Entity ${key.id}", null, null, null, false, "2026-09-30T04:00:00Z", noRecord)
 
 private fun summary(marketStatus: String = "MARKET_HOURS") = MarketSummaryDto(
     asOf = "2026-09-24T09:43:21+05:30", marketStatus = marketStatus, regime = null, advanceDecline = null,
@@ -185,5 +204,38 @@ class MarketIntelligenceRepositoryTest {
         val state = repository.liveFeedHealth()
 
         assertTrue(state is MarketDataState.Unavailable)
+    }
+
+    // Follow state is the server's: optimistic while saving, then whatever the server answered.
+    @Test
+    fun aFollowSettlesOnTheServersCanonicalKeyAndAnUnfollowOnItsList() = runBlocking {
+        val client = FakeMarketApiClient(
+            followList = FollowListDto(listOf(followOf(FollowKey.channel(3)), followOf(FollowKey.channel(1))), 200),
+            canonical = { if (it == FollowKey.channel(7)) FollowKey.channel(1) else it }
+        )
+        val repository = MarketIntelligenceRepository(client)
+
+        repository.follows()
+        val followed = repository.setFollowing(FollowKey.channel(7), follow = true)
+        val unfollowed = repository.setFollowing(FollowKey.channel(3), follow = false)
+
+        assertEquals(setOf(FollowKey.channel(3), FollowKey.channel(1), FollowKey.channel(7)), client.seenWhileSaving.first())
+        assertEquals(MarketDataState.Loaded(setOf(FollowKey.channel(3), FollowKey.channel(1))), followed)
+        assertEquals(MarketDataState.Loaded(setOf(FollowKey.channel(1))), unfollowed)
+        assertEquals(setOf(FollowKey.channel(1)), MarketIntelligenceRepository.followed.value)
+    }
+
+    @Test
+    fun aRefusedFollowRevertsOnlyItsOwnKeyAndIsWordedLikeTheLedger() = runBlocking {
+        fun repo(status: Int) = MarketIntelligenceRepository(FakeMarketApiClient(
+            followList = FollowListDto(listOf(followOf(FollowKey.caller(9))), 200),
+            followError = MarketApiException("Marksy Market API returned HTTP $status", status)
+        ))
+        val forbidden = repo(403).also { it.follows() }.setFollowing(FollowKey.channel(3), follow = true)
+
+        assertEquals(MarketDataState.Error("Your account doesn't have access to tip records yet"), forbidden)
+        assertEquals(setOf(FollowKey.caller(9)), MarketIntelligenceRepository.followed.value)
+        assertEquals(MarketDataState.Unavailable, repo(401).also { it.follows() }.setFollowing(FollowKey.caller(9), follow = false))
+        assertEquals(setOf(FollowKey.caller(9)), MarketIntelligenceRepository.followed.value)
     }
 }

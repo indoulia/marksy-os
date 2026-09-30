@@ -24,7 +24,8 @@ import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.MyTipDto
 
 enum class MyTipsStatus(val label: String, val param: String?, val empty: String) {
-    OPEN("Open", "ACTIVE", "No open tips"), CLOSED("Closed", "CLOSED", "No closed tips yet"), ALL("All", null, "No tips yet");
+    OPEN("Open", "ACTIVE", "No open tips"), CLOSED("Closed", "CLOSED", "No closed tips yet"), ALL("All", null, "No tips yet"),
+    FOLLOWING("Following", null, "Not following anyone yet");
 
     fun next(): MyTipsStatus = entries[(ordinal + 1) % entries.size]
 }
@@ -32,6 +33,7 @@ enum class MyTipsStatus(val label: String, val param: String?, val empty: String
 /** The calls this customer received, as the ledger tracks them (spec §9 `/me/tips`); other holders are only a count. */
 @Composable
 internal fun MyTipsView(repository: MarketIntelligenceRepository, status: MyTipsStatus, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
+    if (status == MyTipsStatus.FOLLOWING) return FollowingView(repository, bottomPadding, onOpenStock)
     val paged = remember(status) { Paged { c -> repository.myTips(status.param, c).map { it.items to it.nextCursor } } }
     LaunchedEffect(paged) { paged.more() }
     val quotes = rememberUpstoxQuotes(remember(paged.items) { paged.items.filter { LedgerCalls.isActive(it.tip) }.map { it.tip.symbol }.distinct() })

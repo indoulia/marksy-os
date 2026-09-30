@@ -69,7 +69,7 @@ fun TradingIntelligenceScreen(
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
         actions = listOfNotNull(
-            if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
+            if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
             if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, "Filter scorecards") { filteringScorecards = true } else null
         )
     )

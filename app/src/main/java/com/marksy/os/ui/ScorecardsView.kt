@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.market.EntityScorecardDto
 import com.marksy.os.market.EntityScorecardListDto
+import com.marksy.os.market.Follows
 import com.marksy.os.market.HorizonBucket
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
@@ -52,6 +53,9 @@ internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: Sco
     val ranked by produceState<MarketDataState<EntityScorecardListDto>>(MarketDataState.Loading, query) { value = repository.scorecards(query.entity, query) }
     var detail by remember { mutableStateOf<EntityScorecardDto?>(null) }
     detail?.let { e -> ScorecardDetailDialog(repository, query, e) { detail = null } }
+    val followed by MarketIntelligenceRepository.followed.collectAsState()
+    LaunchedEffect(Unit) { repository.follows() }
+    val toggleFollow = rememberFollowToggle(repository)
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
@@ -72,7 +76,10 @@ internal fun ScorecardsView(repository: MarketIntelligenceRepository, query: Sco
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Scorecards unavailable", r.message) }
             is MarketDataState.Empty -> item { EmptyState("No ${query.entity.label.lowercase()} with calls in this period", "Widen the period or clear the horizon.") }
-            is MarketDataState.Loaded -> items(r.value.items, key = { "${it.entity}-${it.id}" }) { e -> EntityRow(e) { detail = e } }
+            is MarketDataState.Loaded -> items(r.value.items, key = { "${it.entity}-${it.id}" }) { e ->
+                val key = Follows.key(e)
+                EntityRow(e, Follows.isFollowing(followed, key, e.following), onToggleFollow = { toggleFollow(key, e.name, it) }) { detail = e }
+            }
             else -> Unit
         }
     }
@@ -92,7 +99,7 @@ private fun ScoreTile(title: String, subtitle: String?, body: ScorecardBodyDto, 
 }
 
 @Composable
-private fun EntityRow(e: EntityScorecardDto, onClick: () -> Unit) {
+private fun EntityRow(e: EntityScorecardDto, following: Boolean, onToggleFollow: (Boolean) -> Unit, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
@@ -105,7 +112,10 @@ private fun EntityRow(e: EntityScorecardDto, onClick: () -> Unit) {
             )
             Text(ScorecardText.trust(e.body.trust), color = if (e.body.trust.trustScore != null) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
-        Text(ScorecardText.summary(e.body), color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(ScorecardText.summary(e.body), color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            FollowPill(following, onToggleFollow)
+        }
     }
 }
 

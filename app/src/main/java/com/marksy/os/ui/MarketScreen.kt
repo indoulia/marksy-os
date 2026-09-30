@@ -109,6 +109,9 @@ fun MarketScreen(
                     }
                     val mentions = remember(stockEvents, words) { stockEvents.filter { e -> words.any { it.containsMatchIn("${e.title} ${e.body}") } } }
                     val call = remember(instrument) { com.marksy.os.market.LedgerCalls.leadingMarksyCall(instrument?.calls) }
+                    val followed by MarketIntelligenceRepository.followed.collectAsState()
+                    LaunchedEffect(symbol) { repository.follows() }
+                    val toggleFollow = rememberFollowToggle(repository)
                     SideEffect {
                         stockTrade = TradeIntent(
                             symbol, if (call?.direction == "SELL") TradeSide.SELL else TradeSide.BUY,
@@ -118,7 +121,8 @@ fun MarketScreen(
                     MarksyRefreshBox(refresh) {
                         StockDetailScreen(state = state, padding = inner, symbol = symbol, live = live, range = range, onRangeSelected = { range = it },
                             minutes = minutes, onMinutesSelected = { minutes = it },
-                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis, onOpenTip = { openTip = it })
+                            mentions = mentions, onEventSelected = onEventSelected, fundamentals = fundamentals, onOpenSymbol = { onSymbolSelected(it) }, analysis = analysis, onOpenTip = { openTip = it },
+                            followed = followed, onToggleFollow = toggleFollow)
                     }
                 }
             }
