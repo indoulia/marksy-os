@@ -73,7 +73,9 @@ Out: target/stop/horizon learning; publishing SEL-001 calls (needs trade geometr
   the previous day) that carry official bars for at least `selection_min_session_stocks` (default 100) distinct
   stocks. `i(D)` is the index of session `D` in `S`; `D+k` means `S[i(D)+k]`. `session_date(D)` is the IST date.
 - **Cutoff**: `app/walk_forward_dataset.py::session_cutoff(session_date)`, the anchor D's own bar carries.
-- **Horizon** `h ∈ {3, 5}` sessions (setting `selection_gate_horizons`).
+- **Gate pairs** (setting `selection_gate_pairs`): BASELINE-001 × {1, 3, 5, 7} sessions (every production-supported
+  horizon) and SEL-001 × {3, 5}. Each pair is validated and authorised independently; no horizon is inherently
+  publishable or shadow-only.
 - **Model versions under gate**: `BASELINE-001` (existing live model) and `SEL-001` (new).
 - **Stage**: `WALK_FORWARD` or `HELD_OUT`.
 - **Cost** `c`: round-trip transaction cost as a return, default `0.0030`.
@@ -89,7 +91,8 @@ Out: target/stop/horizon learning; publishing SEL-001 calls (needs trade geometr
 4. FV-001's `REQUIRED_FEATURE_COLUMNS` (`sma20_distance`, `volume_ratio_20d`, `atr_percent`) non-NaN at `D`.
 5. The scan's record contracts pass (`evaluate_record_contracts`, as `evaluate_stock` applies them).
 6. Median of `close × volume` over the 20 official bars ending at `D` ≥ `selection_min_median_traded_value_20d`
-   (default ₹100,000, i.e. ₹1 lakh, per review decision 3), on corporate-action-adjusted bars.
+   (default ₹10,000,000, i.e. ₹1 crore, per review decision 3), on corporate-action-adjusted bars. The floor is
+   applied before the benchmark: an illiquid stock is outside `U(D)` and never enters `b(D,h)`.
 
 A stock with an official bar at `D` that fails a rule is **excluded** with the first failing reason:
 `NOT_EQUITY`, `RIGHTS_ENTITLEMENT`, `TOO_FEW_BARS`, `INVALID_MARKET_DATA`, `DATA_CONTRACT_VIOLATION`,
@@ -113,7 +116,9 @@ One row per `(session D, stock s ∈ U(D), horizon h)`. All prices are corporate
   columns computed **across `U(D)` only** (reusing `walk_forward_dataset.cross_sectional_features` and
   `_regime_for` with `U(D)` as the population).
 - BASELINE-001 uses FV-001 as the live scan does.
-- News, fundamentals, market cap and sector are not features (not reconstructable as of `D`).
+- News, fundamentals and market cap are not features (not reconstructable as of `D`).
+- Known point-in-time limitation: `rel_strength_sector_20d` groups by the current `Stock.sector`, as FV-002 does
+  today. Historical sector membership is not reconstructed; the report states this.
 - Every bar passed to feature code goes through the existing `feature_bar_observer`; a test asserts no observed
   bar has `timestamp > cutoff(D)`.
 
@@ -177,8 +182,11 @@ For model `m`, horizon `h`, stage window `W` (a set of sessions), processed in a
 
 ### 9.2 BASELINE-001
 
-No fitting. Scores come from the existing `BaselineSignalProvider`; the model is evaluated exactly as it runs
-live, restricted to `U(D)`.
+No fitting. Scores come from the existing `BaselineSignalProvider`, restricted to `U(D)`. Offline scoring uses
+split-adjusted bars; the live scan scores raw bars. The two are not treated as equivalent: the dataset carries
+both scores, a test pins where they differ, and every run reports a walk-forward-only live-parity block (rows
+and sessions whose scores or top-K differ, and walk-forward statistics under live scores). The held-out month is
+never scored with the live variant.
 
 ## 10. Validation protocol
 
@@ -322,6 +330,8 @@ supersedes an earlier `PUBLISH`.
 PublishAuthorization(state, reason, decision_id)` returns `PUBLISH` only if every check passes, in order. The
 first failure returns `NO_EDGE` with its reason:
 
+0. `(model_version, horizon_sessions) ∈ selection_gate_pairs`, else `HORIZON_NOT_GATED`. The runner refuses other
+   pairs.
 1. A latest decision exists, else `NO_DECISION_ON_RECORD`.
 2. Its `decision == PUBLISH`, else its own `primary_reason`.
 3. `gate_rule_version`, `universe_rule_version`, `dataset_version` and `config_sha256` equal the running code's,
@@ -331,8 +341,9 @@ first failure returns `NO_EDGE` with its reason:
 6. The stored numbers re-satisfy §11: both results `PASS`, trades ≥ min, `mean_excess ≥ min`, `ci_low > 0`,
    required fields non-null. Else `DECISION_INVALID`.
 
-Any exception → `NO_EDGE / AUTHORIZATION_ERROR` (logged). BASELINE-001 horizons 1 and 7, which the gate never
-evaluates, always resolve to `NO_DECISION_ON_RECORD`.
+Any exception → `NO_EDGE / AUTHORIZATION_ERROR` (logged). A pair outside the list (e.g. SEL-001 at 7 sessions, or an unknown
+model) is always `NO_EDGE / HORIZON_NOT_GATED`. Every listed pair, BASELINE-001 at 1 and 7 sessions included, stays
+`SHADOW` until it passes the complete gate.
 
 ### 13.1 Publication capability
 
@@ -385,8 +396,7 @@ disposition. A single predicate `published_only(query)` is used everywhere.
 
 ### 14.3 `/predictions/active` meta
 
-`meta.publishGate` is a list, one entry per pair in `selection_gate_reported_pairs` (default BASELINE-001 × {1,3,5,7},
-SEL-001 × {3,5}):
+`meta.publishGate` is a list, one entry per pair in `selection_gate_pairs`:
 - `modelVersion`, `horizonSessions`
 - `gateDecision` (`PUBLISH`/`NO_EDGE`), `reason` (e.g. `NO_EDGE — CONFIDENCE_THRESHOLD_NOT_MET`, null on
   `PUBLISH`), `stage`
@@ -412,6 +422,8 @@ and any ranking inclusion. Its outcome for learning comes from `SEL-DS-001` labe
   skip. It scores all of `U(D)` and writes `selection_shadow_scores` for every stock, marking the top K after
   duplicate and overlap reduction against earlier shadow selections (§8 rules).
 - Shadow scores are never read by public routes.
+- Each run records stocks scored, sessions loaded and scored, elapsed and CPU time, peak memory, failed stocks
+  (skipped and counted; the gate job instead fails closed on any stock error) and retries (0; no retry path).
 
 ### 15.3 SEL-001 publication
 
@@ -440,7 +452,8 @@ Both are added to the base kustomization, so `vps-deploy.sh`'s suspend/resume co
 Manual run: `kubectl -n market-agent create job --from=cronjob/market-agent-selection-gate selection-gate-manual-<YYYYMMDD>`.
 
 `scripts/run_selection_gate.py` flags:
-- `--models` (default `BASELINE-001 SEL-001`), `--horizons` (default `3 5`)
+- `--models` (default `BASELINE-001 SEL-001`), `--horizons` (default: every horizon listed for those models in
+  `selection_gate_pairs`; an unlisted pair is refused)
 - `--walk-forward-only`: no holdout read, registration or consumption; no decision written; report only
 - `--shard-cutoffs N`
 
@@ -448,7 +461,7 @@ It prints the report (§19) to stdout as text and a JSON document.
 
 ## 17. Configuration (`app/settings.py`, persisted in every snapshot)
 
-- `selection_gate_horizons = (3, 5)`
+- `selection_gate_pairs = BASELINE-001 × (1, 3, 5, 7), SEL-001 × (3, 5)`
 - `selection_top_k = 10`
 - `selection_round_trip_cost = 0.0030`
 - `selection_min_net_excess = 0.0050`
@@ -460,14 +473,13 @@ It prints the report (§19) to stdout as text and a JSON document.
 - `selection_max_unresolved_share = 0.02`
 - `selection_min_session_stocks = 100`
 - `selection_min_history_bars = 60`
-- `selection_min_median_traded_value_20d = 100000`
+- `selection_min_median_traded_value_20d = 10000000`
 - `selection_min_benchmark_stocks = 100`
 - `selection_min_plausible_return = -0.60`
 - `selection_max_plausible_return = 1.50`
 - `selection_wf_first_test_month = "2018-01"`
 - `selection_min_fit_rows = 100000`
 - `selection_decision_validity_days = 45`
-- `selection_gate_reported_pairs` (display only; excluded from the snapshot and its hash)
 - SEL-001 hyperparameters (§9.1), `DEFAULT_EMBARGO_DAYS`, and the rule and dataset versions
 
 ## 18. Tests (written first; SQLite in-memory, `Base.metadata.create_all`)
@@ -560,12 +572,17 @@ Review report (before merge or deploy):
    (§13.1) until trade-geometry validation is implemented and separately approved.
 2. **VPS capacity.** 6Gi / 2 CPU limits approved for the monthly gate job; resources stay configurable per
    environment (§16).
-3. **Liquidity floor.** ₹1 lakh median 20-session traded value, applied identically offline and live. A
+3. **Liquidity floor.** ₹1 crore median 20-session traded value (revised from ₹1 lakh on 2026-10-01), applied
+   identically offline and live, and before the benchmark universe is formed. A
    BASELINE-001 candidate below the floor is `SHADOW`; nothing bypasses `SEU-001`.
 4. **Decision validity.** 45 days, fail closed: an expired or missing decision means no publication until a fresh
    valid decision exists.
 5. **Held-out lag.** The latest fully resolved month for the horizon; a month is unused until all its `D+h` exit
    sessions exist (§10.1).
 6. **Existing calls.** Pre-rollout predictions and tips are untouched and finish their existing lifecycle.
+8. **Every BASELINE-001 horizon is gated independently** (2026-10-01): 1, 3, 5 and 7 sessions each earn publication
+   through their own decision. At the 02:00 IST run on the 11th, the last one or two sessions before it may not yet
+   have official bars, so `H(7)` can lag a month more than `H(3)`. This is fail-safe: the latest fully resolved month
+   is used.
 7. **Gate decision vs publication.** `PUBLISH` is selection authorisation only; actual publication also needs a
    `PUBLISHABLE` capability (invariant 12, §13.1).

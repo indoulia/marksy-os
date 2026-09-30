@@ -17,11 +17,11 @@
 
 - Official bars only for the dataset: `app/market_data/bar_finality.py::final_bars_only()`. The provisional source `upstox-v3-quote-ohlc` is never read offline. Live (§14.1) accepts the bar the scan used.
 - Thresholds are defaults in `app/settings.py`, all hashed into each decision (spec §17):
-  - horizons `(3, 5)`, top-K `10`, cost `0.0030`, min net excess `0.0050`
+  - gate pairs `BASELINE-001 × {1, 3, 5, 7}`, `SEL-001 × {3, 5}`; top-K `10`, cost `0.0030`, min net excess `0.0050`
   - WF trades `2000`, held-out trades `100`, WF folds `24`
   - bootstrap `10000` draws, seed `42`
   - unresolved share `0.02`, session stocks `100`, history bars `60`
-  - liquidity floor `100000` (₹1 lakh median 20-session traded value)
+  - liquidity floor `10000000` (₹1 crore median 20-session traded value), applied before the benchmark universe is formed
   - benchmark stocks `100`, plausible return `[-0.60, 1.50]`
   - first WF test month `"2018-01"`, min fit rows `100000`, validity `45` days, embargo `DEFAULT_EMBARGO_DAYS` (2)
 - SEL-001 hyperparameters are fixed (spec §9.1): `n_estimators=400, max_depth=4, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, min_child_weight=100, reg_lambda=1.0, objective="reg:squarederror", tree_method="hist", random_state=42, n_jobs=2`. No tuning.
@@ -30,7 +30,8 @@
 - New tables are append-only. No historical rewrite, no target/stop learning, no app UI change, no new dependencies (no pyarrow, no joblib).
 - One-line comments citing SPG-001, matching the surrounding style. TDD for every task: failing test, confirm red, implement, confirm green, commit.
 - Tests use per-file fixtures `create_engine("sqlite:///:memory:")` + `Base.metadata.create_all` (repo pattern). Run from `C:\AIAgent\marksy-api` with `python -m pytest <path> -q`.
-- Do not merge, push to main, or deploy. Task 16 ends with the review report.
+- Do not push, merge or deploy. Task 16 ends with the review report and a local draft-PR description.
+- Publication is earned per (model, horizon) pair listed in `selection_gate_pairs`: BASELINE-001 at 1, 3, 5 and 7 sessions, and SEL-001 at 3 and 5. No horizon is inherently publishable. Each pair publishes only with its own valid `PUBLISH` decision and every authorisation check passing; until then its calls are `SHADOW`. SEL-001 and unknown models are always `SHADOW_ONLY`. A pair outside the list is always `HORIZON_NOT_GATED`. Zero public calls is an acceptable outcome.
 
 ## Review Focus
 
@@ -40,7 +41,7 @@ Each item below is covered by a test in the task that owns the code.
 2. **A session with fewer than `selection_min_benchmark_stocks` resolved stocks.** Its candidates become `UNRESOLVED` and are counted, never silently dropped or benchmarked (Task 12, `test_candidates_in_unbenchmarkable_sessions_are_unresolved_not_dropped`).
 3. **`valid_until` read back naive from SQLite and aware from Postgres, with `at == valid_until`.** Still valid; one microsecond later it is `DECISION_STALE` (Task 5, `test_valid_until_boundary_is_inclusive_across_naive_and_aware`).
 4. **A decision whose stored `config_snapshot` lacks a key that current code snapshots.** It returns `DECISION_MISMATCH`, not an exception (Task 5, `test_snapshot_from_older_code_is_a_mismatch`).
-5. **BASELINE-001 calls at horizons 1 and 7, which the gate never evaluates.** They are always `SHADOW / NO_DECISION_ON_RECORD`, even when h=5 has a valid `PUBLISH` (Task 7, `test_unevaluated_horizons_stay_shadow_even_when_h5_publishes`).
+5. **A (model, horizon) outside `selection_gate_pairs`**, such as SEL-001 at 7 sessions or an unknown model. It is always `SHADOW / HORIZON_NOT_GATED`, even with a `PUBLISH` row (Task 5 `test_a_pair_outside_the_gate_is_never_authorised`, Task 7 `test_a_pair_outside_the_gate_stays_shadow_even_with_a_publish_row`).
 
 ## File Structure
 
@@ -124,7 +125,7 @@ Dispositions for every reader of `Prediction` found in `app/` and `api/`.
 - Test: `tests/test_selection_gate_config.py`
 
 **Interfaces:**
-- Produces: all constants below; `SEL001_PARAMS: dict`; `config_snapshot(source=settings) -> dict`; `config_sha256(snapshot: dict) -> str`; `current_config_sha256() -> str`; `PUBLICATION_CAPABILITY: dict[str, str]`; `publication_capability(model_version: str) -> str`.
+- Produces: all constants below; `SEL001_PARAMS: dict`; `config_snapshot(source=settings) -> dict`; `config_sha256(snapshot: dict) -> str`; `current_config_sha256() -> str`; `gate_pairs() -> tuple[tuple[str, int], ...]`; `gate_horizons(model_version=None) -> tuple[int, ...]`; `PUBLICATION_CAPABILITY: dict[str, str]`; `publication_capability(model_version: str) -> str`.
 
 - [ ] **Step 1: Branch**
 
@@ -137,7 +138,7 @@ cd /c/AIAgent/marksy-api && git checkout main && git pull --ff-only && git check
 ```python
 from app.baseline_signal import MODEL_VERSION
 from app.selection_gate.capability import publication_capability
-from app.selection_gate.config import config_sha256, config_snapshot, current_config_sha256
+from app.selection_gate.config import config_sha256, config_snapshot, current_config_sha256, gate_horizons, gate_pairs
 from app.selection_gate.constants import (
     BASELINE_MODEL_VERSION,
     CAPABILITY_PUBLISHABLE,
@@ -149,7 +150,9 @@ from app.settings import settings
 
 def test_snapshot_holds_every_threshold_and_model_parameter():
     snapshot = config_snapshot()
-    assert snapshot["selection_gate_horizons"] == [3, 5]
+    assert snapshot["selection_gate_pairs"] == [
+        ["BASELINE-001", 1], ["BASELINE-001", 3], ["BASELINE-001", 5], ["BASELINE-001", 7], ["SEL-001", 3], ["SEL-001", 5],
+    ]
     assert snapshot["selection_top_k"] == 10
     assert snapshot["selection_round_trip_cost"] == 0.0030
     assert snapshot["selection_min_net_excess"] == 0.0050
@@ -158,7 +161,7 @@ def test_snapshot_holds_every_threshold_and_model_parameter():
     assert snapshot["selection_min_wf_folds"] == 24
     assert snapshot["selection_bootstrap_draws"] == 10000
     assert snapshot["selection_bootstrap_seed"] == 42
-    assert snapshot["selection_min_median_traded_value_20d"] == 100000
+    assert snapshot["selection_min_median_traded_value_20d"] == 10000000
     assert snapshot["selection_decision_validity_days"] == 45
     assert snapshot["embargo_sessions"] == 2
     assert snapshot["sel001_params"]["n_estimators"] == 400
@@ -174,11 +177,12 @@ def test_hash_is_stable_and_moves_with_any_threshold(monkeypatch):
     assert config_sha256(config_snapshot()) != first
 
 
-def test_display_only_pairs_are_not_hashed(monkeypatch):
+def test_gate_pairs_are_hashed_and_expose_horizons_per_model(monkeypatch):
     first = current_config_sha256()
-    monkeypatch.setattr(settings, "selection_gate_reported_pairs", (("BASELINE-001", 3),))
-    assert current_config_sha256() == first
-    assert "selection_gate_reported_pairs" not in config_snapshot()
+    assert gate_horizons("BASELINE-001") == (1, 3, 5, 7) and gate_horizons("SEL-001") == (3, 5)
+    monkeypatch.setattr(settings, "selection_gate_pairs", (("BASELINE-001", 3),))
+    assert current_config_sha256() != first
+    assert gate_pairs() == (("BASELINE-001", 3),)
 
 
 def test_capability_is_separate_from_any_gate_decision():
@@ -241,6 +245,7 @@ REASON_DECISION_MISMATCH = "DECISION_MISMATCH"
 REASON_DECISION_STALE = "DECISION_STALE"
 REASON_DECISION_INVALID = "DECISION_INVALID"
 REASON_AUTHORIZATION_ERROR = "AUTHORIZATION_ERROR"
+REASON_HORIZON_NOT_GATED = "HORIZON_NOT_GATED"
 REASON_SHADOW_ONLY_CAPABILITY = "SHADOW_ONLY_CAPABILITY"
 REASON_OUTSIDE_GATE_UNIVERSE = "OUTSIDE_GATE_UNIVERSE"
 RANKING_EXCLUSION_SHADOW = "PUBLICATION_SHADOW"
@@ -302,7 +307,7 @@ SEL001_PARAMS = {
 }
 
 SNAPSHOT_SETTINGS = (
-    "selection_gate_horizons",
+    "selection_gate_pairs",
     "selection_top_k",
     "selection_round_trip_cost",
     "selection_min_net_excess",
@@ -350,6 +355,14 @@ def config_sha256(snapshot: dict) -> str:
 
 def current_config_sha256() -> str:
     return config_sha256(config_snapshot())
+
+
+def gate_pairs(source=settings) -> tuple[tuple[str, int], ...]:
+    return tuple((str(model), int(horizon)) for model, horizon in source.selection_gate_pairs)
+
+
+def gate_horizons(model_version: str | None = None) -> tuple[int, ...]:
+    return tuple(sorted({h for m, h in gate_pairs() if model_version is None or m == model_version}))
 ```
 
 `app/selection_gate/capability.py`:
@@ -374,8 +387,12 @@ def publication_capability(model_version: str) -> str:
 In `app/settings.py`, inside `class Settings`, add:
 
 ```python
-    # SPG-001 selection publish gate (spec §17); all but the last are hashed into every decision.
-    selection_gate_horizons: tuple[int, ...] = (3, 5)
+    # SPG-001 selection publish gate (spec §17); all are hashed into every decision.
+    # Publication is earned per listed (model, horizon); anything unlisted is HORIZON_NOT_GATED.
+    selection_gate_pairs: tuple[tuple[str, int], ...] = (
+        ("BASELINE-001", 1), ("BASELINE-001", 3), ("BASELINE-001", 5), ("BASELINE-001", 7),
+        ("SEL-001", 3), ("SEL-001", 5),
+    )
     selection_top_k: int = 10
     selection_round_trip_cost: float = 0.0030
     selection_min_net_excess: float = 0.0050
@@ -387,17 +404,13 @@ In `app/settings.py`, inside `class Settings`, add:
     selection_max_unresolved_share: float = 0.02
     selection_min_session_stocks: int = 100
     selection_min_history_bars: int = 60
-    selection_min_median_traded_value_20d: float = 100000.0
+    selection_min_median_traded_value_20d: float = 10000000.0  # ₹1 crore
     selection_min_benchmark_stocks: int = 100
     selection_min_plausible_return: float = -0.60
     selection_max_plausible_return: float = 1.50
     selection_wf_first_test_month: str = "2018-01"
     selection_min_fit_rows: int = 100000
     selection_decision_validity_days: int = 45
-    selection_gate_reported_pairs: tuple[tuple[str, int], ...] = (
-        ("BASELINE-001", 1), ("BASELINE-001", 3), ("BASELINE-001", 5), ("BASELINE-001", 7),
-        ("SEL-001", 3), ("SEL-001", 5),
-    )
 ```
 
 - [ ] **Step 5: Run; expect PASS.** Run: `python -m pytest tests/test_selection_gate_config.py -q`
@@ -590,7 +603,7 @@ def weekday_sessions(end: date, count: int) -> list[date]:
     return sorted(days)
 
 
-def seed_stock_with_bars(session, *, symbol, sessions, close=100.0, volume=100_000, instrument_key=None,
+def seed_stock_with_bars(session, *, symbol, sessions, close=100.0, volume=1_000_000, instrument_key=None,
                          sector="TECH", drift=0.001) -> Stock:
     """Official bars stamped at each session's cutoff anchor. Copy any other NOT NULL MarketPrice
     columns from tests/test_walk_forward_dataset.py's bar helper if the flush complains."""
@@ -1555,6 +1568,7 @@ from app.db import Base
 from app.selection_gate import authorization
 from app.selection_gate.authorization import authorize_publication
 from app.selection_gate.config import config_sha256
+from app.selection_gate.constants import REASON_HORIZON_NOT_GATED
 from app.selection_gate.constants import (
     DECISION_NO_EDGE, DECISION_PUBLISH, REASON_AUTHORIZATION_ERROR, REASON_CONFIDENCE_NOT_MET,
     REASON_DECISION_INVALID, REASON_DECISION_MISMATCH, REASON_DECISION_STALE, REASON_NO_DECISION, RESULT_FAIL,
@@ -1585,6 +1599,20 @@ def test_valid_publish_decision_authorises_its_pair(session):
     decision = seed_decision(session)
     auth = _auth(session)
     assert (auth.state, auth.reason, auth.decision_id) == (DECISION_PUBLISH, None, decision.id)
+
+
+def test_a_pair_outside_the_gate_is_never_authorised(session):
+    seed_decision(session, horizon=2)
+    seed_decision(session, model_version=SEL001_MODEL_VERSION, horizon=7)
+    assert _auth(session, horizon=2).reason == REASON_HORIZON_NOT_GATED
+    assert _auth(session, model=SEL001_MODEL_VERSION, horizon=7, artefact="a" * 64).reason == REASON_HORIZON_NOT_GATED
+
+
+def test_every_baseline_horizon_is_authorised_only_by_its_own_decision(session):
+    for horizon in (1, 3, 5, 7):
+        assert _auth(session, horizon=horizon).reason == REASON_NO_DECISION
+        seed_decision(session, horizon=horizon)
+        assert _auth(session, horizon=horizon).state == DECISION_PUBLISH
 
 
 def test_publish_at_h5_does_not_authorise_h3(session):
@@ -1676,10 +1704,10 @@ from sqlalchemy.orm import Session
 
 from app.models import SelectionGateDecision
 
-from .config import config_sha256, current_config_sha256
+from .config import config_sha256, current_config_sha256, gate_pairs
 from .constants import (
     DATASET_VERSION, DECISION_NO_EDGE, DECISION_PUBLISH, GATE_RULE_VERSION, REASON_AUTHORIZATION_ERROR,
-    REASON_DECISION_INVALID, REASON_DECISION_MISMATCH, REASON_DECISION_STALE, REASON_NO_DECISION, RESULT_PASS,
+    REASON_HORIZON_NOT_GATED, REASON_DECISION_INVALID, REASON_DECISION_MISMATCH, REASON_DECISION_STALE, REASON_NO_DECISION, RESULT_PASS,
     SEL001_MODEL_VERSION, UNIVERSE_RULE_VERSION,
 )
 
@@ -1737,6 +1765,8 @@ def _numbers_satisfy_rule(decision: SelectionGateDecision) -> bool:
 def authorize_publication(session: Session, *, model_version: str, horizon_sessions: int, at: datetime,
                           artefact_sha256: str | None = None) -> PublishAuthorization:
     try:
+        if (model_version, horizon_sessions) not in gate_pairs():
+            return PublishAuthorization(DECISION_NO_EDGE, REASON_HORIZON_NOT_GATED, None)
         decision = latest_decision(session, model_version=model_version, horizon_sessions=horizon_sessions)
         if decision is None:
             return PublishAuthorization(DECISION_NO_EDGE, REASON_NO_DECISION, None)
@@ -1786,7 +1816,7 @@ git commit -m "SPG-001: fail-closed publication authorisation"
   - `session_date_of` (`app/market_data/freshness.py`), `as_utc` (`app/walk_forward_dataset.py:121`)
 - Produces:
   - `bars_frame(rows) -> pd.DataFrame` with columns `timestamp` (UTC-aware), `open`, `high`, `low`, `close`, `volume` (floats)
-  - `per_stock_features(bars, actions) -> pd.DataFrame` with `timestamp`, `session_date`, `*EXTENDED_PER_STOCK_FEATURES`, `baseline_score`
+  - `per_stock_features(bars, actions) -> pd.DataFrame` with `timestamp`, `session_date`, `*EXTENDED_PER_STOCK_FEATURES`, `baseline_score` (split-adjusted; the gate uses it) and `baseline_score_live` (raw bars, exactly as the live scan scores; report-only)
   - `exclusion_reasons(bars, features, *, is_equity, is_rights, min_history_bars, min_median_traded_value) -> np.ndarray[object]`
   - `stock_session_table(bars, actions, *, is_equity, is_rights, min_history_bars, min_median_traded_value) -> pd.DataFrame`: `per_stock_features` columns plus raw `open`, `close` and `exclusion_reason` (None = in `U(D)`)
 
@@ -1801,8 +1831,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from app.baseline_signal import BaselineSignalProvider
 from app.corporate_action_adjustment import RatioAction
-from app.features.technical import EXTENDED_PER_STOCK_FEATURES
+from app.features.technical import EXTENDED_PER_STOCK_FEATURES, add_basic_features
 from app.market_data.contracts import as_nse_aware, evaluate_record_contracts
 from app.market_data.quality import PriceRecord
 from app.selection_gate.constants import (
@@ -1818,7 +1849,7 @@ SESSIONS = weekday_sessions(date(2026, 9, 30), 90)
 SPLIT_INDEX = 70
 
 
-def _bars(*, split_at=SPLIT_INDEX, bad_at=None, volume=100_000, zero_volume_from=None, constant=False):
+def _bars(*, split_at=SPLIT_INDEX, bad_at=None, volume=1_000_000, zero_volume_from=None, constant=False):
     rows = []
     for i, day in enumerate(SESSIONS):
         base = 100.0 if constant else 100.0 * (1 + 0.01 * math.sin(i / 3)) * (1 + 0.002 * i)
@@ -1873,8 +1904,22 @@ def test_a_future_corporate_action_never_changes_an_earlier_row():
     pd.testing.assert_frame_equal(per_stock_features(bars, ()).iloc[:80], per_stock_features(bars, later).iloc[:80])
 
 
+def test_live_raw_score_matches_the_scan_and_differs_from_offline_only_across_a_split():
+    """Offline scores split-adjusted bars; the live scan scores raw bars (app/scan.py::evaluate_stock). Not equivalent."""
+    bars = _bars()
+    actions = (RatioAction(effective_date=SESSIONS[SPLIT_INDEX], ratio=Decimal("2")),)
+    table = per_stock_features(bars, actions)
+    for k in range(20, len(bars)):
+        live_row = add_basic_features(bars.iloc[: k + 1]).iloc[-1]
+        expected = float(BaselineSignalProvider().predict(1, live_row).predicted_probability)
+        assert table.at[k, "baseline_score_live"] == pytest.approx(expected, abs=1e-12), k
+    assert (table.baseline_score_live[20:SPLIT_INDEX] == table.baseline_score[20:SPLIT_INDEX]).all()
+    after_split = slice(SPLIT_INDEX, SPLIT_INDEX + 20)
+    assert (table.baseline_score_live[after_split] != table.baseline_score[after_split]).any()
+
+
 def _reasons(bars, **overrides):
-    params = dict(is_equity=True, is_rights=False, min_history_bars=60, min_median_traded_value=100_000.0)
+    params = dict(is_equity=True, is_rights=False, min_history_bars=60, min_median_traded_value=10_000_000.0)
     params.update(overrides)
     return exclusion_reasons(bars, per_stock_features(bars, ()), **params)
 
@@ -1901,9 +1946,9 @@ def test_contract_violation_matches_the_scan_evaluator_and_persists():
 
 
 def test_liquidity_floor_is_inclusive():
-    at_floor = _reasons(_bars(split_at=None, constant=True, volume=1000))
+    at_floor = _reasons(_bars(split_at=None, constant=True, volume=100_000))  # 100 x 100,000 = ₹1 crore
     assert at_floor[89] is None
-    below = _reasons(_bars(split_at=None, constant=True, volume=999))
+    below = _reasons(_bars(split_at=None, constant=True, volume=99_999))
     assert below[89] == EXCLUDED_BELOW_LIQUIDITY_FLOOR
 
 
@@ -1928,7 +1973,7 @@ import pandas as pd
 
 from app.baseline_signal import BaselineSignalProvider
 from app.corporate_action_adjustment import RatioAction, back_adjust_frame
-from app.features.technical import EXTENDED_PER_STOCK_FEATURES, add_extended_features
+from app.features.technical import EXTENDED_PER_STOCK_FEATURES, add_basic_features, add_extended_features
 from app.market_data.freshness import session_date_of
 from app.walk_forward_dataset import as_utc
 
@@ -1943,6 +1988,13 @@ def bars_frame(rows) -> pd.DataFrame:
     for position, column in enumerate(_PRICE_COLUMNS, start=1):
         frame[column] = [float(r[position]) for r in rows]
     return frame
+
+
+def _baseline_scores(frame: pd.DataFrame) -> list[float]:
+    return [
+        float(_BASELINE.predict(0, dict(zip(_BASELINE_INPUTS, values))).predicted_probability)
+        for values in frame[list(_BASELINE_INPUTS)].itertuples(index=False, name=None)
+    ]
 
 
 def per_stock_features(bars: pd.DataFrame, actions: Sequence[RatioAction]) -> pd.DataFrame:
@@ -1965,10 +2017,9 @@ def per_stock_features(bars: pd.DataFrame, actions: Sequence[RatioAction]) -> pd
     features = pd.concat(parts) if parts else pd.DataFrame(columns=[*EXTENDED_PER_STOCK_FEATURES, "rsi_14"])
 
     out = pd.DataFrame({"timestamp": bars["timestamp"], "session_date": sessions})
-    out["baseline_score"] = [
-        float(_BASELINE.predict(0, dict(zip(_BASELINE_INPUTS, values))).predicted_probability)
-        for values in features[list(_BASELINE_INPUTS)].itertuples(index=False, name=None)
-    ]
+    out["baseline_score"] = _baseline_scores(features)
+    # The live scan scores raw, unadjusted bars (app/scan.py::evaluate_stock); kept to report, never to decide.
+    out["baseline_score_live"] = _baseline_scores(add_basic_features(bars)) if len(bars) else []
     for name in EXTENDED_PER_STOCK_FEATURES:
         out[name] = features[name].to_numpy(dtype=float)
     out[list(EXTENDED_PER_STOCK_FEATURES)] = out[list(EXTENDED_PER_STOCK_FEATURES)].replace([np.inf, -np.inf], np.nan)
@@ -2030,7 +2081,8 @@ def stock_session_table(bars: pd.DataFrame, actions: Sequence[RatioAction], *, i
         table = per_stock_features(bars, actions)
     else:
         table = pd.DataFrame({"timestamp": bars["timestamp"], "session_date": [None] * len(bars),
-                              "baseline_score": np.nan, **{name: np.nan for name in EXTENDED_PER_STOCK_FEATURES}})
+                              "baseline_score": np.nan, "baseline_score_live": np.nan,
+                              **{name: np.nan for name in EXTENDED_PER_STOCK_FEATURES}})
     table["open"] = bars["open"].to_numpy(dtype=float)
     table["close"] = bars["close"].to_numpy(dtype=float)
     table["exclusion_reason"] = exclusion_reasons(
@@ -2090,7 +2142,8 @@ from app.recommendations import record_recommendation
 from app.selection_gate import publication
 from app.selection_gate.constants import (
     BASELINE_MODEL_VERSION, PUBLICATION_PUBLISHED, PUBLICATION_SHADOW, REASON_AUTHORIZATION_ERROR,
-    REASON_NO_DECISION, REASON_OUTSIDE_GATE_UNIVERSE, REASON_SHADOW_ONLY_CAPABILITY, SEL001_MODEL_VERSION,
+    REASON_HORIZON_NOT_GATED, REASON_NO_DECISION, REASON_OUTSIDE_GATE_UNIVERSE, REASON_SHADOW_ONLY_CAPABILITY,
+    SEL001_MODEL_VERSION,
 )
 from app.walk_forward_dataset import session_cutoff
 from tests._selection_gate_factories import AT, seed_decision, seed_stock_with_bars, weekday_sessions
@@ -2137,12 +2190,33 @@ def test_valid_publish_for_a_publishable_model_in_universe_publishes_with_a_tip(
     assert _tips(session) == 1
 
 
-def test_unevaluated_horizons_stay_shadow_even_when_h5_publishes(session):
+def test_every_baseline_horizon_earns_publication_independently(session):
     stock = seed_stock_with_bars(session, symbol="AAA", sessions=SESSIONS)
-    seed_decision(session, horizon=5)
-    for horizon in (1, 7):
+    seed_decision(session, horizon=1)
+    assert _record(session, stock, horizon_days=1).publication_state == PUBLICATION_PUBLISHED
+    for horizon in (3, 5, 7):
         prediction = _record(session, stock, horizon_days=horizon)
         assert (prediction.publication_state, prediction.publish_gate_reason) == (PUBLICATION_SHADOW, REASON_NO_DECISION)
+
+
+def test_a_pair_outside_the_gate_stays_shadow_even_with_a_publish_row(session):
+    stock = seed_stock_with_bars(session, symbol="AAA", sessions=SESSIONS)
+    seed_decision(session, model_version=SEL001_MODEL_VERSION, horizon=7)
+    outcome = publication.decide_publication(
+        session, model_version=SEL001_MODEL_VERSION, horizon_days=7, stock_id=stock.id, as_of_timestamp=AS_OF,
+        at=AT, artefact_sha256="a" * 64,
+    )
+    assert (outcome.state, outcome.reason) == (PUBLICATION_SHADOW, REASON_HORIZON_NOT_GATED)
+
+
+def test_an_unknown_model_with_a_publish_decision_stays_shadow(session):
+    stock = seed_stock_with_bars(session, symbol="AAA", sessions=SESSIONS)
+    seed_decision(session, model_version="SEL-002", horizon=5)
+    prediction = _record(session, stock, model_version="SEL-002")
+    # Unlisted in selection_gate_pairs, so never gated; publication_capability() is SHADOW_ONLY as well (Task 1).
+    assert (prediction.publication_state, prediction.publish_gate_reason) == (
+        PUBLICATION_SHADOW, REASON_HORIZON_NOT_GATED,
+    )
 
 
 def test_publish_for_a_shadow_only_model_is_recorded_but_not_published(session):
@@ -2504,7 +2578,7 @@ git commit -m "SPG-001: ranking, publication, alerts, rating and backfill ignore
 - Test: `tests/test_selection_gate_public_surfaces.py`
 
 **Interfaces:**
-- Consumes: `published_only` (Task 8), `authorize_publication`, `latest_decision` (Task 5), `publication_capability` (Task 1), `display_reason` (Task 1)
+- Consumes: `published_only` (Task 8), `authorize_publication`, `latest_decision` (Task 5), `publication_capability`, `display_reason`, `gate_pairs` (Task 1)
 - Produces: `api.services.predictions_active.publish_gate_meta(session, *, now=None) -> list[dict]` and the `PublishGateEntry` schema
 
 - [ ] **Step 1: Write the failing test** `tests/test_selection_gate_public_surfaces.py`
@@ -2655,7 +2729,7 @@ def publish_gate_meta(session: Session, *, now: datetime | None = None) -> list[
     """SPG-001 §14.3: per reported pair, the gate decision and whether that model may actually publish."""
     now = now or datetime.now(timezone.utc)
     entries = []
-    for model_version, horizon in settings.selection_gate_reported_pairs:
+    for model_version, horizon in gate_pairs():
         latest = latest_decision(session, model_version=model_version, horizon_sessions=horizon)
         auth = authorize_publication(session, model_version=model_version, horizon_sessions=horizon, at=now,
                                      artefact_sha256=latest.artefact_sha256 if latest is not None else None)
@@ -2706,10 +2780,11 @@ git commit -m "SPG-001: public routes show published calls only; meta.publishGat
 - Produces:
   - `FEATURE_COLUMNS = EXTENDED_FEATURE_COLUMNS`
   - `SelectionDataset(anchors, session_dates, horizons, rows, benchmarks: dict[int, pd.DataFrame], sha256_by_horizon: dict[int, str], stocks_by_year: dict[int, int])`
-  - `rows` has one row per (D, s ∈ U(D)), sorted by `(session_index, stock_id)`. Columns: `session_index`, `stock_id`, `*FEATURE_COLUMNS` (float32), `baseline_score`, `entry_open`, and for each h `exit_close_{h}`, `gross_return_{h}`, `label_status_{h}`.
+  - `rows` has one row per (D, s ∈ U(D)), sorted by `(session_index, stock_id)`. Columns: `session_index`, `stock_id`, `*FEATURE_COLUMNS` (float32), `baseline_score`, `baseline_score_live`, `entry_open`, and for each h `exit_close_{h}`, `gross_return_{h}`, `label_status_{h}`.
+  - `SelectionDataset.failed_stocks: tuple[int, ...]`, stock ids skipped when `skip_failed_stocks=True` (shadow only; the gate passes `False` and fails closed)
   - `benchmarks[h]` columns: `session_index`, `session_date`, `eligible_count`, `labelled_count`, `unresolved` (dict), `excluded` (dict), `benchmark_return` (float or NaN), `benchmarkable` (bool)
   - `session_list(session, *, min_stocks) -> tuple[datetime, ...]`
-  - `build_selection_dataset(session, *, horizons, keep_session_indices=None) -> SelectionDataset`
+  - `build_selection_dataset(session, *, horizons, keep_session_indices=None, skip_failed_stocks=False) -> SelectionDataset`
 
 - [ ] **Step 1: Write the failing test** `tests/test_selection_gate_dataset.py`
 
@@ -2724,13 +2799,18 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import CorporateAction, MarketPrice
+from app.corporate_action_adjustment import ratio_actions_for
 from app.selection_gate.constants import (
-    EXCLUDED_NOT_EQUITY, LABEL_ENTRY_BAR_MISSING, LABEL_EXIT_BAR_MISSING, LABEL_INVALID_PRICE,
+    EXCLUDED_BELOW_LIQUIDITY_FLOOR, EXCLUDED_NOT_EQUITY, LABEL_ENTRY_BAR_MISSING, LABEL_EXIT_BAR_MISSING, LABEL_INVALID_PRICE,
     LABEL_NOT_YET_RESOLVABLE, LABEL_RESOLVED, LABEL_SUSPECT_RETURN,
 )
-from app.selection_gate.dataset import build_selection_dataset
+import math
+
+from app.selection_gate.dataset import FEATURE_COLUMNS, build_selection_dataset
 from app.settings import settings
-from app.walk_forward_dataset import session_cutoff
+from app.walk_forward_dataset import (
+    _regime_for, cross_sectional_features, extended_point_in_time_features, load_bars, session_cutoff,
+)
 from tests._selection_gate_factories import seed_stock_with_bars, weekday_sessions
 
 SESSIONS = weekday_sessions(date(2026, 9, 30), 40)
@@ -2820,6 +2900,50 @@ def test_benchmark_is_the_mean_over_resolved_eligible_rows_with_counts(session):
     assert bool(bench.benchmarkable)
 
 
+def test_the_liquidity_floor_applies_before_the_benchmark(session, monkeypatch):
+    monkeypatch.setattr(settings, "selection_min_median_traded_value_20d", 10_000_000.0)
+    liquid = seed_stock_with_bars(session, symbol="AAA", sessions=SESSIONS, volume=1_000_000)
+    seed_stock_with_bars(session, symbol="THIN", sessions=SESSIONS, volume=10)
+    dataset = build_selection_dataset(session, horizons=(3,))
+    bench = dataset.benchmarks[3].set_index("session_index").loc[25]
+    assert (bench.eligible_count, bench.excluded) == (1, {EXCLUDED_BELOW_LIQUIDITY_FLOOR: 1})
+    assert bench.benchmark_return == pytest.approx(_row(dataset, liquid, 25).gross_return_3)
+
+
+def test_every_dataset_feature_row_matches_the_point_in_time_reference(session):
+    """The per-stock optimisation is approved only while every stock-day row equals the reference functions."""
+    stocks = [seed_stock_with_bars(session, symbol=f"S{k}", sessions=SESSIONS, drift=0.001 * (k - 1),
+                                   sector="TECH" if k < 2 else "BANK") for k in range(4)]
+    split = stocks[3]
+    for index in range(30, 40):
+        bar = _bar(session, split, index)
+        bar.open, bar.high, bar.low, bar.close = (bar.open / 2, bar.high / 2, bar.low / 2, bar.close / 2)
+        bar.volume = bar.volume * 2
+    session.add(CorporateAction(stock_id=split.id, action_type="SPLIT", effective_date=SESSIONS[30], ratio=Decimal("2")))
+    session.flush()
+    dataset = build_selection_dataset(session, horizons=(3,))
+    assert len(dataset.rows) > 0
+    for index, group in dataset.rows.groupby("session_index"):
+        cutoff = dataset.anchors[index]
+        seen = []
+        extended = {}
+        for stock in stocks:
+            if stock.id in set(group.stock_id):
+                extended[stock.id] = extended_point_in_time_features(
+                    load_bars(session, stock.id), cutoff, stock_id=stock.id,
+                    actions=ratio_actions_for(session, stock.id), observer=lambda s, c, t: seen.append((c, t)))
+        assert all(t <= c for c, t in seen)
+        regime = _regime_for(e.as_point_in_time() for e in extended.values())
+        cross = cross_sectional_features(extended, equity_stock_ids=set(extended),
+                                         sector_by_stock={s.id: s.sector for s in stocks}, regime=regime)
+        for row in group.itertuples():
+            expected_values = {**extended[row.stock_id].values, **cross[row.stock_id]}
+            for name in FEATURE_COLUMNS:
+                expected, actual = expected_values[name], float(getattr(row, name))
+                assert math.isnan(actual) if expected is None else actual == pytest.approx(expected, rel=1e-6, abs=1e-6), (
+                    index, row.stock_id, name)
+
+
 def test_dataset_hash_is_stable_and_moves_with_the_data(session):
     a = seed_stock_with_bars(session, symbol="AAA", sessions=SESSIONS)
     first = build_selection_dataset(session, horizons=(3,)).sha256_by_horizon[3]
@@ -2848,6 +2972,7 @@ If `CorporateAction` requires more fields, copy them from `tests/test_corporate_
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -2880,6 +3005,7 @@ from .universe import stock_session_table
 
 FEATURE_COLUMNS = EXTENDED_FEATURE_COLUMNS
 _HASH_CHUNK = 200_000
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -2891,6 +3017,7 @@ class SelectionDataset:
     benchmarks: dict[int, pd.DataFrame]
     sha256_by_horizon: dict[int, str]
     stocks_by_year: dict[int, int]
+    failed_stocks: tuple[int, ...] = ()
 
 
 def session_list(session: Session, *, min_stocks: int) -> tuple[datetime, ...]:
@@ -2948,8 +3075,10 @@ def _add_cross_sectional(rows: pd.DataFrame, sector_by_stock: dict[int, str | No
         extended = {
             int(sid): ExtendedStockFeatures(
                 close=Decimal("0"), predicted_probability=Decimal("0"),
-                sma20_distance=_quantize(float(sma), _SIX_PLACES), volume_ratio_20d=_quantize(float(vr), _SIX_PLACES),
-                atr_percent=_quantize(float(atr), _SIX_PLACES),
+                # Quantised from the 6-place float, exactly as extended_point_in_time_features does.
+                sma20_distance=_quantize(_feature_float(float(sma)), _SIX_PLACES),
+                volume_ratio_20d=_quantize(_feature_float(float(vr)), _SIX_PLACES),
+                atr_percent=_quantize(_feature_float(float(atr)), _SIX_PLACES),
                 values={"return_20d": _feature_float(float(r20)), "volume_ratio_20d": _feature_float(float(vr))},
             )
             for sid, r20, vr, sma, atr in zip(group.stock_id, group.return_20d, group.volume_ratio_20d,
@@ -3005,7 +3134,8 @@ def _sha256(rows: pd.DataFrame, dates: Sequence[date], horizon: int) -> str:
 
 
 def build_selection_dataset(session: Session, *, horizons: Sequence[int],
-                            keep_session_indices: Iterable[int] | None = None) -> SelectionDataset:
+                            keep_session_indices: Iterable[int] | None = None,
+                            skip_failed_stocks: bool = False) -> SelectionDataset:
     horizons = tuple(horizons)
     anchors = session_list(session, min_stocks=settings.selection_min_session_stocks)
     dates = tuple(session_date_of(anchor) for anchor in anchors)
@@ -3016,13 +3146,43 @@ def build_selection_dataset(session: Session, *, horizons: Sequence[int],
     excluded: dict[int, Counter] = defaultdict(Counter)
     years: dict[int, set[int]] = defaultdict(set)
     sector_by_stock: dict[int, str | None] = {}
+    failed: list[int] = []
 
     for stock in session.scalars(select(Stock).order_by(Stock.id)).all():
+        try:
+            part = _stock_part(session, stock, index_of, dates, horizons, last_index, keep, excluded, years)
+        except Exception:
+            if not skip_failed_stocks:
+                raise  # the gate fails closed: a missing stock would bias the universe
+            logger.exception("SPG-001 dataset: stock %s skipped", stock.id)
+            failed.append(stock.id)
+            continue
+        if part is not None:
+            parts.append(part)
+            sector_by_stock[stock.id] = stock.sector
+
+    if not parts:
+        raise ValueError("SPG-001: no stock-session is in the gate universe")
+    rows = pd.concat(parts, ignore_index=True)
+    rows = rows.sort_values(["session_index", "stock_id"], kind="mergesort").reset_index(drop=True)
+    _add_cross_sectional(rows, sector_by_stock)
+    rows[list(FEATURE_COLUMNS)] = rows[list(FEATURE_COLUMNS)].astype(np.float32)
+    session_indices = set(rows.session_index.astype(int)) | set(excluded)
+    return SelectionDataset(
+        anchors=anchors, session_dates=dates, horizons=horizons, rows=rows,
+        benchmarks={h: _benchmarks(rows, excluded, dates, h, session_indices) for h in horizons},
+        sha256_by_horizon={h: _sha256(rows, dates, h) for h in horizons},
+        stocks_by_year={year: len(ids) for year, ids in sorted(years.items())},
+        failed_stocks=tuple(failed),
+    )
+
+
+def _stock_part(session, stock, index_of, dates, horizons, last_index, keep, excluded, years) -> pd.DataFrame | None:
         bars = _official_bars(session, stock.id)
         mapped = bars["timestamp"].map(index_of)
         bars = bars[mapped.notna()].reset_index(drop=True)
         if bars.empty:
-            continue
+            return None
         session_index = mapped.dropna().astype(np.int64).to_numpy()
         actions = ratio_actions_for(session, stock.id)
         table = stock_session_table(
@@ -3042,29 +3202,17 @@ def build_selection_dataset(session: Session, *, horizons: Sequence[int],
         if keep is not None:
             mask &= np.isin(session_index, list(keep))
         if not mask.any():
-            continue
-        part = table.loc[mask, ["baseline_score", *[c for c in table.columns if c in FEATURE_COLUMNS]]].copy()
+            return None
+        part = table.loc[mask, ["baseline_score", "baseline_score_live",
+                                *[c for c in table.columns if c in FEATURE_COLUMNS]]].copy()
         part.insert(0, "stock_id", stock.id)
         part.insert(0, "session_index", session_index[mask])
         for name, values in labels.items():
             part[name] = values[mask]
-        parts.append(part)
-        sector_by_stock[stock.id] = stock.sector
-
-    if not parts:
-        raise ValueError("SPG-001: no stock-session is in the gate universe")
-    rows = pd.concat(parts, ignore_index=True)
-    rows = rows.sort_values(["session_index", "stock_id"], kind="mergesort").reset_index(drop=True)
-    _add_cross_sectional(rows, sector_by_stock)
-    rows[list(FEATURE_COLUMNS)] = rows[list(FEATURE_COLUMNS)].astype(np.float32)
-    session_indices = set(rows.session_index.astype(int)) | set(excluded)
-    return SelectionDataset(
-        anchors=anchors, session_dates=dates, horizons=horizons, rows=rows,
-        benchmarks={h: _benchmarks(rows, excluded, dates, h, session_indices) for h in horizons},
-        sha256_by_horizon={h: _sha256(rows, dates, h) for h in horizons},
-        stocks_by_year={year: len(ids) for year, ids in sorted(years.items())},
-    )
+        return part
 ```
+
+`_stock_part` is the former loop body. Keep its lines at one indentation level (dedent the block when writing it); it returns the stock's in-universe part or `None`.
 
 Memory note for the executor: production is about 4.5M official rows. Features are float32, and only in-universe rows are kept. Expect about 1.5–2.5 GiB peak inside the 6 GiB job limit.
 
@@ -3369,7 +3517,7 @@ git commit -m "SPG-001: validation windows, SEL-001 model and single-use holdout
 ### Task 12: Stage runner, records, gate runner, report, script and operation
 
 **Files:**
-- Create: `app/selection_gate/evaluation.py`, `app/selection_gate/runner.py`, `app/selection_gate/report.py`, `scripts/run_selection_gate.py`
+- Create: `app/selection_gate/evaluation.py`, `app/selection_gate/runner.py`, `app/selection_gate/report.py`, `app/selection_gate/metrics.py`, `scripts/run_selection_gate.py`
 - Modify:
   - `app/selection_gate/records.py`: add writers
   - `app/schedule_orchestration.py`: two operation constants near line 164, two `TRIGGER_POLICIES` entries after `OPERATION_LEARNING_CYCLE`
@@ -3412,6 +3560,7 @@ from app.selection_gate.constants import (
     SEL001_FEATURE_VERSION, SEL001_MODEL_VERSION, STAGE_HELD_OUT,
 )
 from app.selection_gate.evaluation import run_stage
+from app.selection_gate.metrics import measured
 from app.selection_gate.statistics import StageThresholds
 from app.settings import settings
 from scripts.run_selection_gate import read_only_sessionmaker
@@ -3423,7 +3572,8 @@ SMALL = {
     "selection_min_session_stocks": 1, "selection_min_benchmark_stocks": 3, "selection_min_history_bars": 25,
     "selection_min_median_traded_value_20d": 0.0, "selection_min_wf_trades": 5, "selection_min_holdout_trades": 3,
     "selection_min_wf_folds": 1, "selection_bootstrap_draws": 200, "selection_top_k": 2,
-    "selection_wf_first_test_month": "2026-03", "selection_min_fit_rows": 20, "selection_gate_horizons": (3,),
+    "selection_wf_first_test_month": "2026-03", "selection_min_fit_rows": 20,
+    "selection_gate_pairs": (("BASELINE-001", 3), ("SEL-001", 3)),
 }
 
 
@@ -3459,6 +3609,9 @@ def test_a_full_run_writes_one_auditable_decision_per_pair(session):
         trades = session.scalar(select(func.count()).select_from(SelectionGateTrade)
                                 .where(SelectionGateTrade.decision_id == d.id))
         assert trades == (d.wf_candidates or 0) + (d.ho_candidates or 0)
+    parity = result["pairs"][0]["live_parity"]  # no ratio actions in this fixture: the two paths agree
+    assert parity["rows_compared"] > 0 and parity["rows_differing"] == 0 and parity["sessions_top_k_differing"] == 0
+    assert result["pairs"][1]["live_parity"] is None
     sel = decisions[1]
     assert sel.artefact_id is not None
     artefact = load_artefact(SEL001_MODEL_VERSION, SEL001_FEATURE_VERSION, root=REGISTRY_ROOT,
@@ -3507,6 +3660,18 @@ def test_an_evaluation_failure_is_recorded_and_isolated(session, monkeypatch):
     by_model = {d.model_version: d for d in session.scalars(select(SelectionGateDecision))}
     assert by_model[SEL001_MODEL_VERSION].primary_reason == REASON_EVALUATION_FAILED
     assert by_model[BASELINE_MODEL_VERSION].primary_reason != REASON_EVALUATION_FAILED
+
+
+def test_pairs_outside_the_gate_are_refused(session):
+    with pytest.raises(ValueError):
+        runner.run_selection_gate(session, models=(SEL001_MODEL_VERSION,), horizons=(1,), now=NOW)
+
+
+def test_measured_records_time_cpu_and_peak_memory():
+    with measured() as metrics:
+        sum(range(100_000))
+    assert metrics["elapsed_seconds"] >= 0 and metrics["cpu_seconds"] >= 0
+    assert metrics["peak_memory_mb"] is None or metrics["peak_memory_mb"] > 0
 
 
 def test_candidates_in_unbenchmarkable_sessions_are_unresolved_not_dropped():
@@ -3776,9 +3941,9 @@ from app.models import ModelArtefact, ModelVersion
 from app.purged_embargo_validation import DEFAULT_EMBARGO_DAYS
 from app.settings import settings
 
-from .config import config_sha256, config_snapshot
+from .config import config_sha256, config_snapshot, gate_pairs
 from .constants import (
-    BASELINE_FEATURE_VERSION, DECISION_NO_EDGE, DISPOSITION_ACCEPTED, FOLD_TESTED, FOLD_TOO_SMALL,
+    BASELINE_FEATURE_VERSION, BASELINE_MODEL_VERSION, DECISION_NO_EDGE, DISPOSITION_ACCEPTED, FOLD_TESTED, FOLD_TOO_SMALL,
     GATED_MODEL_VERSIONS, LABEL_RESOLVED, REASON_EVALUATION_FAILED, REASON_HOLDOUT_ALREADY_CONSUMED,
     REASON_HOLDOUT_PREVIOUSLY_OBSERVED, REASON_INSUFFICIENT_EVIDENCE, SEL001_FEATURE_VERSION, SEL001_MODEL_NAME,
     SEL001_MODEL_VERSION, STAGE_HELD_OUT, STAGE_WALK_FORWARD,
@@ -3787,6 +3952,7 @@ from .dataset import FEATURE_COLUMNS, SelectionDataset, build_selection_dataset
 from .evaluation import StageRun, run_stage
 from .holdout import consume_holdout, holdout_label, previously_observed, register_holdout
 from .records import write_benchmarks, write_decision, write_trades
+from .reduction import top_k_candidates
 from .sel001 import fit_sel001, score_sel001
 from .statistics import GateOutcome, StageThresholds, decide, failed_stage
 from .validation import Windows, fit_row_mask, month_of, month_text, plan_windows, protected_rows, quarter_of
@@ -3900,10 +4066,11 @@ def _evaluate_pair(session, dataset: SelectionDataset, windows: Windows, *, mode
                        thresholds=_thresholds(STAGE_WALK_FORWARD),
                        folds_tested=sum(f["status"] == FOLD_TESTED for f in folds), top_k=settings.selection_top_k)
     _fold_results(folds, wf_run, dates, cost)
+    parity = _live_parity(dataset, horizon, tested, benchmark) if model_version == BASELINE_MODEL_VERSION else None
     if walk_forward_only:
         from .records import stage_fields
         return {"model_version": model_version, "horizon_sessions": horizon, "wf_folds": folds,
-                **stage_fields("wf", wf_run, wf_run.statistics)}
+                "live_parity": parity, **stage_fields("wf", wf_run, wf_run.statistics)}
 
     ho_threshold = _thresholds(STAGE_HELD_OUT)
     ho_run, ho_stats, artefact_id, artefact_sha = None, None, None, None
@@ -3962,7 +4129,32 @@ def _evaluate_pair(session, dataset: SelectionDataset, windows: Windows, *, mode
         artefact_id=artefact_id, artefact_sha256=artefact_sha,
     )
     write_trades(session, decision, [r for r in (wf_run, ho_run) if r is not None], dates, horizon, cost)
-    return _decision_report(decision)
+    return {**_decision_report(decision), "live_parity": parity}
+
+
+def _live_parity(dataset: SelectionDataset, horizon: int, tested: list[int], benchmark: pd.DataFrame) -> dict:
+    """§9.2: offline (split-adjusted) vs live-path (raw-bar) BASELINE-001 scores. Walk-forward sessions only:
+    the held-out month is never scored with a variant nobody decided on."""
+    rows = dataset.rows
+    window = rows.session_index.isin(tested)
+    top_k = settings.selection_top_k
+    live = run_stage(stage=STAGE_WALK_FORWARD, model_version=BASELINE_MODEL_VERSION, horizon=horizon, rows=rows,
+                     scores=rows.baseline_score_live, session_indices=tested, benchmark=benchmark,
+                     thresholds=_thresholds(STAGE_WALK_FORWARD), folds_tested=None, top_k=top_k).statistics
+
+    def picks(column: str) -> dict:
+        top = top_k_candidates(rows[window].assign(score=rows.loc[window, column]), score_column="score", top_k=top_k)
+        return top.groupby("session_index").stock_id.apply(frozenset).to_dict()
+
+    adjusted, raw = picks("baseline_score"), picks("baseline_score_live")
+    return {
+        "rows_compared": int(window.sum()),
+        "rows_differing": int((window & (rows.baseline_score != rows.baseline_score_live)).sum()),
+        "sessions_compared": len(set(tested)),
+        "sessions_top_k_differing": sum(adjusted.get(i) != raw.get(i) for i in set(adjusted) | set(raw)),
+        "live_score_wf_trades": live.trades, "live_score_wf_mean_excess": live.mean_excess,
+        "live_score_wf_ci_low": live.ci_low, "live_score_wf_ci_high": live.ci_high,
+    }
 
 
 def _decision_report(decision) -> dict:
@@ -3989,7 +4181,11 @@ def run_selection_gate(session: Session, *, read_session: Session | None = None,
                        code_version: str | None = None) -> dict:
     read_session = read_session or session
     now = now or datetime.now(timezone.utc)
-    horizons = tuple(horizons or settings.selection_gate_horizons)
+    wanted = [(m, h) for m, h in gate_pairs() if m in models and (horizons is None or h in horizons)]
+    refused = {(m, h) for m in models for h in (horizons or ())} - set(gate_pairs())
+    if refused:
+        raise ValueError(f"SPG-001: {sorted(refused)} are not in selection_gate_pairs and are never gated")
+    horizons = tuple(sorted({h for _, h in wanted}))
     snapshot = config_snapshot()
     snapshot_sha = config_sha256(snapshot)
     code_version = code_version or settings.build_identifier or "UNKNOWN"
@@ -4002,7 +4198,7 @@ def run_selection_gate(session: Session, *, read_session: Session | None = None,
             session.commit()
         windows = plan_windows(dataset.session_dates, horizon, today=today,
                                first_test_month=settings.selection_wf_first_test_month)
-        for model_version in models:
+        for model_version in [m for m, h in wanted if h == horizon]:
             try:
                 pairs.append(_evaluate_pair(session, dataset, windows, model_version=model_version, horizon=horizon,
                                             now=now, walk_forward_only=walk_forward_only, snapshot=snapshot,
@@ -4042,6 +4238,50 @@ def _excluded_totals(benchmark: pd.DataFrame) -> dict:
     return dict(sorted(totals.items()))
 ```
 
+`app/selection_gate/metrics.py`:
+
+```python
+"""SPG-001 run evidence: elapsed and CPU time and peak memory for the gate and shadow jobs."""
+from __future__ import annotations
+
+import ctypes
+import sys
+import time
+from contextlib import contextmanager
+
+
+def peak_memory_mb() -> float | None:
+    """Peak resident memory of this process: ru_maxrss on Linux (KiB), PeakWorkingSetSize on Windows."""
+    if sys.platform == "win32":
+        from ctypes import wintypes
+
+        class _Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                        *((name, ctypes.c_size_t) for name in (
+                            "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage",
+                            "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage"))]
+
+        counters = _Counters(cb=ctypes.sizeof(_Counters))
+        process = ctypes.windll.kernel32.GetCurrentProcess()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+            return round(counters.PeakWorkingSetSize / 2**20, 1)
+        return None
+    import resource
+
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+
+
+@contextmanager
+def measured():
+    metrics: dict = {}
+    started, cpu = time.perf_counter(), time.process_time()
+    try:
+        yield metrics
+    finally:
+        metrics.update(elapsed_seconds=round(time.perf_counter() - started, 3),
+                       cpu_seconds=round(time.process_time() - cpu, 3), peak_memory_mb=peak_memory_mb())
+```
+
 `app/selection_gate/report.py`:
 
 ```python
@@ -4061,9 +4301,13 @@ def render_report(result: dict) -> tuple[str, str]:
         "stocks per year: " + ", ".join(f"{year}={count}" for year, count in data["stocks_by_year"].items()),
     ]
     lines += [f"h={h} dataset_sha256={sha} excluded={data['excluded_totals'][h]}" for h, sha in data["sha256_by_horizon"].items()]
+    if result.get("metrics"):
+        lines.append("run: " + ", ".join(f"{k}={v}" for k, v in result["metrics"].items()))
     for pair in result["pairs"]:
         reason = display_reason(pair.get("primary_reason")) or ""
         lines.append(f"{pair['model_version']} h={pair['horizon_sessions']}: {pair.get('decision', 'WALK_FORWARD_ONLY')} {reason}".rstrip())
+        if pair.get("live_parity"):
+            lines.append("  live-path parity (walk-forward only): " + ", ".join(f"{k}={v}" for k, v in pair["live_parity"].items()))
         for prefix in ("wf", "ho"):
             fields = {k[len(prefix) + 1:]: v for k, v in sorted(pair.items()) if k.startswith(prefix + "_") and k != "wf_folds"}
             if fields:
@@ -4119,6 +4363,7 @@ from app.schedule_orchestration import (
     OPERATION_SELECTION_GATE, TRIGGER_SCHEDULED, acquire_execution, complete_execution, fail_execution,
 )
 from app.selection_gate.constants import GATED_MODEL_VERSIONS
+from app.selection_gate.metrics import measured
 from app.selection_gate.report import render_report
 from app.selection_gate.runner import run_selection_gate
 
@@ -4162,11 +4407,13 @@ def main(argv: list[str] | None = None) -> None:
         try:
             kwargs = dict(models=tuple(args.models), horizons=args.horizons, walk_forward_only=args.walk_forward_only,
                           now=requested_at, code_version=args.code_version)
-            if source is not None:
-                with source() as read_session:
-                    result = run_selection_gate(session, read_session=read_session, **kwargs)
-            else:
-                result = run_selection_gate(session, **kwargs)
+            with measured() as metrics:
+                if source is not None:
+                    with source() as read_session:
+                        result = run_selection_gate(session, read_session=read_session, **kwargs)
+                else:
+                    result = run_selection_gate(session, **kwargs)
+            result["metrics"] = {**metrics, "failed_stocks": 0, "retries": 0}  # gate fails closed on any stock; backoffLimit 0
         except BaseException as exc:
             fail_execution(session, claim, started_at=requested_at, failed_at=datetime.now(timezone.utc),
                            failure_reason=f"{type(exc).__name__}: {exc}")
@@ -4212,7 +4459,7 @@ git commit -m "SPG-001: gate runner, append-only decisions and trades, report an
 
 **Interfaces:**
 - Consumes: `build_selection_dataset(..., keep_session_indices=...)`, `load_artefact`, `score_sel001`, `SelectionShadowScore`
-- Produces: `run_selection_shadow(session, *, now, horizons=None) -> dict[int, str]`. Values are `"SKIPPED_NO_DECISION"`, `"ALREADY_SCORED"` or `"SCORED <n>"`.
+- Produces: `run_selection_shadow(session, *, now, horizons=None) -> dict` with `"results": {horizon: "SKIPPED_NO_DECISION" | "ALREADY_SCORED" | "SCORED <n>"}` and `"metrics"`: `stocks_scored`, `sessions_loaded`, `sessions_scored`, `failed_stocks`, `retries`, `elapsed_seconds`, `cpu_seconds`, `peak_memory_mb`
 
 - [ ] **Step 1: Write the failing test** `tests/test_selection_gate_shadow.py`
 
@@ -4227,7 +4474,8 @@ from sqlalchemy.orm import sessionmaker
 from app.challenger_artefact import save_artefact
 from app.db import Base
 from app.model_artefact_registry import REGISTRY_ROOT
-from app.models import SelectionShadowScore
+from app.models import SelectionShadowScore, Stock
+from app.selection_gate import dataset as dataset_module
 from app.selection_gate.constants import DISPOSITION_OVERLAP_SUPPRESSED, SEL001_FEATURE_VERSION, SEL001_MODEL_VERSION
 from app.selection_gate.dataset import FEATURE_COLUMNS
 from app.selection_gate.sel001 import fit_sel001
@@ -4243,7 +4491,7 @@ NOW = datetime(2026, 10, 1, 3, 5, tzinfo=timezone.utc)
 def session(monkeypatch):
     for name, value in {"selection_min_session_stocks": 1, "selection_min_history_bars": 25,
                         "selection_min_median_traded_value_20d": 0.0, "selection_top_k": 2,
-                        "selection_gate_horizons": (3,)}.items():
+                        "selection_gate_pairs": (("SEL-001", 3),)}.items():
         monkeypatch.setattr(settings, name, value)
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -4263,16 +4511,34 @@ def _decision_with_artefact(session):
 
 
 def test_without_a_decision_shadow_scoring_skips(session):
-    assert run_selection_shadow(session, now=NOW) == {3: "SKIPPED_NO_DECISION"}
+    assert run_selection_shadow(session, now=NOW)["results"] == {3: "SKIPPED_NO_DECISION"}
 
 
 def test_scores_every_eligible_stock_and_selects_the_top_k_once(session):
     _decision_with_artefact(session)
-    assert run_selection_shadow(session, now=NOW) == {3: "SCORED 5"}
+    assert run_selection_shadow(session, now=NOW)["results"] == {3: "SCORED 5"}
     rows = session.scalars(select(SelectionShadowScore)).all()
     assert len(rows) == 5 and sum(r.selected for r in rows) == 2
     assert {r.session_date for r in rows} == {SESSIONS[-1]}
-    assert run_selection_shadow(session, now=NOW) == {3: "ALREADY_SCORED"}
+    assert run_selection_shadow(session, now=NOW)["results"] == {3: "ALREADY_SCORED"}
+
+
+def test_metrics_record_scale_time_memory_failures_and_retries(session, monkeypatch):
+    _decision_with_artefact(session)
+    failing = min(session.scalars(select(Stock.id)))
+    real = dataset_module._official_bars
+
+    def flaky(db, stock_id):
+        if stock_id == failing:
+            raise RuntimeError("corrupt bars")
+        return real(db, stock_id)
+
+    monkeypatch.setattr(dataset_module, "_official_bars", flaky)
+    metrics = run_selection_shadow(session, now=NOW)["metrics"]
+    assert (metrics["stocks_scored"], metrics["failed_stocks"], metrics["retries"]) == (4, 1, 0)
+    assert (metrics["sessions_loaded"], metrics["sessions_scored"]) == (40, 1)
+    assert metrics["elapsed_seconds"] >= 0 and metrics["cpu_seconds"] >= 0
+    assert metrics["peak_memory_mb"] is None or metrics["peak_memory_mb"] > 0
 
 
 def test_an_open_shadow_hold_suppresses_a_repick(session):
@@ -4315,62 +4581,77 @@ from app.models import SelectionGateDecision, SelectionShadowScore
 from app.settings import settings
 
 from .constants import DISPOSITION_OVERLAP_SUPPRESSED, SEL001_FEATURE_VERSION, SEL001_MODEL_VERSION
+from .config import gate_horizons
 from .dataset import FEATURE_COLUMNS, build_selection_dataset, session_list
+from .metrics import measured
 from .sel001 import score_sel001
 
 logger = logging.getLogger(__name__)
 
 
-def run_selection_shadow(session: Session, *, now: datetime, horizons=None) -> dict[int, str]:
-    horizons = tuple(horizons or settings.selection_gate_horizons)
+def run_selection_shadow(session: Session, *, now: datetime, horizons=None) -> dict:
+    horizons = tuple(horizons or gate_horizons(SEL001_MODEL_VERSION))
     last_index = len(session_list(session, min_stocks=settings.selection_min_session_stocks)) - 1
-    dataset, results = None, {}
-    for horizon in horizons:
-        decision = session.scalar(
-            select(SelectionGateDecision)
-            .where(SelectionGateDecision.model_version == SEL001_MODEL_VERSION,
-                   SelectionGateDecision.horizon_sessions == horizon, SelectionGateDecision.artefact_sha256.is_not(None))
-            .order_by(SelectionGateDecision.id.desc()).limit(1)
-        )
-        if decision is None:
-            logger.info("SPG-001 shadow: no SEL-001 decision with an artefact for h=%s", horizon)
-            results[horizon] = "SKIPPED_NO_DECISION"
-            continue
-        if dataset is None:
-            dataset = build_selection_dataset(session, horizons=horizons, keep_session_indices={last_index})
-        day = dataset.session_dates[last_index]
-        if session.scalar(select(SelectionShadowScore.id).where(
+    dataset, results, scored, sessions_scored = None, {}, 0, 0
+    with measured() as metrics:
+        for horizon in horizons:
+            decision = session.scalar(
+                select(SelectionGateDecision)
+                .where(SelectionGateDecision.model_version == SEL001_MODEL_VERSION,
+                       SelectionGateDecision.horizon_sessions == horizon,
+                       SelectionGateDecision.artefact_sha256.is_not(None))
+                .order_by(SelectionGateDecision.id.desc()).limit(1)
+            )
+            if decision is None:
+                logger.info("SPG-001 shadow: no SEL-001 decision with an artefact for h=%s", horizon)
+                results[horizon] = "SKIPPED_NO_DECISION"
+                continue
+            if dataset is None:
+                # Shadow skips and counts a bad stock; only the gate must fail closed on one.
+                dataset = build_selection_dataset(session, horizons=horizons, keep_session_indices={last_index},
+                                                  skip_failed_stocks=True)
+            day = dataset.session_dates[last_index]
+            if session.scalar(select(SelectionShadowScore.id).where(
+                    SelectionShadowScore.model_version == SEL001_MODEL_VERSION,
+                    SelectionShadowScore.horizon_sessions == horizon,
+                    SelectionShadowScore.session_date == day).limit(1)):
+                results[horizon] = "ALREADY_SCORED"
+                continue
+            estimator = load_artefact(SEL001_MODEL_VERSION, SEL001_FEATURE_VERSION, root=REGISTRY_ROOT,
+                                      expected_sha256=decision.artefact_sha256, session=session).estimator
+            rows = dataset.rows[dataset.rows.session_index == last_index].copy()
+            rows["score"] = score_sel001(estimator, rows[list(FEATURE_COLUMNS)].to_numpy())
+            rows = rows.sort_values(["score", "stock_id"], ascending=[False, True], kind="mergesort")
+            held_from = dataset.session_dates[max(last_index - horizon + 1, 0)]
+            open_holds = set(session.scalars(select(SelectionShadowScore.stock_id).where(
                 SelectionShadowScore.model_version == SEL001_MODEL_VERSION,
-                SelectionShadowScore.horizon_sessions == horizon, SelectionShadowScore.session_date == day).limit(1)):
-            results[horizon] = "ALREADY_SCORED"
-            continue
-        estimator = load_artefact(SEL001_MODEL_VERSION, SEL001_FEATURE_VERSION, root=REGISTRY_ROOT,
-                                  expected_sha256=decision.artefact_sha256, session=session).estimator
-        rows = dataset.rows[dataset.rows.session_index == last_index].copy()
-        rows["score"] = score_sel001(estimator, rows[list(FEATURE_COLUMNS)].to_numpy())
-        rows = rows.sort_values(["score", "stock_id"], ascending=[False, True], kind="mergesort")
-        held_from = dataset.session_dates[max(last_index - horizon + 1, 0)]
-        open_holds = set(session.scalars(select(SelectionShadowScore.stock_id).where(
-            SelectionShadowScore.model_version == SEL001_MODEL_VERSION, SelectionShadowScore.horizon_sessions == horizon,
-            SelectionShadowScore.selected.is_(True), SelectionShadowScore.session_date >= held_from,
-            SelectionShadowScore.session_date < day)))
-        for rank, row in enumerate(rows.itertuples(index=False), start=1):
-            candidate = rank <= settings.selection_top_k
-            suppressed = candidate and int(row.stock_id) in open_holds
-            session.add(SelectionShadowScore(
-                model_version=SEL001_MODEL_VERSION, artefact_sha256=decision.artefact_sha256,
-                horizon_sessions=horizon, session_date=day, stock_id=int(row.stock_id),
-                score=Decimal(str(round(float(row.score), 10))), rank=rank, selected=candidate and not suppressed,
-                suppression_reason=DISPOSITION_OVERLAP_SUPPRESSED if suppressed else None, scored_at=now,
-            ))
-        session.commit()
-        results[horizon] = f"SCORED {len(rows)}"
-    return results
+                SelectionShadowScore.horizon_sessions == horizon, SelectionShadowScore.selected.is_(True),
+                SelectionShadowScore.session_date >= held_from, SelectionShadowScore.session_date < day)))
+            for rank, row in enumerate(rows.itertuples(index=False), start=1):
+                candidate = rank <= settings.selection_top_k
+                suppressed = candidate and int(row.stock_id) in open_holds
+                session.add(SelectionShadowScore(
+                    model_version=SEL001_MODEL_VERSION, artefact_sha256=decision.artefact_sha256,
+                    horizon_sessions=horizon, session_date=day, stock_id=int(row.stock_id),
+                    score=Decimal(str(round(float(row.score), 10))), rank=rank,
+                    selected=candidate and not suppressed,
+                    suppression_reason=DISPOSITION_OVERLAP_SUPPRESSED if suppressed else None, scored_at=now,
+                ))
+            session.commit()
+            scored += len(rows)
+            sessions_scored += 1
+            results[horizon] = f"SCORED {len(rows)}"
+    metrics.update(
+        stocks_scored=scored, sessions_loaded=last_index + 1, sessions_scored=sessions_scored,
+        failed_stocks=0 if dataset is None else len(dataset.failed_stocks),
+        retries=0,  # no retry path; the CronJob's backoffLimit is 0
+    )
+    return {"results": results, "metrics": metrics}
 ```
 
 Hold rule, same as §8: a selection on D′ is still open on D when `i(D) < i(D′) + h`. The window `[D−h+1, D−1]` is that set.
 
-`scripts/run_selection_shadow.py` has the same shape as `scripts/run_selection_gate.py` (claim, run, complete/fail). It claims `OPERATION_SELECTION_SHADOW` and calls `run_selection_shadow(session, now=requested_at)`, printing the result dict. It takes no read-only source flag.
+`scripts/run_selection_shadow.py` has the same shape as `scripts/run_selection_gate.py` (claim, run, complete/fail). It claims `OPERATION_SELECTION_SHADOW`, calls `run_selection_shadow(session, now=requested_at)`, prints the result dict as JSON (results and metrics), and stores the metrics in `complete_execution(..., result_summary=...)`. It takes no read-only source flag.
 
 - [ ] **Step 4: Run; expect PASS.** Run: `python -m pytest tests/test_selection_gate_shadow.py -q`
 
@@ -4635,12 +4916,23 @@ DATABASE_URL="sqlite:///$SCRATCH/eval.db" python -m scripts.run_selection_gate -
 
 Record the wall-clock time and peak memory (Task Manager, or `Measure-Command` in PowerShell) for the §16 limits.
 
-- [ ] **Step 8: Measure the shadow job against its 1800 s deadline.** The eval store already holds the SEL-001 decisions and artefacts. Add the market data to it, then time one run:
+- [ ] **Step 8: Measure the shadow job against its 1800 s deadline.** The eval store already holds the SEL-001 decisions and artefacts. Add the market data to it, then run once:
 
 ```bash
 python -m scripts.load_selection_snapshot $SCRATCH/snapshot "sqlite:///$SCRATCH/eval.db"
-DATABASE_URL="sqlite:///$SCRATCH/eval.db" python -m scripts.run_selection_shadow
+DATABASE_URL="sqlite:///$SCRATCH/eval.db" python -m scripts.run_selection_shadow | tee $SCRATCH/spg-shadow-run.json
 ```
+
+Record, from the printed `metrics` and the gate report's `run:` line:
+- stocks scored
+- sessions loaded and scored
+- elapsed time
+- peak memory
+- CPU seconds
+- failed stock count
+- retry count
+
+Record the same for the gate run. If the shadow elapsed time exceeds 1800 s, or either peak exceeds its job limit, the report proposes new limits; it never raises them silently.
 
 ---
 
@@ -4654,14 +4946,21 @@ cd /c/AIAgent/marksy-api && python -m pytest -q -p no:cacheprovider > $SCRATCH/s
 
 Compare failures against the 4 known pre-existing failures on `main`, using `git stash` or a clean `main` worktree run of just those files. Any new failure blocks the report.
 
-- [ ] **Step 2: Push the branch and open a draft PR (no merge):**
+- [ ] **Step 2: Draft-PR state, no push.** Write the PR title and body to `$SCRATCH/spg-001-draft-pr.md`. Title: `SPG-001: selection publish gate`. The body links the spec, lists the commits (`git log --oneline main..HEAD`), carries the evaluation summary, and ends with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. The branch stays local. Do not push, open a PR, merge or deploy.
 
-```bash
-git push -u origin feat/spg-001-selection-gate
-gh pr create --draft --title "SPG-001: selection publish gate" --body "Implements marksy-os docs/superpowers/specs/2026-10-01-marksy-selection-publish-gate-design.md. Draft: awaiting review of the pre-merge evaluation report. Do not merge.
+- [ ] **Step 2b: One comprehensive whole-branch review** (the controller dispatches it on the most capable model, over `git merge-base main HEAD`..HEAD). It must cover:
+  - no publish-path bypass: `record_recommendation` is the only `Prediction` constructor, and `register_prediction` refuses SHADOW
+  - no shadow prediction reaching any public surface
+  - fail-closed behaviour on every error path
+  - leakage and embargo correctness
+  - held-out-month single use
+  - deduplication and overlap reduction before statistics
+  - pairs outside `selection_gate_pairs` staying shadow; every BASELINE-001 horizon earning publication only through its own decision
+  - SEL-001 staying shadow-only
+  - missing or expired decisions blocking publication
+  - pre-rollout calls untouched
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)"
-```
+  One fix wave, then one scoped re-review.
 
 - [ ] **Step 3: The review report to the user** (spec §19), then stop:
   - **Formulas:** §7–§11 as implemented, each with `file:line`:
@@ -4678,11 +4977,10 @@ gh pr create --draft --title "SPG-001: selection publish gate" --body "Implement
   - **Data sources:** tables read, session range, stocks per year, `dataset_sha256` per horizon, universe rows, exclusion totals per horizon, all from `spg-eval-report.json`.
   - **Tests:** new test files with pass counts, and the full-suite result against the `main` baseline.
   - **Gate results:** for each of BASELINE-001 and SEL-001 at h=3 and h=5, every `wf_`/`ho_` field, the decision, the reasons, and the folds table (month, train rows, `n`, `mean_excess`).
-  - **Runtime:** gate wall-clock time and peak memory, shadow runtime, against the 6 Gi / 21600 s and 1800 s limits.
-  - **What changes for users on deploy:**
-    - Every new BASELINE-001 call at h=1 and h=7 becomes `SHADOW`.
-    - h=3 and h=5 calls publish only if their pair passed.
-    - Zero public calls if none passed.
+  - **Runtime:** for the gate and the shadow job: stocks scored, sessions processed, elapsed time, peak memory, CPU seconds, failed stocks and retries, against the 6 Gi / 21600 s and 1800 s limits.
+  - **Offline/live parity:** each BASELINE-001 pair's `live_parity` block, stated as a measured difference, not as equivalence.
+  - **Known limitations:** the current-sector feature (historical sector membership is not reconstructed) and survivorship.
+  - **What changes for users on deploy:** each BASELINE-001 horizon (1, 3, 5, 7) publishes only if its own pair passed; everything else is `SHADOW`. Zero public calls if none passed.
 
 No merge, deploy or migration until the user approves the report.
 
@@ -4693,7 +4991,8 @@ No merge, deploy or migration until the user approves the report.
 1. **Holdout consumption uses a new table `selection_holdout_usages`, not `HoldoutUsageRecord`.** `HoldoutUsageRecord.experiment_arm_id` is a NOT NULL foreign key to `experiment_arms`, which the gate has no use for. Windows are still registered in `HoldoutWindowRegistry` as the spec says.
 2. **Per-stock feature computation replaces per-cutoff observer calls.** Recomputing `extended_point_in_time_features` for about 4M (stock, session) pairs would take hours. Instead each stock is computed once per corporate-action epoch. Task 6 proves every row equal to the reference and also checks the observer bound. Two leakage tests (future prices, future corporate actions) pin it.
 3. **`--shard-cutoffs` is dropped; three flags are added.** The dataset is built stock by stock, so memory is bounded by the final frame. The new flags are `--source-url` (read-only source), `--ephemeral-schema` and `--report-json`, for the pre-merge evaluation.
-4. **`rel_strength_sector_20d` uses the current `Stock.sector`,** as FV-002 already does. This is a classification dependency, not a price leak. It is reported with the survivorship limitation.
-5. **BASELINE-001 is scored offline on corporate-action-adjusted bars.** The live scan reads raw bars. Adjusted is the point-in-time analogue; the two differ only for a stock with a ratio action inside a feature window.
+4. **`rel_strength_sector_20d` uses the current `Stock.sector`,** as FV-002 already does. This is a documented point-in-time limitation: historical sector membership is not reconstructed. It is kept for compatibility and reported with the survivorship limitation.
+5. **BASELINE-001 is scored offline on corporate-action-adjusted bars; the live scan reads raw bars.** They are not treated as equivalent. The dataset carries `baseline_score_live`, Task 6 pins where the two differ, and every run reports a walk-forward-only `live_parity` block.
 6. **A SEL-001 `ModelVersion` row is created on its first gate run.** BASELINE-001 is fixed code: if it has no `ModelVersion` row, its no-peeking check is skipped. Single use per month still applies to it.
-7. **The shadow job's 1800 s deadline is kept.** Task 15 Step 8 measures it; if it is exceeded, the report proposes a new limit rather than silently raising it.
+7. **`selection_gate_pairs` replaces `selection_gate_horizons` and `selection_gate_reported_pairs`.** Per the 2026-10-01 instruction, every BASELINE-001 horizon is gated independently. The pair list is hashed, and `meta.publishGate` reports exactly these pairs.
+8. **The shadow job's 1800 s deadline is kept.** Task 15 Step 8 measures it; if it is exceeded, the report proposes a new limit rather than silently raising it.
