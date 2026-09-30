@@ -67,23 +67,32 @@ class ScorecardGraphicsTest {
     }
 
     @Test
-    fun aRangeKeepsItsWindowRebasedToZeroInPercentagePoints() {
+    fun theChartPlotsRunningAveragesAndARangeAveragesOnlyItsOwnCloses() {
         val series = listOf(
-            SeriesPointDto("2026-06-01T10:00:00Z", -0.01, 0.02, 1),
-            SeriesPointDto("2026-09-01T10:00:00Z", -0.03, 0.05, 1),
-            SeriesPointDto("2026-09-28T10:00:00Z", -0.04, 0.09, 2)
+            SeriesPointDto("2026-06-01T10:00:00Z", -0.01, 0.02, 1, realisedAvg = -0.01, promisedAvg = 0.02),
+            SeriesPointDto("2026-09-01T10:00:00Z", -0.03, 0.05, 1, realisedAvg = -0.015, promisedAvg = 0.025),
+            SeriesPointDto("2026-09-28T10:00:00Z", -0.04, 0.09, 2, realisedAvg = -0.01, promisedAvg = 0.0225)
         )
+        fun assertPoints(expected: List<Pair<Double, Double>>, actual: List<Pair<Double, Double>>) {
+            assertEquals(expected.size, actual.size)
+            expected.zip(actual).forEach { (e, a) -> assertEquals(e.first, a.first, 1e-9); assertEquals(e.second, a.second, 1e-9) }
+        }
 
-        val all = ScorecardGraphics.window(series, ReturnRange.ALL)
-        assertEquals(4, all.size)
-        assertEquals(0.0 to 0.0, all.first())
-        assertEquals(-4.0, all.last().first, 1e-9)
-
-        val month = ScorecardGraphics.window(series, ReturnRange.M1)
-        assertEquals(3, month.size)
-        assertEquals(-3.0, month.last().first, 1e-9)
-        assertEquals(7.0, month.last().second, 1e-9)
+        assertPoints(listOf(-1.0 to 2.0, -1.5 to 2.5, -1.0 to 2.25), ScorecardGraphics.window(series, ReturnRange.ALL))
+        // 1M starts at 1 Sep: its means leave out the June close.
+        assertPoints(listOf(-2.0 to 3.0, -1.0 to 7.0 / 3), ScorecardGraphics.window(series, ReturnRange.M1))
+        // An older backend without the means: the whole series divides its sums by the closes so far.
+        assertPoints(listOf(-1.0 to 2.0, -1.5 to 2.5, -1.0 to 2.25), ScorecardGraphics.window(series.map { it.copy(realisedAvg = null, promisedAvg = null) }, ReturnRange.ALL))
         assertEquals(emptyList<Pair<Double, Double>>(), ScorecardGraphics.window(emptyList(), ReturnRange.W1))
+    }
+
+    @Test
+    fun theGaugeDrawsAShortfallBelowZeroRedBySizeAndKeepsBandsAboveIt() {
+        assertEquals(.43f to MarksyTheme.RedUrgent, ScorecardGraphics.gauge(-43.0))
+        assertEquals(1f to MarksyTheme.RedUrgent, ScorecardGraphics.gauge(-150.0))
+        assertEquals(.38f to MarksyTheme.YellowImportant, ScorecardGraphics.gauge(38.0))
+        assertEquals(1f to MarksyTheme.PrimaryEmerald, ScorecardGraphics.gauge(250.0))
+        assertEquals(0f to MarksyTheme.TextMuted, ScorecardGraphics.gauge(null))
     }
 
     @Test

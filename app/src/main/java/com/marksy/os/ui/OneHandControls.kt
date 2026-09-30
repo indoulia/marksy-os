@@ -59,6 +59,13 @@ import androidx.compose.ui.unit.sp
 val OneHandListBottomPadding = 120.dp
 
 private val FloatingButtonSize = 44.dp
+
+/** Bottom padding that lets a list's last item scroll clear of a stack of [buttons] floating buttons, plus 16dp. */
+fun oneHandStackBottomPadding(buttons: Int): androidx.compose.ui.unit.Dp =
+    14.dp + FloatingButtonSize * buttons + 10.dp * (buttons - 1).coerceAtLeast(0) + 16.dp
+
+/** Extra end padding for a row's right-edge badge (inside the 18dp list and 12dp card insets) to sit left of the button column. */
+val OneHandRowEndClearance = 34.dp
 private val FloatingIconSize = 22.dp
 
 /**

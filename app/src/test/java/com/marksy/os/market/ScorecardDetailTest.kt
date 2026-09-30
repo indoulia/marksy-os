@@ -21,7 +21,7 @@ class ScorecardDetailTest {
                      "filter": {"period": "LIFETIME", "basis": "first_seen", "asOf": "2026-09-30T10:00:00Z"}, $body, "following": true},
             "trustBand": {"low": "0.017302", "high": "0.198211"},
             "byHorizon": [{"horizon": "INTRADAY", "hitRatePct": null, "completed": 0}, {"horizon": "UP_TO_1_WEEK", "hitRatePct": "12.50", "completed": 16}],
-            "series": [{"at": "2026-09-02T10:00:00Z", "realisedCum": "-0.02", "promisedCum": "0.04", "n": 1},
+            "series": [{"at": "2026-09-02T10:00:00Z", "realisedCum": "-0.02", "promisedCum": "0.04", "realisedAvg": "-0.02", "promisedAvg": "0.04", "n": 1},
                        {"at": "2026-09-09T10:00:00+00:00", "realisedCum": "-0.05", "promisedCum": "0.07", "n": 3}],
             "recent": [{"tipId": "t-9", "symbol": "RSYSTEMS", "direction": "BUY", "firstSeenAt": "2026-09-30T04:00:00Z", "status": "ACTIVE",
                         "target": "450", "stopLoss": "400", "entryLow": "420", "entryHigh": "420",
@@ -43,6 +43,8 @@ class ScorecardDetailTest {
         assertNull(d.byHorizon[0].hitRatePct)
         assertEquals(12.5, d.byHorizon[1].hitRatePct!!, 1e-9)
         assertEquals(listOf(-0.02, -0.05), d.series.map { it.realisedCum })
+        assertEquals(listOf(-0.02, null), d.series.map { it.realisedAvg })
+        assertEquals(0.04, d.series[0].promisedAvg!!, 1e-9)
         assertEquals(3, d.series[1].n)
         assertEquals(450.0, d.recent.single().target!!, 1e-9)
         assertEquals("WHATSAPP_GROUP", d.recent.single().channel?.type)

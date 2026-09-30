@@ -53,6 +53,14 @@ fun TradingIntelligenceScreen(
     val followed by com.marksy.os.market.MarketIntelligenceRepository.followed.collectAsState()
     val toggleFollow = marketRepository?.let { rememberFollowToggle(it) }
     val openSource = scorecardTrail.lastOrNull()?.takeIf { selectedFilter == TAB_SCORECARDS }
+    val actions = listOfNotNull(
+        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
+        openSource?.let { s -> followed?.let { set -> toggleFollow?.let { toggle ->
+            val on = s.followKey in set
+            FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggle(s.followKey, s.name, !on) }
+        } } },
+        if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards") { filteringScorecards = scorecardQuery } else null
+    )
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
         Modifier
@@ -66,7 +74,8 @@ fun TradingIntelligenceScreen(
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_SCORECARDS && marketRepository != null -> ScorecardsView(
-                marketRepository, scorecardQuery, OneHandListBottomPadding, onScorecardQueryChange, onEditFilter = { filteringScorecards = it },
+                // The tab button plus this page's actions.
+                marketRepository, scorecardQuery, oneHandStackBottomPadding(1 + actions.size), onScorecardQueryChange, onEditFilter = { filteringScorecards = it },
                 trail = scorecardTrail, onTrailChange = onScorecardTrailChange, onOpenStock = onOpenStock
             )
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
@@ -77,14 +86,7 @@ fun TradingIntelligenceScreen(
         filters = TradingFilters.map { it to it },
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
-        actions = listOfNotNull(
-            if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null,
-            openSource?.let { s -> followed?.let { set -> toggleFollow?.let { toggle ->
-                val on = s.followKey in set
-                FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggle(s.followKey, s.name, !on) }
-            } } },
-            if (selectedFilter == TAB_SCORECARDS) FloatingAction(Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards") { filteringScorecards = scorecardQuery } else null
-        )
+        actions = actions
     )
     }
 }
