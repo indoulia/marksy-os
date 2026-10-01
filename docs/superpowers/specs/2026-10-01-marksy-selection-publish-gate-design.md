@@ -177,8 +177,8 @@ For model `m`, horizon `h`, stage window `W` (a set of sessions), processed in a
   colsample_bytree=0.8, min_child_weight=100, reg_lambda=1.0, objective="reg:squarederror", tree_method="hist",
   random_state=42, n_jobs=2)`. Rows sorted by `(session_date, stock_id)` before fitting. NaN left as missing.
 - No tuning of any kind; parameters are part of the config snapshot. Changing any of them is a new model version.
-- Fitted artefacts are saved with `app/challenger_artefact.py::save_artefact(root="db://")` into `ModelArtefact`;
-  `ModelVersion(version="SEL-001", feature_version="FV-002", status="SHADOW")` is registered on first run.
+- Fitted artefacts are saved with `app/challenger_artefact.py::save_artefact(root="db://")` into `ModelArtefact`. The gate writes no `ModelVersion` row: that registry belongs to
+  `challenger_training` and the append-only `model_promotions` log.
 
 ### 9.2 BASELINE-001
 
@@ -213,9 +213,10 @@ never scored with the live variant.
 - Immediately before held-out scoring (after `F_H` is fitted), insert `HoldoutUsageRecord(holdout_label=label)`.
   Its uniqueness makes each exam single-use. If it already exists, the pair gets `NO_EDGE /
   HOLDOUT_ALREADY_CONSUMED` and no held-out statistics. Failures before this point do not burn the month.
-- **No peeking**: a model version may be examined on month `M` only if its `ModelVersion.created_at` precedes the
-  earliest `registered_at` of any `SPG-HOLDOUT-001` row for month `M` or later at the same horizon; otherwise
-  `NO_EDGE / HOLDOUT_PREVIOUSLY_OBSERVED`.
+- **No peeking**: a model version may be examined on month `M` only if its first gate appearance (the earliest
+  `selection_gate_decisions.decided_at` for that model version, or the current run's time when it has none) is not
+  later than the earliest `registered_at` of any `SPG-HOLDOUT-001` row for month `M` or later at the same horizon;
+  otherwise `NO_EDGE / HOLDOUT_PREVIOUSLY_OBSERVED`.
 - Config is frozen before the run (setting defaults and code constants). A config change can never be judged on
   an already-consumed month because the usage record is per model, horizon and month.
 - `SPG-HOLDOUT-001` months are rolling exams: once consumed they may be training history in later runs.
