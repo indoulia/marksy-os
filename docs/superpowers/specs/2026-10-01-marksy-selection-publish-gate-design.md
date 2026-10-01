@@ -583,9 +583,24 @@ Review report (before merge or deploy):
 5. **Held-out lag.** The latest fully resolved month for the horizon; a month is unused until all its `D+h` exit
    sessions exist (§10.1).
 6. **Existing calls.** Pre-rollout predictions and tips are untouched and finish their existing lifecycle.
+7. **Gate decision vs publication.** `PUBLISH` is selection authorisation only; actual publication also needs a
+   `PUBLISHABLE` capability (invariant 12, §13.1).
 8. **Every BASELINE-001 horizon is gated independently** (2026-10-01): 1, 3, 5 and 7 sessions each earn publication
    through their own decision. At the 02:00 IST run on the 11th, the last one or two sessions before it may not yet
    have official bars, so `H(7)` can lag a month more than `H(3)`. This is fail-safe: the latest fully resolved month
    is used.
-7. **Gate decision vs publication.** `PUBLISH` is selection authorisation only; actual publication also needs a
-   `PUBLISHABLE` capability (invariant 12, §13.1).
+9. **Calibrated BASELINE.** Every calibration is a new model version (`<base>+<calibration version>`, the name
+   `CalibratedSignalProvider` already gives it), gated independently at every horizon. It never inherits the base model's
+   decision. Calibration parameters are fitted only on training/walk-forward data inside each fold, and the held-out
+   month stays untouched. A calibration that does not change the selection ranking is still versioned explicitly.
+   Until such a pair is in `selection_gate_pairs`, with an offline scorer that applies the calibration in-fold, its
+   calls are `SHADOW / HORIZON_NOT_GATED`. No calibration is active as of 2026-10-01.
+10. **Count vocabulary.** These four counts stay separate in every report and API:
+    - `qualifiedCount`: unique eligible stock/session/horizon rows with a resolved label in the evaluation period
+      (decision field `*_labelled_stock_sessions`)
+    - `selectedCount`: top-K selections before trade reduction (`*_candidates`)
+    - `acceptedTradeCount`: unique, non-overlapping trades used in the statistics (`*_trades`)
+    - `publishedCount`: calls actually authorised and published
+11. **xgboost in the API process.** It loads via the pre-existing challenger code. That is existing technical debt
+    (marksy-api #65), not an SPG blocker. SEL-001 and xgboost never load or run on the API publication or request path;
+    only the selection-gate and selection-shadow jobs use them.
