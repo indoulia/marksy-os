@@ -455,7 +455,10 @@ Manual run: `kubectl -n market-agent create job --from=cronjob/market-agent-sele
 - `--models` (default `BASELINE-001 SEL-001`), `--horizons` (default: every horizon listed for those models in
   `selection_gate_pairs`; an unlisted pair is refused)
 - `--walk-forward-only`: no holdout read, registration or consumption; no decision written; report only
-- `--shard-cutoffs N`
+- `--source-url URL`: read-only market-data source (pre-merge evaluation), enforced read-only by the database
+- `--ephemeral-schema`: create the schema in a throwaway SQLite `DATABASE_URL` (evaluation only)
+- `--report-json PATH`, `--code-version SHA`
+- (no `--shard-cutoffs`: the dataset is built stock by stock, so memory is bounded by the final frame)
 
 It prints the report (§19) to stdout as text and a JSON document.
 
