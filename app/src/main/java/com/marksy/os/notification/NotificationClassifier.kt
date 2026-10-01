@@ -2,14 +2,14 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 11
+    const val VERSION = 12
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
         WORK, EMAIL, DELIVERY, PROMOTIONS, SYSTEM, MARKET, OTHER
     }
 
-    data class Result(val category: Category, val priority: Int, val confidence: Float)
+    data class Result(val category: Category, val priority: Int, val confidence: Float, val reason: String? = null)
 
     private data class Rule(
         val category: Category,
@@ -214,9 +214,32 @@ object NotificationClassifier {
 
     private val otpWarning = Regex("""\b(?:never|do\s+not|don'?t)\s+share\s+(?:your\s+|the\s+|any\s+)?otp\b""")
 
+    // Android 15+ sensitive-notification protection (not the lock-screen setting) swaps the real body for this
+    // placeholder when Marksy lacks the RECEIVE_SENSITIVE_NOTIFICATIONS app-op; it carries no signal at all.
+    private const val REDACTED_BODY_PREFIX = "sensitive notification content"
+    const val REDACTION_REASON = "Content hidden by Android sensitive-notification protection"
+
+    // fix/trading-call-any-source: a structured call reads as TRADING regardless of source package
+    // (OTP and own-order/account precedence, enforced by their own callers, still win as they do today).
+    private val callDirectionWord = Regex("""\b(?:buy|sell|long|short)\b""", RegexOption.IGNORE_CASE)
+    private val callLevelOrStopWord = Regex("""\b(?:target|tgt|tp|stop\s+loss|stoploss|stop-loss|sl)\b""", RegexOption.IGNORE_CASE)
+    private val callExplicitHit = Regex(
+        """\b(?:target|tgt)\s+(?:\d+\s+)?hit\b|\b(?:sl|stop\s+loss|stoploss|stop-loss)\s+hit\b""",
+        RegexOption.IGNORE_CASE
+    )
+
+    // A lone direction or level word is too weak ("hit your savings target"); only the pair is distinctive.
+    private fun isStructuredTradingCall(text: String): Boolean =
+        callExplicitHit.containsMatchIn(text) || (callDirectionWord.containsMatchIn(text) && callLevelOrStopWord.containsMatchIn(text))
+
     fun classify(packageName: String, title: String, body: String): Result {
         val normalizedPackage = packageName.trim().lowercase()
         val notificationText = "$title $body".trim().lowercase()
+
+        // Redacted content is not a signal; must never be reported as a confident MARKET/TRADING hit.
+        if (body.trim().lowercase().startsWith(REDACTED_BODY_PREFIX)) {
+            return Result(Category.OTHER, 10, .15f, REDACTION_REASON)
+        }
 
         // OTP is a safety-critical notification type. It must win even when a
         // broker package or other text also contains trading-looking language.
@@ -238,6 +261,12 @@ object NotificationClassifier {
                 ?.let { return Result(it.category, it.priority, it.confidence) }
             if (brokerPromoTerms.any { notificationText.containsRuleTerm(it) }) return Result(Category.PROMOTIONS, 20, .85f)
             return Result(Category.MARKET, 60, .80f)
+        }
+
+        // fix/trading-call-any-source: distinctive call language (direction + level/stop, or an explicit
+        // "target hit"/"sl hit") is TRADING no matter which app delivered it.
+        if (isStructuredTradingCall(notificationText)) {
+            return Result(tradingRule.category, tradingRule.priority, tradingRule.confidence)
         }
 
         // The OTP rule leads this list too, so it must not see a tip's stripped footer either.
