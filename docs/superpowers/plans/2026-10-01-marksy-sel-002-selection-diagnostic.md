@@ -13,7 +13,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-01-marksy-sel-002-selection-diagnostic.md` in marksy-os. The binding inputs are the predeclared protocol (`scratchpad/sel002-protocol.md`) and the addendum (`scratchpad/sel002-addendum.md`). Code goes in the worktree `C:\AIAgent\marksy-api-sel002`, on branch `feat/sel-002-diagnostic`, which already exists at `8944bf4` (marksy-api `main`).
 
-**Pre-validated:** every code block below passed (99 tests, about 2 min) in a scratch copy of marksy-api at `8944bf4` before this plan was committed. Implement them verbatim; a red or green result that differs from the one stated is a finding to investigate, not something to patch over.
+**Pre-validated:** every code block below passed (99 tests, about 2 min) in a scratch copy of marksy-api at `8944bf4` before this plan was first committed, against evidence rules `SEL-002-EVIDENCE-001`. On 2026-10-01 the spec was revised at the user's review to `SEL-002-EVIDENCE-002` (core/robustness grading, major red flags F1-F5, the K8s Job dropped); Tasks 12, 14, 15, 16 and 18 below were updated to match and their changed code blocks re-run on synthetic data before this revision was committed. Implement them verbatim; a red or green result that differs from the one stated is a finding to investigate, not something to patch over.
 
 ## Global Constraints
 
@@ -30,13 +30,19 @@
   - seeds: random baseline `42` plus `1..20`; permutation seeds `1..8`; selection null `1000` draws, seed `42`
   - bucket edges `(0, 1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)`; top fractions `0.01` and `0.05`
   - parity tolerance `1e-6`
-- **Evidence** (`SEL-002-EVIDENCE-001`):
+- **Evidence** (`SEL-002-EVIDENCE-002`):
+  - 37 checks per horizon, tagged core (E1-E4, 19) or robustness (E5-E6, 18)
   - IC share ≥ `0.55`, monotonicity ≥ `0.8`
   - breadth at K `5, 10, 25, 50`
   - `8` permutation runs, ≥ `3` sd; selection-null p ≤ `0.01`
   - single sector or year share ≤ `0.40`
   - an undefined value fails, except an undefined E6 CI
-  - A: every check at both horizons. B: otherwise, mean IC CI_low > 0 or K=10 net-excess CI_low > 0 at either horizon. C: otherwise.
+  - major red flags F1-F5 (§7.2): F1/F2 session/stock dependence (ex-top-1% K=10 mean net excess ≤ 0 or undefined),
+    F3/F4 period/sector dependence (largest share > 0.40 or undefined), F5 a losing regime with CI_high < 0 and
+    `MIN_REGIME_SESSIONS = 250` sessions with ≥ 1 accepted K=10 trade; a thinner losing regime or a failed E5 CI
+    check whose mean stays positive is a minor flag only
+  - A: all 19 core checks hold at both horizons, and no major flag (F1-F5) at either horizon. B: otherwise, mean IC
+    CI_low > 0 or K=10 net-excess CI_low > 0 at either horizon. C: otherwise.
 - **Pins:**
   - snapshot `5f59b9bc929f5d0c3f8fcdada419d705f0e6e9a3c0e26efb72d79ae2f0579a8b`
   - `dataset.pkl` `50035bae382cf525ece4643cfcf4cf876b9c61db3c4573110522ede73a6dc08e`
@@ -94,7 +100,6 @@ New, in `app/selection_diagnostics/` (every module imports only from SPG-001 and
 
 New elsewhere:
 - `scripts/run_sel002_diagnostic.py` (Task 16)
-- `deploy/k8s/manual/sel002-diagnostic-job.yaml` (Task 17, optional)
 - `tests/_sel002_factories.py` (Task 2) and `tests/_sel002_world.py` (Task 14)
 - `tests/test_sel002_*.py`
 
@@ -822,7 +827,7 @@ git commit -m "SEL-002: remove the held-out months before any computation"
 **Acceptance criteria:**
 - `5 passed`.
 - Inside the guard, every write (ORM flush, CREATE or DELETE) raises; reads still work.
-- No SEL-002 module imports an SPG-001 writer, `app.db` or `SessionLocal`.
+- No SEL-002 module imports an SPG-001 writer, `app.db`, `SessionLocal` or anything from `app.trade_geometry` (TG-001).
 - Nothing under `app/`, `api/`, `scripts/` or `deploy/k8s/base` references SEL-002.
 
 - [ ] **Step 1: Write the failing tests**
@@ -852,7 +857,7 @@ AT = datetime(2026, 10, 1, tzinfo=timezone.utc)
 FORBIDDEN_MODULES = {
     "app.db", "app.challenger_artefact", "app.schedule_orchestration", "app.selection_gate.holdout",
     "app.selection_gate.records", "app.selection_gate.shadow", "app.selection_gate.publication",
-    "app.selection_gate.authorization", "app.recommendations", "app.marksy_tips",
+    "app.selection_gate.authorization", "app.recommendations", "app.marksy_tips", "app.trade_geometry",
 }
 FORBIDDEN_NAMES = {"run_selection_gate", "register_holdout", "consume_holdout", "write_decision", "write_trades",
                    "write_benchmarks", "SessionLocal", "save_artefact", "run_selection_shadow", "_evaluate_pair"}
@@ -2777,7 +2782,7 @@ git commit -m "SEL-002: point-in-time liquidity terciles and the predeclared reg
 
 ---
 
-### Task 12: Predeclared evidence rules and the A/B/C class
+### Task 12: Predeclared evidence rules, major red flags and the A/B/C class
 
 **Files:**
 - Create: `app/selection_diagnostics/evidence.py`
@@ -2786,22 +2791,36 @@ git commit -m "SEL-002: point-in-time liquidity terciles and the predeclared reg
 **Interfaces:**
 - Consumes: `BASELINE_NAMES`, `REGIME_BUCKETS` (Task 1).
 - Produces:
-  - `RULES_VERSION = "SEL-002-EVIDENCE-001"`, the threshold constants, `CLASSES` and `DEPENDENCY`
-  - `Check(rule, name, value, threshold, holds)`
-  - `horizon_checks(inputs) -> list[Check]` (37), `positive_evidence(inputs) -> dict`
-  - `classify({3: inputs, 5: inputs}) -> {rules_version, class, label, recommendation, checks, rules_hold, positive_evidence, failing, dependencies}`
-- The evidence input keys (produced by Task 14): `ic_ci_low`, `ic_share_positive`, `bucket_monotonicity`, `spread_ci_low`, `net_excess_ci_low_by_k` (str K keys), `net_excess_k10`, `net_excess_k10_ci_low`, `paired_ci_low` (by baseline), `permutation_net_excess` (list), `mean_ic`, `permutation_ic` (list), `selection_null_p`, `ex_top_sessions_ci_low`, `ex_top_stocks_ci_low`, `max_sector_share`, `max_year_share`, `regime_ci_high` (`"dim:bucket"` keys).
+  - `RULES_VERSION = "SEL-002-EVIDENCE-002"`, the threshold constants (including `MIN_REGIME_SESSIONS = 250`),
+    `CLASSES` and `DEPENDENCY`
+  - `Check(rule, name, value, threshold, holds, group)` where `group` is `"core"` (E1-E4) or `"robustness"` (E5-E6)
+  - `Flag(id, kind, rule, name, value)` where `kind` is `"major"` (id `F1`-`F5`) or `"minor"` (id names the bucket or
+    check; `rule` is always `E5` or `E6`, matching `DEPENDENCY`)
+  - `horizon_checks(inputs) -> list[Check]` (37: 19 core, 18 robustness), `positive_evidence(inputs) -> dict`
+  - `major_flags(inputs) -> list[Flag]`, `minor_flags(inputs, major) -> list[Flag]`
+  - `classify({3: inputs, 5: inputs}) -> {rules_version, class, label, recommendation, checks, rules_hold, core_hold, positive_evidence, failing, major_flags, minor_flags, dependencies}`
+- The evidence input keys (produced by Task 14): `ic_ci_low`, `ic_share_positive`, `bucket_monotonicity`, `spread_ci_low`, `net_excess_ci_low_by_k` (str K keys), `net_excess_k10`, `net_excess_k10_ci_low`, `paired_ci_low` (by baseline), `permutation_net_excess` (list), `mean_ic`, `permutation_ic` (list), `selection_null_p`, `ex_top_sessions_ci_low`, `ex_top_sessions_mean`, `ex_top_stocks_ci_low`, `ex_top_stocks_mean`, `max_sector_share`, `max_year_share`, `regime_ci_high` (`"dim:bucket"` keys), `regime_sessions` (`"dim:bucket"` -> sessions with >= 1 accepted K=10 trade in that bucket).
 
 **Data dependencies:** hand-built evidence inputs.
 
 **Compute:** < 5 s.
 
 **Acceptance criteria:**
-- `13 passed`.
-- The thresholds are pinned literally.
-- A requires all 37 checks at both horizons.
-- Any single failing rule with positive evidence gives B; no positive evidence gives C.
-- An undefined value fails, except E6.
+- `15 passed`.
+- The thresholds, including `MIN_REGIME_SESSIONS = 250`, are pinned literally.
+- Implements spec §7 (`SEL-002-EVIDENCE-002`) literally: never adjust a threshold, rule, flag or classification to make
+  a test or a synthetic result come out a particular way. If a test and spec §7 disagree, the test is wrong.
+- All 37 checks are still computed and reported at every horizon; only the 19 core checks (E1-E4) and the absence of
+  a major flag (F1-F5) gate class A. A failing robustness check (E5-E6) that is not a major flag is a minor flag:
+  reported, never blocking.
+- A thin losing regime (< 250 sessions) does not block A; a well-populated one (>= 250) is a major flag (F5).
+- A failed E5 concentration CI check whose underlying mean stays positive does not block A; a mean <= 0 or
+  undefined (F1/F2) does.
+- A sector or year share > 0.40, or undefined, is always a major flag (F3/F4) when it occurs.
+- Any single failed core check, or any major flag, with positive evidence gives B; no positive evidence gives C.
+- An undefined value fails, except E6 (an undefined CI cannot show a significantly negative regime); an undefined
+  F1-F4 input is itself a major flag.
+- Both horizons are required.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2826,36 +2845,47 @@ def strong() -> dict:
         "paired_ci_low": {name: 0.001 for name in BASELINE_NAMES},
         "permutation_net_excess": [0.0001, -0.0002, 0.0003, 0.0, -0.0001, 0.0002, 0.0001, -0.0003],
         "mean_ic": 0.03, "permutation_ic": [0.001, -0.002, 0.0, 0.002, -0.001, 0.001, 0.0, -0.001],
-        "selection_null_p": 1 / 1001, "ex_top_sessions_ci_low": 0.001, "ex_top_stocks_ci_low": 0.001,
+        "selection_null_p": 1 / 1001,
+        "ex_top_sessions_ci_low": 0.001, "ex_top_sessions_mean": 0.002,
+        "ex_top_stocks_ci_low": 0.001, "ex_top_stocks_mean": 0.002,
         "max_sector_share": 0.2, "max_year_share": 0.3,
         "regime_ci_high": {f"{d}:{b}": 0.01 for d, bs in REGIME_BUCKETS.items() for b in bs},
+        "regime_sessions": {f"{d}:{b}": 40 for d, bs in REGIME_BUCKETS.items() for b in bs},
     }
 
 
 def test_thresholds_are_the_frozen_protocol_numbers():
-    assert evidence.RULES_VERSION == "SEL-002-EVIDENCE-001"
+    assert evidence.RULES_VERSION == "SEL-002-EVIDENCE-002"
     assert (evidence.IC_SHARE_MIN, evidence.MONOTONICITY_MIN, evidence.BREADTH_K) == (0.55, 0.8, (5, 10, 25, 50))
     assert (evidence.PERMUTATION_RUNS, evidence.PERMUTATION_SD_MULTIPLE, evidence.SELECTION_NULL_P_MAX) == (8, 3.0, 0.01)
     assert evidence.MAX_GROUP_SHARE == 0.40
-    assert len(horizon_checks(strong())) == 4 + 4 + 7 + 4 + 4 + 14
+    assert evidence.MIN_REGIME_SESSIONS == 250
+    checks = horizon_checks(strong())
+    assert len(checks) == 4 + 4 + 7 + 4 + 4 + 14
+    assert sum(1 for c in checks if c.group == "core") == 19
+    assert sum(1 for c in checks if c.group == "robustness") == 18
 
 
-def test_every_rule_at_both_horizons_is_class_a():
+def test_every_check_at_both_horizons_with_no_flags_is_class_a():
     out = classify({3: strong(), 5: strong()})
-    assert out["class"] == "A" and out["recommendation"] == "Proceed to TG-001."
+    assert out["class"] == "A"
     assert out["dependencies"] == []
+    assert out["major_flags"]["3"] == [] and out["major_flags"]["5"] == []
+    assert out["minor_flags"]["3"] == [] and out["minor_flags"]["5"] == []
+    assert out["core_hold"]["3"] and out["core_hold"]["5"]
 
 
 @pytest.mark.parametrize("key, value, rule", [
     ("ic_share_positive", 0.54, "E1"), ("bucket_monotonicity", 0.79, "E1"),
     ("net_excess_ci_low_by_k", {"1": 0.0, "5": 0.001, "10": 0.002, "25": 0.001, "50": -0.0001}, "E2"),
-    ("selection_null_p", 0.011, "E4"), ("max_year_share", 0.41, "E5"), ("ex_top_stocks_ci_low", None, "E5"),
+    ("selection_null_p", 0.011, "E4"),
 ])
-def test_one_failing_rule_with_positive_evidence_is_class_b(key, value, rule):
+def test_any_single_failed_core_check_with_positive_evidence_is_class_b(key, value, rule):
     weak = strong()
     weak[key] = value
     out = classify({3: strong(), 5: weak})
     assert out["class"] == "B"
+    assert not out["core_hold"]["5"] and out["core_hold"]["3"]
     assert not out["rules_hold"]["5"][rule] and all(out["rules_hold"]["3"].values())
     assert evidence.DEPENDENCY[rule] in out["dependencies"]
 
@@ -2871,13 +2901,50 @@ def test_permutation_rules_need_all_eight_runs_and_three_sd():
     assert not all(c.holds for c in horizon_checks(short) if c.rule == "E4")
 
 
-def test_a_significantly_negative_regime_fails_e6_and_an_undefined_ci_does_not():
+def test_a_thin_significantly_negative_regime_still_gives_a():
     bad = strong()
     bad["regime_ci_high"]["volatility:HIGH"] = -0.0001
-    assert not classify({3: bad, 5: strong()})["rules_hold"]["3"]["E6"]
+    bad["regime_sessions"]["volatility:HIGH"] = 100  # below MIN_REGIME_SESSIONS: minor, not major
+    out = classify({3: bad, 5: strong()})
+    assert out["class"] == "A"
+    assert not out["rules_hold"]["3"]["E6"]
+    assert any(f["rule"] == "E6" and f["kind"] == "minor" for f in out["minor_flags"]["3"])
+    assert out["major_flags"]["3"] == [] and out["major_flags"]["5"] == []
     undefined = strong()
     undefined["regime_ci_high"]["fv002:BEARISH"] = None
     assert classify({3: undefined, 5: strong()})["class"] == "A"
+
+
+def test_a_well_populated_losing_regime_is_a_major_flag_and_gives_b():
+    bad = strong()
+    bad["regime_ci_high"]["volatility:HIGH"] = -0.0001
+    bad["regime_sessions"]["volatility:HIGH"] = 250  # >= MIN_REGIME_SESSIONS: major (F5)
+    out = classify({3: bad, 5: strong()})
+    assert out["class"] == "B"
+    assert any(f["id"] == "F5" for f in out["major_flags"]["3"])
+
+
+def test_a_failed_ex_top_ci_check_blocks_a_only_when_its_mean_is_not_positive():
+    ci_dips = strong()
+    ci_dips["ex_top_sessions_ci_low"] = -0.0001  # CI dips below 0, mean (0.002) stays positive
+    out = classify({3: strong(), 5: ci_dips})
+    assert out["class"] == "A"
+    assert out["major_flags"]["5"] == []  # F1 does not trigger: the mean is still positive
+    assert any(f["rule"] == "E5" and f["kind"] == "minor" for f in out["minor_flags"]["5"])
+    mean_fails = strong()
+    mean_fails["ex_top_sessions_ci_low"] = -0.0001
+    mean_fails["ex_top_sessions_mean"] = 0.0
+    bad = classify({3: strong(), 5: mean_fails})
+    assert bad["class"] == "B"
+    assert any(f["id"] == "F1" for f in bad["major_flags"]["5"])
+
+
+def test_a_year_share_over_threshold_is_a_major_flag_and_gives_b():
+    weak = strong()
+    weak["max_year_share"] = 0.41
+    out = classify({3: strong(), 5: weak})
+    assert out["class"] == "B"
+    assert any(f["id"] == "F3" for f in out["major_flags"]["5"])
 
 
 def test_no_positive_evidence_is_class_c_and_either_kind_is_enough_for_b():
@@ -2897,6 +2964,14 @@ def test_both_horizons_are_required():
         classify({3: strong()})
 
 
+def test_undefined_f_input_is_itself_a_major_flag():
+    undefined_mean = strong()
+    undefined_mean["ex_top_sessions_mean"] = None
+    out = classify({3: strong(), 5: undefined_mean})
+    assert any(f["id"] == "F1" for f in out["major_flags"]["5"])
+    assert out["class"] == "B"
+
+
 def test_rules_module_has_no_runtime_inputs():
     """The rules read only their frozen constants and the numbers handed to them (no settings, no files)."""
     source = pathlib.Path(evidence.__file__).read_text(encoding="utf-8")
@@ -2914,7 +2989,8 @@ python -m pytest tests/test_sel002_evidence.py -q -p no:cacheprovider
 `app/selection_diagnostics/evidence.py`:
 
 ```python
-"""SEL-002 §7 predeclared evidence rules E1-E6 and the A/B/C classification. Diagnostic only: no publication decision.
+"""SEL-002 §7 predeclared evidence rules E1-E6, major red flags F1-F5, and the A/B/C classification. Diagnostic
+only: no publication decision.
 
 Frozen before any SEL-002 number is computed; changing anything here is a new rules version and a new run."""
 from __future__ import annotations
@@ -2924,7 +3000,7 @@ from dataclasses import asdict, dataclass
 
 from .config import BASELINE_NAMES, REGIME_BUCKETS
 
-RULES_VERSION = "SEL-002-EVIDENCE-001"
+RULES_VERSION = "SEL-002-EVIDENCE-002"
 IC_SHARE_MIN = 0.55
 MONOTONICITY_MIN = 0.8
 BREADTH_K = (5, 10, 25, 50)
@@ -2932,16 +3008,18 @@ PERMUTATION_RUNS = 8
 PERMUTATION_SD_MULTIPLE = 3.0
 SELECTION_NULL_P_MAX = 0.01
 MAX_GROUP_SHARE = 0.40
+MIN_REGIME_SESSIONS = 250
 HORIZONS = (3, 5)
 
 CLASSES = {
-    "A": ("STRONG EVIDENCE OF A RANKING SIGNAL", "Proceed to TG-001."),
-    "B": ("WEAK OR UNSTABLE EVIDENCE", "Investigate and revise SEL-001 before trade geometry."),
-    "C": ("NO EVIDENCE", "Stop investing in the current SEL-001 architecture; redesign the selection model, features "
-                         "or objective."),
+    "A": ("STRONG EVIDENCE OF A RANKING SIGNAL", "Recommend TG-001; resuming it still needs the user's approval."),
+    "B": ("MEANINGFUL BUT INCOMPLETE OR FRAGILE EVIDENCE", "Investigate and revise SEL-001 before trade geometry."),
+    "C": ("NO EVIDENCE OF A USEFUL RANKING SIGNAL", "Stop investing in the current SEL-001 architecture; redesign "
+                                                     "the selection model, features or objective."),
 }
 DEPENDENCY = {"E1": "deciles and ranking", "E2": "K", "E3": "simple baselines", "E4": "null expectations",
               "E5": "period or a small subset of observations", "E6": "regime"}
+GROUP = {"E1": "core", "E2": "core", "E3": "core", "E4": "core", "E5": "robustness", "E6": "robustness"}
 
 
 @dataclass(frozen=True)
@@ -2951,6 +3029,16 @@ class Check:
     value: float | None
     threshold: str
     holds: bool
+    group: str
+
+
+@dataclass(frozen=True)
+class Flag:
+    id: str
+    kind: str
+    rule: str
+    name: str
+    value: object
 
 
 def _num(value) -> float | None:
@@ -2972,21 +3060,35 @@ def _le(value, threshold) -> bool:
     return v is not None and v <= threshold
 
 
+def _le_or_undefined(value, threshold) -> bool:
+    v = _num(value)
+    return v is None or v <= threshold
+
+
+def _gt_or_undefined(value, threshold) -> bool:
+    v = _num(value)
+    return v is None or v > threshold
+
+
 def horizon_checks(e: dict) -> list[Check]:
+    def check(rule, name, value, threshold, holds):
+        return Check(rule, name, value, threshold, holds, GROUP[rule])
+
     checks = [
-        Check("E1", "mean Spearman IC CI_low", _num(e["ic_ci_low"]), "> 0", _gt(e["ic_ci_low"], 0)),
-        Check("E1", "share of sessions with IC > 0", _num(e["ic_share_positive"]), f">= {IC_SHARE_MIN}",
+        check("E1", "mean Spearman IC CI_low", _num(e["ic_ci_low"]), "> 0", _gt(e["ic_ci_low"], 0)),
+        check("E1", "share of sessions with IC > 0", _num(e["ic_share_positive"]), f">= {IC_SHARE_MIN}",
               _ge(e["ic_share_positive"], IC_SHARE_MIN)),
-        Check("E1", "bucket monotonicity Spearman", _num(e["bucket_monotonicity"]), f">= {MONOTONICITY_MIN}",
+        check("E1", "bucket monotonicity Spearman", _num(e["bucket_monotonicity"]), f">= {MONOTONICITY_MIN}",
               _ge(e["bucket_monotonicity"], MONOTONICITY_MIN)),
-        Check("E1", "top-minus-bottom decile spread CI_low", _num(e["spread_ci_low"]), "> 0", _gt(e["spread_ci_low"], 0)),
+        check("E1", "top-minus-bottom decile spread CI_low", _num(e["spread_ci_low"]), "> 0",
+              _gt(e["spread_ci_low"], 0)),
     ]
     for k in BREADTH_K:
         value = e["net_excess_ci_low_by_k"].get(str(k))
-        checks.append(Check("E2", f"K={k} net excess CI_low", _num(value), "> 0", _gt(value, 0)))
+        checks.append(check("E2", f"K={k} net excess CI_low", _num(value), "> 0", _gt(value, 0)))
     for name in BASELINE_NAMES:
         value = e["paired_ci_low"].get(name)
-        checks.append(Check("E3", f"K=10 paired net excess vs {name} CI_low", _num(value), "> 0", _gt(value, 0)))
+        checks.append(check("E3", f"K=10 paired net excess vs {name} CI_low", _num(value), "> 0", _gt(value, 0)))
 
     observed = _num(e["net_excess_k10"])
     perm = [_num(v) for v in e["permutation_net_excess"]]
@@ -2998,32 +3100,32 @@ def horizon_checks(e: dict) -> list[Check]:
         z = (observed - mean) / sd if sd > 0 else None
     else:
         margin, z_ok, z = None, False, None
-    checks.append(Check("E4", "K=10 net excess minus the best of 8 permutation runs", margin, "> 0",
+    checks.append(check("E4", "K=10 net excess minus the best of 8 permutation runs", margin, "> 0",
                         complete and margin > 0))
-    checks.append(Check("E4", "K=10 net excess above the permutation mean, in permutation sd", z,
+    checks.append(check("E4", "K=10 net excess above the permutation mean, in permutation sd", z,
                         f">= {PERMUTATION_SD_MULTIPLE}", complete and z_ok))
     ic, perm_ic = _num(e["mean_ic"]), [_num(v) for v in e["permutation_ic"]]
     ic_complete = len(perm_ic) == PERMUTATION_RUNS and all(v is not None for v in perm_ic) and ic is not None
     ic_margin = ic - max(perm_ic) if ic_complete else None
-    checks.append(Check("E4", "mean IC minus the best of 8 permutation ICs", ic_margin, "> 0",
+    checks.append(check("E4", "mean IC minus the best of 8 permutation ICs", ic_margin, "> 0",
                         ic_complete and ic_margin > 0))
-    checks.append(Check("E4", "selection-null p", _num(e["selection_null_p"]), f"<= {SELECTION_NULL_P_MAX}",
+    checks.append(check("E4", "selection-null p", _num(e["selection_null_p"]), f"<= {SELECTION_NULL_P_MAX}",
                         _le(e["selection_null_p"], SELECTION_NULL_P_MAX)))
 
     checks += [
-        Check("E5", "net excess CI_low without the top 1% of sessions", _num(e["ex_top_sessions_ci_low"]), "> 0",
+        check("E5", "net excess CI_low without the top 1% of sessions", _num(e["ex_top_sessions_ci_low"]), "> 0",
               _gt(e["ex_top_sessions_ci_low"], 0)),
-        Check("E5", "net excess CI_low without the top 1% of stocks", _num(e["ex_top_stocks_ci_low"]), "> 0",
+        check("E5", "net excess CI_low without the top 1% of stocks", _num(e["ex_top_stocks_ci_low"]), "> 0",
               _gt(e["ex_top_stocks_ci_low"], 0)),
-        Check("E5", "largest single-sector share of total net excess", _num(e["max_sector_share"]),
+        check("E5", "largest single-sector share of total net excess", _num(e["max_sector_share"]),
               f"<= {MAX_GROUP_SHARE}", _le(e["max_sector_share"], MAX_GROUP_SHARE)),
-        Check("E5", "largest single-year share of total net excess", _num(e["max_year_share"]), f"<= {MAX_GROUP_SHARE}",
-              _le(e["max_year_share"], MAX_GROUP_SHARE)),
+        check("E5", "largest single-year share of total net excess", _num(e["max_year_share"]),
+              f"<= {MAX_GROUP_SHARE}", _le(e["max_year_share"], MAX_GROUP_SHARE)),
     ]
     for dim, buckets in REGIME_BUCKETS.items():
         for bucket in buckets:
             value = _num(e["regime_ci_high"].get(f"{dim}:{bucket}"))
-            checks.append(Check("E6", f"{dim}={bucket} net excess CI_high", value, "not < 0",
+            checks.append(check("E6", f"{dim}={bucket} net excess CI_high", value, "not < 0",
                                 value is None or value >= 0))
     return checks
 
@@ -3032,14 +3134,76 @@ def positive_evidence(e: dict) -> dict:
     return {"ic_ci_low_gt_0": _gt(e["ic_ci_low"], 0), "k10_net_excess_ci_low_gt_0": _gt(e["net_excess_k10_ci_low"], 0)}
 
 
+def major_flags(e: dict) -> list[Flag]:
+    """§7.2 F1-F5: robustness failures that, unlike a thin regime or a CI dip with a positive mean, block class A."""
+    flags = []
+    if _le_or_undefined(e["ex_top_sessions_mean"], 0):
+        flags.append(Flag("F1", "major", "E5", "session dependence: ex-top-1%-sessions K=10 mean net excess <= 0 "
+                                               "or undefined", _num(e["ex_top_sessions_mean"])))
+    if _le_or_undefined(e["ex_top_stocks_mean"], 0):
+        flags.append(Flag("F2", "major", "E5", "stock dependence: ex-top-1%-stocks K=10 mean net excess <= 0 or "
+                                               "undefined", _num(e["ex_top_stocks_mean"])))
+    if _gt_or_undefined(e["max_year_share"], MAX_GROUP_SHARE):
+        flags.append(Flag("F3", "major", "E5", "period dependence: largest single-year share > 0.40 or undefined",
+                          _num(e["max_year_share"])))
+    if _gt_or_undefined(e["max_sector_share"], MAX_GROUP_SHARE):
+        flags.append(Flag("F4", "major", "E5", "sector dependence: largest single-sector share (UNKNOWN excluded) "
+                                               "> 0.40 or undefined", _num(e["max_sector_share"])))
+    losing = []
+    for dim, buckets in REGIME_BUCKETS.items():
+        for bucket in buckets:
+            key = f"{dim}:{bucket}"
+            ci_high = _num(e["regime_ci_high"].get(key))
+            sessions = e["regime_sessions"].get(key)
+            if ci_high is not None and ci_high < 0 and sessions is not None and sessions >= MIN_REGIME_SESSIONS:
+                losing.append(key)
+    if losing:
+        flags.append(Flag("F5", "major", "E6", f"well-populated losing regime (>= {MIN_REGIME_SESSIONS} sessions "
+                                               "with >= 1 accepted K=10 trade)", losing))
+    return flags
+
+
+def minor_flags(e: dict, major: list[Flag]) -> list[Flag]:
+    """Robustness failures reported for completeness; unlike F1-F5 they never block class A."""
+    major_ids = {f.id for f in major}
+    flags = []
+    if "F1" not in major_ids and not _gt(e["ex_top_sessions_ci_low"], 0):
+        flags.append(Flag("ex_top_sessions_ci_low", "minor", "E5", "net excess CI_low without the top 1% of "
+                                                                    "sessions <= 0, but the mean is positive",
+                          _num(e["ex_top_sessions_ci_low"])))
+    if "F2" not in major_ids and not _gt(e["ex_top_stocks_ci_low"], 0):
+        flags.append(Flag("ex_top_stocks_ci_low", "minor", "E5", "net excess CI_low without the top 1% of stocks "
+                                                                  "<= 0, but the mean is positive",
+                          _num(e["ex_top_stocks_ci_low"])))
+    major_regimes = set()
+    for f in major:
+        if f.id == "F5":
+            major_regimes.update(f.value)
+    for dim, buckets in REGIME_BUCKETS.items():
+        for bucket in buckets:
+            key = f"{dim}:{bucket}"
+            if key in major_regimes:
+                continue
+            ci_high = _num(e["regime_ci_high"].get(key))
+            if ci_high is not None and ci_high < 0:
+                flags.append(Flag(key, "minor", "E6", f"thin negative regime {key} (< {MIN_REGIME_SESSIONS} "
+                                                       "sessions with an accepted K=10 trade)", ci_high))
+    return flags
+
+
 def classify(inputs_by_horizon: dict) -> dict:
-    """A: every check holds at h=3 and h=5. B: otherwise, positive evidence at either horizon. C: otherwise."""
+    """A: all 19 core checks (E1-E4) hold at h=3 and h=5, and no major flag (F1-F5) at either horizon.
+    B: not A, but meaningful core evidence exists (mean IC CI_low > 0 or K=10 net-excess CI_low > 0 at either
+    horizon). C: otherwise."""
     inputs = {int(h): v for h, v in inputs_by_horizon.items()}
     if set(inputs) != set(HORIZONS):
         raise ValueError(f"SEL-002: evidence needs horizons {HORIZONS}, got {sorted(inputs)}")
     checks = {h: horizon_checks(inputs[h]) for h in HORIZONS}
     positive = {h: positive_evidence(inputs[h]) for h in HORIZONS}
-    if all(c.holds for h in HORIZONS for c in checks[h]):
+    core_hold = {h: all(c.holds for c in checks[h] if c.group == "core") for h in HORIZONS}
+    major = {h: major_flags(inputs[h]) for h in HORIZONS}
+    minor = {h: minor_flags(inputs[h], major[h]) for h in HORIZONS}
+    if all(core_hold[h] for h in HORIZONS) and not any(major[h] for h in HORIZONS):
         label = "A"
     elif any(any(p.values()) for p in positive.values()):
         label = "B"
@@ -3051,13 +3215,16 @@ def classify(inputs_by_horizon: dict) -> dict:
         "rules_version": RULES_VERSION, "class": label, "label": CLASSES[label][0], "recommendation": CLASSES[label][1],
         "checks": {str(h): [asdict(c) for c in checks[h]] for h in HORIZONS},
         "rules_hold": {str(h): rules[h] for h in HORIZONS},
+        "core_hold": {str(h): core_hold[h] for h in HORIZONS},
         "positive_evidence": {str(h): positive[h] for h in HORIZONS},
         "failing": {str(h): failing[h] for h in HORIZONS},
+        "major_flags": {str(h): [asdict(f) for f in major[h]] for h in HORIZONS},
+        "minor_flags": {str(h): [asdict(f) for f in minor[h]] for h in HORIZONS},
         "dependencies": sorted({DEPENDENCY[c["rule"]] for h in HORIZONS for c in failing[h]}),
     }
 ```
 
-- [ ] **Step 4: Run them; expect PASS** (`13 passed`)
+- [ ] **Step 4: Run them; expect PASS** (`15 passed`)
 
 ```bash
 python -m pytest tests/test_sel002_evidence.py -q -p no:cacheprovider
@@ -3068,7 +3235,7 @@ git diff --exit-code 8944bf4 -- app/selection_gate scripts/run_selection_gate.py
 
 ```bash
 git add app/selection_diagnostics/evidence.py tests/test_sel002_evidence.py
-git commit -m "SEL-002: predeclared evidence rules E1-E6 and the A/B/C classification"
+git commit -m "SEL-002: predeclared evidence rules E1-E6, major red flags F1-F5, and the A/B/C classification"
 ```
 
 ---
@@ -3377,7 +3544,7 @@ git commit -m "SEL-002: resumable parallel refit jobs and the parity gate"
 
 **Interfaces:**
 - Consumes: Tasks 2 and 4–11.
-- Produces: `analyze_horizon(*, dataset, horizon, windows, tested, sel001_scores, variant_scores: {variant: Series}, permutation_scores: {seed: Series}, liquidity: Series, sectors: {stock_id: str|None}, cfg) -> dict`. The keys are `horizon`, `tested_sessions`, `outcome_rows`, `resolved_rows`, `k_sensitivity` ({strategy: {str K: summary}}), `random_distribution`, `baselines_paired_k10`, `ranking`, `buckets`, `ablation`, `features`, `selection_null`, `label_permutation`, `concentration`, `regimes` and `evidence_inputs` (the Task 12 contract).
+- Produces: `analyze_horizon(*, dataset, horizon, windows, tested, sel001_scores, variant_scores: {variant: Series}, permutation_scores: {seed: Series}, liquidity: Series, sectors: {stock_id: str|None}, cfg) -> dict`. The keys are `horizon`, `tested_sessions`, `outcome_rows`, `resolved_rows`, `k_sensitivity` ({strategy: {str K: summary}}), `random_distribution`, `baselines_paired_k10`, `ranking`, `buckets`, `ablation`, `features`, `selection_null`, `label_permutation`, `concentration`, `regimes` and `evidence_inputs` (the Task 12 contract, including `ex_top_sessions_mean`, `ex_top_stocks_mean` and `regime_sessions`, all read straight off `concentration` and `regimes`, which already carry them).
 - Test helper: `analyze_world(source, cfg=None, horizon=3) -> dict`.
 
 **Data dependencies:** the synthetic world, with real refits through `walk_forward` (SEL-001, 2 variants, 2 permutations).
@@ -3660,9 +3827,13 @@ def analyze_horizon(*, dataset, horizon: int, windows, tested, sel001_scores: pd
         "mean_ic": sel_rank["ic"]["mean"], "permutation_ic": [runs[s]["mean_ic"] for s in sorted(runs)],
         "selection_null_p": sel_null["p"],
         "ex_top_sessions_ci_low": concentration["exclude_top_sessions"]["ci_low"],
+        "ex_top_sessions_mean": concentration["exclude_top_sessions"]["mean_net_excess"],
         "ex_top_stocks_ci_low": concentration["exclude_top_stocks"]["ci_low"],
+        "ex_top_stocks_mean": concentration["exclude_top_stocks"]["mean_net_excess"],
         "max_sector_share": concentration["max_sector_share"], "max_year_share": concentration["max_year_share"],
         "regime_ci_high": {f"{d}:{b}": regimes[d][b]["ci_high"] for d, bs in REGIME_BUCKETS.items() for b in bs},
+        # F5 needs sessions with >= 1 accepted K=10 trade per bucket; regime_report already counts them.
+        "regime_sessions": {f"{d}:{b}": regimes[d][b]["sessions"] for d, bs in REGIME_BUCKETS.items() for b in bs},
     }
     return {
         "horizon": horizon, "tested_sessions": len(set(tested)), "outcome_rows": int(len(frame)),
@@ -3708,8 +3879,13 @@ git commit -m "SEL-002: every predeclared analysis for one horizon"
 **Acceptance criteria:**
 - `3 passed`.
 - The headings are exactly the addendum list, in order.
-- The class and all 2 × 37 checks lead the report.
-- The reproducibility block names the code version, dataset hash, configuration, seeds, windows, universe, cost and the SPG-001 freeze.
+- The executive conclusion opens with the verbatim sentence from spec §11: "SEL-002 produced Grade <A|B|C> under
+  the criteria frozen before execution (`SEL-002-EVIDENCE-002`, evidence.py SHA-256 <hash>)."
+- All 2 × 37 checks lead the report, grouped core then robustness, followed by the major flags (F1-F5) and the
+  minor flags per horizon.
+- One sentence states the criteria were frozen before execution and are descriptive, never used to tune SEL-001.
+- The reproducibility block names the code version, dataset hash, configuration, seeds, windows, universe, cost,
+  the evidence rules version and the SPG-001 freeze.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3755,7 +3931,7 @@ def results():
                        "snapshot_sha256_after": "f" * 64, "code_version": "abc1234", "source_digest": "src-sha256:x",
                        "spg_code_version": "8944bf4", "spg_unchanged": True, "dataset_sha256": {"3": "a", "5": "b"},
                        "cache_sha256": {}, "diagnostic_sha256": {"3": "c", "5": "d"}, "config_sha256": cfg.sha256(),
-                       "config": jsonable(cfg.snapshot()), "rules_version": "SEL-002-EVIDENCE-001",
+                       "config": jsonable(cfg.snapshot()), "rules_version": "SEL-002-EVIDENCE-002",
                        "evidence_source_sha256": "e" * 64, "universe": "SEU-001", "libraries": {"xgboost": "x"},
                        "workers": 7}
     return {"classification": classify({h: r["evidence_inputs"] for h, r in horizons.items()}), "horizons": horizons,
@@ -3772,9 +3948,13 @@ def test_sections_are_exactly_the_addendum_list_in_order(results):
 def test_the_classification_and_every_check_lead_the_report(results):
     text = render_report(results)
     executive = text.split("## 2.")[0]
-    assert f"Class {results['classification']['class']}" in executive
+    c, r = results["classification"], results["reproducibility"]
+    assert (f"SEL-002 produced Grade {c['class']} under the criteria frozen before execution "
+            f"(`{c['rules_version']}`, evidence.py SHA-256 {r['evidence_source_sha256']}).") in executive
     assert executive.count("HOLDS") + executive.count("FAILS") == 2 * 37
     assert "not a publication decision" in executive
+    assert "must not be used to tune SEL-001" in executive
+    assert "core" in executive.lower() and "robustness" in executive.lower()
 
 
 def test_reproducibility_names_every_required_item(results):
@@ -3820,9 +4000,10 @@ LIMITATIONS = (
     "Walk-forward months only (2018-01..2026-07). The held-out months are not part of SEL-002.",
 )
 TG001_TEXT = {
-    "A": "Yes. The predeclared evidence supports proceeding to TG-001 (still subject to the user's approval).",
-    "B": "Not yet. Investigate and revise SEL-001 before trade geometry; the failing rules show what the evidence "
-         "depends on.",
+    "A": "Yes. The predeclared evidence recommends proceeding to TG-001. TG-001 is not resumed automatically on an "
+         "A: the user decides from this report.",
+    "B": "Not yet. Investigate and revise SEL-001 before trade geometry; the failing core checks and any major red "
+         "flag show what the evidence depends on.",
     "C": "No. Stop investing in the current SEL-001 architecture and redesign the selection model, features or "
          "objective before any trade geometry.",
 }
@@ -3854,21 +4035,43 @@ def _ranking_line(label: str, r: dict) -> str:
             f"{_f(sp['share_positive'], 3)} ({ic['sessions']} sessions)")
 
 
+def _flag_value(value) -> str:
+    return ", ".join(str(v) for v in value) if isinstance(value, list) else _f(value)
+
+
 def _executive(results: dict) -> list[str]:
-    c = results["classification"]
-    lines = [f"**Class {c['class']}: {c['label']}.** {c['recommendation']}", "",
-             "Diagnostic classification only (rules " + c["rules_version"] + "). It is not a publication decision; "
-             "SPG-001 decisions, thresholds and publication are unchanged."]
+    c, r = results["classification"], results["reproducibility"]
+    lines = [
+        f"SEL-002 produced Grade {c['class']} under the criteria frozen before execution (`{c['rules_version']}`, "
+        f"evidence.py SHA-256 {r['evidence_source_sha256']}).", "",
+        f"**{c['label']}.** {c['recommendation']}", "",
+        "Diagnostic classification only. It is not a publication decision; SPG-001 decisions, thresholds and "
+        "publication are unchanged.",
+        "The checks and flags below (core, robustness, and the major and minor flags) were frozen before any "
+        "SEL-002 number was computed and are never changed afterwards; they are descriptive and must not be used "
+        "to tune SEL-001.",
+    ]
     for h, pos in c["positive_evidence"].items():
-        lines.append(f"- h={h} positive evidence: mean IC CI_low > 0 = {pos['ic_ci_low_gt_0']}, K=10 net excess "
-                     f"CI_low > 0 = {pos['k10_net_excess_ci_low_gt_0']}; rules: "
-                     + ", ".join(f"{r} {'holds' if ok else 'fails'}" for r, ok in c["rules_hold"][h].items()))
+        lines.append(f"- h={h}: all core checks hold = {c['core_hold'][h]}; positive evidence: mean IC CI_low > 0 "
+                     f"= {pos['ic_ci_low_gt_0']}, K=10 net excess CI_low > 0 = {pos['k10_net_excess_ci_low_gt_0']}; "
+                     "rules: " + ", ".join(f"{rl} {'holds' if ok else 'fails'}" for rl, ok in c["rules_hold"][h].items()))
     if c["dependencies"]:
         lines.append("- The evidence fails on: " + "; ".join(c["dependencies"]))
     for h, checks in c["checks"].items():
-        lines += ["", f"Evidence checks, h={h}:"]
+        core = [k for k in checks if k["group"] == "core"]
+        robustness = [k for k in checks if k["group"] == "robustness"]
+        lines += ["", f"Evidence checks, h={h}, core (E1-E4, gate class A):"]
         lines += [f"- {k['rule']} {k['name']}: {_f(k['value'])} (needs {k['threshold']}) "
-                  f"{'HOLDS' if k['holds'] else 'FAILS'}" for k in checks]
+                  f"{'HOLDS' if k['holds'] else 'FAILS'}" for k in core]
+        lines += ["", f"Evidence checks, h={h}, robustness (E5-E6, reported; only a major flag below gates A):"]
+        lines += [f"- {k['rule']} {k['name']}: {_f(k['value'])} (needs {k['threshold']}) "
+                  f"{'HOLDS' if k['holds'] else 'FAILS'}" for k in robustness]
+        major = c["major_flags"][h]
+        lines += ["", f"Major red flags, h={h}: " + ("none" if not major else "")]
+        lines += [f"- {f['id']} {f['name']}: {_flag_value(f['value'])}" for f in major]
+        minor = c["minor_flags"][h]
+        lines += ["", f"Minor flags, h={h}: " + ("none" if not minor else "")]
+        lines += [f"- {f['name']}: {_flag_value(f['value'])}" for f in minor]
     return lines
 
 
@@ -4036,7 +4239,7 @@ git diff --exit-code 8944bf4 -- app/selection_gate scripts/run_selection_gate.py
 
 ```bash
 git add app/selection_diagnostics/report.py tests/test_sel002_report.py
-git commit -m "SEL-002: the single report in the addendum's section order"
+git commit -m "SEL-002: the single report, core/robustness grouping and major/minor flags (EVIDENCE-002)"
 ```
 
 ---
@@ -4403,7 +4606,7 @@ def report_stage(cfg, out_dir, *, source: str, code_version: str | None, spg_unc
 """SEL-002 selection diagnostic: offline and read-only; never scheduled, never on the API path.
 
 Run from the marksy-api worktree with DATABASE_URL set to a throwaway SQLite file (importing `app` needs one):
-  python -m scripts.run_sel002_diagnostic all --out OUT --source-url sqlite:///SNAPSHOT --cache SEL_DIAG_DIR --workers 7
+  python -m scripts.run_sel002_diagnostic all --out OUT --source-url sqlite:///SNAPSHOT --cache SEL_DIAG_DIR --workers 5
 Stages: prepare | refit | parity | analyze --h H | report | all. With the frozen configuration every pin is enforced.
 """
 from __future__ import annotations
@@ -4458,7 +4661,7 @@ def main(argv: list[str] | None = None, cfg: DiagnosticConfig | None = None) -> 
     parser.add_argument("--cache", default=None, help="SEL-DIAG-001 folder with dataset.pkl and wf_h{3,5}.npz")
     parser.add_argument("--rebuild", action="store_true", help="rebuild through build_selection_dataset (reproduction)")
     parser.add_argument("--h", type=int, default=None, help="horizon for the analyze stage")
-    parser.add_argument("--workers", type=int, default=7, help="parallel refit processes (2 xgboost threads each)")
+    parser.add_argument("--workers", type=int, default=5, help="parallel refit processes (2 xgboost threads each)")
     parser.add_argument("--code-version", default=None)
     args = parser.parse_args(argv)
     frozen = cfg is None
@@ -4521,143 +4724,12 @@ git commit -m "SEL-002: read-only pipeline stages and the run_sel002_diagnostic 
 
 ---
 
-### Task 17: Optional manual-only Kubernetes Job
-
-**Files:**
-- Create: `deploy/k8s/manual/sel002-diagnostic-job.yaml`
-- Test: `tests/test_sel002_manifest.py`
-
-**Interfaces:**
-- Consumes: the CLI (Task 16).
-- Produces: a suspended `batch/v1 Job` named `sel002-diagnostic`, which no kustomization references.
-
-**Data dependencies:** none.
-
-**Compute:** < 5 s.
-
-**Acceptance criteria:**
-- `2 passed`.
-- The Job is suspended, unscheduled, `backoffLimit: 0`, uses `--rebuild`, a throwaway SQLite `DATABASE_URL` and the `sel002-snapshot-source` secret, never reads `market-agent-secrets`, and has a read-only root filesystem.
-- `tests/test_cronjob_manifests.py` is unaffected (`python -m pytest tests/test_cronjob_manifests.py -q`).
-- If spec open question 6 decides against the Job, skip this task.
-
-- [ ] **Step 1: Write the failing tests**
-
-`tests/test_sel002_manifest.py`:
-
-```python
-import pathlib
-
-import yaml
-
-import app.selection_diagnostics as package
-
-ROOT = pathlib.Path(package.__file__).resolve().parent.parent.parent
-MANIFEST = ROOT / "deploy" / "k8s" / "manual" / "sel002-diagnostic-job.yaml"
-
-
-def test_the_job_is_manual_suspended_and_unscheduled():
-    job = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
-    assert job["kind"] == "Job" and job["spec"]["suspend"] is True and "schedule" not in job["spec"]
-    assert job["spec"]["backoffLimit"] == 0
-    container = job["spec"]["template"]["spec"]["containers"][0]
-    assert container["command"][:4] == ["python", "-m", "scripts.run_sel002_diagnostic", "all"]
-    assert "--rebuild" in container["command"]
-    env = {e["name"]: e for e in container["env"]}
-    assert env["DATABASE_URL"]["value"].startswith("sqlite:////work/")
-    assert env["SELECTION_SOURCE_DATABASE_URL"]["valueFrom"]["secretKeyRef"]["name"] == "sel002-snapshot-source"
-    assert "market-agent-secrets" not in MANIFEST.read_text(encoding="utf-8")
-    assert container["securityContext"]["readOnlyRootFilesystem"] is True
-
-
-def test_no_kustomization_references_the_job():
-    for path in (ROOT / "deploy" / "k8s").rglob("kustomization.yaml"):
-        assert "sel002" not in path.read_text(encoding="utf-8").lower(), path
-```
-
-- [ ] **Step 2: Run them; expect FAIL** (`1 failed, 1 passed`: `FileNotFoundError` for the manifest)
-
-```bash
-python -m pytest tests/test_sel002_manifest.py -q -p no:cacheprovider
-```
-
-- [ ] **Step 3: Implement**
-
-`deploy/k8s/manual/sel002-diagnostic-job.yaml`:
-
-```yaml
-# SEL-002: manual-only, suspended reproduction of the selection diagnostic. Not in any kustomization; never scheduled.
-# The source is a frozen read-only snapshot database (never the live one): its dataset hash must equal the pinned
-# SPG-001 pre-merge hash or the job stops. It writes only to its own emptyDir and touches nothing in production.
-# The classification of record is the local frozen-cache run; this job is a reproducibility check.
-# After review: kubectl -n market-agent apply -f deploy/k8s/manual/sel002-diagnostic-job.yaml
-#               kubectl -n market-agent patch job sel002-diagnostic --type=merge -p '{"spec":{"suspend":false}}'
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: sel002-diagnostic
-  namespace: market-agent
-spec:
-  suspend: true
-  backoffLimit: 0
-  activeDeadlineSeconds: 172800
-  ttlSecondsAfterFinished: 604800
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: sel002-diagnostic
-          image: marksy-api:local
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "scripts.run_sel002_diagnostic", "all", "--out", "/work/sel002", "--rebuild",
-                    "--workers", "1"]
-          env:
-            - name: DATABASE_URL
-              value: "sqlite:////work/throwaway-app.db"
-            - name: SELECTION_SOURCE_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: sel002-snapshot-source
-                  key: SNAPSHOT_DATABASE_URL
-          resources:
-            requests:
-              cpu: "2"
-              memory: 4Gi
-            limits:
-              cpu: "2"
-              memory: 6Gi
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: work
-              mountPath: /work
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: work
-          emptyDir: {}
-        - name: tmp
-          emptyDir: {}
-```
-
-- [ ] **Step 4: Run them; expect PASS** (`2 passed`)
-
-```bash
-python -m pytest tests/test_sel002_manifest.py -q -p no:cacheprovider
-git diff --exit-code 8944bf4 -- app/selection_gate scripts/run_selection_gate.py
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add deploy/k8s/manual/sel002-diagnostic-job.yaml tests/test_sel002_manifest.py
-git commit -m "SEL-002: suspended manual-only Job manifest for reproduction runs"
-```
-
----
-
 ### Task 18: Whole-branch validation, the run on the read-only snapshot, the report, then stop
+
+> **Task 17 (optional manual-only Kubernetes Job) is dropped.** Spec §10.2 and §14 decision 6 (2026-10-01, user
+> review): the record run uses the local frozen-cache CLI; the Job would need a restored, frozen read-only snapshot
+> database, the secret `sel002-snapshot-source`, and about 28 h of the VPS's 2 CPUs. There is no
+> `deploy/k8s/manual/sel002-diagnostic-job.yaml` and no `tests/test_sel002_manifest.py`.
 
 **Files:**
 - Create (scratchpad only, never in a repo):
@@ -4673,32 +4745,35 @@ git commit -m "SEL-002: suspended manual-only Job manifest for reproduction runs
 - `$SCRATCH/sel_diag/dataset.pkl`, `wf_h3.npz` and `wf_h5.npz` (pinned)
 - nothing else: no production connection
 
-**Compute:**
+**Compute** (the record run uses 5 workers; the worker count changes only the wall clock, never a result):
 - prepare: about 10–15 min
-- refit: 40 runs, 7 workers × 2 xgboost threads on 16 logical cores, about 5 h (4.5–6 h), about 44 CPU-hours
+- refit: 40 runs, 5 workers × 2 xgboost threads on 16 logical cores, about 5.5–7 h, about 44 CPU-hours
 - parity: under 1 min
 - analyze: about 25–30 min, with h=3 and h=5 running concurrently
 - report: under 1 min
-- end to end: about 6–6.5 h
-- RAM: about 8 GB for the refits, about 6 GB for the two analyze processes; at least 10 GB free, otherwise `--workers 5`
+- end to end: about 7 h with 5 workers (about 6–6.5 h for reference with 7, if at least 10 GB RAM is free)
+- RAM: about 6 GB for the refits at 5 workers, about 6 GB for the two analyze processes; at least 7 GB free
 
 **Acceptance criteria:**
-- All 99 SEL-002 tests pass, and the SPG diff is empty.
+- All SEL-002 tests pass (99 pre-amendment; Task 17's 2 manifest tests are gone and Task 12 gained 2, so still about
+  99 — confirmed exactly by the collected count during implementation), and the SPG diff is empty.
 - One whole-branch review is done, with fixes re-reviewed.
 - The tree is clean at the frozen commit.
 - Parity passes at both horizons.
-- `report.md` holds the 13 sections, the class, and every check with its value.
+- `report.md` holds the 13 sections, the class, and every check with its value, grouped core then robustness, plus
+  the major and minor flags.
 - The snapshot SHA-256 after the run equals the value before.
 - No push, merge, PR or deploy.
 
-- [ ] **Step 1: The SEL-002 suite, the manifest suite and the SPG freeze** (about 2 min)
+- [ ] **Step 1: The SEL-002 suite and the SPG freeze** (about 2 min)
 
 ```bash
-python -m pytest tests/test_sel002_*.py tests/test_cronjob_manifests.py -q -p no:cacheprovider -p no:faulthandler
+python -m pytest tests/test_sel002_*.py -q -p no:cacheprovider -p no:faulthandler
 git diff --exit-code 8944bf4 -- app/selection_gate scripts/run_selection_gate.py && echo SPG-UNCHANGED
 ```
 
-Expected: no failures (the 99 SEL-002 tests plus the manifest suite), then `SPG-UNCHANGED`. SPG-001's suites are not rerun, because neither SPG-001 nor its dependencies changed.
+Expected: no failures (the SEL-002 suite), then `SPG-UNCHANGED`. SPG-001's suites are not rerun, because neither
+SPG-001 nor its dependencies changed. (There is no manifest suite: Task 17 is dropped.)
 
 - [ ] **Step 2: One whole-branch review** (the controller dispatches it on the most capable model, over `8944bf4..HEAD`). It must cover:
   - **Held-out protection:** nothing at or after 2026-08-01 is read for any computation; only the calendar is kept; the liquidity read is bounded.
@@ -4710,7 +4785,7 @@ Expected: no failures (the 99 SEL-002 tests plus the manifest suite), then `SPG-
   - **Report:** the sections are exactly the addendum's.
   - **Reach:** nothing on the API path, in a schedule or in the base kustomization.
 
-  One fix wave, then one scoped re-review. Any fix is TDD'd and committed. All 99 tests are green again.
+  One fix wave, then one scoped re-review. Any fix is TDD'd and committed. All SEL-002 tests are green again.
 
 - [ ] **Step 3: Freeze the commit and pre-flight** (from here on, any code change means a rerun from `prepare`)
 
@@ -4722,7 +4797,9 @@ powershell -NoProfile -Command "[math]::Round((Get-CimInstance Win32_OperatingSy
 export DATABASE_URL="sqlite:///$SCRATCH/sel002/throwaway-app.db"
 ```
 
-Expected: the four hashes are exactly the pins in Global Constraints, and free RAM is at least 10 GB (otherwise close other applications or use `--workers 5`). A hash mismatch stops here; nothing else may be substituted.
+Expected: the four hashes are exactly the pins in Global Constraints, and free RAM is at least 7 GB (the CLI's
+default is already `--workers 5`; close other applications if it is not). A hash mismatch stops here; nothing else
+may be substituted.
 
 - [ ] **Step 4: Prepare** (about 10–15 min)
 
@@ -4740,10 +4817,11 @@ Expected:
 
 Exit code 2 means a pin or held-out refusal; stop and report it.
 
-- [ ] **Step 5: Refit, 40 runs in the background** (about 5 h). Use `run_in_background`; do not poll with sleeps.
+- [ ] **Step 5: Refit, 40 runs in the background** (about 5.5–7 h with the CLI's default of 5 workers). Use
+  `run_in_background`; do not poll with sleeps.
 
 ```bash
-python -m scripts.run_sel002_diagnostic refit --out "$SCRATCH/sel002" --workers 7 > "$SCRATCH/sel002/refit.log" 2>&1
+python -m scripts.run_sel002_diagnostic refit --out "$SCRATCH/sel002" --workers 5 > "$SCRATCH/sel002/refit.log" 2>&1
 ```
 
 - [ ] **Step 6: Parity, as soon as both FULL jobs exist** (they are the first two in the queue, about 1 h in). Use a Monitor until-loop on `ls "$SCRATCH/sel002/refits/h3__FULL.json" "$SCRATCH/sel002/refits/h5__FULL.json"`, then:
@@ -4791,7 +4869,8 @@ Expected:
   - the parity block
   - the runtime and peak memory per stage, against spec §13
 
-Resuming TG-001 needs the user's explicit decision (spec open question 7). The branch stays local and unmerged.
+Resuming TG-001 needs the user's explicit decision (spec §14 decision 8), even on a Grade A. The branch stays local
+and unmerged.
 
 ---
 
@@ -4807,18 +4886,23 @@ Spec coverage:
 - §6.6: Tasks 5, 9 and 13
 - §6.7: Tasks 10 and 11
 - §6.8: Task 11
-- §7: Task 12
+- §7: Task 12, with Tasks 14 and 15 wiring the `SEL-002-EVIDENCE-002` inputs and the report
 - §8: Task 4
 - §9: every task
-- §10: Tasks 16–18
+- §10: Task 16 (§10.2, the Kubernetes Job, is dropped; Task 18 runs the CLI directly)
 - §11: Task 15
 - §12: Tasks 1, 13 and 16
 - §13: Task 18
 
 Clarifications, all from the spec:
 1. **Calendar kept whole.** Only dates are kept for `plan_windows`; every value at or after 2026-08-01 is dropped first.
-2. **Selection null over every scored U(D) row.** This follows the addendum's selection-before-labels rule. SEL-DIAG-001 drew from resolved rows (spec open question 3).
-3. **One label permutation per seed, shared by all folds** (spec open question 2).
-4. **UNKNOWN sector** is outside the 40% sector check, and its share is reported (spec open question 1).
+2. **Selection null over every scored U(D) row.** This follows the addendum's selection-before-labels rule. SEL-DIAG-001 drew from resolved rows (§14 decision 3).
+3. **One label permutation per seed, shared by all folds** (§14 decision 2).
+4. **UNKNOWN sector** is outside the 40% sector check and major flag F4, and its share is reported (§14 decision 1).
 5. **The cached FULL scores are SEL-001**, and the FULL refit exists only for the parity gate.
-6. **Rebuilds are explicit.** `--rebuild` is never automatic. The record run uses the pinned cache, and the optional Job always rebuilds.
+6. **Rebuilds are explicit.** `--rebuild` is never automatic. The record run uses the pinned cache and `--workers 5`
+   (§14 decision 7 and spec §13); there is no Kubernetes Job (§14 decision 6).
+7. **Grading.** Core (E1-E4) versus robustness (E5-E6) evidence, with major red flags F1-F5 blocking class A
+   (§7, `SEL-002-EVIDENCE-002`, §14 decision 7).
+8. **After the run.** TG-001 is not resumed automatically even on a Grade A; the user decides from the report (§14
+   decision 8).
