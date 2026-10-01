@@ -25,20 +25,23 @@ class NotificationClassifierTest {
         assertEquals(NotificationClassifier.Category.OTHER, result.category)
     }
 
-    // Phase 4b: the phone no longer spots calls; they land in categories the capture gate sends (CaptureGateTest).
+    // Phase 4b kept text-based call-spotting off the phone for broker packages (still true: they stay MARKET below).
+    // fix/trading-call-any-source adds a structured-call detector ahead of category rules, so a clear call from any
+    // other source (SMS, WhatsApp, Telegram, ...) is now TRADING too, superseding the old CaptureGateTest split.
     @Test fun callsLandInCategoriesTheCaptureGateSends() {
         fun cat(pkg: String, t: String, b: String) = NotificationClassifier.classify(pkg, t, b).category
         assertEquals(NotificationClassifier.Category.MARKET, cat("com.fivepaisa.trade", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26"))
         assertEquals(NotificationClassifier.Category.MARKET, cat("in.upstox.app", "📈BUY LCCPROJECT with 20.0% upside potential", "🛠️ Entry : Rs 144.24 🎯 Target : Rs 173.08 🛑 Stoploss : Rs 129.81"))
         assertEquals(NotificationClassifier.Category.MARKET, cat("com.icicidirect.idirectsuper", "ICICI Direct", "Buy INDGN around Rs 609 for 12 Month with target price of Rs 750, potential upside of 23.15%."))
-        assertEquals(NotificationClassifier.Category.OTHER, cat("com.google.android.apps.messaging", "KISHAN ENTERPRISE", "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"))
-        assertEquals(NotificationClassifier.Category.MESSAGES, cat("com.whatsapp", "Tips Group", "BUY TATASTEEL CMP 152 SL 147 TGT 162"))
-        assertEquals(NotificationClassifier.Category.MESSAGES, cat("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525"))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.google.android.apps.messaging", "KISHAN ENTERPRISE", "KISHAN ENTERPRISE: Dear Client \nBUY | CROPSTER AGRO | \nEntry ₹2.82 | Target ₹10 | SL ₹2 | \nTime: 1-2 Months"))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.whatsapp", "Tips Group", "BUY TATASTEEL CMP 152 SL 147 TGT 162"))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("org.telegram.messenger", "Stock Calls", "SELL INFY @ 1500 target 1450 stoploss 1525"))
     }
 
-    @Test fun tipCallTextFromANonBrokerAppIsStillNotTrading() {
+    // fix/trading-call-any-source: a structured call (direction + level/stop) is now TRADING from any source.
+    @Test fun structuredTipCallFromANonBrokerAppIsNowTrading() {
         val result = NotificationClassifier.classify("com.android.shell", "Short term Call", "BUY RENUKA CMP : 23.62 SL : 22.25 TGT : 26")
-        assertTrue(result.category != NotificationClassifier.Category.TRADING)
+        assertEquals(NotificationClassifier.Category.TRADING, result.category)
     }
 
     // Regression: broker/market updates (holdings alerts, research, IPO notices, market moves) landed in OTHER.
@@ -195,5 +198,41 @@ class NotificationClassifierTest {
         val pricedTip = NotificationClassifier.classify("com.google.android.apps.messaging", "KISHAN", "BUY RELIANCE CMP 1450 SL 1400 TGT 1500. Never share your OTP with anyone.")
         assertEquals(NotificationClassifier.Category.OTP, tpin.category)
         assertTrue(pricedTip.category != NotificationClassifier.Category.OTP)
+    }
+
+    // Evidence: the user's trading-agent posts via ChatGPT; these were classified OTHER before the any-source fix.
+    @Test fun tradingAgentCallsFromChatGptAppAreTrading() {
+        fun cat(t: String, b: String) = NotificationClassifier.classify("com.openai.chatgpt", t, b).category
+        assertEquals(NotificationClassifier.Category.TRADING, cat("PowerMech hits target two market update", "Material update — 30 Sep 2026 13:05 IST - POWERMECH — TARGET 2 HIT. Power..."))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("Trade update", "DRREDDY LONG — TARGET 1 HIT"))
+        // A direction word alone, with no level or stop keyword, is too weak -- stays non-trading.
+        assertEquals(NotificationClassifier.Category.OTHER, cat("Trade update", "RCF LONG — WEAKENING"))
+    }
+
+    @Test fun structuredCallFromAnyNonBrokerPackageIsTradingIncludingStoplossSpellings() {
+        fun cat(pkg: String, t: String, b: String) = NotificationClassifier.classify(pkg, t, b).category
+        // Posted from shell (a test artifact), but the structured call text must still classify as TRADING.
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.android.shell", "Zerodha", "BUY TATAMOTORS above 700 target 740 stoploss 680"))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.android.shell", "Zerodha", "BUY TATAMOTORS above 700 target 740 stop-loss 680"))
+        // "stoploss"/"stop-loss" alone (no "target"/"tgt") must still be recognised as the stop keyword.
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.example.tipster", "Call", "SELL RELIANCE stoploss 2900"))
+        assertEquals(NotificationClassifier.Category.TRADING, cat("com.example.tipster", "Call", "BUY INFY stop-loss 1400"))
+    }
+
+    @Test fun savingsTargetPhraseIsNotTradingForANonBrokerPackage() {
+        val result = NotificationClassifier.classify("com.myntra.android", "Keep going!", "Hit your savings target this month!")
+        assertTrue(result.category != NotificationClassifier.Category.TRADING)
+    }
+
+    // Android 15+ sensitive-notification protection, not the lock-screen setting (device check confirmed
+    // lock_screen_allow_private_notifications=1 is already on; the phone lacks RECEIVE_SENSITIVE_NOTIFICATIONS).
+    @Test fun redactedSensitiveContentIsNotAConfidentMarketOrTradingHit() {
+        val result = NotificationClassifier.classify("com.icicidirect.idirectsuper", "ICICI Direct", "Sensitive notification content hidden")
+        assertTrue(result.category != NotificationClassifier.Category.MARKET && result.category != NotificationClassifier.Category.TRADING)
+        assertTrue(result.confidence < .5f)
+        assertEquals(NotificationClassifier.REDACTION_REASON, result.reason)
+        // The shorter OS variant (no trailing "hidden") must be recognised too.
+        val shortVariant = NotificationClassifier.classify("com.icicidirect.idirectsuper", "ICICI Direct", "Sensitive notification content")
+        assertEquals(NotificationClassifier.REDACTION_REASON, shortVariant.reason)
     }
 }
