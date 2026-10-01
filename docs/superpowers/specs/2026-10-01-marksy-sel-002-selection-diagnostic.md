@@ -17,10 +17,15 @@ concentration, regime or chance?
 **Answer format.** A diagnostic classification, A, B or C (§7), per the addendum. These classes are not
 publication decisions, and SEL-002 adds no pass/fail gate.
 
-- A, strong evidence of a ranking signal. Proceed to TG-001.
-- B, weak or unstable evidence. Investigate and revise SEL-001 before trade geometry.
-- C, no evidence. Stop investing in the current SEL-001 architecture and redesign the selection model, features or
-  objective.
+- A, strong evidence of a ranking signal: the core signal evidence passes comprehensively at both horizons, with no
+  major robustness red flag. Recommend TG-001; resuming it still needs the user's approval.
+- B, meaningful core evidence, but the signal is incomplete or fragile. Investigate and revise SEL-001 before trade
+  geometry.
+- C, the core evidence does not demonstrate a useful ranking signal. Stop investing in the current SEL-001
+  architecture and redesign the selection model, features or objective.
+
+The 37 checks per horizon are descriptive. They are frozen before execution and never changed afterwards, and they
+are never used to tune SEL-001 after the results are seen.
 
 **Non-goals.** SEL-002 does none of the following:
 - edit anything under `app/selection_gate/**` or `scripts/run_selection_gate.py`
@@ -173,7 +178,7 @@ through the same function with `--rebuild`:
 - SEL-001 scores come from `runner._walk_forward`.
 - The SPG dataset hashes are still required.
 
-A rebuilt run reports `mode: REBUILD`. The optional Kubernetes Job (§10.2) always rebuilds.
+A rebuilt run reports `mode: REBUILD`.
 
 ### 5.2 Universe, labels, benchmark, cost
 
@@ -406,12 +411,18 @@ Per bucket:
 
 ## 7. Evidence rules and classification (DECISION)
 
-The rules are frozen in `evidence.py` as `RULES_VERSION = "SEL-002-EVIDENCE-001"`, with the protocol's §9
-thresholds used as classification evidence. A check whose value is undefined (None) does not hold, except in E6,
-where an undefined CI cannot show a significantly negative regime.
+The rules are frozen in `evidence.py` as `RULES_VERSION = "SEL-002-EVIDENCE-002"`, with the protocol's §9
+thresholds used as classification evidence. Version 002 replaced 001 on 2026-10-01, at the user's review and
+before any SEL-002 code existed or any SEL-002 number was computed. 001 required every one of the 37 checks for A; 002
+splits them into core signal evidence and robustness evidence, so that one thin regime or one narrow diagnostic
+cannot by itself make an otherwise compelling result B or C.
 
-Per horizon h ∈ {3, 5}, 37 checks:
+A check whose value is undefined (None) does not hold, except in E6, where an undefined CI cannot show a
+significantly negative regime.
 
+### 7.1 The 37 checks per horizon h ∈ {3, 5} (all reported)
+
+**Core signal evidence (19).**
 - **E1 Ranking (4).**
   - mean IC CI_low > 0
   - the share of sessions with IC > 0 is ≥ 0.55
@@ -425,18 +436,36 @@ Per horizon h ∈ {3, 5}, 37 checks:
   - (K=10 net excess − their mean) ≥ 3 × their sd (ddof = 1)
   - mean IC > the maximum of the 8 permutation ICs
   - the selection-null p is ≤ 0.01
+
+**Robustness evidence (18).**
 - **E5 Concentration (4).**
   - net-excess CI_low > 0 without the top 1% of sessions
   - the same without the top 1% of stocks
-  - the largest single-sector share is ≤ 0.40
+  - the largest single-sector share is ≤ 0.40 (UNKNOWN excluded; its share is reported)
   - the largest single-year share is ≤ 0.40
 
   A share is undefined, and so fails, when the total net excess is ≤ 0.
 - **E6 Regimes (14).** No predeclared bucket has a mean net excess with CI_high < 0.
 
-Classification (addendum §2):
-- **A.** Every check holds at h=3 and at h=5.
-- **B.** Not A, but positive evidence exists. Positive evidence means, at either horizon, mean IC CI_low > 0 or K=10
+### 7.2 Major robustness red flags (per horizon, K = 10)
+
+A failed robustness check is a **minor flag** (reported, does not block A) unless it is one of these **major red
+flags**:
+- **F1 Session dependence.** Without the top 1% of sessions, the mean net excess is ≤ 0 or undefined: the edge
+  disappears, not merely its CI.
+- **F2 Stock dependence.** The same without the top 1% of stocks.
+- **F3 Period dependence.** The largest single-year share is > 0.40 or undefined.
+- **F4 Sector dependence.** The largest single-sector share (UNKNOWN excluded) is > 0.40 or undefined.
+- **F5 Well-populated losing regime.** A regime bucket has CI_high < 0 and at least `MIN_REGIME_SESSIONS = 250`
+  sessions with ≥ 1 accepted K=10 trade in that bucket. A bucket below 250 sessions with CI_high < 0 is a minor flag.
+
+So a failed E5 CI check whose mean stays > 0, or a significantly negative thin regime, is reported but cannot block
+A. F1–F5 are fixed here, before execution, like the checks.
+
+### 7.3 Classification (addendum §2, revised at review)
+
+- **A.** All 19 core checks hold at h=3 and at h=5, and no major red flag (F1–F5) exists at either horizon.
+- **B.** Not A, but meaningful core evidence exists. That means, at either horizon, mean IC CI_low > 0 or K=10
   net-excess CI_low > 0.
 - **C.** Otherwise.
 
@@ -445,8 +474,8 @@ The report maps each failing rule to what the evidence depends on:
 - E2: K
 - E3: simple baselines
 - E4: null expectations
-- E5: period or a small subset of observations
-- E6: regime
+- E5 and F1–F4: period or a small subset of observations
+- E6 and F5: regime
 
 The SPG-001 decision for SEL-001 (`NO_EDGE`) is unaffected by any class.
 
@@ -566,7 +595,7 @@ under `BEGIN TRANSACTION READ ONLY`, loaded into SQLite. It runs from the worktr
 Stages, each resumable:
 1. `prepare`: verify the pins, restrict, build the windows, load the cached SEL-001 scores, run the liquidity read,
    hash the restricted frame.
-2. `refit`: 40 jobs in a process pool (`--workers 7`, spawn). Parity jobs go first, and each job writes its scores
+2. `refit`: 40 jobs in a process pool (`--workers 5`, spawn). Parity jobs go first, and each job writes its scores
    atomically.
 3. `parity`: the gate below.
 4. `analyze --h 3` and `analyze --h 5`. They can run concurrently, and they refuse unless parity passed.
@@ -579,23 +608,10 @@ Stages, each resumable:
 
 Otherwise the run stops.
 
-### 10.2 Optional manual-only Kubernetes Job (reproduction only)
+### 10.2 Kubernetes Job: dropped
 
-The manifest is `deploy/k8s/manual/sel002-diagnostic-job.yaml`:
-- **Never scheduled.** `kind: Job` with `suspend: true` and no schedule. No kustomization references it, so
-  `vps-deploy.sh` never applies it.
-- **Command.** `python -m scripts.run_sel002_diagnostic all --rebuild --workers 1`.
-- **Throwaway database.** `DATABASE_URL` is a throwaway SQLite file in an emptyDir.
-- **Source.** `SELECTION_SOURCE_DATABASE_URL` comes from a separate secret, `sel002-snapshot-source`. It must name a
-  frozen read-only snapshot database, never the live one, and it never reads `market-agent-secrets`.
-- **Fail closed.** If the source is not the frozen snapshot, the session list and the dataset hash differ, and the
-  job stops.
-- **Resources.** CPU 2 and memory 6 Gi, matching the SPG gate job; `activeDeadlineSeconds` is 172,800.
-- **Containment.** `readOnlyRootFilesystem`, emptyDir `/work` and `/tmp`.
-
-The classification of record is the local frozen-cache run. A Job run is a reproducibility check, and its report
-states its deltas, since the image's xgboost 3.2.0 differs from the local 3.4.1. The Job competes for the VPS's CPU
-for about 28 h, so it is unsuspended only in a window the user agrees.
+Dropped at the user's review (2026-10-01). It would need about 28 h of the VPS's 2 CPUs, and the local frozen-cache
+run is the classification of record.
 
 ### 10.3 Deployment boundary
 
@@ -609,11 +625,14 @@ for about 28 h, so it is unsuspended only in a window the user agrees.
 `report.md` is one document with exactly these sections, in this order (the addendum's list):
 
 1. **Executive conclusion.**
+   - the opening sentence, verbatim with the values filled: "SEL-002 produced Grade <A|B|C> under the criteria
+     frozen before execution (`SEL-002-EVIDENCE-002`, evidence.py SHA-256 <hash>)."
    - the class, label and recommendation
    - the statement that this is a diagnostic classification, not a publication decision
    - the positive-evidence flags per h, and each rule E1–E6 holding or failing per h
    - the dependencies of a B result
-   - all 37 checks per h, each with its value and threshold
+   - all 37 checks per h, each with its value and threshold, grouped core then robustness
+   - the major red flags F1–F5 and the minor flags per h
 2. **Dataset and validation period.**
    - source and hashes
    - sessions used and masking counts
@@ -693,7 +712,9 @@ Baseline cost:
 - The SEL-002 workers load a slim input (row keys, 23 float32 features and the target; about 280 MB), so each peaks
   at roughly 1 GB.
 
-Expected wall clock with 7 parallel refits (14 xgboost threads; i7-11850H, 8 cores/16 threads):
+The record run uses 5 parallel refits (`--workers 5`, the CLI default), since only about 7 GB of RAM was free.
+The worker count changes only the wall clock, never a result. For reference, with 7 parallel refits (14 xgboost
+threads; i7-11850H, 8 cores/16 threads):
 - **Per run.** About 55–65 min each, from hyperthread sharing and all-core clocks. The variants average about 0.87 of
   FULL's cost by feature count.
 - **Refit stage.** 40 runs in 6 waves, about 5 h (4.5–6 h). That is about 158,000 CPU-s, or 44 CPU-hours.
@@ -702,27 +723,20 @@ Expected wall clock with 7 parallel refits (14 xgboost threads; i7-11850H, 8 cor
   - `parity`: under 1 min
   - `analyze`: about 25–30 min per horizon, run concurrently
   - `report`: under 1 min
-- **End to end:** about 6–6.5 h.
+- **End to end:** about 6–6.5 h with 7 workers; about 7 h with the record run's 5.
 
 Memory and fallbacks:
 - **RAM.** About 8 GB for 7 workers plus the parent, and about 3 GB per analyze process. At least 10 GB of free RAM
   is needed; otherwise use `--workers 5`, which changes only the wall clock.
-- **Kubernetes Job.** With 1 worker on 2 CPU it needs about 42 refits (2 extra for the rebuild), about 28 h, within its
-  48 h deadline.
 
-## 14. Open questions
+## 14. Decisions (user review, 2026-10-01)
 
-1. **UNKNOWN sector.** It is excluded from E5's single-sector check and its share is reported. Confirm, or treat
-   UNKNOWN as one sector.
-2. **Permutation scope.** The label permutation is one within-session permutation per seed, shared by every fold
-   (fits read whole sessions). Confirm, rather than an independent permutation per fold.
-3. **Selection-null population.** The null draws from every scored U(D) row, label-blind per the addendum's rule
-   that K selection happens before labels are read. SEL-DIAG-001 drew from resolved rows only. Confirm.
-4. **Ex-post regimes.** Regime terciles use cut points over the whole walk-forward period, and market direction uses
-   the realised b(D,h). They are predeclared and descriptive only. Confirm they are acceptable as E6 inputs.
-5. **Held-out rows in the cache.** The cached `dataset.pkl` still carries feature rows for 2026-08..09 sessions, with
-   labels masked. SEL-002 drops them on load, before any computation. Confirm, or require a re-cache without them;
-   that would change the pinned file hash, and the parity gate would then re-establish equivalence.
-6. **Kubernetes Job.** Keep the optional manual Job (§10.2), or drop it from the plan. It needs a restored, frozen
-   read-only snapshot database and the secret `sel002-snapshot-source`. It also takes about 28 h of the VPS's 2 CPUs.
-7. **After an A.** A class A recommends TG-001. Resuming TG-001 still needs the user's explicit approval; confirm.
+1. **UNKNOWN sector.** Excluded from the single-sector check and flag F4; its share is reported, and listed as a
+   limitation if material.
+2. **Permutation scope.** One within-session permutation per seed, shared by every fold.
+3. **Selection-null population.** Every scored U(D) row, the pool SEL-001 actually selects from.
+4. **Ex-post regimes.** Fixed whole-period cut points and the realised b(D,h), descriptive and after the fact only.
+5. **Held-out rows in the cache.** Dropped on load; a test proves none survive.
+6. **Kubernetes Job.** Dropped (§10.2).
+7. **Grading.** Core versus robustness evidence with major red flags (§7, `SEL-002-EVIDENCE-002`).
+8. **After the run.** TG-001 is not resumed automatically, even on an A; the user decides from the report.
