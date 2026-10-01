@@ -148,7 +148,7 @@ VPS Postgres). Its identity is `dataset_sha256`: SHA-256 over UTF-8 lines
 with every number formatted `%.8f` and missing values as the empty string. Benchmarks and every candidate trade
 are persisted (§12), so any decision can be audited without rebuilding.
 
-Build is per horizon and cutoff-sharded (existing `--shard-cutoffs` pattern) with `float32` feature arrays.
+Build is stock by stock, so peak memory is bounded by the final frame, with `float32` feature arrays.
 
 ## 8. Trade selection and reduction
 
@@ -441,8 +441,7 @@ CronJob `market-agent-selection-gate`:
 - the `wait-for-db` initContainer, and `DATABASE_URL` from `market-agent-secrets`, as `learning-cycle-cronjob.yaml` does
 - command `python -m scripts.run_selection_gate`
 - resources: requests `cpu: 1, memory: 3Gi`; limits `cpu: 2, memory: 6Gi` (approved). They live only in the
-  manifest, so an environment changes them with a kustomize patch and no code change; `--shard-cutoffs` trades
-  memory for time
+  manifest, so an environment changes them with a kustomize patch and no code change
 
 CronJob `market-agent-selection-shadow`: same shape; schedule `5 3 * * 1-5`, `activeDeadlineSeconds: 1800`,
 limit `memory: 2Gi`.
