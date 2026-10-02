@@ -162,6 +162,19 @@ class SmartInboxModelTest {
         assertEquals(setOf("HDFC Bank", "ET Money"), stacks.map { it.label }.toSet())
     }
 
+    // Device: Truecaller's smart card puts the amount in the title and the sender in the body.
+    @Test
+    fun truecallerSmartCardsGroupByTheSenderInTheBody() {
+        val stacks = SmartInboxModel.sourceStacks(
+            listOf(
+                msg(1, "com.truecaller", "₹5,000", "• ET Money • Bill due\nSMS from ET Money", now - hour),
+                msg(2, "com.truecaller", "₹500", "• ET Money • Payment\nSMS from ET Money", now - 2 * hour)
+            ),
+            nowMillis = now
+        )
+        assertEquals(listOf("ET Money"), stacks.map { it.label })
+    }
+
     @Test
     fun groupRowsPutUnreadFirstThenReadEachNewestFirst() {
         val stack = SmartInboxModel.sourceStacks(
