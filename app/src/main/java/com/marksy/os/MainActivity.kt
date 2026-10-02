@@ -738,9 +738,11 @@ class MainActivity : ComponentActivity() {
                     onOpenTrading = { marketTabName = MarketTab.OVERVIEW.name; selectedTab = 2 },
                     onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
-                    onArchive = archiveWithUndo,
-                    onDelete = deleteNow,
-                    onHide = { homeHidden = homeHidden + it.id },
+                    onArchive = archiveThreadWithUndo,
+                    onDelete = { rows -> rows.forEach(deleteNow) },
+                    onHide = { rows -> homeHidden = homeHidden + rows.map { it.id } },
+                    onMarkRead = vm::markThreadSeen,
+                    onMarkUnread = { ids -> ids.forEach { vm.setRead(it, false) } },
                     planItems = planItems,
                     onOpenPlan = { planView = com.marksy.os.ui.PlanViews.first(); showPlan = true },
                     onAddReminder = { addingPlan = true },
@@ -760,6 +762,7 @@ class MainActivity : ComponentActivity() {
                     actions = remember(vm) {
                         InboxActions(
                             markSeen = vm::markThreadSeen,
+                            markUnread = { ids -> ids.forEach { vm.setRead(it, false) } },
                             resolve = vm::resolveThread,
                             reopen = vm::reopenThread,
                             snooze = vm::snoozeThread,

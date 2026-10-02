@@ -152,6 +152,14 @@ object SmartInboxModel {
         val unread: Int get() = threads.count { it.unread }
         val latestAt: Long get() = threads.maxOf { it.latest.postedAt }
         val topAttention: Int get() = threads.maxOf { it.attentionScore }
+        /** Every row in the group, folded duplicates included, for whole-group actions. */
+        val allRows: List<NotificationEventEntity> get() = threads.flatMap { it.events + it.duplicates }
+    }
+
+    /** [events] as Inbox's source groups, for Home; [byRecency] orders groups newest first instead of by attention. */
+    fun sourceStacks(events: List<NotificationEventEntity>, nowMillis: Long = System.currentTimeMillis(), byRecency: Boolean = false): List<SourceStack> {
+        val grouped = stacks(inbox(events, nowMillis = nowMillis).sections.values.flatten())
+        return if (byRecency) grouped.sortedByDescending { it.latestAt } else grouped
     }
 
     data class InboxSummary(val needsYou: Int, val newUnread: Int)
@@ -222,7 +230,7 @@ object SmartInboxModel {
                 val latest = group.maxBy { it.latest.postedAt }.latest
                 val sms = isSms(latest)
                 val label = if (sms) latest.title.ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
-                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.attentionScore }.thenByDescending { it.latest.postedAt }))
+                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.unread }.thenByDescending { it.latest.postedAt }))
             }
             .sortedWith(compareByDescending<SourceStack> { it.topAttention }.thenByDescending { it.latestAt })
 

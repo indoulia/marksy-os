@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -47,7 +49,10 @@ import com.marksy.os.intelligence.SmartInboxModel
 import com.marksy.os.intelligence.SmartInboxModel.InboxThread
 
 private const val NEEDS_VISIBLE = 3
-private const val STACK_VISIBLE = 2
+private const val STACK_VISIBLE = 3
+// Rows sit just right of a rail under the group icon's centre (12dp inset + half its 28dp).
+private val RAIL_X = 25.dp
+private val ROW_INDENT = 36.dp
 private const val NEEDS_KEY = "needs"
 private const val EARLIER_PREFIX = "e:"
 private const val HOUR_MS = 60 * 60 * 1000L
@@ -101,6 +106,13 @@ fun SmartInboxScreen(
         delete = { onDelete(rowsOf(it)) },
         hide = { onHide(rowsOf(it)) }
     )
+    val group = GroupSwipe(
+        // Marking a group read holds its place for this visit, like opening it does.
+        markRead = { s -> seenThisVisit = seenThisVisit + s.threads.map { it.key }; actions.markSeen(s.threads.flatMap { it.allIds }) },
+        markUnread = { s -> actions.markUnread(s.threads.flatMap { it.allIds }) },
+        archive = { s -> onArchive(s.allRows) },
+        delete = { s -> onDelete(s.allRows) }
+    )
 
     Box(
         Modifier
@@ -152,13 +164,10 @@ fun SmartInboxScreen(
                         stack,
                         expanded = stack.key in expanded,
                         swipe = swipe,
+                        group = group,
                         onToggle = { toggle(stack.key) },
                         onOpen = { openThread(it) },
-                        onLongClick = { actionThreadKey = it.key },
-                        onMarkAllRead = {
-                            seenThisVisit = seenThisVisit + stack.threads.map { it.key }
-                            actions.markSeen(stack.threads.flatMap { it.allIds })
-                        }
+                        onLongClick = { actionThreadKey = it.key }
                     )
                 }
             }
@@ -171,6 +180,7 @@ fun SmartInboxScreen(
                         onToggle = { toggle(it) },
                         onOpen = { openThread(it) },
                         onLongClick = { actionThreadKey = it.key },
+                        group = group,
                         onClearAll = {
                             onArchive(lanes.earlier.flatMap { s -> s.threads.flatMap { rowsOf(it) } })
                             earlierOpen = false
@@ -214,6 +224,7 @@ fun inboxTitleNote(summary: SmartInboxModel.InboxSummary, filterName: String): S
 /** Thread-level inbox actions; each receives every row id the thread represents. */
 data class InboxActions(
     val markSeen: (List<Long>) -> Unit = {},
+    val markUnread: (List<Long>) -> Unit = {},
     val resolve: (List<Long>) -> Unit = {},
     val reopen: (List<Long>) -> Unit = {},
     val snooze: (List<Long>, Long) -> Unit = { _, _ -> },
@@ -221,11 +232,41 @@ data class InboxActions(
     val prefer: (PersonalLearning.Subject, PersonalLearning.Preference?) -> Unit = { _, _ -> }
 )
 
-private data class ThreadSwipe(
+internal data class ThreadSwipe(
     val archive: (InboxThread) -> Unit,
     val delete: (InboxThread) -> Unit,
     val hide: (InboxThread) -> Unit
 )
+
+/** What a group header's swipe does to every item in the group. */
+internal data class GroupSwipe(
+    val markRead: (SmartInboxModel.SourceStack) -> Unit,
+    val markUnread: (SmartInboxModel.SourceStack) -> Unit,
+    val archive: (SmartInboxModel.SourceStack) -> Unit,
+    val delete: (SmartInboxModel.SourceStack) -> Unit
+)
+
+/** Header swipe for a whole group: read/unread, archive, then delete behind a confirmation (delete has no undo). */
+@Composable
+private fun SwipeableGroup(stack: SmartInboxModel.SourceStack, group: GroupSwipe, stacked: Boolean = true, content: @Composable (headerDrag: Modifier) -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    val actions = listOf(
+        if (stack.unread > 0) SwipeTrayAction(Icons.Default.DoneAll, "Mark all from ${stack.label} read", MarksyTheme.SecondaryCyan) { group.markRead(stack) }
+        else SwipeTrayAction(Icons.Default.MarkEmailUnread, "Mark all from ${stack.label} unread", MarksyTheme.SecondaryCyan) { group.markUnread(stack) },
+        SwipeTrayAction(Icons.Default.Archive, "Archive all from ${stack.label}", MarksyTheme.PrimaryEmerald) { group.archive(stack) },
+        SwipeTrayAction(Icons.Default.Delete, "Delete all from ${stack.label}", MarksyTheme.RedUrgent) { confirming = true }
+    )
+    SwipeGroupCard(actions, stacked = stacked, content = content)
+    if (confirming) MarksyDialog(
+        onDismissRequest = { confirming = false },
+        title = { Text("Delete all ${stack.threads.size} from ${stack.label}?") },
+        text = { Text("This can't be undone. Archive keeps them instead.", color = MarksyTheme.TextSecondary, fontSize = 13.sp) },
+        dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
+        confirmButton = {
+            TextButton(onClick = { confirming = false; group.delete(stack) }) { Text("Delete", color = MarksyTheme.RedUrgent, fontWeight = FontWeight.Bold) }
+        }
+    )
+}
 
 @Composable
 private fun Swipeable(thread: InboxThread, swipe: ThreadSwipe, content: @Composable () -> Unit) {
@@ -341,15 +382,16 @@ private fun rowText(event: NotificationEventEntity, smsStack: Boolean): RowText 
 }
 
 @Composable
-private fun SourceStackCard(
+internal fun SourceStackCard(
     stack: SmartInboxModel.SourceStack,
     expanded: Boolean,
     swipe: ThreadSwipe,
+    group: GroupSwipe,
     onToggle: () -> Unit,
     onOpen: (InboxThread) -> Unit,
     onLongClick: (InboxThread) -> Unit,
-    onMarkAllRead: () -> Unit
-) {
+    note: (InboxThread) -> String? = { null }
+) = SwipeableGroup(stack, group) { headerDrag ->
     val hidden = stack.threads.size - STACK_VISIBLE
     val peek = hidden > 0 && !expanded
     val shape = RoundedCornerShape(16.dp)
@@ -368,7 +410,7 @@ private fun SourceStackCard(
                 .border(1.dp, MarksyTheme.BorderGlow, shape)
                 .animateContentSize()
         ) {
-            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(headerDrag.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 SourceIcon(resolveSourceStyle(stack.threads.first().latest), 28.dp, 15.dp)
                 Spacer(Modifier.width(10.dp))
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -387,19 +429,20 @@ private fun SourceStackCard(
                 }
                 Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
                 if (stack.unread > 0) {
-                    IconButton(onClick = onMarkAllRead, modifier = Modifier.size(40.dp)) {
+                    IconButton(onClick = { group.markRead(stack) }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Default.DoneAll, contentDescription = "Mark all from ${stack.label} read", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 } else {
                     Spacer(Modifier.width(12.dp))
                 }
             }
+            val rail = resolveSourceStyle(stack.threads.first().latest).iconBg
             (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEachIndexed { index, thread ->
-                if (index > 0) HorizontalDivider(Modifier.padding(start = 50.dp), color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
+                if (index > 0) HorizontalDivider(Modifier.padding(start = ROW_INDENT), color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
                 // Swipe offset lives in the row's composition; keyed so a re-sort never leaves an open tray over another thread.
                 key(thread.key) {
                     Swipeable(thread, swipe) {
-                        StackRow(thread, stack.isSms, first = index == 0, onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
+                        StackRow(thread, stack.isSms, first = index == 0, note = note(thread), rail = rail, onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
                     }
                 }
             }
@@ -422,17 +465,18 @@ private fun SourceStackCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, note: String?, rail: Color, onClick: () -> Unit, onLongClick: () -> Unit) {
     val text = rowText(thread.latest, smsStack)
     val unread = thread.unread
     Box(
         Modifier
             .fillMaxWidth()
             .background(MarksyTheme.Surface)
+            // The rail runs down from the group's icon, tying these rows to it without a wide indent.
+            .drawBehind { drawRect(rail.copy(alpha = 0.6f), topLeft = Offset(RAIL_X.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
-            .padding(start = 50.dp, end = 14.dp, top = 7.dp, bottom = 9.dp)
+            .padding(start = ROW_INDENT, end = 14.dp, top = 7.dp, bottom = 9.dp)
     ) {
-        if (unread) Box(Modifier.offset(x = (-19).dp, y = 6.dp).size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -447,8 +491,13 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, onC
                     },
                     maxLines = if (text.bodyLed) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                if (unread) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
+                }
+                Spacer(Modifier.weight(1f))
                 if (thread.count > 1) {
                     Spacer(Modifier.width(6.dp))
                     Box(
@@ -466,6 +515,7 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, onC
                     maxLines = if (first) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
                 )
             }
+            note?.let { Text(it, color = MarksyTheme.YellowImportant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
 }
@@ -535,6 +585,7 @@ private fun EarlierList(
     onToggle: (String) -> Unit,
     onOpen: (InboxThread) -> Unit,
     onLongClick: (InboxThread) -> Unit,
+    group: GroupSwipe,
     onClearAll: () -> Unit
 ) {
     val shape = RoundedCornerShape(16.dp)
@@ -547,33 +598,34 @@ private fun EarlierList(
         stacks.forEach { stack ->
             val key = EARLIER_PREFIX + stack.key
             val open = key in expanded
-            val top = rowText(stack.threads.first().latest, stack.isSms)
+            val style = resolveSourceStyle(stack.threads.first().latest)
+            val shown = if (open) stack.threads else stack.threads.take(STACK_VISIBLE)
+            // A one-row group is too short for a column of icons, so its tray lies flat.
+            androidx.compose.runtime.key(stack.key) { SwipeableGroup(stack, group, stacked = shown.size > 1) { headerDrag -> Column(Modifier.background(MarksyTheme.Surface)) {
             Row(
-                Modifier.fillMaxWidth().clickable { onToggle(key) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                headerDrag.fillMaxWidth().clickable(enabled = stack.threads.size > STACK_VISIBLE) { onToggle(key) }.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.alpha(0.8f)) { SourceIcon(resolveSourceStyle(stack.threads.first().latest), 24.dp, 13.dp) }
+                Box(Modifier.alpha(0.8f)) { SourceIcon(style, 24.dp, 13.dp) }
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("${stack.label} · ${stack.threads.size}", color = MarksyTheme.TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        if (top.bodyLed || top.detail.isBlank()) top.headline else "${top.headline}: ${top.detail}",
-                        color = MarksyTheme.TextMuted, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    "${stack.label} · ${stack.threads.size}", color = MarksyTheme.TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                Icon(
-                    Icons.Default.ExpandMore, contentDescription = if (open) "Fold ${stack.label}" else "Show ${stack.label}",
+                if (stack.threads.size > STACK_VISIBLE) Icon(
+                    Icons.Default.ExpandMore, contentDescription = if (open) "Fold ${stack.label}" else "Show all ${stack.threads.size} from ${stack.label}",
                     tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f)
                 )
             }
-            if (open) stack.threads.forEach { thread ->
+            shown.forEach { thread ->
                 val t = rowText(thread.latest, stack.isSms)
                 Row(
                     Modifier.fillMaxWidth()
+                        .drawBehind { drawRect(style.iconBg.copy(alpha = 0.6f), topLeft = Offset(23.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) }
                         .combinedClickable(onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) }, onLongClickLabel = "Thread actions")
-                        .padding(start = 46.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = 34.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -584,6 +636,7 @@ private fun EarlierList(
                     Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
                 }
             }
+            } } }
         }
         Row(Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp)) {
             Pill("Clear all ${stacks.sumOf { it.threads.size }}", onClick = onClearAll)
