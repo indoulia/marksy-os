@@ -53,6 +53,16 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
+    // Captured page: retired calls stay visible there (Earlier), unlike the active views.
+    @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE', 'RESOLVED') ORDER BY postedAt DESC LIMIT :limit")
+    fun observeCaptured(limit: Int): Flow<List<NotificationEventEntity>>
+
+    @Query("UPDATE notification_events SET deliveryState = 'PENDING', deliveryAttempts = 0, deliveryNote = NULL WHERE id = :eventId AND deliveryState = 'FAILED' AND archived = 0")
+    suspend fun requeueFailed(eventId: Long): Int
+
+    @Query("UPDATE notification_events SET deliveryNote = :note WHERE id = :eventId")
+    suspend fun setDeliveryNote(eventId: Long, note: String?): Int
+
     // Queued by CaptureGate.queues at capture, whatever the category; the gate decides again at delivery.
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND deliveryState = 'PENDING' ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findPendingCapture(limit: Int): List<NotificationEventEntity>

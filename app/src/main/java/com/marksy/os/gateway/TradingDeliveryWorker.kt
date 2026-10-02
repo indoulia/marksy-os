@@ -139,6 +139,7 @@ internal class TradingDeliveryRun(
                     }
                     is CaptureDecision.Keep -> {
                         dao.updateInFlightDeliveryState(event.id, DeliveryState.NOT_APPLICABLE.name, attempts, System.currentTimeMillis())
+                        dao.setDeliveryNote(event.id, decision.reason)
                         Log.i(TAG, "Trading event ${event.id} stays on the phone (${decision.reason})")
                         continue
                     }
@@ -183,6 +184,7 @@ internal class TradingDeliveryRun(
                     } else if (state == DeliveryState.PENDING) {
                         retryRequested = true
                     } else {
+                        dao.setDeliveryNote(event.id, TradingDeliveryPolicy.failureCode(error))
                         // Deliberately do not log the exception message: backend error
                         // details must never become a notification-content side channel.
                         Log.w(TAG, "Trading event ${event.id} permanently rejected")
