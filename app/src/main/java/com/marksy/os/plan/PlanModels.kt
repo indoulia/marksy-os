@@ -9,7 +9,7 @@ enum class PlanStatus(val label: String) { TODO("To do"), DOING("Doing"), DONE("
 enum class Recurrence(val label: String) { NONE("Once"), MONTHLY("Monthly"), YEARLY("Yearly") }
 
 /** Where an item came from; auto-created ones are updated in place by their dedupe key. */
-enum class PlanOrigin { SMS, CONTACTS, MANUAL, REMIND_ME }
+enum class PlanOrigin { SMS, CONTACTS, MANUAL, REMIND_ME, IPO }
 
 /** A due found in a notification: what, when (09:00 local on the due day), how much, to whom. */
 data class DueNotice(val kind: PlanKind, val dueAt: Long, val amountMinor: Long?, val counterparty: String?)

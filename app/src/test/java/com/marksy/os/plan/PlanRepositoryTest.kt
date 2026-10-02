@@ -1,5 +1,6 @@
 package com.marksy.os.plan
 
+import kotlinx.coroutines.flow.first
 import androidx.room.Room
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
@@ -111,5 +112,23 @@ class PlanRepositoryTest {
         assertEquals("Aisha K's birthday", item.title)
         assertEquals(Recurrence.YEARLY.name, item.recurrence)
         assertEquals(PlanRules.nextBirthday(3, 14, now, zone), item.dueAt)
+    }
+
+    @Test fun ipoReminderSchedulesOnceAndClears() = runBlocking {
+        repo.setIpoReminder("ipo|kaveri|close", "Kaveri Hospitals: last day to bid", now + 3_600_000)
+        repo.setIpoReminder("ipo|kaveri|close", "Kaveri Hospitals: last day to bid", now + 3_600_000)
+        val item = db.planItemDao().byKey("ipo|kaveri|close")!!
+        assertEquals(1, db.planItemDao().all().size)
+        assertEquals(PlanKind.FOLLOW_UP.name, item.kind)
+        assertEquals(PlanOrigin.IPO.name, item.origin)
+        assertTrue(item.id in scheduled)
+        repo.setIpoReminder("ipo|kaveri|close", "", null)
+        assertNull(db.planItemDao().byKey("ipo|kaveri|close"))
+        assertTrue(item.id in cancelled)
+    }
+
+    @Test fun ipoRemindersReportTheirDueTimes() = runBlocking {
+        repo.setIpoReminder("ipo|kaveri|allot", "Kaveri Hospitals: allotment results", now + 7_200_000)
+        assertEquals(mapOf("ipo|kaveri|allot" to now + 7_200_000), repo.observeIpoReminders("ipo|").first())
     }
 }

@@ -63,7 +63,10 @@ data class IpoListItemDto(
     val closesOn: IpoValueDto?,
     val listsOn: IpoValueDto?,
     val terms: IpoTermsDto?,
-    val raw: JSONObject? = null
+    val raw: JSONObject? = null,
+    val gmp: IpoGmpDto? = null,
+    val subscription: IpoSubscriptionDto? = null,
+    val retailAllocation: IpoAllocationDto? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = IpoListItemDto(
@@ -77,9 +80,12 @@ data class IpoListItemDto(
             opensOn = IpoValueDto.parse(json.optJSONObject("opensOn")),
             closesOn = IpoValueDto.parse(json.optJSONObject("closesOn")),
             listsOn = IpoValueDto.parse(json.optJSONObject("listsOn")),
-            terms = IpoTermsDto.parse(json.optJSONObject("terms"))
+            terms = IpoTermsDto.parse(json.optJSONObject("terms")),
+            gmp = IpoGmpDto.parse(json.optJSONObject("gmp")),
+            subscription = IpoSubscriptionDto.parse(json.optJSONObject("subscription")),
+            retailAllocation = IpoAllocationDto.parse(json.optJSONObject("retailAllocationEstimate"))
         )
-        fun parseList(array: JSONArray?) = array.objects().map(::parse)
+        fun parseList(array: JSONArray?) = array.allObjects().map(::parse)
     }
 }
 
@@ -93,13 +99,23 @@ data class IpoRiskRunDto(val status: String, val ranAt: String?, val findingsCou
 }
 
 /** [raw] keeps every section the backend sends (anchor book, peers, analyst views…) for the detail page. */
-data class IpoDetailDto(val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?, val raw: JSONObject? = null) {
+data class IpoDetailDto(
+    val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?, val raw: JSONObject? = null,
+    val keyDates: List<IpoKeyDate> = emptyList(), val decisionContexts: List<IpoDecisionContext> = emptyList(),
+    val outcome: IpoOutcomeDto? = null, val anchorCrore: Double? = null, val overview: IpoValueDto? = null, val anchorState: String? = null
+) {
     companion object {
         fun parse(json: JSONObject) = IpoDetailDto(
             summary = IpoListItemDto.parse(json.optJSONObject("summary") ?: JSONObject()),
             riskEngineRan = json.boolOrFalse("riskEngineRan"),
             riskRun = IpoRiskRunDto.parse(json.optJSONObject("riskRun")),
-            raw = json
+            raw = json,
+            keyDates = json.optJSONArray("keyDates").objects().map { IpoKeyDate(it.textOrNull("label") ?: "", IpoValueDto.parse(it.optJSONObject("date"))) },
+            decisionContexts = json.optJSONArray("decisionContexts").objects().map(IpoDecisionContext::parse),
+            outcome = IpoOutcomeDto.parse(json.optJSONObject("outcome")),
+            anchorCrore = json.optJSONObject("anchorBook")?.opt("totalAmountCrore").asDouble(),
+            overview = IpoValueDto.parse(json.optJSONObject("companyOverview")),
+            anchorState = json.optJSONObject("anchorBook")?.textOrNull("state")
         )
     }
 }
@@ -155,5 +171,100 @@ data class IpoTrackedItemDto(val ipoId: String, val companyName: String, val sta
 data class IpoTrackingStateDto(val ipoId: String, val tracking: Boolean) {
     companion object {
         fun parse(json: JSONObject) = IpoTrackingStateDto(json.textOrNull("ipoId") ?: "", json.boolOrFalse("tracking"))
+    }
+}
+
+/** Every object in [this]; IPO lists and subscription series run past the shared 50-item cap. */
+private fun JSONArray?.allObjects(): List<JSONObject> = if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+
+internal fun Any?.asDouble(): Double? = when (this) { is Number -> toDouble(); is String -> toDoubleOrNull(); else -> null }
+
+/** The fact as a number; Marksy sends some decimals as strings. */
+fun IpoValueDto?.number(): Double? = this?.value.asDouble()
+
+fun IpoValueDto?.localDate(): java.time.LocalDate? =
+    (this?.value as? String)?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
+
+/** (lower, upper) of a band-shaped fact. */
+fun IpoValueDto?.bounds(): Pair<Double, Double>? {
+    val o = this?.value as? JSONObject ?: return null
+    return listOf("lower" to "upper", "low" to "high", "min" to "max", "from" to "to").firstNotNullOfOrNull { (a, b) ->
+        val lo = o.opt(a).asDouble()
+        val hi = o.opt(b).asDouble()
+        if (lo != null && hi != null) lo to hi else null
+    }
+}
+
+/** Why a fact can't be read as current, or null when it can. */
+fun IpoValueDto?.stateNote(): String? = when {
+    this == null || value == null -> when (this?.state) { "INSUFFICIENT_EVIDENCE" -> "not enough evidence"; "CONFLICTING" -> "sources disagree"; else -> "not out yet" }
+    state == "STALE" -> IpoLifecycle.dateOf(asOf)?.let { "as of ${IpoLifecycle.dm(it)}" } ?: "may be out of date"
+    state == "CONFLICTING" -> "sources disagree"
+    state == "INSUFFICIENT_EVIDENCE" -> "not enough evidence"
+    else -> null
+}
+
+data class IpoGmpReading(val source: String, val premium: Double, val premiumPercent: Double?, val observedAt: String?)
+
+/** Every source's current quote; there is deliberately no single "the GMP". */
+data class IpoGmpDto(val state: String, val readings: List<IpoGmpReading>) {
+    companion object {
+        fun parse(json: JSONObject?): IpoGmpDto? = json?.let { g ->
+            IpoGmpDto(g.textOrNull("state") ?: "UNAVAILABLE", g.optJSONArray("readings").allObjects().mapNotNull { r ->
+                r.opt("premium").asDouble()?.let { IpoGmpReading(r.textOrNull("source") ?: "Unknown", it, r.opt("premiumPercent").asDouble(), r.textOrNull("observedAt")) }
+            })
+        }
+    }
+}
+
+data class IpoSubscriptionReading(val times: Double, val observedAt: String?)
+
+data class IpoSubscriptionDto(val state: String, val asOf: String?, val series: Map<String, List<IpoSubscriptionReading>>, val latest: Map<String, IpoSubscriptionReading>) {
+    companion object {
+        private fun reading(o: JSONObject?) = o?.opt("timesSubscribed").asDouble()?.let { IpoSubscriptionReading(it, o?.textOrNull("observedAt")) }
+        fun parse(json: JSONObject?): IpoSubscriptionDto? {
+            if (json == null) return null
+            val series = json.optJSONObject("series")
+            val latest = json.optJSONObject("latest")
+            return IpoSubscriptionDto(
+                state = json.textOrNull("state") ?: "UNAVAILABLE", asOf = json.textOrNull("asOf"),
+                series = series?.keys()?.asSequence()?.associateWith { k -> series.optJSONArray(k).allObjects().mapNotNull(::reading) }.orEmpty(),
+                latest = latest?.keys()?.asSequence()?.mapNotNull { k -> reading(latest.optJSONObject(k))?.let { k to it } }?.toMap().orEmpty()
+            )
+        }
+    }
+}
+
+data class IpoAllocationDto(val probability: Double?, val oversubscription: Double?) {
+    companion object {
+        fun parse(json: JSONObject?): IpoAllocationDto? = json?.let {
+            IpoAllocationDto(IpoValueDto.parse(it.optJSONObject("probability")).number(), IpoValueDto.parse(it.optJSONObject("oversubscription")).number())
+        }
+    }
+}
+
+data class IpoKeyDate(val label: String, val date: IpoValueDto?)
+
+data class IpoDecisionContext(val context: String, val question: String?, val verdict: String, val confidence: Double?, val reason: String?, val answeredBy: String?) {
+    companion object {
+        fun parse(json: JSONObject): IpoDecisionContext {
+            fun first(key: String): String? = json.optJSONArray(key)?.let { a ->
+                (0 until a.length()).firstNotNullOfOrNull { i -> a.opt(i).let { (it as? JSONObject)?.textOrNull("description") ?: (it as? String)?.takeIf(String::isNotBlank) } }
+            }
+            return IpoDecisionContext(
+                context = json.textOrNull("context") ?: "", question = json.textOrNull("question"), verdict = json.textOrNull("verdict") ?: "NO_DECISION",
+                confidence = IpoValueDto.parse(json.optJSONObject("confidence")).number(),
+                reason = first("supporting") ?: first("opposing") ?: first("uncertainties"), answeredBy = json.textOrNull("answeredBy")
+            )
+        }
+    }
+}
+
+data class IpoOutcomeDto(val issuePrice: Double?, val listingPrice: Double?, val listingReturnPercent: Double?, val expectedReturnPercent: Double?) {
+    companion object {
+        fun parse(json: JSONObject?): IpoOutcomeDto? = json?.let { o ->
+            fun n(k: String) = IpoValueDto.parse(o.optJSONObject(k)).number()
+            IpoOutcomeDto(n("issuePrice"), n("listingPrice"), n("listingReturnPercent"), n("expectedReturnPercent"))
+        }
     }
 }

@@ -104,4 +104,62 @@ class IpoModelsTest {
         val state = IpoTrackingStateDto.parse(JSONObject("""{"ipoId": "ipo-42", "tracking": false, "stage": null}"""))
         assertEquals(IpoTrackingStateDto("ipo-42", false), state)
     }
+
+    @Test
+    fun parsesGmpSubscriptionAndRetailEstimate() {
+        val ipo = IpoListItemDto.parse(JSONObject("""
+            {"id":"kaveri","companyName":"Kaveri Hospitals","isSme":false,"stage":"OPEN",
+             "gmp":{"state":"AVAILABLE","readings":[{"source":"ipoji.com","premium":48,"premiumPercent":11.06,"observedAt":"2026-10-01T04:45:00Z"},{"source":"other.in","premium":"40.5","premiumPercent":null,"observedAt":null}]},
+             "subscription":{"state":"AVAILABLE","asOf":"2026-10-01T05:10:00Z",
+               "series":{"RETAIL":[{"category":"RETAIL","timesSubscribed":1.18,"observedAt":"2026-09-29T11:30:00Z"},{"category":"RETAIL","timesSubscribed":2.41,"observedAt":"2026-09-30T11:30:00Z"}]},
+               "latest":{"OVERALL":{"category":"OVERALL","timesSubscribed":2.31,"observedAt":"2026-10-01T05:10:00Z"}}},
+             "retailAllocationEstimate":{"category":"RETAIL","probability":{"state":"AVAILABLE","value":0.25},"oversubscription":{"state":"AVAILABLE","value":3.92}}}
+        """))
+        assertEquals(listOf("ipoji.com", "other.in"), ipo.gmp!!.readings.map { it.source })
+        assertEquals(40.5, ipo.gmp!!.readings[1].premium, 1e-9)
+        assertNull(ipo.gmp!!.readings[1].premiumPercent)
+        assertEquals(2, ipo.subscription!!.series.getValue("RETAIL").size)
+        assertEquals(2.31, ipo.subscription!!.latest.getValue("OVERALL").times, 1e-9)
+        assertEquals(0.25, ipo.retailAllocation!!.probability!!, 1e-9)
+    }
+
+    @Test
+    fun parsesDetailDatesVerdictsAndOutcome() {
+        val d = IpoDetailDto.parse(JSONObject("""
+            {"summary":{"id":"kaveri","companyName":"Kaveri Hospitals"},
+             "keyDates":[{"label":"Allotment","date":{"state":"AVAILABLE","value":"2026-10-05"}},{"label":"Refunds","date":{"state":"MISSING","value":null}}],
+             "decisionContexts":[{"context":"PARTICIPATION","question":"Is it worth applying?","verdict":"APPLY","confidence":{"state":"AVAILABLE","value":0.8},
+               "supporting":[{"supportive":true,"description":"Retail is a lottery past 1x."}],"opposing":[],"uncertainties":["Thin data"]}],
+             "outcome":{"issuePrice":{"state":"AVAILABLE","value":434},"listingPrice":{"state":"AVAILABLE","value":479},"listingReturnPercent":{"state":"AVAILABLE","value":10.37},"expectedReturnPercent":{"state":"AVAILABLE","value":9.5}},
+             "anchorBook":{"state":"AVAILABLE","totalAmountCrore":552.0},
+             "companyOverview":{"state":"AVAILABLE","value":"Runs 14 hospitals."}}
+        """))
+        assertEquals(java.time.LocalDate.of(2026, 10, 5), d.keyDates.first { it.label == "Allotment" }.date.localDate())
+        assertNull(d.keyDates.first { it.label == "Refunds" }.date.localDate())
+        val c = d.decisionContexts.single()
+        assertEquals("APPLY", c.verdict)
+        assertEquals(0.8, c.confidence!!, 1e-9)
+        assertEquals("Retail is a lottery past 1x.", c.reason)
+        assertEquals(10.37, d.outcome!!.listingReturnPercent!!, 1e-9)
+        assertEquals(552.0, d.anchorCrore!!, 1e-9)
+        assertEquals("Runs 14 hospitals.", d.overview?.value)
+    }
+
+    @Test
+    fun stateNoteFlagsStaleMissingAndConflicting() {
+        assertNull(IpoValueDto("AVAILABLE", 434, "2026-09-20T00:00:00Z").stateNote())
+        assertEquals("as of 20 Sep", IpoValueDto("STALE", 434, "2026-09-20T00:00:00Z").stateNote())
+        assertEquals("not out yet", IpoValueDto("MISSING", null, null).stateNote())
+        assertEquals("not out yet", (null as IpoValueDto?).stateNote())
+        assertEquals("sources disagree", IpoValueDto("CONFLICTING", 434, null).stateNote())
+        assertEquals(412.0 to 434.0, IpoValueDto("AVAILABLE", JSONObject("""{"lower":"412","upper":434}"""), null).bounds())
+    }
+
+    @Test
+    fun parsesEverySubscriptionReadingAndListRowPastFifty() {
+        val readings = org.json.JSONArray((0 until 60).map { JSONObject().put("timesSubscribed", it / 10.0) })
+        assertEquals(60, IpoSubscriptionDto.parse(JSONObject().put("series", JSONObject().put("RETAIL", readings)))!!.series.getValue("RETAIL").size)
+        val rows = org.json.JSONArray((0 until 60).map { JSONObject().put("id", "ipo-$it").put("companyName", "Co $it") })
+        assertEquals(60, IpoListItemDto.parseList(rows).size)
+    }
 }
