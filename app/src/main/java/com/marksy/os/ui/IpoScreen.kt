@@ -117,7 +117,10 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     Box(Modifier.fillMaxSize()) {
         if (opened != null) {
             BackHandler { openedId = null; remindersOpen = false }
-            IpoDetailScreen(repository, opened, padding, watched = opened.id in watched.orEmpty(), onToggleWatch = { toggleWatch(opened) })
+            IpoDetailScreen(
+                repository, opened, padding, now, reminderKeys, onReminder = { e, on -> setReminder(opened, e, on) },
+                remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }
+            )
         } else {
             MarksyRefreshBox(refresh) {
                 LazyColumn(
