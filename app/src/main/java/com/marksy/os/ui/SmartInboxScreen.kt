@@ -479,25 +479,27 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text.headline,
-                    color = MarksyTheme.TextPrimary,
-                    fontSize = if (text.bodyLed) 13.sp else 13.5.sp,
-                    fontWeight = when {
-                        text.bodyLed && unread -> FontWeight.Medium
-                        text.bodyLed -> FontWeight.Normal
-                        unread -> FontWeight.Bold
-                        else -> FontWeight.Medium
-                    },
-                    maxLines = if (text.bodyLed) 2 else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (unread) {
-                    Spacer(Modifier.width(6.dp))
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (thread.critical) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald))
+                // The title takes the free width and the dot hugs it; a second weighted spacer would halve the title.
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text.headline,
+                        color = MarksyTheme.TextPrimary,
+                        fontSize = if (text.bodyLed) 13.sp else 13.5.sp,
+                        fontWeight = when {
+                            text.bodyLed && unread -> FontWeight.Medium
+                            text.bodyLed -> FontWeight.Normal
+                            unread -> FontWeight.Bold
+                            else -> FontWeight.Medium
+                        },
+                        maxLines = if (text.bodyLed) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (unread) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (thread.critical) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald))
+                    }
                 }
-                Spacer(Modifier.weight(1f))
                 if (thread.count > 1) {
                     Spacer(Modifier.width(6.dp))
                     Box(
