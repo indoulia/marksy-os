@@ -22,7 +22,7 @@ The Inbox is the app's main page. Make it obvious at a glance what needs the use
 The screen is one `LazyColumn` with three lanes. A lane with nothing in it is not drawn. Each lane is introduced by a small uppercase label with a coloured dot, used as an in-list divider, never as a page header row.
 
 **Needs you** (dot: RedUrgent). A thread is here when any of these is true:
-- `bucketFor` puts it in `NEEDS_ACTION` (the existing reasons, plus the new ones below) or `PRIORITY` (attention ≥ 90);
+- `bucketFor` puts it in `NEEDS_ACTION` (the existing reasons, plus the new ones below) or `PRIORITY` (attention ≥ 90) while the thread is under 24 h old and unread or opened this visit (device check 2026-10-02: without that, 51 day-old trading items filled the lane);
 - any `PersonalLearning.subjectsOf(thread.latest)` has `profile.of(type, key)?.override == ALWAYS_IMPORTANT`.
 
 Rules for this lane:
@@ -43,7 +43,7 @@ Rules for this lane:
 
 ### Read-in-place
 
-Tapping a row marks its thread seen, as today. The thread stays in its lane until the user leaves the Inbox tab. `SmartInboxScreen` keeps a `remember`ed set of thread keys seen during this visit and passes it to the model. Leaving the tab disposes it, so the next visit regroups.
+Tapping a row marks its thread seen, as today. A thread in New or Needs you stays in its lane until the user leaves the Inbox tab; one opened from Earlier stays in Earlier (`Lanes.holdsOnOpen`). "Mark read" in the long-press dialog follows the same rule. `SmartInboxScreen` keeps a `remember`ed set of thread keys seen during this visit and passes it to the model. Leaving the tab disposes it, so the next visit regroups.
 
 ### New action reasons in `bucketFor`
 
@@ -53,7 +53,7 @@ Tapping a row marks its thread seen, as today. The thread stays in its lane unti
 |---|---|---|
 | trading + `deliveryState == FAILED` | "Retry needed" | FAILURE |
 | PAYMENTS/BANKING + failure term | "Payment failed" | FAILURE |
-| **new:** TRADING + "rejected" | "Order rejected" | FAILURE |
+| **new:** TRADING + "rejected", own order only (`isOwnOrderEvent`) | "Order rejected" | FAILURE |
 | **new:** DELIVERY + delivery-failure term ("failed", "unsuccessful", "undelivered", "could not be delivered") | "Delivery failed" | FAILURE |
 | BILLS | "Bill due" | DUE |
 | REMINDERS | "Reminder" | DUE |
@@ -64,15 +64,17 @@ An action reason always wins over a FLAGGED one. The old "Fresh one-time code" r
 
 ### One-time codes are never captured
 
-User rule (2026-10-02): Marksy must not capture or store OTPs, PINs or similar codes, and must keep anything it is not sure about. `NotificationClassifier.isOneTimeCode(title, body)` is true only when the text names a code (OTP, one-time password, verification/security/login code, passcode, password, PIN, TPIN, MPIN) and carries a standalone 4–8 digit number that is no amount, balance, account or card mask (XX1234), date, time, phone number, order or reference id, or call level. `IngestionPipeline` drops such a capture before storage, including a re-post that would update an existing row. `classify` files a message as OTP only when it is such a code, so an alert that merely says "never share your OTP" keeps its real category. Classifier version 13 re-files stored rows once and deletes stored codes (non-trading rows).
+User rule (2026-10-02): Marksy must not capture or store OTPs, PINs or similar codes, and must keep anything it is not sure about. `NotificationClassifier.isOneTimeCode(title, body)` is true only when the text names a code (OTP, one-time password, verification/security/login code, passcode, password, PIN, TPIN, MPIN) and carries a standalone 4–8 digit number that is no amount, balance, account or card mask (XX1234), date, time, phone number, order or reference id, or call level. Postal PIN codes, spaced phone numbers, comma dates ("Oct 2, 2026"), spaced masks ("XXXX 1234") and policy or ticket numbers do not count; in a trading tip the code word must sit next to the number, so a tip's "never share your OTP" footer does not make it a code. `IngestionPipeline` drops only the code messages of a capture (a conversation re-post keeps its other messages) and drops the capture only when nothing else is left. `classify` files a message as OTP only when it is such a code, so an alert that merely says "never share your OTP" keeps its real category. Classifier version 14 re-files stored rows once and deletes stored codes (non-trading rows).
 
 ### Retirement of seen, low-attention items
 
 There is a new rule next to the expiry rules: a thread leaves the active views once it is
 - NEW/ACTIVE, not archived, `isRead`, not `kept`, with no `remindAt`;
 - posted 48 h or more ago;
-- `max(priority, importanceScore) < 60`;
-- not BILLS or REMINDERS, and not a trading row with `deliveryState == FAILED`.
+- `max(priority, importanceScore) < 60`, except BANKING and PAYMENTS, whose 80/75 score is a category default (user 2026-10-02: seen bank and payment alerts retire too);
+- not BILLS, REMINDERS or OTHER (History hides OTHER), and not anything with an action reason (`actionFor`: failed delivery to Marksy, failed payment, own rejected order, failed delivery).
+
+A delivery that failed ("could not be delivered", "undelivered") is not retired at the end of its day.
 
 It is resolved with reason `"Retired: seen and older than 2 days"`, using the existing `EventExpiry.REASON_PREFIX` so learning still treats unseen retirements correctly. History (`observeHistory`) keeps these rows. The decision is a pure function `EventExpiry.staleSeen(event): Expiry?` (returns the retire time; the caller compares it with now, like `EventExpiry.of`). `NotificationRepository.retireExpired` applies it to a new DAO candidate query `findSeenOpen()` (NEW/ACTIVE, archived = 0, isRead = 1, kept = 0, remindAt IS NULL). Both existing callers, RetentionWorker and MainActivity start-up, pick it up unchanged.
 
