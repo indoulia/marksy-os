@@ -69,15 +69,19 @@ class UpstoxApiClient(private val token: () -> String?) {
         UpstoxHoldings.parse(get("$V2_URL/portfolio/long-term-holdings"))
     }
 
-    private fun get(url: String): String {
-        val bearer = token() ?: throw UpstoxAuthException("No Upstox token saved")
+    /** Market holidays for the current year; a public endpoint, so it works before sign-in. */
+    suspend fun holidays(): String = withContext(Dispatchers.IO) { get("$V2_URL/market/holidays", auth = false) }
+
+    private fun get(url: String, auth: Boolean = true): String {
+        val bearer = token()
+        if (auth && bearer == null) throw UpstoxAuthException("No Upstox token saved")
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 8_000
             readTimeout = 8_000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("Authorization", "Bearer $bearer")
+            if (bearer != null) setRequestProperty("Authorization", "Bearer $bearer")
         }
         val started = System.currentTimeMillis()
         var failure: String? = "no response"

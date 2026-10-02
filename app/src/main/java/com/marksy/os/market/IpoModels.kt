@@ -102,7 +102,8 @@ data class IpoRiskRunDto(val status: String, val ranAt: String?, val findingsCou
 data class IpoDetailDto(
     val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?, val raw: JSONObject? = null,
     val keyDates: List<IpoKeyDate> = emptyList(), val decisionContexts: List<IpoDecisionContext> = emptyList(),
-    val outcome: IpoOutcomeDto? = null, val anchorCrore: Double? = null, val overview: IpoValueDto? = null, val anchorState: String? = null
+    val outcome: IpoOutcomeDto? = null, val anchorCrore: Double? = null, val overview: IpoValueDto? = null, val anchorState: String? = null,
+    val listedSymbol: String? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = IpoDetailDto(
@@ -115,7 +116,8 @@ data class IpoDetailDto(
             outcome = IpoOutcomeDto.parse(json.optJSONObject("outcome")),
             anchorCrore = json.optJSONObject("anchorBook")?.opt("totalAmountCrore").asDouble(),
             overview = IpoValueDto.parse(json.optJSONObject("companyOverview")),
-            anchorState = json.optJSONObject("anchorBook")?.textOrNull("state")
+            anchorState = json.optJSONObject("anchorBook")?.textOrNull("state"),
+            listedSymbol = json.textOrNull("listedSymbol")
         )
     }
 }
