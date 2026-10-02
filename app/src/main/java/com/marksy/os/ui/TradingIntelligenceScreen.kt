@@ -50,9 +50,6 @@ fun TradingIntelligenceScreen(
 ) {
     var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
     var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
-    val actions = listOfNotNull(
-        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips", active = tipsStatus != MyTipsStatus.OPEN) { onTipsStatusChange(tipsStatus.next()) } else null
-    )
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
         Modifier
@@ -73,11 +70,26 @@ fun TradingIntelligenceScreen(
         filters = TradingFilters.map { it to it },
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
-        actions = actions,
         filterIsView = false,
-        extrasActive = selectedFilter == TAB_CAPTURED && show != ShowOnly.ALL,
-        filterExtras = if (selectedFilter == TAB_CAPTURED) ({ CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) }) else null
+        // One filter button: My tips' status and Captured's options sit in its panel under the tabs.
+        extrasActive = (selectedFilter == TAB_CAPTURED && show != ShowOnly.ALL) || (selectedFilter == TAB_TIPS && tipsStatus != MyTipsStatus.OPEN),
+        filterExtras = when (selectedFilter) {
+            TAB_CAPTURED -> ({ CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) })
+            TAB_TIPS -> ({ TipsFilterSection(tipsStatus, onTipsStatusChange) })
+            else -> null
+        }
     )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> Unit) {
+    Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("SHOW", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MyTipsStatus.entries.forEach { s -> Pill(s.label, selected = status == s) { onStatus(s) } }
+        }
     }
 }
 

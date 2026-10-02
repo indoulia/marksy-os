@@ -64,9 +64,8 @@ fun DashboardScreen(
     onOpenTrading: () -> Unit = {},
     onOpenAsk: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
-    // Swipes act on a whole thread or, from a group header, on every row in the group.
+    // Swipes act on a whole thread or, from a group header, on every row in the group; nothing deletes.
     onArchive: (List<NotificationEventEntity>) -> Unit = {},
-    onDelete: (List<NotificationEventEntity>) -> Unit = {},
     onHide: (List<NotificationEventEntity>) -> Unit = {},
     onMarkRead: (List<Long>) -> Unit = {},
     onMarkUnread: (List<Long>) -> Unit = {},
@@ -86,7 +85,6 @@ fun DashboardScreen(
     val latest = remember(events) { SmartInboxModel.sourceStacks(events.take(LATEST_POOL), snapshot.generatedAt, byRecency = true).take(LATEST_GROUPS) }
     val swipe = ThreadSwipe(
         archive = { onArchive(it.events + it.duplicates) },
-        delete = { onDelete(it.events + it.duplicates) },
         hide = { onHide(it.events + it.duplicates) }
     )
     val group = GroupSwipe(
@@ -94,10 +92,19 @@ fun DashboardScreen(
         markUnread = { s -> onMarkUnread(s.allRows.map { it.id }) },
         archive = { s -> onArchive(s.allRows) }
     )
-    // The AI reason stays visible as a line under each attention row.
-    fun attentionNote(thread: SmartInboxModel.InboxThread): String? =
-        thread.events.mapNotNull { scores[it.id] }.maxByOrNull { it.attentionScore }
-            ?.let { r -> listOfNotNull("${r.attentionScore}/100", EventText.usefulReasons(r.reasons).firstOrNull()).joinToString(" · ") }
+    // Why it's here, in words ("High · Bill due"); Normal/Low rows without a reason say nothing.
+    fun attentionNote(thread: SmartInboxModel.InboxThread): RowNote? {
+        val r = thread.events.mapNotNull { scores[it.id] }.maxByOrNull { it.attentionScore } ?: return null
+        val reason = EventText.usefulReasons(r.reasons).firstOrNull()
+        val (level, tint) = when (r.attentionLevel) {
+            EventIntelligence.AttentionLevel.CRITICAL -> "Critical" to MarksyTheme.RedUrgent
+            EventIntelligence.AttentionLevel.HIGH -> "High" to MarksyTheme.YellowImportant
+            EventIntelligence.AttentionLevel.NORMAL -> "Normal" to MarksyTheme.TextMuted
+            EventIntelligence.AttentionLevel.LOW -> "Low" to MarksyTheme.TextMuted
+        }
+        if (reason == null && tint == MarksyTheme.TextMuted) return null
+        return RowNote(listOfNotNull(level, reason).joinToString(" · "), tint)
+    }
 
     LazyColumn(
         modifier = modifier.background(MarksyTheme.Background),

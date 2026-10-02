@@ -47,19 +47,17 @@ private val OpenThreshold = 64.dp
 private val OpenFlingVelocity = 1200.dp
 
 /**
- * Swipe either way to reveal Delete / Archive / Hide. Delete is permanent, Archive moves it out of active
- * lists, Hide only drops it from the current page.
+ * Swipe either way to reveal Archive / Hide. Archive moves it out of active lists, Hide only drops it from the
+ * current page. No swipe delete: retention cleanup removes old notifications.
  */
 @Composable
 fun SwipeActionsRow(
-    onDelete: () -> Unit,
     onArchive: () -> Unit,
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) = SwipeActionsRow(
     listOf(
-        SwipeTrayAction(Icons.Default.Delete, "Delete", MarksyTheme.RedUrgent, onDelete),
         SwipeTrayAction(Icons.Default.Archive, "Archive", MarksyTheme.PrimaryEmerald, onArchive),
         SwipeTrayAction(Icons.Default.VisibilityOff, "Hide", MarksyTheme.TextSecondary, onHide)
     ),
@@ -113,17 +111,7 @@ private fun SwipeTray(
         state = rememberDraggableState { delta ->
             scope.launch { offset.snapTo((offset.value + delta).coerceIn(-trayPx, trayPx)) }
         },
-        onDragStopped = { velocity ->
-            val moved = offset.value - anchor
-            settle(
-                when {
-                    anchor != 0f -> if (moved * anchor < 0 && abs(moved) > nudgePx) 0f else anchor
-                    moved > openPx || (moved > nudgePx * 3 && velocity > flingPx) -> trayPx
-                    moved < -openPx || (moved < -nudgePx * 3 && velocity < -flingPx) -> -trayPx
-                    else -> 0f
-                }
-            )
-        }
+        onDragStopped = { velocity -> settle(swipeSettle(offset.value - anchor, velocity, anchor, trayPx, nudgePx, openPx, flingPx)) }
     )
 
     Box(modifier.fillMaxWidth()) {
@@ -162,6 +150,18 @@ private fun SwipeAction(icon: ImageVector, label: String, tint: Color, onClick: 
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(30.dp))
+    }
+}
+
+/** Where a tray settles after a drag of [moved]: open on a deliberate pull or a fling; a nudge closes an open tray. */
+internal fun swipeSettle(moved: Float, velocity: Float, anchor: Float, trayPx: Float, nudgePx: Float, openPx: Float, flingPx: Float): Float {
+    // A one-column group tray is narrower than openPx, so it opens once pulled most of its width.
+    val openAt = minOf(openPx, trayPx * 0.6f)
+    return when {
+        anchor != 0f -> if (moved * anchor < 0 && abs(moved) > nudgePx) 0f else anchor
+        moved > openAt || (moved > nudgePx * 3 && velocity > flingPx) -> trayPx
+        moved < -openAt || (moved < -nudgePx * 3 && velocity < -flingPx) -> -trayPx
+        else -> 0f
     }
 }
 

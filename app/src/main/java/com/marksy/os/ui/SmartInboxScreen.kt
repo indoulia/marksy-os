@@ -63,7 +63,6 @@ fun SmartInboxScreen(
     onFilterSelected: (String) -> Unit,
     // Swipe actions act on one thread (every row incl. folded duplicates).
     onArchive: (List<NotificationEventEntity>) -> Unit = {},
-    onDelete: (List<NotificationEventEntity>) -> Unit = {},
     onHide: (List<NotificationEventEntity>) -> Unit = {},
     actions: InboxActions = InboxActions(),
     learningProfile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY,
@@ -100,7 +99,6 @@ fun SmartInboxScreen(
     fun toggle(key: String) { expanded = if (key in expanded) expanded - key else expanded + key }
     val swipe = ThreadSwipe(
         archive = { onArchive(rowsOf(it)) },
-        delete = { onDelete(rowsOf(it)) },
         hide = { onHide(rowsOf(it)) }
     )
     val group = GroupSwipe(
@@ -228,9 +226,11 @@ data class InboxActions(
     val prefer: (PersonalLearning.Subject, PersonalLearning.Preference?) -> Unit = { _, _ -> }
 )
 
+/** A short coloured line under a group row, e.g. Home's attention level and reason. */
+internal data class RowNote(val text: String, val tint: Color)
+
 internal data class ThreadSwipe(
     val archive: (InboxThread) -> Unit,
-    val delete: (InboxThread) -> Unit,
     val hide: (InboxThread) -> Unit
 )
 
@@ -255,7 +255,6 @@ private fun SwipeableGroup(stack: SmartInboxModel.SourceStack, group: GroupSwipe
 @Composable
 private fun Swipeable(thread: InboxThread, swipe: ThreadSwipe, content: @Composable () -> Unit) {
     SwipeActionsRow(
-        onDelete = { swipe.delete(thread) },
         onArchive = { swipe.archive(thread) },
         onHide = { swipe.hide(thread) },
         content = content
@@ -374,7 +373,7 @@ internal fun SourceStackCard(
     onToggle: () -> Unit,
     onOpen: (InboxThread) -> Unit,
     onLongClick: (InboxThread) -> Unit,
-    note: (InboxThread) -> String? = { null }
+    note: (InboxThread) -> RowNote? = { null }
 ) = SwipeableGroup(stack, group) { headerDrag ->
     val hidden = stack.threads.size - STACK_VISIBLE
     val peek = hidden > 0 && !expanded
@@ -448,7 +447,7 @@ internal fun SourceStackCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, note: String?, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, note: RowNote?, onClick: () -> Unit, onLongClick: () -> Unit) {
     val text = rowText(thread.latest, smsStack)
     val unread = thread.unread
     Box(
@@ -498,7 +497,7 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
                     maxLines = if (first) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            note?.let { Text(it, color = MarksyTheme.YellowImportant, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
+            note?.let { Text(it.text, color = it.tint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
 }

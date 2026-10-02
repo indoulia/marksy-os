@@ -295,19 +295,6 @@ class MainActivity : ComponentActivity() {
             val id = pendingEventId ?: return@LaunchedEffect
             inboxEvents.firstOrNull { it.id == id }?.let { openEvent(it); pendingEventId = null }
         }
-        val archiveWithUndo: (NotificationEventEntity) -> Unit = { event ->
-            vm.archive(event.id)
-            scope.launch {
-                if (snackbar.showSnackbar("Archived", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.unarchive(event.id)
-            }
-        }
-        // Delete is permanent and immediate by request; Archive keeps its undo.
-        val deleteNow: (NotificationEventEntity) -> Unit = { event ->
-            vm.delete(event.id)
-            ReminderScheduler.cancel(applicationContext, event.id)
-            lifecycleScope.launch { plan.mirrorFollowUp(event.id, event.title, null) }
-            if (selectedEvent?.id == event.id) selectedEvent = null
-        }
         // Inbox swipes act on a whole thread; one undo restores every row of it.
         val archiveThreadWithUndo: (List<NotificationEventEntity>) -> Unit = { rows ->
             vm.archiveThread(rows.map { it.id })
@@ -318,6 +305,7 @@ class MainActivity : ComponentActivity() {
         // "Hide" drops a row from one page only; nothing changes in storage.
         var inboxHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
         var homeHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
+        var marketHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
         val homeEvents = remember(events, homeHidden) { events.filterNot { it.id in homeHidden } }
         val homeSnapshot = remember(homeEvents) { DashboardSnapshot.from(homeEvents) }
         val openCategory: (String) -> Unit = { label ->
@@ -401,6 +389,8 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             selectedTab == 2 && marketTabName == MarketTab.IPOS.name -> ipoNote
             selectedTab == 2 && marketTabName == MarketTab.PORTFOLIO.name -> portfolioNote
+            // Overview, Updates: the section name, so every Market page carries its green label.
+            selectedTab == 2 -> MarketTab.entries.firstOrNull { it.name == marketTabName }?.label
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
@@ -739,7 +729,6 @@ class MainActivity : ComponentActivity() {
                     onOpenAsk = { showAsk = true },
                     onOpenProfile = { selectedTab = 5 },
                     onArchive = archiveThreadWithUndo,
-                    onDelete = { rows -> rows.forEach(deleteNow) },
                     onHide = { rows -> homeHidden = homeHidden + rows.map { it.id } },
                     onMarkRead = vm::markThreadSeen,
                     onMarkUnread = { ids -> ids.forEach { vm.setRead(it, false) } },
@@ -755,7 +744,6 @@ class MainActivity : ComponentActivity() {
                     selectedFilterName = inboxFilterName,
                     onFilterSelected = { inboxFilterName = it },
                     onArchive = archiveThreadWithUndo,
-                    onDelete = { rows -> rows.forEach(deleteNow) },
                     onHide = { rows -> inboxHidden = inboxHidden + rows.map { it.id } },
                     learningProfile = learningProfile,
                     onOpenHistory = { showTimeline = true },
@@ -811,9 +799,11 @@ class MainActivity : ComponentActivity() {
                     },
                     onSymbolBack = ::stockBack,
                     stockQuery = stockQuery,
-                    marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
+                    marketEvents = remember(inboxEvents, marketHidden) { inboxEvents.filter { it.category == "MARKET" && it.id !in marketHidden } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
                     onEventSelected = openEvent,
+                    onArchiveEvent = { archiveThreadWithUndo(listOf(it)) },
+                    onHideEvent = { marketHidden = marketHidden + it.id },
                     onOpenStock = { openStockFrom(it, "2") },
                     onIpoNote = { ipoNote = it }
                 )

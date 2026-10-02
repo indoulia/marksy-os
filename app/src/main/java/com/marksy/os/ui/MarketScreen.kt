@@ -52,6 +52,9 @@ fun MarketScreen(
     marketEvents: List<NotificationEventEntity> = emptyList(),
     stockEvents: List<NotificationEventEntity> = emptyList(),
     onEventSelected: (NotificationEventEntity) -> Unit = {},
+    // Updates swipe like Home and Inbox: archive (with undo) or hide from this page.
+    onArchiveEvent: (NotificationEventEntity) -> Unit = {},
+    onHideEvent: (NotificationEventEntity) -> Unit = {},
     onOpenStock: ((String) -> Unit)? = null,
     onIpoNote: (String?) -> Unit = {}
 ) {
@@ -143,7 +146,9 @@ fun MarketScreen(
                 contentPadding = PaddingValues(top = 10.dp, bottom = OneHandListBottomPadding)
             ) {
                 if (marketEvents.isEmpty()) item { EmptyState("No market updates yet.", "Holdings alerts, research views, IPO notices and market moves from your broker and market apps appear here.") }
-                items(marketEvents, key = { "mkt-${it.id}" }) { event -> MarketUpdateCard(event) { onEventSelected(event) } }
+                items(marketEvents, key = { "mkt-${it.id}" }) { event ->
+                    SwipeActionsRow(onArchive = { onArchiveEvent(event) }, onHide = { onHideEvent(event) }) { MarketUpdateCard(event) { onEventSelected(event) } }
+                }
             }
         }
         // Search and sort only once there are holdings to search.
