@@ -47,7 +47,7 @@ class UpstoxOAuthTest {
         assertEquals(UpstoxOAuth.Redirect.Code("mk404x"), UpstoxOAuth.parseRedirect(url, "XX56849"))
         assertTrue(UpstoxOAuth.parseRedirect(url, "other") is UpstoxOAuth.Redirect.Failed)
         assertTrue(UpstoxOAuth.parseRedirect("http://127.0.0.1/marksy-upstox?state=XX56849", "XX56849") is UpstoxOAuth.Redirect.Failed)
-        assertTrue(UpstoxOAuth.parseRedirect("http://127.0.0.1/marksy-upstox?code=%zz&state=XX56849", "XX56849") is UpstoxOAuth.Redirect.Failed)
+        assertTrue(UpstoxOAuth.parseRedirect("not a url", "XX56849") is UpstoxOAuth.Redirect.Failed)
         val denied = UpstoxOAuth.parseRedirect("http://127.0.0.1/marksy-upstox?error=access_denied&state=XX56849", "XX56849")
         assertEquals("Upstox: access_denied", (denied as UpstoxOAuth.Redirect.Failed).message)
     }
@@ -80,5 +80,11 @@ class UpstoxOAuthTest {
         val s = UpstoxOAuth.newState()
         assertTrue(s.matches(Regex("[0-9a-f]{32}")))
         assertNotEquals(s, UpstoxOAuth.newState())
+    }
+
+    @Test fun urlsWithUnusualQueryCharactersStillParse() {
+        assertTrue(UpstoxOAuth.isUpstoxPage("https://login.upstox.com/login?x=a|b{c}"))
+        assertTrue(UpstoxOAuth.isRedirect("http://127.0.0.1/marksy-upstox?code=a|b&state=s", "http://127.0.0.1/marksy-upstox"))
+        assertEquals(UpstoxOAuth.Redirect.Code("ab|c"), UpstoxOAuth.parseRedirect("http://127.0.0.1/marksy-upstox?code=ab|c&state=s1", "s1"))
     }
 }

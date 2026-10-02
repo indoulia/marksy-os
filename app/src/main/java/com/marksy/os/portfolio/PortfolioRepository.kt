@@ -22,15 +22,29 @@ import java.util.concurrent.ConcurrentHashMap
 
 enum class PortfolioConnection { NOT_CONNECTED, SIGNED_IN, SIGNED_OUT }
 
+/** Which body the Portfolio page shows. */
+enum class PortfolioView {
+    LOADING, CONNECT, LOAD_FAILED, EMPTY, HOLDINGS;
+
+    companion object {
+        fun of(snapshot: HoldingsSnapshot?, connection: PortfolioConnection, loading: Boolean, error: String?): PortfolioView = when {
+            snapshot != null -> if (snapshot.holdings.isEmpty()) EMPTY else HOLDINGS
+            loading -> LOADING
+            connection == PortfolioConnection.SIGNED_IN && error != null -> LOAD_FAILED
+            else -> CONNECT
+        }
+    }
+}
+
 /** Daily candles per holding symbol plus NIFTY 50, for period bases and the chart. */
 data class PortfolioHistory(val daily: Map<String, List<Candle>>, val nifty: List<Candle>)
 
 /** Holdings from Upstox straight to this phone (never via Marksy), cached encrypted for the signed-out morning. */
-class PortfolioRepository(context: Context) {
+class PortfolioRepository(context: Context, source: HoldingsSource? = null) {
     private val app = context.applicationContext
     val store = UpstoxOAuthStore(app)
     private val analytics = UpstoxTokenStore(app)
-    private val upstox = UpstoxHoldingsSource({ store.accessToken() }) { token -> UpstoxApiClient { token }.longTermHoldings() }
+    private val upstox = source ?: UpstoxHoldingsSource({ store.accessToken() }) { token -> UpstoxApiClient { token }.longTermHoldings() }
     val providers: List<PortfolioProvider> = PortfolioProviders.catalog(upstox)
 
     fun cached(): HoldingsSnapshot? = store.holdings()?.let(HoldingsSnapshot::fromJson)
@@ -41,11 +55,17 @@ class PortfolioRepository(context: Context) {
         else -> PortfolioConnection.NOT_CONNECTED
     }
 
-    /** A rejected or expired token signs out but keeps the app keys and the cached holdings. */
-    suspend fun refresh(now: Long = System.currentTimeMillis()): HoldingsResult = when (val r = upstox.fetch(now)) {
-        is HoldingsResult.Ok -> HoldingsResult.Ok(withSectors(r.snapshot)).also { store.saveHoldings(it.snapshot.toJson()) }
-        is HoldingsResult.SignedOut -> r.also { store.clearToken() }
-        is HoldingsResult.Failed -> r
+    /**
+     * A rejected or expired token signs out but keeps the app keys and the cached holdings. Without [force] (a pull or
+     * a fresh sign-in) a fetch under a minute old is reused, so opening a stock and coming back costs no Upstox calls.
+     */
+    suspend fun refresh(now: Long = System.currentTimeMillis(), force: Boolean = true): HoldingsResult {
+        if (!force && now - lastFetchAt in 0L until REUSE_MS) cached()?.let { return HoldingsResult.Ok(it) }
+        return when (val r = upstox.fetch(now)) {
+            is HoldingsResult.Ok -> HoldingsResult.Ok(withSectors(r.snapshot)).also { store.saveHoldings(it.snapshot.toJson()); lastFetchAt = now }
+            is HoldingsResult.SignedOut -> r.also { store.clearToken() }
+            is HoldingsResult.Failed -> r
+        }
     }
 
     // Candles and sector profiles are market data: the Analytics Token when saved, else today's sign-in.
@@ -78,10 +98,16 @@ class PortfolioRepository(context: Context) {
         PortfolioHistory(daily, nifty.await())
     }
 
-    suspend fun intraday(holdings: List<Holding>, today: LocalDate): Map<String, List<Candle>> = coroutineScope {
-        val gate = Semaphore(4)
-        holdings.map { h -> async { h.symbol to gate.withPermit { quietly { market().candles(h.instrumentKey, ChartRange.D1, today, IST) }.orEmpty() } } }
-            .awaitAll().toMap()
+    suspend fun intraday(holdings: List<Holding>, today: LocalDate, force: Boolean = false, now: Long = System.currentTimeMillis()): Map<String, List<Candle>> =
+        coroutineScope {
+            val gate = Semaphore(4)
+            holdings.map { h -> async { h.symbol to gate.withPermit { intradayOf(h.instrumentKey, today, force, now) } } }.awaitAll().toMap()
+        }
+
+    private suspend fun intradayOf(key: String, today: LocalDate, force: Boolean, now: Long): List<Candle> {
+        val cacheKey = "$today|$key"
+        if (!force) INTRADAY[cacheKey]?.takeIf { now - it.first in 0L until REUSE_MS }?.let { return it.second }
+        return quietly { market().candles(key, ChartRange.D1, today, IST) }.orEmpty().also { if (it.isNotEmpty()) INTRADAY[cacheKey] = now to it }
     }
 
     private suspend fun daily(key: String, from: LocalDate, today: LocalDate): List<Candle> {
@@ -103,6 +129,8 @@ class PortfolioRepository(context: Context) {
     fun disconnect() {
         store.disconnect()
         DAILY.clear()
+        INTRADAY.clear()
+        lastFetchAt = 0L
         runCatching {
             android.webkit.CookieManager.getInstance().removeAllCookies(null)
             android.webkit.WebStorage.getInstance().deleteAllData()
@@ -120,6 +148,9 @@ class PortfolioRepository(context: Context) {
         val IST: ZoneId = ZoneId.of("Asia/Kolkata")
         // One fetch of a year's daily candles per instrument per day, shared by every Portfolio visit.
         private val DAILY = ConcurrentHashMap<String, List<Candle>>()
+        private val INTRADAY = ConcurrentHashMap<String, Pair<Long, List<Candle>>>()
+        private const val REUSE_MS = 60_000L
+        @Volatile private var lastFetchAt = 0L
 
         fun bases(history: PortfolioHistory?, period: PortfolioPeriod): Map<String, Double> =
             history?.daily.orEmpty().mapNotNull { (symbol, candles) -> UpstoxCandles.bases(candles)[period.label]?.let { symbol to it } }.toMap()

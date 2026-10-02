@@ -5,10 +5,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
-import java.net.URLDecoder
 import java.net.URLEncoder
 import java.security.SecureRandom
 import java.time.Instant
@@ -38,25 +37,23 @@ object UpstoxOAuth {
         "$AUTHORIZE_URL?response_type=code&client_id=${enc(credentials.apiKey)}&redirect_uri=${enc(credentials.redirectUri)}&state=${enc(state)}"
 
     /** Same scheme, host, port and path as the registered redirect, whatever the query. */
+    // OkHttp's parser, not java.net.URI: URI rejects '|' or braces in a query that browsers accept.
     fun isRedirect(url: String, redirectUri: String): Boolean {
-        val a = uri(url) ?: return false
-        val b = uri(redirectUri) ?: return false
-        if (a.scheme == null || a.host == null) return false
-        return a.scheme.equals(b.scheme, ignoreCase = true) && a.host.equals(b.host, ignoreCase = true) &&
-            port(a) == port(b) && a.path.orEmpty().trimEnd('/') == b.path.orEmpty().trimEnd('/')
+        val a = url.toHttpUrlOrNull() ?: return false
+        val b = redirectUri.toHttpUrlOrNull() ?: return false
+        return a.scheme == b.scheme && a.host == b.host && a.port == b.port && a.encodedPath.trimEnd('/') == b.encodedPath.trimEnd('/')
     }
 
     fun isUpstoxPage(url: String): Boolean {
-        val u = uri(url) ?: return false
-        val host = u.host?.lowercase() ?: return false
-        return u.scheme.equals("https", ignoreCase = true) && (host == "upstox.com" || host.endsWith(".upstox.com"))
+        val u = url.toHttpUrlOrNull() ?: return false
+        return u.isHttps && (u.host == "upstox.com" || u.host.endsWith(".upstox.com"))
     }
 
     fun parseRedirect(url: String, expectedState: String): Redirect {
-        val q = query(url) ?: return Redirect.Failed("Upstox sent an unreadable sign-in reply. Try again.")
-        q["error"]?.let { return Redirect.Failed("Upstox: ${q["error_description"] ?: it}") }
-        if (q["state"] != expectedState) return Redirect.Failed("That sign-in didn't come from this request. Try again.")
-        val code = q["code"]?.takeIf { it.isNotBlank() } ?: return Redirect.Failed("Upstox sent no sign-in code. Try again.")
+        val u = url.toHttpUrlOrNull() ?: return Redirect.Failed("Upstox sent an unreadable sign-in reply. Try again.")
+        u.queryParameter("error")?.let { return Redirect.Failed("Upstox: ${u.queryParameter("error_description") ?: it}") }
+        if (u.queryParameter("state") != expectedState) return Redirect.Failed("That sign-in didn't come from this request. Try again.")
+        val code = u.queryParameter("code")?.takeIf { it.isNotBlank() } ?: return Redirect.Failed("Upstox sent no sign-in code. Try again.")
         return Redirect.Code(code)
     }
 
@@ -115,11 +112,5 @@ object UpstoxOAuth {
         }
     }
 
-    private fun uri(url: String): URI? = runCatching { URI(url) }.getOrNull()
-    private fun port(u: URI): Int = if (u.port != -1) u.port else if (u.scheme.equals("https", ignoreCase = true)) 443 else 80
     private fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
-    private fun query(url: String): Map<String, String>? = runCatching {
-        uri(url)?.rawQuery.orEmpty().split('&').filter { '=' in it }
-            .associate { URLDecoder.decode(it.substringBefore('='), "UTF-8") to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
-    }.getOrNull()
 }

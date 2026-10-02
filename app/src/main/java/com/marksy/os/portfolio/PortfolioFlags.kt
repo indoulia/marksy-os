@@ -25,18 +25,20 @@ object PortfolioFlags {
     const val ALERT_DISTANCE_PCT = 4.0
     const val CONCENTRATION_PCT = 20.0
     const val DAY_MOVE_PCT = 4.0
+    // Rupee-and-paise prices land a hair either side of a threshold in doubles; an exact boundary must still flag.
+    private const val EPS = 1e-9
     private val IST: ZoneId = ZoneId.of("Asia/Kolkata")
     private val OPEN: LocalTime = LocalTime.of(9, 15)
 
     fun flags(row: HoldingRow, alerts: List<PriceAlert>): List<HoldingFlag> = buildList {
-        row.dayPct?.takeIf { abs(it) >= DAY_MOVE_PCT }?.let { d ->
+        row.dayPct?.takeIf { abs(it) >= DAY_MOVE_PCT - EPS }?.let { d ->
             add(HoldingFlag(FlagKind.DAY_MOVE, if (d < 0) FlagSeverity.CRITICAL else FlagSeverity.POSITIVE, "${if (d < 0) "Fell" else "Rose"} ${one(abs(d))}% today"))
         }
-        row.totalPct?.takeIf { it <= -BELOW_AVERAGE_PCT }?.let { add(HoldingFlag(FlagKind.BELOW_AVERAGE, FlagSeverity.CRITICAL, "${one(-it)}% below your average")) }
+        row.totalPct?.takeIf { it <= -BELOW_AVERAGE_PCT + EPS }?.let { add(HoldingFlag(FlagKind.BELOW_AVERAGE, FlagSeverity.CRITICAL, "${one(-it)}% below your average")) }
         nearestAlert(row, alerts)?.let { (alert, gap) ->
             add(HoldingFlag(FlagKind.NEAR_ALERT, FlagSeverity.WARNING, "${one(gap)}% from your ₹${com.marksy.os.ui.money(alert.price)} alert"))
         }
-        if (row.weightPct >= CONCENTRATION_PCT) add(HoldingFlag(FlagKind.CONCENTRATION, FlagSeverity.WARNING, "${row.weightPct.roundToInt()}% of your portfolio"))
+        if (concentrated(row.weightPct)) add(HoldingFlag(FlagKind.CONCENTRATION, FlagSeverity.WARNING, "${row.weightPct.roundToInt()}% of your portfolio"))
     }
 
     /** The user's closest alert on this holding, when within [ALERT_DISTANCE_PCT] of the price either way. */
@@ -44,9 +46,11 @@ object PortfolioFlags {
         if (row.price <= 0) return null
         return alerts.filter { it.symbol.equals(row.holding.symbol, ignoreCase = true) }
             .map { it to abs(row.price - it.price) / row.price * 100 }
-            .filter { it.second <= ALERT_DISTANCE_PCT }
+            .filter { it.second <= ALERT_DISTANCE_PCT + EPS }
             .minByOrNull { it.second }
     }
+
+    fun concentrated(weightPct: Double): Boolean = weightPct >= CONCENTRATION_PCT - EPS
 
     /** Flagged holdings not hidden today: most severe first, then by today's rupee move. */
     fun needsALook(rows: List<HoldingRow>, alerts: List<PriceAlert>, hidden: Set<String>): List<NeedsLook> =

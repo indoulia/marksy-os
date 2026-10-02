@@ -65,4 +65,16 @@ class PortfolioFlagsTest {
         assertEquals(ist("2026-10-03T09:15"), PortfolioFlags.hiddenUntil(ist("2026-10-02T11:00")))
         assertEquals(ist("2026-10-02T09:15"), PortfolioFlags.hiddenUntil(ist("2026-10-02T08:00")))
     }
+
+    @Test fun exactThresholdsFlagDespiteFloatingPoint() {
+        // Each case sits exactly on its threshold in rupees and paise, but its double lands a hair inside.
+        fun rows(vararg h: Holding) = PortfolioMath.rows(h.toList(), emptyMap(), PortfolioPeriod.D1, emptyMap())
+        val big = Holding("BIG", "BIG", "", "k0", HoldingType.STOCK, 1, 1_000_000.0, 1_000_000.0, 1_000_000.0)
+        assertEquals(listOf(FlagKind.BELOW_AVERAGE), kinds(rows(Holding("A", "A", "", "k1", HoldingType.STOCK, 1, 13.0, 11.05, 11.05), big).first()))
+        assertEquals(listOf(FlagKind.DAY_MOVE), kinds(rows(Holding("B", "B", "", "k2", HoldingType.STOCK, 1, 10.56, 10.56, 11.0), big).first()))
+        val near = rows(Holding("SUZLON", "S", "", "k3", HoldingType.STOCK, 1, 10.0, 10.0, 10.0), big).first()
+        assertEquals(listOf(FlagKind.NEAR_ALERT), kinds(near, listOf(PriceAlert(1, "SUZLON", 10.40, true, 0))))
+        val heavy = rows(Holding("C", "C", "", "k4", HoldingType.STOCK, 3, 0.70, 0.70, 0.70), Holding("D", "D", "", "k5", HoldingType.STOCK, 1, 8.40, 8.40, 8.40))
+        assertEquals(listOf(FlagKind.CONCENTRATION), kinds(heavy.first()))
+    }
 }

@@ -11,8 +11,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The user's Upstox app keys, today's OAuth token and the last holdings, each Keystore-encrypted with its own
- * alias (same pattern as [UpstoxTokenStore]). Keys and token are only ever sent to api.upstox.com.
+ * The user's Upstox app keys, today's OAuth token and the last holdings, each slot Keystore-encrypted under one
+ * alias of its own (same pattern as [UpstoxTokenStore]). Keys and token are only ever sent to api.upstox.com.
  */
 class UpstoxOAuthStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -23,14 +23,17 @@ class UpstoxOAuthStore(context: Context) {
         return UpstoxOAuth.Credentials(key, secret, read(REDIRECT) ?: UpstoxOAuth.DEFAULT_REDIRECT)
     }
 
-    fun hasCredentials(): Boolean = preferences.contains(API_KEY) && preferences.contains(API_SECRET)
+    // Decrypts rather than checks presence: keys the Keystore can no longer open count as missing.
+    fun hasCredentials(): Boolean = credentials() != null
 
-    /** A different app's keys can't use the old app's token. */
+    /** Only a different app (key or redirect) invalidates today's token. */
     fun saveCredentials(apiKey: String, apiSecret: String, redirectUri: String) {
+        val redirect = redirectUri.trim().ifBlank { UpstoxOAuth.DEFAULT_REDIRECT }
+        val before = credentials()
         write(API_KEY, apiKey.trim())
         write(API_SECRET, apiSecret.trim())
-        write(REDIRECT, redirectUri.trim().ifBlank { UpstoxOAuth.DEFAULT_REDIRECT })
-        clearToken()
+        write(REDIRECT, redirect)
+        if (before?.apiKey != apiKey.trim() || before.redirectUri != redirect) clearToken()
     }
 
     fun saveToken(token: String, issuedAt: Long) {

@@ -49,13 +49,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +92,7 @@ import com.marksy.os.portfolio.PortfolioPeriod
 import com.marksy.os.portfolio.PortfolioProvider
 import com.marksy.os.portfolio.PortfolioRepository
 import com.marksy.os.portfolio.PortfolioTotals
+import com.marksy.os.portfolio.PortfolioView
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.FeedFreshness
 import com.marksy.os.upstox.UpstoxCandles
@@ -109,6 +110,16 @@ import kotlin.math.roundToInt
 object PortfolioChrome {
     val note = MutableStateFlow<String?>(null)
     val hasHoldings = MutableStateFlow(false)
+
+    // The page leaves composition whenever a stock opens; its choices live here for as long as the app runs.
+    internal val metric = mutableStateOf(PortfolioMetric.PERIOD)
+    internal val period = mutableStateOf(PortfolioPeriod.D1)
+    internal val sort = mutableStateOf(HoldingSort.MOVE)
+    internal val show = mutableStateOf<HoldingType?>(null)
+    internal val open = mutableStateOf<String?>(null)
+    internal val allocationOpen = mutableStateOf(false)
+    internal val allocationBy = mutableStateOf(AllocationBy.SECTOR)
+    internal val needsOpen = mutableStateOf(false)
 }
 
 /** Market › Portfolio, triage first: totals, Needs a look, then holdings ranked by rupee move. Read-only. */
@@ -124,14 +135,15 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     var hidden by remember { mutableStateOf(repo.hidden(System.currentTimeMillis())) }
     var settled by remember { mutableIntStateOf(0) }
     var order by remember { mutableStateOf(emptyList<String>()) }
-    var metric by rememberSaveable { mutableStateOf(PortfolioMetric.PERIOD) }
-    var period by rememberSaveable { mutableStateOf(PortfolioPeriod.D1) }
-    var sort by rememberSaveable { mutableStateOf(HoldingSort.MOVE) }
-    var show by rememberSaveable { mutableStateOf<HoldingType?>(null) }
-    var open by rememberSaveable { mutableStateOf<String?>(null) }
-    var allocationOpen by rememberSaveable { mutableStateOf(false) }
-    var allocationBy by rememberSaveable { mutableStateOf(AllocationBy.SECTOR) }
-    var needsOpen by rememberSaveable { mutableStateOf(false) }
+    var signedOutReason by remember { mutableStateOf<String?>(null) }
+    var metric by PortfolioChrome.metric
+    var period by PortfolioChrome.period
+    var sort by PortfolioChrome.sort
+    var show by PortfolioChrome.show
+    var open by PortfolioChrome.open
+    var allocationOpen by PortfolioChrome.allocationOpen
+    var allocationBy by PortfolioChrome.allocationBy
+    var needsOpen by PortfolioChrome.needsOpen
     var keysOpen by remember { mutableStateOf(false) }
     var why by remember { mutableStateOf<NeedsLook?>(null) }
     var alerting by remember { mutableStateOf<HoldingRow?>(null) }
@@ -145,9 +157,9 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
         connection = repo.connection(now)
         if (connection == PortfolioConnection.SIGNED_IN) {
             loading = snapshot == null
-            when (val r = repo.refresh(now)) {
-                is HoldingsResult.Ok -> { snapshot = r.snapshot; error = null }
-                is HoldingsResult.SignedOut -> { connection = repo.connection(now); error = null }
+            when (val r = repo.refresh(now, force = refresh.key > 0)) {
+                is HoldingsResult.Ok -> { snapshot = r.snapshot; error = null; signedOutReason = null }
+                is HoldingsResult.SignedOut -> { connection = repo.connection(now); error = null; signedOutReason = r.reason }
                 is HoldingsResult.Failed -> error = r.message
             }
             loading = false
@@ -162,17 +174,21 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     val owner = remember { Any() }
     LaunchedEffect(keys) { UpstoxFeed.acquire(owner, keys + UpstoxIndices.NIFTY_50) }
     DisposableEffect(owner) { onDispose { UpstoxFeed.release(owner) } }
-    val feed by UpstoxFeed.quotes.collectAsStateWithLifecycle()
+    val feed = UpstoxFeed.quotes.collectAsStateWithLifecycle()
+    // Only this page's instruments: ticks for other screens' keys don't recompose it.
+    val live by remember(keys) { derivedStateOf { keys.mapNotNull { k -> feed.value[k]?.let { k to LivePrice(it.lastPrice, it.previousClose) } }.toMap() } }
+    val niftyLive by remember { derivedStateOf { feed.value[UpstoxIndices.NIFTY_50] } }
     val freshness = rememberFeedFreshness()
     val today = remember { LocalDate.now(PortfolioRepository.IST) }
     val history by produceState<PortfolioHistory?>(null, keys) { value = if (holdings.isEmpty()) null else repo.history(holdings, today) }
-    val intraday by produceState<Map<String, List<Candle>>?>(null, keys, refresh.key) { value = if (holdings.isEmpty()) null else repo.intraday(holdings, today) }
+    val intraday by produceState<Map<String, List<Candle>>?>(null, keys, refresh.key) {
+        value = if (holdings.isEmpty()) null else repo.intraday(holdings, today, force = refresh.key > 0)
+    }
 
-    val live = keys.mapNotNull { k -> feed[k]?.let { k to LivePrice(it.lastPrice, it.previousClose) } }.toMap()
     val bases = remember(history, period) { PortfolioRepository.bases(history, period) }
     val rows = PortfolioMath.rows(holdings, live, period, bases)
     val totals = PortfolioMath.totals(rows)
-    val alerts by PriceAlertStore.alerts(context.applicationContext).collectAsStateWithLifecycle()
+    val alerts by remember { PriceAlertStore.alerts(context.applicationContext) }.collectAsStateWithLifecycle()
     val needs = PortfolioFlags.needsALook(rows, alerts.orEmpty(), hidden)
     val flagged = rows.associate { r -> r.holding.symbol to PortfolioFlags.flags(r, alerts.orEmpty()).minByOrNull { it.severity.ordinal }?.severity }
     // Ticks change numbers, never order: rows re-rank only on load, refresh, or a metric, period or sort change.
@@ -183,7 +199,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
         val candles = if (period == PortfolioPeriod.D1) intraday.orEmpty() else history?.daily.orEmpty().mapValues { PortfolioMath.window(it.value, period) }
         PortfolioMath.valueSeries(holdings, candles).map { it.second }
     }.let { if (it.isEmpty()) it else it + totals.value }
-    val nifty = niftyChange(history, feed[UpstoxIndices.NIFTY_50], period)
+    val nifty = niftyChange(history, niftyLive, period)
     val badge = when {
         freshness == FeedFreshness.LIVE && live.isNotEmpty() -> null
         freshness == FeedFreshness.CLOSED && live.isNotEmpty() -> "Closed"
@@ -196,14 +212,19 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     }
     val sectorPct = PortfolioMath.allocation(rows, AllocationBy.SECTOR).associate { it.name to it.pct }
 
-    val note = when {
-        snapshot == null -> if (loading) "Portfolio" else "Portfolio · not connected"
-        holdings.isEmpty() -> "Portfolio · no holdings yet"
-        q.isNotEmpty() -> "Portfolio · ${visible.size} match \"$q\""
-        // One fact after the section so the note fits beside the header icons on a 360dp phone.
-        connection == PortfolioConnection.SIGNED_OUT -> "Portfolio · signed out"
-        needs.isNotEmpty() -> "Portfolio · ${needs.size} need${if (needs.size == 1) "s" else ""} a look"
-        else -> "Portfolio · ${plural(holdings.size, "holding")}"
+    val view = PortfolioView.of(snapshot, connection, loading, error)
+    val note = when (view) {
+        PortfolioView.LOADING -> "Portfolio"
+        PortfolioView.CONNECT -> "Portfolio · not connected"
+        PortfolioView.LOAD_FAILED -> "Portfolio · couldn't load"
+        PortfolioView.EMPTY -> "Portfolio · no holdings yet"
+        PortfolioView.HOLDINGS -> when {
+            q.isNotEmpty() -> "Portfolio · ${visible.size} match \"$q\""
+            // One fact after the section so the note fits beside the header icons on a 360dp phone.
+            connection == PortfolioConnection.SIGNED_OUT -> "Portfolio · signed out"
+            needs.isNotEmpty() -> "Portfolio · ${needs.size} need${if (needs.size == 1) "s" else ""} a look"
+            else -> "Portfolio · ${plural(holdings.size, "holding")}"
+        }
     }
     SideEffect {
         PortfolioChrome.note.value = note
@@ -217,14 +238,15 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
             contentPadding = PaddingValues(top = 4.dp, bottom = padding.calculateBottomPadding())
         ) {
             val snap = snapshot
-            when {
-                snap == null && loading -> item(key = "loading") { MarksyLoader("Loading your Upstox holdings…") }
-                snap == null -> item(key = "connect") { ConnectCard(repo.providers, startSignIn) }
-                holdings.isEmpty() -> item(key = "empty") {
+            when (view) {
+                PortfolioView.LOADING -> item(key = "loading") { MarksyLoader("Loading your Upstox holdings…") }
+                PortfolioView.CONNECT -> item(key = "connect") { ConnectCard(repo.providers, startSignIn) }
+                PortfolioView.LOAD_FAILED -> item(key = "load-failed") { LoadFailedCard(error.orEmpty(), refresh::refresh) }
+                PortfolioView.EMPTY -> item(key = "empty") {
                     EmptyState("No holdings in your Upstox account", "Stocks and ETFs you own show here. A buy shows up the next morning, once it settles.")
                 }
-                else -> {
-                    if (connection == PortfolioConnection.SIGNED_OUT) item(key = "signed-out") { SignedOutCard(snap.fetchedAt, live.isNotEmpty(), startSignIn) }
+                PortfolioView.HOLDINGS -> if (snap != null) {
+                    if (connection == PortfolioConnection.SIGNED_OUT) item(key = "signed-out") { SignedOutCard(snap.fetchedAt, live.isNotEmpty(), signedOutReason, startSignIn) }
                     error?.let { e -> item(key = "error") { Caveat("Couldn't refresh from Upstox ($e). Showing holdings from ${compactTime(snap.fetchedAt) ?: "earlier"}.") } }
                     item(key = "hero") {
                         PortfolioHero(
@@ -407,7 +429,7 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
 
 @Composable
 private fun AllocationRow(slice: AllocationSlice, max: Double, line: Double?) {
-    val over = line != null && slice.pct >= line
+    val over = line != null && PortfolioFlags.concentrated(slice.pct)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(slice.name, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(92.dp))
         BoxWithConstraints(Modifier.weight(1f).height(8.dp)) {
@@ -663,8 +685,8 @@ private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit
         }
         Text("See what you own, next to live prices", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Your Analytics Token covers prices but can't read holdings. Sign in to Upstox once a day to see today's and total P&L, " +
-                "holdings that need a look, and your sector mix.",
+            "Holdings need an Upstox sign-in once a day; Upstox's market-data token can't read them. Sign in to see today's and " +
+                "total P&L, holdings that need a look, and your sector mix.",
             color = MarksyTheme.TextSecondary, fontSize = 12.5.sp, lineHeight = 18.sp
         )
         SignInButton(onSignIn, Modifier.fillMaxWidth())
@@ -677,14 +699,24 @@ private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit
 }
 
 @Composable
-private fun SignedOutCard(fetchedAt: Long, livePrices: Boolean, onSignIn: () -> Unit) {
+private fun LoadFailedCard(message: String, onRetry: () -> Unit) {
+    Column(Modifier.portfolioCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chip(Icons.Default.Schedule, "Couldn't load your holdings", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
+        Text(message, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+        Text("You're still signed in to Upstox; nothing is wrong with your keys.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        Pill("Try again", onClick = onRetry)
+    }
+}
+
+@Composable
+private fun SignedOutCard(fetchedAt: Long, livePrices: Boolean, reason: String?, onSignIn: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.YellowImportant.copy(alpha = .55f), shape).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Chip(Icons.Default.Schedule, "Signed out of Upstox", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
-        Text("Upstox ends every sign-in at 3:30 am", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(reason ?: "Upstox ends every sign-in at 3:30 am", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         Text(
             "Holdings as of ${compactTime(fetchedAt) ?: "your last sign-in"}; prices are ${if (livePrices) "live" else "from then too"}.",
             color = MarksyTheme.TextSecondary, fontSize = 12.sp

@@ -22,6 +22,8 @@ import com.marksy.os.upstox.UpstoxOAuth
 import com.marksy.os.upstox.UpstoxOAuthStore
 import com.marksy.os.portfolio.PortfolioRepository
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -172,7 +174,8 @@ internal fun UpstoxAppKeysDialog(store: UpstoxOAuthStore, onDismiss: () -> Unit,
                 CompactTextField(
                     secret, { secret = it.trim() }, Modifier.fillMaxWidth(), label = "API secret",
                     placeholder = if (existing != null) "Leave blank to keep the saved one" else "",
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
                 )
                 Text("Read-only: Marksy reads holdings and never places orders.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
             }

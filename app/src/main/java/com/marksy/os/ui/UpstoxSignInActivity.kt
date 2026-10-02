@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +54,8 @@ class UpstoxSignInActivity : ComponentActivity() {
     @OptIn(ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // OTP and PIN stay out of recents and screen recordings.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         store = UpstoxOAuthStore(this)
         credentials = store.credentials() ?: run { finish(); return }
         state = savedInstanceState?.getString(KEY_STATE) ?: UpstoxOAuth.newState()
@@ -63,8 +68,9 @@ class UpstoxSignInActivity : ComponentActivity() {
             settings.setSupportMultipleWindows(false)
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = route(request.url.toString(), request.isForMainFrame)
+                // POST navigations skip shouldOverrideUrlLoading, so the redirect and host checks repeat here.
                 override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                    if (url != null && UpstoxOAuth.isRedirect(url, credentials.redirectUri)) { view.stopLoading(); route(url, mainFrame = true) }
+                    if (url != null && url != "about:blank" && route(url, mainFrame = true)) view.stopLoading()
                 }
             }
         }
@@ -73,7 +79,7 @@ class UpstoxSignInActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) { if (problem == null && view.canGoBack()) view.goBack() else finish() }
         setContent {
             MarksyMaterialTheme {
-                Box(Modifier.fillMaxSize().background(MarksyTheme.Background).systemBarsPadding()) {
+                Box(Modifier.fillMaxSize().background(MarksyTheme.Background).systemBarsPadding().imePadding()) {
                     AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
                     if (busy) Box(Modifier.fillMaxSize().background(MarksyTheme.Background.copy(alpha = .9f)), contentAlignment = Alignment.Center) {
                         MarksyLoader("Finishing the Upstox sign-in…")
@@ -102,8 +108,18 @@ class UpstoxSignInActivity : ComponentActivity() {
         outState.putString(KEY_STATE, state)
     }
 
+    override fun onResume() {
+        super.onResume()
+        web?.onResume()
+    }
+
+    override fun onPause() {
+        web?.onPause()
+        super.onPause()
+    }
+
     override fun onDestroy() {
-        web?.destroy()
+        web?.let { (it.parent as? ViewGroup)?.removeView(it); it.destroy() }
         web = null
         super.onDestroy()
     }

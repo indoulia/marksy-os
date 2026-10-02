@@ -90,4 +90,21 @@ class UpstoxOAuthStoreTest {
         assertEquals("analytics", UpstoxTokenStore(context).getToken())
         UpstoxTokenStore(context).clear()
     }
+
+    @Test
+    fun resavingTheSameAppKeepsTodaysSignIn() {
+        val store = UpstoxOAuthStore(context)
+        store.saveCredentials("key", "secret", UpstoxOAuth.DEFAULT_REDIRECT)
+        store.saveToken("token", issued)
+        store.saveCredentials("key", "secret2", UpstoxOAuth.DEFAULT_REDIRECT)
+        assertEquals("token", store.accessToken(issued + 1))
+    }
+
+    @Test
+    fun undecryptableKeysCountAsMissing() {
+        context.getSharedPreferences("upstox_oauth", Context.MODE_PRIVATE).edit()
+            .putString("api_key", "garbage").putString("api_key_iv", "AAAAAAAAAAAAAAAA")
+            .putString("api_secret", "garbage").putString("api_secret_iv", "AAAAAAAAAAAAAAAA").commit()
+        assertFalse(UpstoxOAuthStore(context).hasCredentials())
+    }
 }
