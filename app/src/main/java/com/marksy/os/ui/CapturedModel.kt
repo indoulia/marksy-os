@@ -84,7 +84,7 @@ object CapturedModel {
 
         val rejected = rows.filter { it.event.id !in needIds && isRejected(it) }.sortedByDescending { it.event.postedAt }
         val rest = rows.filter { it.event.id !in needIds && !isRejected(it) }
-            .let { fold(it) }
+            .let { fold(it, boundary) }
             .filter { show != ShowOnly.TIPS || !it.keptLocal }
 
         val (today, earlier) = rest.partition { it.event.lifecycleState != "RESOLVED" && it.event.postedAt >= boundary }
@@ -137,7 +137,8 @@ object CapturedModel {
     private fun foldKey(body: String) = body.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
 
     /** A call forwarded to another group within a day folds into the first row; display only, each copy is its own ledger tip. */
-    private fun fold(rows: List<CapturedRow>): List<CapturedRow> {
+    private fun fold(rows: List<CapturedRow>, boundary: Long): List<CapturedRow> {
+        fun lane(r: CapturedRow) = r.event.lifecycleState == "RESOLVED" || r.event.postedAt < boundary
         class Cluster(val primary: CapturedRow, val labels: MutableList<String>, var copies: Int = 0)
         val clusters = mutableListOf<Cluster>()
         val byKey = mutableMapOf<String, MutableList<Cluster>>()
@@ -146,7 +147,7 @@ object CapturedModel {
             val label = sourceLabel(r.event)
             if (r.keptLocal || key.length < 20) { clusters += Cluster(r, mutableListOf(label)); continue }
             val target = byKey[key].orEmpty().firstOrNull { c ->
-                r.event.postedAt - c.primary.event.postedAt <= DAY && label !in c.labels
+                r.event.postedAt - c.primary.event.postedAt <= DAY && label !in c.labels && lane(r) == lane(c.primary)
             }
             if (target != null) { target.labels += label; target.copies++; continue }
             Cluster(r, mutableListOf(label)).also { clusters += it; byKey.getOrPut(key) { mutableListOf() } += it }
@@ -155,8 +156,8 @@ object CapturedModel {
     }
 
     private fun stacks(rows: List<CapturedRow>, by: StackBy): List<CapturedStack> =
-        rows.groupBy { r -> if (by == StackBy.SYMBOL) r.levels?.symbol ?: "Other" else sourceLabel(r.event) }
-            .map { (label, g) -> CapturedStack(label.lowercase(Locale.ROOT), label, g.sortedByDescending { it.event.postedAt }) }
+        rows.groupBy { r -> (if (by == StackBy.SYMBOL) r.levels?.symbol ?: "Other" else sourceLabel(r.event)).lowercase(Locale.ROOT) }
+            .map { (key, g) -> CapturedStack(key, g.first().let { r -> if (by == StackBy.SYMBOL) r.levels?.symbol ?: "Other" else sourceLabel(r.event) }, g.sortedByDescending { it.event.postedAt }) }
             .sortedByDescending { it.rows.first().event.postedAt }
 
     private fun health(rows: List<CapturedRow>, boundary: Long): CaptureHealth {

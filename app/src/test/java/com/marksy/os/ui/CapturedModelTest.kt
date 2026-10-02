@@ -152,4 +152,16 @@ class CapturedModelTest {
         assertEquals(CaptureHealth(today = 3, sent = 1, waiting = 0, failed = 1, kept = 1, lastDeliveredAt = null), l.health)
         assertEquals("Captured · 3 today · 1 needs you", capturedNote(l))
     }
+
+    // Review: labels differing only in case shared a LazyColumn key; a post-close copy folded into a pre-close row.
+    @Test
+    fun caseCollidingLabelsShareOneStackAndCopiesNeverFoldAcrossLanes() {
+        val stacks = lanes(ev(call, title = "Tips"), ev(sell, title = "tips")).today
+        assertEquals(1, stacks.size)
+        val before = ev(call, postedAt = at(2, 14), title = "G1")
+        val after = ev(call, postedAt = at(2, 16), title = "G2")
+        val l = lanes(before, after, now = at(2, 17))
+        assertEquals(listOf(after.id), l.todayIds())
+        assertEquals(listOf(before.id), l.earlierIds())
+    }
 }

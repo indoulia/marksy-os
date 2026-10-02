@@ -104,8 +104,8 @@ private fun CapturedList(
     onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit
 ) {
     val isSymbol = rememberSymbolCheck()
-    val now = System.currentTimeMillis()
-    val lanes = remember(events, stackBy, show, isSymbol) {
+    val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
+    val lanes = remember(events, stackBy, show, isSymbol, now) {
         CapturedModel.lanes(events, now, stackBy, show) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
     }
     CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss)
