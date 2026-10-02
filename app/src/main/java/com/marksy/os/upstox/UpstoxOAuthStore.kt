@@ -11,8 +11,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The user's Upstox app keys, today's OAuth token and the last holdings, each slot Keystore-encrypted under one
- * alias of its own (same pattern as [UpstoxTokenStore]). Keys and token are only ever sent to api.upstox.com.
+ * The user's Upstox app keys, today's OAuth token and the last holdings, each slot Keystore-encrypted; all slots
+ * share this store's one alias (same pattern as [UpstoxTokenStore]). Keys and token are only ever sent to api.upstox.com.
  */
 class UpstoxOAuthStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)

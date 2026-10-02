@@ -120,6 +120,7 @@ object PortfolioChrome {
     internal val allocationOpen = mutableStateOf(false)
     internal val allocationBy = mutableStateOf(AllocationBy.SECTOR)
     internal val needsOpen = mutableStateOf(false)
+    internal val signedOutReason = mutableStateOf<String?>(null)
 }
 
 /** Market › Portfolio, triage first: totals, Needs a look, then holdings ranked by rupee move. Read-only. */
@@ -135,7 +136,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     var hidden by remember { mutableStateOf(repo.hidden(System.currentTimeMillis())) }
     var settled by remember { mutableIntStateOf(0) }
     var order by remember { mutableStateOf(emptyList<String>()) }
-    var signedOutReason by remember { mutableStateOf<String?>(null) }
+    var signedOutReason by PortfolioChrome.signedOutReason
     var metric by PortfolioChrome.metric
     var period by PortfolioChrome.period
     var sort by PortfolioChrome.sort
