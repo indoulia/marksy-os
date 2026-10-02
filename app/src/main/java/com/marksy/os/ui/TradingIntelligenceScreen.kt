@@ -74,9 +74,8 @@ fun TradingIntelligenceScreen(
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
         actions = actions,
-        filterIsView = selectedFilter != TAB_CAPTURED,
+        filterIsView = false,
         extrasActive = show != ShowOnly.ALL,
-        onClearExtras = { show = ShowOnly.ALL },
         filterExtras = if (selectedFilter == TAB_CAPTURED) ({ CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) }) else null
     )
     }

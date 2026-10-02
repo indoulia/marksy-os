@@ -72,6 +72,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Lists by stock count, fullest first; ties keep creation order. */
 fun rankedWatchlists(lists: List<WatchlistEntity>, items: List<WatchlistItemEntity>): List<WatchlistEntity> {
@@ -162,6 +163,7 @@ fun WatchlistScreen(
     val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
     val adder = LocalWatchlistAdder.current
     var creating by rememberSaveable { mutableStateOf(false) }
+    var quickAdding by rememberSaveable { mutableStateOf(false) }
     var moving by remember { mutableStateOf<String?>(null) }
 
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
@@ -170,7 +172,7 @@ fun WatchlistScreen(
         when {
             q.length >= 2 -> StockSuggestions(q, inner, onSymbolSelected = { adder?.open(it) }, emptyHint = "Try the company's NSE symbol, e.g. HAL.")
             list == null -> Box(Modifier.padding(18.dp)) {
-                EmptyState("No watchlists yet", "Tap + to create one, e.g. Defence or SmallCap, then tap search above to add stocks.")
+                EmptyState("No watchlists yet", "Tap the bottom-left button to create one, e.g. Defence or SmallCap, then tap search above to add stocks.")
             }
             else -> WatchlistRows(
                 rows = items.filter { it.watchlistId == list.id },
@@ -181,19 +183,21 @@ fun WatchlistScreen(
                 onMove = { moving = it }
             )
         }
-        if (lists.size > 1) OneHandQuickMenu(
+        OneHandQuickMenu(
             options = rankedWatchlists(lists, items).map { it.id.toString() to "${it.name}  ${counts[it.id] ?: 0}" },
             selected = list?.id?.toString(),
             onSelected = onViewSelected,
             icon = Icons.Default.Bookmarks,
-            label = "Switch watchlist"
+            label = "Watchlists",
+            action = FloatingAction(Icons.Default.Add, "New watchlist") { creating = true }
         )
+        // Delete lives in Settings (ManageWatchlistsDialog), away from easy taps.
         OneHandControls(
             filters = MarketSections,
             selectedFilter = MarketTab.WATCHLIST.name,
+            filterIsView = false,
             onFilterSelected = onSectionSelected,
-            // Delete lives in Settings (ManageWatchlistsDialog), away from easy taps.
-            actions = listOf(FloatingAction(Icons.Default.Add, "New watchlist") { creating = true })
+            actions = listOfNotNull(list?.let { l -> FloatingAction(Icons.Default.Add, "Add stocks to ${l.name}") { quickAdding = true } })
         )
     }
 
@@ -222,6 +226,67 @@ fun WatchlistScreen(
         onDismiss = { creating = false },
         onCreate = { name -> repository.createList(name)?.also { creating = false; onViewSelected(it.toString()) } }
     )
+    list?.takeIf { quickAdding }?.let { l ->
+        QuickAddStockDialog(repository, l, items.filter { it.watchlistId == l.id }.mapTo(HashSet()) { it.symbol }) { quickAdding = false }
+    }
+}
+
+/** Search-and-add straight into [list]; stays open so several stocks go in one trip. */
+@Composable
+private fun QuickAddStockDialog(repository: WatchlistRepository, list: WatchlistEntity, inList: Set<String>, onDismiss: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var pending by remember { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
+    val q = query.trim()
+    // null = still loading.
+    val matches by produceState<List<String>?>(emptyList(), q) {
+        if (q.length < 2) { value = emptyList(); return@produceState }
+        value = null
+        value = runCatching { UpstoxInstruments.suggest(context, q) }.getOrDefault(emptyList())
+    }
+    MarksyDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to ${list.name}  ${inList.size}/${WatchlistRepository.MAX_STOCKS}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CompactTextField(query, { query = it; note = null }, Modifier.fillMaxWidth(), placeholder = "NSE symbol or name, e.g. HAL")
+                note?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                val found = matches
+                when {
+                    found == null -> MarksyLoader("Searching…")
+                    q.length >= 2 && found.isEmpty() -> Text("No NSE symbol matches \"$q\"", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                }
+                found.orEmpty().forEach { symbol ->
+                    val has = symbol in inList
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !has && pending == null) {
+                            pending = symbol
+                            scope.launch {
+                                // Company name for the row's subtitle; skipped if the lookup is slow.
+                                val name = withTimeoutOrNull(3_000) { loadTraits(context, symbol).name }
+                                note = when (repository.add(list.id, symbol, name)) {
+                                    WatchAdd.ADDED -> "Added $symbol"
+                                    WatchAdd.ALREADY_THERE -> "$symbol is already in ${list.name}"
+                                    WatchAdd.FULL -> "${list.name} already has ${WatchlistRepository.MAX_STOCKS} stocks"
+                                }
+                                pending = null
+                            }
+                        }.padding(horizontal = 4.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text(
+                            when { has -> "✓"; pending == symbol -> "Adding…"; else -> "Add" },
+                            color = if (has) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+    )
 }
 
 /** Settings' watchlist manager: deleting a list takes this trip and a confirmation. */
@@ -230,8 +295,13 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
     val scope = rememberCoroutineScope()
     val counts = remember(items) { items.groupingBy { it.watchlistId }.eachCount() }
     var deleting by remember { mutableStateOf<WatchlistEntity?>(null) }
+    var creating by remember { mutableStateOf(false) }
     val target = deleting
-    if (target != null) WatchDialog(
+    if (creating) NewWatchlistDialog(
+        existing = lists.map { it.name },
+        onDismiss = { creating = false },
+        onCreate = { name -> repository.createList(name)?.also { creating = false } }
+    ) else if (target != null) WatchDialog(
         title = "Delete ${target.name}?",
         confirmLabel = "Delete",
         confirmEnabled = true,
@@ -258,6 +328,7 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
                 }
             }
         },
+        dismissButton = { TextButton(onClick = { creating = true }) { Text("New watchlist", color = MarksyTheme.PrimaryEmerald) } },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
     )
 }
@@ -270,7 +341,7 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding())
     ) {
-        if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Tap search above to add up to ${WatchlistRepository.MAX_STOCKS} stocks.") }
+        if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Tap + to add up to ${WatchlistRepository.MAX_STOCKS} stocks.") }
         items(rows, key = { "w-${it.watchlistId}-${it.symbol}" }) { row ->
             // Same swipe tray as Home: actions show first and only run when tapped.
             SwipeActionsRow(

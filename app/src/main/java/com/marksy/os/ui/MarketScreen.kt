@@ -152,6 +152,7 @@ fun MarketScreen(
         if (tab != MarketTab.IPOS) OneHandControls(
             filters = MarketSections,
             selectedFilter = tab.name,
+            filterIsView = false,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
             searchQuery = portfolioQuery.takeIf { portfolioTools },
             onSearchChange = if (portfolioTools) { q -> portfolioQuery = q } else null,

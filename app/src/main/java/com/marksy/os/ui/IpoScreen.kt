@@ -165,6 +165,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
         OneHandControls(
             filters = MarketSections,
             selectedFilter = MarketTab.IPOS.name,
+            filterIsView = false,
             onFilterSelected = onSectionSelected,
             searchQuery = if (opened == null) query else null,
             onSearchChange = if (opened == null) ({ query = it }) else null,
