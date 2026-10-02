@@ -65,17 +65,15 @@ class IpoScreenTest {
     }
 
     @Test
-    fun stageFilterChipsComeFromServerCounts() {
+    fun upcomingIssuesShowInTheOpensSoonLane() {
         val repository = MarketIntelligenceRepository(
-            FixtureIpoClient(
-                list = listOf(ipo("ipo-1", "Acme Robotics", "OPEN")),
-                counts = IpoStageCountsDto(byStage = mapOf("OPEN" to 1, "UPCOMING" to 2), total = 3)
-            )
+            FixtureIpoClient(list = listOf(ipo("ipo-2", "Nilgiri Foods", "UPCOMING")), counts = IpoStageCountsDto(byStage = mapOf("UPCOMING" to 1), total = 1))
         )
 
         compose.setContent { IpoScreen(repository = repository, padding = PaddingValues()) }
         compose.waitForIdle()
 
-        compose.onNodeWithText("Upcoming (2)", substring = true).assertExists()
+        compose.onNodeWithText("OPENS SOON", substring = true).assertExists()
+        compose.onNodeWithText("Nilgiri Foods").assertExists()
     }
 }

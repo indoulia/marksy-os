@@ -246,6 +246,7 @@ class MainActivity : ComponentActivity() {
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.WATCHLIST.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
+        var ipoNote by remember { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
         // Back from a stock returns to where it was opened: earlier stocks (peers), then the page it came from.
         var stockTrail by rememberSaveable { mutableStateOf(listOf<String>()) }
@@ -392,6 +393,7 @@ class MainActivity : ComponentActivity() {
             hostOpen -> null
             onWatchlist -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
+            selectedTab == 2 && marketTabName == MarketTab.IPOS.name -> ipoNote
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             else -> null
@@ -793,7 +795,8 @@ class MainActivity : ComponentActivity() {
                     marketEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
                     onEventSelected = openEvent,
-                    onOpenStock = { openStockFrom(it, "2") }
+                    onOpenStock = { openStockFrom(it, "2") },
+                    onIpoNote = { ipoNote = it }
                 )
                 selectedTab == 4 -> com.marksy.os.ui.TrustScreen(
                     repository = remember { MarksyContainer.marketIntelligence(applicationContext) },

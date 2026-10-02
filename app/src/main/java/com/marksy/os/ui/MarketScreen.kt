@@ -51,7 +51,8 @@ fun MarketScreen(
     marketEvents: List<NotificationEventEntity> = emptyList(),
     stockEvents: List<NotificationEventEntity> = emptyList(),
     onEventSelected: (NotificationEventEntity) -> Unit = {},
-    onOpenStock: ((String) -> Unit)? = null
+    onOpenStock: ((String) -> Unit)? = null,
+    onIpoNote: (String?) -> Unit = {}
 ) {
     val tab = MarketTab.entries.firstOrNull { it.name == tabName } ?: MarketTab.OVERVIEW
 
@@ -133,7 +134,7 @@ fun MarketScreen(
                     }
                 }
             }
-            MarketTab.IPOS -> IpoScreen(repository = repository, padding = inner)
+            MarketTab.IPOS -> IpoScreen(repository = repository, padding = inner, onSectionSelected = { onTabSelected(it); onSymbolSelected(null) }, onTitleNote = onIpoNote)
             MarketTab.UPDATES -> LazyColumn(
                 Modifier.fillMaxSize().padding(horizontal = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -143,7 +144,8 @@ fun MarketScreen(
                 items(marketEvents, key = { "mkt-${it.id}" }) { event -> MarketUpdateCard(event) { onEventSelected(event) } }
             }
         }
-        OneHandControls(
+        // The IPO page draws its own stack (filters, search, reminders, watch).
+        if (tab != MarketTab.IPOS) OneHandControls(
             filters = MarketSections,
             selectedFilter = tab.name,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
