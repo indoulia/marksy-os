@@ -121,8 +121,10 @@ ui/PortfolioScreen.kt          the page
 
 ## 8. Page layout (matches the mockup)
 
-- **Header note** (no in-page heading): "Portfolio · 13 holdings · 3 need a look", "Portfolio · not connected",
-  "Portfolio · no holdings yet" or "Portfolio · signed out".
+- **Header note** (no in-page heading): one fact after the section, so it fits beside the header icons at 360dp.
+  It reads "Portfolio · 3 need a look", "Portfolio · 13 holdings", "Portfolio · signed out", "Portfolio · not
+  connected" or "Portfolio · no holdings yet". The header's own LIVE mark covers live prices, so the card's badge
+  appears only for "Closed" or "as of 10:42".
 - **Top card:** Current value with a LIVE, Closed or "as of 10:42" badge, and Invested.
   - Two boxes, Today (or the period's name) and Total, each with ₹ and %. Tapping one sets what every row shows.
   - A sparkline for the period, with "start · NIFTY 50 ±x.xx% · now" under it.

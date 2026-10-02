@@ -200,11 +200,10 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
         snapshot == null -> if (loading) "Portfolio" else "Portfolio · not connected"
         holdings.isEmpty() -> "Portfolio · no holdings yet"
         q.isNotEmpty() -> "Portfolio · ${visible.size} match \"$q\""
-        else -> listOfNotNull(
-            "Portfolio", plural(holdings.size, "holding"),
-            needs.size.takeIf { it > 0 }?.let { "$it need${if (it == 1) "s" else ""} a look" },
-            "signed out".takeIf { connection == PortfolioConnection.SIGNED_OUT }
-        ).joinToString(" · ")
+        // One fact after the section so the note fits beside the header icons on a 360dp phone.
+        connection == PortfolioConnection.SIGNED_OUT -> "Portfolio · signed out"
+        needs.isNotEmpty() -> "Portfolio · ${needs.size} need${if (needs.size == 1) "s" else ""} a look"
+        else -> "Portfolio · ${plural(holdings.size, "holding")}"
     }
     SideEffect {
         PortfolioChrome.note.value = note
@@ -327,7 +326,8 @@ private fun PortfolioHero(
             PnlBox("Total", totals.totalPnl, totals.totalPct, metric == PortfolioMetric.TOTAL, Modifier.weight(1f)) { onMetric(PortfolioMetric.TOTAL) }
         }
         if (series.size >= 2) {
-            Sparkline(series, if (series.last() >= series.first()) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, Modifier.fillMaxWidth().height(52.dp))
+            // Relative to the period start: Sparkline's scale always includes zero.
+            Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, Modifier.fillMaxWidth().height(52.dp))
         }
         if (series.size >= 2 || nifty != null) Row(verticalAlignment = Alignment.CenterVertically) {
             if (series.size >= 2) Text(if (period == PortfolioPeriod.D1) "9:15 am" else "${period.title} ago", color = MarksyTheme.TextMuted, fontSize = 10.sp)
@@ -477,7 +477,7 @@ private fun NeedsCard(item: NeedsLook, sectorPct: Map<String, Double>, onWhy: ()
             ).joinToString(" · "),
             color = MarksyTheme.TextMuted, fontSize = 11.sp
         )
-        Text("${h.name} · ₹${money(r.price)}", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${displayName(h.name)} · ₹${money(r.price)}", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(needBody(item, sectorPct), color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill("Open stock", onClick = onOpen)
@@ -590,12 +590,13 @@ private fun HoldingLine(
             .padding(horizontal = 14.dp, vertical = 9.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(h.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            flag?.let {
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.size(7.dp).clip(CircleShape).background(severityColors(it).first))
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(h.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                flag?.let {
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(severityColors(it).first))
+                }
             }
-            Spacer(Modifier.weight(1f))
             Text(pnl?.let(::signedRupees) ?: "—", color = pnlColor(pnl), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(
                 pct?.let(::signedPct).orEmpty(), color = pnlColor(pct), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
@@ -770,6 +771,8 @@ private fun Modifier.portfolioCard(): Modifier {
     return fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
 }
 
+private val LEGAL_SUFFIX = Regex("\\s+(LTD|LIMITED)\\.?$", RegexOption.IGNORE_CASE)
+private fun displayName(name: String): String = name.replace(LEGAL_SUFFIX, "")
 private fun rupees(v: Double): String = "₹" + count(Math.round(abs(v)))
 private fun signedRupees(v: Double): String = (if (v < 0) "−" else "+") + rupees(v)
 private fun signedPct(v: Double): String = (if (v < 0) "−" else "+") + String.format(Locale.US, "%.2f", abs(v)) + "%"
