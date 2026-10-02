@@ -73,8 +73,7 @@ class UpstoxApiClient(private val token: () -> String?) {
     suspend fun holidays(): String = withContext(Dispatchers.IO) { get("$V2_URL/market/holidays", auth = false) }
 
     private fun get(url: String, auth: Boolean = true): String {
-        val bearer = token()
-        if (auth && bearer == null) throw UpstoxAuthException("No Upstox token saved")
+        val bearer = if (auth) token() ?: throw UpstoxAuthException("No Upstox token saved") else null
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 8_000

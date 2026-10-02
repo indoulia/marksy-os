@@ -121,10 +121,9 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     var details by remember { mutableStateOf<Map<String, IpoDetailDto>>(emptyMap()) }
     LaunchedEffect(state) {
         val at = ZonedDateTime.now(IpoLifecycle.IST)
-        val wanted = items.filter { ipo ->
-            val lane = IpoLifecycle.laneOf(ipo, at)
-            lane == Lane.ALLOTMENT || (lane == Lane.LISTED && ipo.listsOn.localDate()?.isAfter(at.toLocalDate().minusDays(15)) == true)
-        }.map { it.id }.filter { it !in details }.take(12)
+        val wanted = items.filter { IpoLifecycle.needsDetail(it, details[it.id], at) }
+            .sortedWith(compareBy({ IpoLifecycle.laneOf(it, at) != Lane.ALLOTMENT }, { -(it.listsOn.localDate()?.toEpochDay() ?: 0L) }))
+            .map { it.id }.take(12)
         if (wanted.isNotEmpty()) details = details + coroutineScope {
             wanted.map { id -> async { id to (repository.ipoDetail(id) as? MarketDataState.Loaded)?.value } }.awaitAll()
         }.mapNotNull { (id, d) -> d?.let { id to it } }

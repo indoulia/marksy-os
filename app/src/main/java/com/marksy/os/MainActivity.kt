@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
         const val OPEN_BRIEFING = "briefing"
         const val OPEN_SETUPS = "setups"
         const val OPEN_FOLLOWING = "following"
+        const val OPEN_IPOS = "ipos"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -430,6 +431,7 @@ class MainActivity : ComponentActivity() {
                 OPEN_ASK -> showAsk = true
                 OPEN_BRIEFING -> { showAsk = false; showBriefing = true }
                 OPEN_SETUPS -> { showAsk = false; showBriefing = false; tradingFilter = TradingFilters.first(); selectedTab = 3 }
+                OPEN_IPOS -> { showAsk = false; showBriefing = false; marketTabName = MarketTab.IPOS.name; selectedTab = 2 }
                 OPEN_FOLLOWING -> {
                     showAsk = false; showBriefing = false
                     tradingFilter = com.marksy.os.ui.TradingTipsFilter; tipsStatus = com.marksy.os.ui.MyTipsStatus.FOLLOWING; selectedTab = 3

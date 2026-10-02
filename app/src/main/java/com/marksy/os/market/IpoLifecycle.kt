@@ -139,6 +139,13 @@ object IpoLifecycle {
     fun allotDate(detail: IpoDetailDto?): LocalDate? = detail?.keyDates?.firstOrNull { it.label == "Allotment" }?.date.localDate()
     fun allotOut(allot: LocalDate?, now: ZonedDateTime): Boolean = allot != null && !now.isBefore(allot.atTime(18, 0).atZone(IST))
 
+    /** Whether a home card still lacks the detail fact it shows: the allotment day, or a recent listing's result. */
+    fun needsDetail(ipo: IpoListItemDto, detail: IpoDetailDto?, now: ZonedDateTime): Boolean = when (laneOf(ipo, now)) {
+        Lane.ALLOTMENT -> allotDate(detail) == null
+        Lane.LISTED -> ipo.listsOn.localDate()?.isAfter(now.toLocalDate().minusDays(15)) == true && detail?.outcome?.listingReturnPercent == null
+        else -> false
+    }
+
     /** [detail], when loaded, adds the allotment day and the listing result. */
     fun cardFacts(ipo: IpoListItemDto, now: ZonedDateTime, detail: IpoDetailDto? = null): CardFacts {
         val overall = ipo.subscription?.latest?.get("OVERALL")?.times
@@ -202,7 +209,7 @@ object IpoLifecycle {
     /** Market holidays strictly between [from] and [to], which the issue's dates step over. */
     fun holidayNote(holidays: Map<LocalDate, String>, from: LocalDate?, to: LocalDate?): String? {
         if (from == null || to == null) return null
-        val inside = holidays.filterKeys { it.isAfter(from) && it.isBefore(to) }.toSortedMap()
+        val inside = holidays.filterKeys { it.isAfter(from) && it.isBefore(to) && it.dayOfWeek.value <= 5 }.toSortedMap()
         if (inside.isEmpty()) return null
         if (inside.size == 1) return inside.entries.first().let { (d, name) -> "${day(d)} is a market holiday ($name), so these dates skip it." }
         return inside.entries.joinToString(", ") { (d, name) -> "${day(d)} ($name)" } + " are market holidays, so these dates skip them."

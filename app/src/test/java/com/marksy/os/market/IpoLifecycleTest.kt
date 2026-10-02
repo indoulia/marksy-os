@@ -177,4 +177,17 @@ class IpoLifecycleTest {
         assertEquals("Fri 2 Oct is a market holiday (Gandhi Jayanti), so these dates skip it.", IpoLifecycle.holidayNote(holidays, LocalDate.of(2026, 9, 29), LocalDate.of(2026, 10, 7)))
         assertNull(IpoLifecycle.holidayNote(holidays, LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 9)))
     }
+
+    @Test fun detailsAreRefetchedUntilTheyCarryWhatTheCardNeeds() {
+        assertEquals(true, IpoLifecycle.needsDetail(book[2], null, now))
+        assertEquals(true, IpoLifecycle.needsDetail(book[2], detail(book[2]), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[2], detail(book[2], "2026-10-05"), now))
+        assertEquals(true, IpoLifecycle.needsDetail(book[5], detail(book[5]), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[5], detail(book[5], outcome = IpoOutcomeDto(570.0, 637.0, 11.75, null)), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[1], null, now))
+    }
+
+    @Test fun holidaysOnAWeekendAreNotSkippedDates() {
+        assertNull(IpoLifecycle.holidayNote(mapOf(LocalDate.of(2026, 10, 3) to "Saturday holiday"), LocalDate.of(2026, 9, 29), LocalDate.of(2026, 10, 7)))
+    }
 }

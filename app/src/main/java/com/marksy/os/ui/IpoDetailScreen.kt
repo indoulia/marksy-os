@@ -76,7 +76,7 @@ fun IpoDetailScreen(
     val stage = if (lane == Lane.TODAY) Lane.OPEN else lane
     val symbol = loaded?.listedSymbol?.takeIf { stage == Lane.LISTED }
     val nowPrice by produceState<Double?>(null, symbol) {
-        value = symbol?.let { s -> (repository.liveQuotes(listOf(s)) as? MarketDataState.Loaded)?.value?.quotes?.firstOrNull()?.price }
+        value = symbol?.let { s -> (repository.liveQuotes(listOf(s)) as? MarketDataState.Loaded)?.value?.quotes?.firstOrNull { it.symbol.equals(s, ignoreCase = true) }?.price }
     }
     val dates = IpoLifecycle.keyDates(loaded, summary)
     val events = IpoLifecycle.reminderEvents(dates, now)
@@ -159,7 +159,9 @@ private fun buildSections(
     add(
         if (lotCost != null && lotSize != null && upper != null) Sec("calc", "Lot calculator", IpoLifecycle.minBid(ipo)?.let { "From ${IpoLifecycle.inr(it)}" } ?: "") {
             CalculatorBody(ipo, stage, lotCost, lotSize, upper, now, events.firstOrNull { it.key == "open" }, reminderKeys, keyOf, onReminder)
-        } else Sec("calc", "Lot calculator", "Needs the price band") { BandAlertBody(ipo) }
+        } else Sec("calc", "Lot calculator", "Needs the price band") {
+            if (upper == null && (stage == Lane.UPCOMING || stage == null)) BandAlertBody(ipo) else MutedText("The lot size is not out yet.")
+        }
     )
 
     detail?.outcome?.let { o ->
@@ -585,8 +587,12 @@ private fun BandAlertBody(ipo: IpoListItemDto) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val watching by remember { com.marksy.os.alerts.IpoBandWatch.watching(context) }.collectAsState()
     val on = ipo.id in watching.orEmpty()
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
     MutedText("The price band and lot size are not out yet.")
-    Pill(if (on) "Marksy will tell you when it is out" else "Tell me when it is out", selected = on) { com.marksy.os.alerts.IpoBandWatch.set(context, ipo.id, ipo.companyName, !on) }
+    Pill(if (on) "Marksy will tell you when it is out" else "Tell me when it is out", selected = on) {
+        com.marksy.os.alerts.IpoBandWatch.set(context, ipo.id, ipo.companyName, !on)
+        if (!on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
 }
 
 @Composable
