@@ -220,12 +220,21 @@ object SmartInboxModel {
 
     // Truecaller often is the phone's SMS app; CaptureMedium stays as is because it mirrors what the tip ledger sends.
     fun isSms(event: NotificationEventEntity): Boolean =
-        CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS || event.sourcePackage.trim().lowercase(Locale.ROOT) == "com.truecaller"
+        CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS || isTruecaller(event)
+
+    private fun isTruecaller(event: NotificationEventEntity) = event.sourcePackage.trim().lowercase(Locale.ROOT) == "com.truecaller"
+    private val TRUECALLER_SENDER = listOf(Regex("""SMS from ([^\n•]+)"""), Regex("""^\s*•\s*([^•\n]+?)\s*•"""))
+
+    /** Who an SMS is from: its title, except Truecaller smart cards, which title the amount and name the sender in the body. */
+    fun smsSender(event: NotificationEventEntity): String {
+        if (!isTruecaller(event)) return event.title
+        return TRUECALLER_SENDER.firstNotNullOfOrNull { r -> r.find(event.body)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() } } ?: event.title
+    }
 
     // One SMS app carries the bank, the telco and the courier, so SMS stacks by sender; every other app is one stack.
     private fun stackKey(event: NotificationEventEntity): String {
         val pkg = event.sourcePackage.trim().lowercase(Locale.ROOT)
-        return if (isSms(event)) "$pkg|${event.title.trim().lowercase(Locale.ROOT)}" else pkg
+        return if (isSms(event)) "$pkg|${smsSender(event).trim().lowercase(Locale.ROOT)}" else pkg
     }
 
     private fun stacks(threads: List<InboxThread>): List<SourceStack> =
@@ -233,7 +242,7 @@ object SmartInboxModel {
             .map { (key, group) ->
                 val latest = group.maxBy { it.latest.postedAt }.latest
                 val sms = isSms(latest)
-                val label = if (sms) latest.title.ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
+                val label = if (sms) smsSender(latest).ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
                 SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.unread }.thenByDescending { it.latest.postedAt }))
             }
             .sortedWith(compareByDescending<SourceStack> { it.topAttention }.thenByDescending { it.latestAt })
