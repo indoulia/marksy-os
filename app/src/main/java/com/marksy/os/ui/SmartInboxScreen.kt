@@ -495,7 +495,7 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
                 )
                 if (unread) {
                     Spacer(Modifier.width(6.dp))
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(MarksyTheme.PrimaryEmerald))
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (thread.critical) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald))
                 }
                 Spacer(Modifier.weight(1f))
                 if (thread.count > 1) {

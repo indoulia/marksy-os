@@ -108,6 +108,8 @@ object SmartInboxModel {
         val count: Int get() = events.size
         // isRead (inbox UI) and lifecycle NEW (EPIC-010) are kept in step; either marks the thread unread.
         val unread: Boolean get() = events.any { !it.isRead || it.lifecycleState == EventLifecycle.State.NEW.name }
+        // Same cut-off as EventIntelligence's CRITICAL level.
+        val critical: Boolean get() = attentionScore >= 90
         val sources: List<String> get() = (events + duplicates).map { it.sourceName }.distinct()
         /** Every row the thread represents, so an action on the thread also covers folded duplicates. */
         val allIds: List<Long> get() = (events + duplicates).map { it.id }
