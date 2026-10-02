@@ -172,6 +172,88 @@ class SmartInboxModelTest {
         assertTrue(buckets[3L] != SmartInboxModel.Bucket.NEEDS_ACTION)
     }
 
+    @Test
+    fun lanesSeparateNeedsYouNewAndEarlier() {
+        val lanes = SmartInboxModel.lanes(
+            listOf(
+                msg(1, "com.power", "Electricity bill", "Due on 4 Oct", now - hour, category = "BILLS"),
+                msg(2, WA, "Mom", "Call me", now - hour),
+                msg(3, WA, "College gang", "Plan for Sunday?", now - 30 * hour),
+                msg(4, WA, "Papa", "Ok", now - 2 * hour, read = true)
+            ),
+            nowMillis = now
+        )
+        assertEquals(listOf(1L), lanes.needsYou.map { it.thread.latest.id })
+        assertEquals(SmartInboxModel.NeedReason("Bill due", SmartInboxModel.Urgency.DUE), lanes.needsYou.single().reason)
+        assertEquals(listOf(2L), lanes.fresh.flatMap { it.threads }.map { it.latest.id })
+        assertEquals(setOf(3L, 4L), lanes.earlier.flatMap { it.threads }.map { it.latest.id }.toSet())
+        assertEquals(SmartInboxModel.InboxSummary(needsYou = 1, newUnread = 1), lanes.summary)
+    }
+
+    @Test
+    fun readThisVisitStaysInNewUntilTheNextVisit() {
+        val read = msg(1, WA, "Mom", "Call me", now - hour, read = true)
+        val key = EventIntelligence.threadKey(read)
+        assertEquals(1, SmartInboxModel.lanes(listOf(read), nowMillis = now, seenThisVisit = setOf(key)).fresh.size)
+        assertEquals(1, SmartInboxModel.lanes(listOf(read), nowMillis = now).earlier.size)
+    }
+
+    @Test
+    fun oneStackPerAppButSmsSplitsBySender() {
+        val lanes = SmartInboxModel.lanes(
+            listOf(
+                msg(1, WA, "Mom", "Call me", now - hour),
+                msg(2, WA, "Platform team", "Build is green", now - 2 * hour),
+                msg(3, SMS, "HDFC Bank", "Rs 640 debited to SWIGGY", now - hour, category = "PAYMENTS"),
+                msg(4, SMS, "Airtel", "Data pack renewed", now - hour, category = "OTHER")
+            ),
+            nowMillis = now
+        )
+        assertEquals(mapOf("WhatsApp" to 2, "HDFC Bank" to 1, "Airtel" to 1), lanes.fresh.associate { it.label to it.threads.size })
+        assertTrue(lanes.fresh.single { it.label == "HDFC Bank" }.isSms)
+    }
+
+    @Test
+    fun rowsInAStackRankByAttentionThenRecency() {
+        val lanes = SmartInboxModel.lanes(
+            listOf(
+                msg(1, WA, "Residents", "Water off Saturday", now - 10 * 60_000, priority = 20),
+                msg(2, WA, "Mom", "Call me", now - 2 * hour, priority = 70)
+            ),
+            nowMillis = now
+        )
+        assertEquals(listOf("Mom", "Residents"), lanes.fresh.single().threads.map { it.latest.title })
+    }
+
+    @Test
+    fun alwaysImportantSenderIsPinnedToNeedsYou() {
+        val e = msg(1, WA, "Mom", "Call me", now - hour, priority = 30)
+        val subject = PersonalLearning.subjectsOf(e).first { it.type != PersonalLearning.SubjectType.CATEGORY }
+        val profile = PersonalLearning.Profile(
+            mapOf(
+                (subject.type to subject.key) to PersonalLearning.SubjectProfile(
+                    subject, positive = 0, negative = 0, neutral = 0, lastObservedAt = now, adjustment = 25,
+                    confidence = 1f, override = PersonalLearning.Preference.ALWAYS_IMPORTANT, reason = "You marked this important"
+                )
+            )
+        )
+        val need = SmartInboxModel.lanes(listOf(e), nowMillis = now, profile = profile).needsYou.single()
+        assertEquals(SmartInboxModel.NeedReason("Always important", SmartInboxModel.Urgency.FLAGGED), need.reason)
+    }
+
+    @Test
+    fun failedOrdersAndDeliveriesShowFailureChips() {
+        val lanes = SmartInboxModel.lanes(
+            listOf(
+                msg(1, "com.zerodha.kite3", "Order rejected", "BUY 10 INFY rejected: insufficient margin", now - hour, category = "TRADING"),
+                msg(2, "com.delhivery", "Delivery attempt failed", "AWB 1490: you were not available", now - hour, category = "DELIVERY")
+            ),
+            nowMillis = now
+        )
+        assertEquals(setOf("Order rejected", "Delivery failed"), lanes.needsYou.map { it.reason.chip }.toSet())
+        assertTrue(lanes.needsYou.all { it.reason.urgency == SmartInboxModel.Urgency.FAILURE })
+    }
+
     companion object {
         const val WA = "com.whatsapp"
         const val SMS = "com.google.android.apps.messaging"

@@ -1,6 +1,8 @@
 package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.notification.CaptureMedium
+import java.util.Locale
 
 /** Presentation-ready grouping for Smart Inbox. All decisions remain deterministic and local. */
 object SmartInboxModel {
@@ -143,6 +145,83 @@ object SmartInboxModel {
         return Inbox(sections, snoozedThreads)
     }
 
+    // ---- Inbox redesign (spec 2026-10-02): lanes + source stacks ------------------------
+
+    data class NeedThread(val thread: InboxThread, val reason: NeedReason)
+
+    data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) {
+        val unread: Int get() = threads.count { it.unread }
+        val latestAt: Long get() = threads.maxOf { it.latest.postedAt }
+        val topAttention: Int get() = threads.maxOf { it.attentionScore }
+    }
+
+    data class InboxSummary(val needsYou: Int, val newUnread: Int)
+
+    data class Lanes(
+        val needsYou: List<NeedThread>,
+        val fresh: List<SourceStack>,
+        val earlier: List<SourceStack>,
+        val snoozedCount: Int
+    ) {
+        val isEmpty: Boolean get() = needsYou.isEmpty() && fresh.isEmpty() && earlier.isEmpty()
+        val summary: InboxSummary get() = InboxSummary(needsYou.size, fresh.sumOf { it.unread })
+    }
+
+    /** [seenThisVisit] holds thread keys opened since the user entered the tab; they keep their lane until the next visit. */
+    fun lanes(
+        events: List<NotificationEventEntity>,
+        filter: Filter = Filter.ALL,
+        query: String = "",
+        nowMillis: Long = System.currentTimeMillis(),
+        profile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY,
+        seenThisVisit: Set<String> = emptySet(),
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
+    ): Lanes {
+        val inbox = inbox(events, filter, query, nowMillis, profile, zone)
+        val needs = mutableListOf<NeedThread>()
+        val rest = mutableListOf<InboxThread>()
+        inbox.sections.filterKeys { it != Bucket.RESOLVED }.values.flatten().forEach { thread ->
+            val reason = needReason(thread, profile, nowMillis)
+            if (reason == null) rest += thread
+            else needs += NeedThread(thread, reason)
+        }
+        val (fresh, earlier) = rest.partition { t ->
+            nowMillis - t.latest.postedAt < NEW_WINDOW_MS && (t.unread || t.key in seenThisVisit)
+        }
+        return Lanes(
+            needs.sortedWith(compareByDescending<NeedThread> { it.thread.attentionScore }.thenByDescending { it.thread.latest.postedAt }),
+            stacks(fresh), stacks(earlier), inbox.snoozedCount
+        )
+    }
+
+    // Action beats an explicit "Always important", which beats a bare high score: the chip names the most useful reason.
+    private fun needReason(thread: InboxThread, profile: PersonalLearning.Profile, nowMillis: Long): NeedReason? {
+        val open = thread.events.filter { it.lifecycleState != EventLifecycle.State.RESOLVED.name }
+        actionFor(open, nowMillis)?.let { return it.second }
+        val pinned = PersonalLearning.subjectsOf(thread.latest)
+            .any { profile.of(it.type, it.key)?.override == PersonalLearning.Preference.ALWAYS_IMPORTANT }
+        if (pinned) return NeedReason("Always important", Urgency.FLAGGED)
+        return if (thread.bucket == Bucket.PRIORITY) NeedReason("High attention", Urgency.FLAGGED) else null
+    }
+
+    fun isSms(event: NotificationEventEntity): Boolean = CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS
+
+    // One SMS app carries the bank, the telco and the courier, so SMS stacks by sender; every other app is one stack.
+    private fun stackKey(event: NotificationEventEntity): String {
+        val pkg = event.sourcePackage.trim().lowercase(Locale.ROOT)
+        return if (isSms(event)) "$pkg|${event.title.trim().lowercase(Locale.ROOT)}" else pkg
+    }
+
+    private fun stacks(threads: List<InboxThread>): List<SourceStack> =
+        threads.groupBy { stackKey(it.latest) }
+            .map { (key, group) ->
+                val latest = group.maxBy { it.latest.postedAt }.latest
+                val sms = isSms(latest)
+                val label = if (sms) latest.title.ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
+                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.attentionScore }.thenByDescending { it.latest.postedAt }))
+            }
+            .sortedWith(compareByDescending<SourceStack> { it.topAttention }.thenByDescending { it.latestAt })
+
     private fun buildThread(
         key: String,
         events: List<NotificationEventEntity>,
@@ -212,4 +291,5 @@ object SmartInboxModel {
 
     private const val ATTENTION_THRESHOLD = 70
     private const val RECENT_WINDOW_MS = 2 * 60 * 60 * 1000L
+    private const val NEW_WINDOW_MS = 24 * 60 * 60 * 1000L
 }
