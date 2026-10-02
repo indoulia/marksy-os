@@ -12,6 +12,13 @@ object EventExpiry {
     data class Expiry(val atMillis: Long, val reason: String)
 
     const val REASON_PREFIX = "Retired: "
+    const val REASON_STALE_SEEN = "${REASON_PREFIX}seen and older than 2 days"
+    private const val STALE_ATTENTION = 60
+    // History hides OTHER, so a retired OTHER row would vanish entirely.
+    private val NEVER_STALE = setOf("BILLS", "REMINDERS", "OTHER")
+    // Their 80/75 score is a category default, not this alert's weight (user 2026-10-02: seen ones retire too).
+    private val DEFAULT_SCORED = setOf("BANKING", "PAYMENTS")
+    private val deliveryFailed = Regex("""\b(?:failed|unsuccessful|undelivered|could\s+not\s+be\s+delivered)\b""", RegexOption.IGNORE_CASE)
     private const val MINUTE = 60_000L
     private const val DAY = 24 * 60 * MINUTE
     private val MARKET_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
@@ -31,9 +38,18 @@ object EventExpiry {
             "PROMOTIONS" -> Expiry(posted + DAY, "${REASON_PREFIX}promotion older than a day")
             "TRADING" -> Expiry(posted + 7 * DAY, "${REASON_PREFIX}trading update older than a week")
             "MARKET" -> Expiry(nextSessionClose(posted), "${REASON_PREFIX}market session closed")
-            "DELIVERY" -> if (deliveryToday.containsMatchIn(text)) Expiry(endOfDay(posted, zone), "${REASON_PREFIX}delivery day ended") else null
+            "DELIVERY" -> if (deliveryToday.containsMatchIn(text) && !deliveryFailed.containsMatchIn(text)) Expiry(endOfDay(posted, zone), "${REASON_PREFIX}delivery day ended") else null
             else -> null
         }
+    }
+
+    /** Seen, low-attention items retire two days after posting; due, kept, reminded and failed items never do. */
+    fun staleSeen(event: NotificationEventEntity): Expiry? {
+        if (!event.isRead || event.kept || event.remindAt != null || event.archived) return null
+        if (event.lifecycleState != EventLifecycle.State.NEW.name && event.lifecycleState != EventLifecycle.State.ACTIVE.name) return null
+        if (event.category in NEVER_STALE || SmartInboxModel.actionFor(listOf(event), event.postedAt) != null) return null
+        if (event.category !in DEFAULT_SCORED && maxOf(event.priority, event.importanceScore) >= STALE_ATTENTION) return null
+        return Expiry(event.postedAt + 2 * DAY, REASON_STALE_SEEN)
     }
 
     private fun otpValidUntil(text: String, posted: Long, zone: ZoneId): Long {

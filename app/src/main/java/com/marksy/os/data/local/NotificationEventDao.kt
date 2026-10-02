@@ -191,6 +191,10 @@ interface NotificationEventDao {
     @Query("SELECT * FROM notification_events WHERE lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0 AND kept = 0 AND remindAt IS NULL AND category IN ('OTP', 'PROMOTIONS', 'TRADING', 'MARKET', 'DELIVERY')")
     suspend fun findRetirable(): List<NotificationEventEntity>
 
+    // Seen open items EventExpiry.staleSeen may retire (Inbox redesign).
+    @Query("SELECT * FROM notification_events WHERE lifecycleState IN ('NEW', 'ACTIVE') AND archived = 0 AND isRead = 1 AND kept = 0 AND remindAt IS NULL")
+    suspend fun findSeenOpen(): List<NotificationEventEntity>
+
     // Retired-but-unseen items still count as ignored for learning.
     @Query("SELECT * FROM notification_events WHERE (lifecycleState = 'NEW' OR (lifecycleState = 'RESOLVED' AND isRead = 0 AND lifecycleReason LIKE 'Retired: %')) AND archived = 0 AND postedAt < :beforeMillis ORDER BY postedAt ASC LIMIT :limit")
     suspend fun findStaleNew(beforeMillis: Long, limit: Int): List<NotificationEventEntity>

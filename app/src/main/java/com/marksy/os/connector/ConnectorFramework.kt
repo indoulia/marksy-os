@@ -144,7 +144,9 @@ class IngestionPipeline(
         if (input.title.isBlank() && input.body.isBlank()) return Result.Empty
         // An adapter bug must not stop capture: fall back to the unadapted capture.
         val adapter = ConnectorRegistry.adapterFor(input.connectorId, input.sourcePackage)
-        val raw = if (adapted) input else adapter?.let { a -> runCatching { a.adapt(input) }.getOrNull() } ?: input
+        val captured = if (adapted) input else adapter?.let { a -> runCatching { a.adapt(input) }.getOrNull() } ?: input
+        // User rule 2026-10-02: code messages are never stored; the rest of a conversation re-post still is.
+        val raw = withoutOneTimeCodes(captured) ?: return Result.Empty
         return try {
             val result = NotificationClassifier.classify(raw.sourcePackage, raw.title, raw.body)
             val isTrading = result.category == NotificationClassifier.Category.TRADING
@@ -229,6 +231,13 @@ class IngestionPipeline(
             metrics.count(Metric.CAPTURE_FAILED, MetricsRecorder.connector(input.connectorId), MetricsRecorder.source(input.sourcePackage))
             Result.Failed(e.javaClass.simpleName)
         }
+    }
+
+    private fun withoutOneTimeCodes(raw: RawCapture): RawCapture? {
+        if (!NotificationClassifier.isOneTimeCode(raw.title, raw.body)) return raw
+        val kept = raw.body.lines().filterNot { NotificationClassifier.isOneTimeCode(raw.title, it) }.joinToString("\n")
+        // A code split over lines still reads as one once joined, so then nothing is kept.
+        return if (kept.isBlank() || NotificationClassifier.isOneTimeCode(raw.title, kept)) null else raw.copy(body = kept)
     }
 
     /** A record deleted/cancelled at its source resolves the stored event (kept for history, not deleted). */

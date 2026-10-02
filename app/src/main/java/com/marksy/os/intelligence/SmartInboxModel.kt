@@ -1,6 +1,9 @@
 package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.notification.CaptureMedium
+import com.marksy.os.notification.NotificationClassifier
+import java.util.Locale
 
 /** Presentation-ready grouping for Smart Inbox. All decisions remain deterministic and local. */
 object SmartInboxModel {
@@ -143,6 +146,86 @@ object SmartInboxModel {
         return Inbox(sections, snoozedThreads)
     }
 
+    data class NeedThread(val thread: InboxThread, val reason: NeedReason)
+
+    data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) {
+        val unread: Int get() = threads.count { it.unread }
+        val latestAt: Long get() = threads.maxOf { it.latest.postedAt }
+        val topAttention: Int get() = threads.maxOf { it.attentionScore }
+    }
+
+    data class InboxSummary(val needsYou: Int, val newUnread: Int)
+
+    data class Lanes(
+        val needsYou: List<NeedThread>,
+        val fresh: List<SourceStack>,
+        val earlier: List<SourceStack>,
+        val snoozedCount: Int
+    ) {
+        val isEmpty: Boolean get() = needsYou.isEmpty() && fresh.isEmpty() && earlier.isEmpty()
+        val summary: InboxSummary get() = InboxSummary(needsYou.size, fresh.sumOf { it.unread })
+        /** Only New and Needs-you threads keep their place once opened; an Earlier thread must not jump up into New. */
+        fun holdsOnOpen(threadKey: String): Boolean =
+            needsYou.any { it.thread.key == threadKey } || fresh.any { s -> s.threads.any { it.key == threadKey } }
+    }
+
+    /** [seenThisVisit] holds thread keys opened since the user entered the tab; they keep their lane until the next visit. */
+    fun lanes(
+        events: List<NotificationEventEntity>,
+        filter: Filter = Filter.ALL,
+        query: String = "",
+        nowMillis: Long = System.currentTimeMillis(),
+        profile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY,
+        seenThisVisit: Set<String> = emptySet(),
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
+    ): Lanes {
+        val inbox = inbox(events, filter, query, nowMillis, profile, zone)
+        val needs = mutableListOf<NeedThread>()
+        val rest = mutableListOf<InboxThread>()
+        inbox.sections.filterKeys { it != Bucket.RESOLVED }.values.flatten().forEach { thread ->
+            val reason = needReason(thread, profile, nowMillis, seenThisVisit)
+            if (reason == null) rest += thread
+            else needs += NeedThread(thread, reason)
+        }
+        val (fresh, earlier) = rest.partition { t ->
+            nowMillis - t.latest.postedAt < NEW_WINDOW_MS && (t.unread || t.key in seenThisVisit)
+        }
+        return Lanes(
+            needs.sortedWith(compareByDescending<NeedThread> { it.thread.attentionScore }.thenByDescending { it.thread.latest.postedAt }),
+            stacks(fresh), stacks(earlier), inbox.snoozedCount
+        )
+    }
+
+    // Action beats an explicit "Always important", which beats a bare high score: the chip names the most useful reason.
+    private fun needReason(thread: InboxThread, profile: PersonalLearning.Profile, nowMillis: Long, seenThisVisit: Set<String>): NeedReason? {
+        val open = thread.events.filter { it.lifecycleState != EventLifecycle.State.RESOLVED.name }
+        actionFor(open, nowMillis)?.let { return it.second }
+        val pinned = PersonalLearning.subjectsOf(thread.latest)
+            .any { profile.of(it.type, it.key)?.override == PersonalLearning.Preference.ALWAYS_IMPORTANT }
+        if (pinned) return NeedReason("Always important", Urgency.FLAGGED)
+        // A bare high score is no task (device: 51 day-old trading items flooded the lane), so it needs the user only while fresh and unread.
+        val fresh = nowMillis - thread.latest.postedAt < NEW_WINDOW_MS && (thread.unread || thread.key in seenThisVisit)
+        return if (thread.bucket == Bucket.PRIORITY && fresh) NeedReason("High attention", Urgency.FLAGGED) else null
+    }
+
+    fun isSms(event: NotificationEventEntity): Boolean = CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS
+
+    // One SMS app carries the bank, the telco and the courier, so SMS stacks by sender; every other app is one stack.
+    private fun stackKey(event: NotificationEventEntity): String {
+        val pkg = event.sourcePackage.trim().lowercase(Locale.ROOT)
+        return if (isSms(event)) "$pkg|${event.title.trim().lowercase(Locale.ROOT)}" else pkg
+    }
+
+    private fun stacks(threads: List<InboxThread>): List<SourceStack> =
+        threads.groupBy { stackKey(it.latest) }
+            .map { (key, group) ->
+                val latest = group.maxBy { it.latest.postedAt }.latest
+                val sms = isSms(latest)
+                val label = if (sms) latest.title.ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
+                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.attentionScore }.thenByDescending { it.latest.postedAt }))
+            }
+            .sortedWith(compareByDescending<SourceStack> { it.topAttention }.thenByDescending { it.latestAt })
+
     private fun buildThread(
         key: String,
         events: List<NotificationEventEntity>,
@@ -166,25 +249,35 @@ object SmartInboxModel {
         return InboxThread(key, events, duplicates, bucket, top.score, why, top.prediction)
     }
 
+    enum class Urgency { FAILURE, DUE, FLAGGED }
+    data class NeedReason(val chip: String, val urgency: Urgency)
+
     /** Deterministic bucket; the returned string is shown verbatim in "Why am I seeing this?". */
     internal fun bucketFor(events: List<NotificationEventEntity>, attention: Int, nowMillis: Long): Pair<Bucket, String> {
         val open = events.filter { it.lifecycleState != EventLifecycle.State.RESOLVED.name }
         if (open.isEmpty()) return Bucket.RESOLVED to "Resolved"
-        val latest = open.maxBy { it.postedAt }
-        val text = "${latest.title} ${latest.body}".lowercase()
-        val actionReason = when {
-            open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry"
-            latest.category == "BILLS" -> "Bill that may need payment"
-            latest.category == "REMINDERS" -> "Due or reminder to act on"
-            latest.category == "OTP" && nowMillis - latest.postedAt <= OTP_ACTION_WINDOW_MS -> "Fresh one-time code"
-            latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed"
-            else -> null
-        }
+        val action = actionFor(open, nowMillis)
         return when {
-            attention >= PRIORITY_THRESHOLD && actionReason == null -> Bucket.PRIORITY to "Very high attention score ($attention)"
-            actionReason != null -> Bucket.NEEDS_ACTION to actionReason
+            attention >= PRIORITY_THRESHOLD && action == null -> Bucket.PRIORITY to "Very high attention score ($attention)"
+            action != null -> Bucket.NEEDS_ACTION to action.first
             attention >= IMPORTANT_THRESHOLD -> Bucket.IMPORTANT to "Attention score $attention"
             else -> Bucket.INFORMATIONAL to "Informational (attention $attention)"
+        }
+    }
+
+    /** Why-string plus the short chip for anything the user should act on now; null when nothing is due. */
+    internal fun actionFor(open: List<NotificationEventEntity>, nowMillis: Long): Pair<String, NeedReason>? {
+        if (open.isEmpty()) return null
+        val latest = open.maxBy { it.postedAt }
+        val text = "${latest.title} ${latest.body}".lowercase()
+        return when {
+            open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry" to NeedReason("Retry needed", Urgency.FAILURE)
+            latest.category == "BILLS" -> "Bill that may need payment" to NeedReason("Bill due", Urgency.DUE)
+            latest.category == "REMINDERS" -> "Due or reminder to act on" to NeedReason("Reminder", Urgency.DUE)
+            latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed" to NeedReason("Payment failed", Urgency.FAILURE)
+            latest.category == "TRADING" && text.contains("rejected") && NotificationClassifier.isOwnOrderEvent(latest.title, latest.body) -> "Your order was rejected" to NeedReason("Order rejected", Urgency.FAILURE)
+            latest.category == "DELIVERY" && DELIVERY_FAILURE_TERMS.any { text.contains(it) } -> "A delivery attempt failed" to NeedReason("Delivery failed", Urgency.FAILURE)
+            else -> null
         }
     }
 
@@ -197,9 +290,10 @@ object SmartInboxModel {
 
     private const val PRIORITY_THRESHOLD = 90
     private const val IMPORTANT_THRESHOLD = 60
-    private const val OTP_ACTION_WINDOW_MS = 10 * 60 * 1000L
     private val FAILURE_TERMS = listOf("failed", "declined", "unsuccessful", "reversed")
+    private val DELIVERY_FAILURE_TERMS = listOf("failed", "unsuccessful", "undelivered", "could not be delivered")
 
     private const val ATTENTION_THRESHOLD = 70
     private const val RECENT_WINDOW_MS = 2 * 60 * 60 * 1000L
+    private const val NEW_WINDOW_MS = 24 * 60 * 60 * 1000L
 }

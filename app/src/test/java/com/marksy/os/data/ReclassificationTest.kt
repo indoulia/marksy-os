@@ -72,4 +72,18 @@ class ReclassificationTest {
         assertEquals("TRADING", dao.getById(execution)!!.category)
         assertEquals("NOT_APPLICABLE", dao.getById(execution)!!.deliveryState)
     }
+
+    // User rule 2026-10-02: codes stored before the rule are deleted once; an alert that only mentions OTP is re-filed, not deleted.
+    @Test fun storedOneTimeCodesAreDeletedOnceAndOtpMentionsAreRefiled() = runBlocking {
+        val dao = db.notificationEventDao()
+        val code = dao.insert(event("com.google.android.apps.messaging", "SBI", "482913 is your OTP for login", "OTP", false, "NOT_APPLICABLE"))
+        val pin = dao.insert(event("com.delhivery", "Delhivery", "Share PIN 4821 with the delivery agent", "DELIVERY", false, "NOT_APPLICABLE"))
+        val alert = dao.insert(event("com.snapwork.hdfc", "HDFC Bank", "Rs 500 debited from a/c XX1234. Never share your OTP.", "OTP", false, "NOT_APPLICABLE"))
+
+        NotificationRepository(dao).reclassifyIfClassifierChanged(prefs)
+
+        assertEquals(null, dao.getById(code))
+        assertEquals(null, dao.getById(pin))
+        assertEquals("BANKING", dao.getById(alert)!!.category)
+    }
 }

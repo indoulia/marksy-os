@@ -53,4 +53,16 @@ class RetirementTest {
 
         assertEquals(1, dao.findStaleNew(t0 + 1, 10).size)
     }
+
+    // Inbox redesign: a seen, low-attention item leaves the Inbox after two days; history keeps it, unread stays.
+    @Test
+    fun seenLowAttentionItemRetiresAfterTwoDays() = runBlocking {
+        dao.insert(event("BANKING", "Rs 500 debited").copy(isRead = true, lifecycleState = "ACTIVE"))
+        dao.insert(event("MESSAGES", "Call me"))
+
+        repository.retireExpired(t0 + 2 * 24 * 60 * minute)
+
+        assertEquals(listOf("MESSAGES"), dao.observeActive().first().map { it.category })
+        assertEquals(2, dao.observeHistory().first().size)
+    }
 }

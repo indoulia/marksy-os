@@ -65,6 +65,11 @@ class NotificationRepository(
         if (prefs.getInt(KEY_CLASSIFIER_VERSION, 0) >= com.marksy.os.notification.NotificationClassifier.VERSION) return
         var changed = 0
         dao.findNonTrading().forEach { event ->
+            // User rule 2026-10-02: codes captured before capture dropped them are deleted, not re-filed.
+            if (com.marksy.os.notification.NotificationClassifier.isOneTimeCode(event.title, event.body)) {
+                dao.deleteById(event.id)
+                return@forEach
+            }
             val result = com.marksy.os.notification.NotificationClassifier.classify(event.sourcePackage, event.title, event.body)
             if (result.category.name != event.category) {
                 val trading = result.category == com.marksy.os.notification.NotificationClassifier.Category.TRADING
@@ -83,6 +88,9 @@ class NotificationRepository(
         val reasons = mutableMapOf<Long, String>()
         open.forEach { e ->
             if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.of(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
+        }
+        dao.findSeenOpen().forEach { e ->
+            if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.staleSeen(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
         }
         return reasons.entries.groupBy({ it.value }, { it.key }).entries.sumOf { (reason, ids) ->
             ids.chunked(500).sumOf { dao.resolve(it, reason, nowMillis) }

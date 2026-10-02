@@ -50,4 +50,48 @@ class EventExpiryTest {
         assertEquals(midnight, expiry(event("DELIVERY", "Amazon", "Your package is out for delivery")))
         assertNull(expiry(event("BANKING", "HDFC", "Rs 500 debited")))
     }
+
+    // Inbox redesign: seen, low-attention items leave the active views two days after posting.
+    @Test
+    fun seenLowAttentionItemsGoStaleAfterTwoDays() {
+        val seen = event("BANKING", "HDFC Bank", "Rs 640 debited").copy(isRead = true, lifecycleState = "ACTIVE")
+        assertEquals(seen.postedAt + 2 * day, EventExpiry.staleSeen(seen)?.atMillis)
+        assertEquals(EventExpiry.REASON_STALE_SEEN, EventExpiry.staleSeen(seen)?.reason)
+    }
+
+    @Test
+    fun unreadKeptRemindedDueFailedAndImportantItemsNeverGoStale() {
+        val seen = event("BANKING", "HDFC Bank", "Rs 640 debited").copy(isRead = true, lifecycleState = "ACTIVE")
+        assertNull(EventExpiry.staleSeen(seen.copy(isRead = false)))
+        assertNull(EventExpiry.staleSeen(seen.copy(kept = true)))
+        assertNull(EventExpiry.staleSeen(seen.copy(remindAt = seen.postedAt + day)))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "BILLS")))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "REMINDERS")))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "MESSAGES", priority = 60)))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "MESSAGES", importanceScore = 75)))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "TRADING", isTrading = true, deliveryState = "FAILED")))
+        assertNull(EventExpiry.staleSeen(seen.copy(lifecycleState = "RESOLVED")))
+    }
+
+    // Review I5: History hides OTHER, so a retired OTHER row would vanish entirely; it keeps the normal retention instead.
+    @Test
+    fun seenOtherItemsNeverGoStale() {
+        val seen = event("OTHER", "App", "Something happened").copy(isRead = true, lifecycleState = "ACTIVE")
+        assertNull(EventExpiry.staleSeen(seen))
+    }
+
+    // Review minor (re-graded): "could not be delivered" is a failure to act on, not a delivery day that ended.
+    @Test
+    fun failedDeliveryDoesNotExpireAtEndOfDay() {
+        assertNull(EventExpiry.of(event("DELIVERY", "Delhivery", "Your parcel could not be delivered. We will retry tomorrow.")))
+    }
+
+    // User 2026-10-02: seen bank and payment alerts retire too; their 80/75 score is a category default, so only a failure keeps one.
+    @Test
+    fun seenBankAndPaymentAlertsGoStaleButFailuresDoNot() {
+        val debit = event("BANKING", "HDFC Bank", "Rs 640 debited to SWIGGY").copy(isRead = true, lifecycleState = "ACTIVE", priority = 80, importanceScore = 80)
+        assertEquals(debit.postedAt + 2 * day, EventExpiry.staleSeen(debit)?.atMillis)
+        assertEquals(debit.postedAt + 2 * day, EventExpiry.staleSeen(debit.copy(category = "PAYMENTS", priority = 75))?.atMillis)
+        assertNull(EventExpiry.staleSeen(debit.copy(body = "Payment of Rs 640 to SWIGGY failed")))
+    }
 }
