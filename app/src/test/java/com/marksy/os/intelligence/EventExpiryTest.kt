@@ -50,4 +50,26 @@ class EventExpiryTest {
         assertEquals(midnight, expiry(event("DELIVERY", "Amazon", "Your package is out for delivery")))
         assertNull(expiry(event("BANKING", "HDFC", "Rs 500 debited")))
     }
+
+    // Inbox redesign: seen, low-attention items leave the active views two days after posting.
+    @Test
+    fun seenLowAttentionItemsGoStaleAfterTwoDays() {
+        val seen = event("BANKING", "HDFC Bank", "Rs 640 debited").copy(isRead = true, lifecycleState = "ACTIVE")
+        assertEquals(seen.postedAt + 2 * day, EventExpiry.staleSeen(seen)?.atMillis)
+        assertEquals(EventExpiry.REASON_STALE_SEEN, EventExpiry.staleSeen(seen)?.reason)
+    }
+
+    @Test
+    fun unreadKeptRemindedDueFailedAndImportantItemsNeverGoStale() {
+        val seen = event("BANKING", "HDFC Bank", "Rs 640 debited").copy(isRead = true, lifecycleState = "ACTIVE")
+        assertNull(EventExpiry.staleSeen(seen.copy(isRead = false)))
+        assertNull(EventExpiry.staleSeen(seen.copy(kept = true)))
+        assertNull(EventExpiry.staleSeen(seen.copy(remindAt = seen.postedAt + day)))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "BILLS")))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "REMINDERS")))
+        assertNull(EventExpiry.staleSeen(seen.copy(priority = 60)))
+        assertNull(EventExpiry.staleSeen(seen.copy(importanceScore = 75)))
+        assertNull(EventExpiry.staleSeen(seen.copy(category = "TRADING", isTrading = true, deliveryState = "FAILED")))
+        assertNull(EventExpiry.staleSeen(seen.copy(lifecycleState = "RESOLVED")))
+    }
 }

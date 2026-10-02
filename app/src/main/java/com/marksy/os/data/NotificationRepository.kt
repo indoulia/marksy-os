@@ -89,6 +89,9 @@ class NotificationRepository(
         open.forEach { e ->
             if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.of(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
         }
+        dao.findSeenOpen().forEach { e ->
+            if (e.id !in reasons) com.marksy.os.intelligence.EventExpiry.staleSeen(e)?.takeIf { it.atMillis <= nowMillis }?.let { reasons[e.id] = it.reason }
+        }
         return reasons.entries.groupBy({ it.value }, { it.key }).entries.sumOf { (reason, ids) ->
             ids.chunked(500).sumOf { dao.resolve(it, reason, nowMillis) }
         }
