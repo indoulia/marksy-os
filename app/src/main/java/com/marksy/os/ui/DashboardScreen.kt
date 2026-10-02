@@ -284,7 +284,7 @@ fun DashboardScreen(
             }
         }
 
-        item { SectionTitle("Latest Activity") }
+        item { SectionTitle("Latest Activity", link = "Timeline", onLink = onOpenTimeline) }
         if (events.isEmpty()) {
             item {
                 EmptyDashboardCard(
@@ -582,13 +582,18 @@ private fun AiSummaryBanner(summary: String) {
 }
 
 @Composable
-private fun SectionTitle(title: String) = Text(
-    title,
-    color = MarksyTheme.TextPrimary,
-    fontSize = 18.sp,
-    fontWeight = FontWeight.Bold,
-    modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)
-)
+private fun SectionTitle(title: String, link: String? = null, onLink: () -> Unit = {}) = Row(
+    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Text(title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+    link?.let {
+        Text(
+            "$it ›", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onLink).padding(horizontal = 6.dp, vertical = 4.dp)
+        )
+    }
+}
 
 @Composable
 private fun AttentionCard(

@@ -125,7 +125,7 @@ fun BoxScope.OneHandControls(
             }
         }
         actions.forEach { action ->
-            FloatingRoundButton(action.icon, action.label, false) { filtersOpen = false; action.onClick() }
+            FloatingRoundButton(action.icon, action.label, action.active) { filtersOpen = false; action.onClick() }
         }
     }
 }
@@ -190,7 +190,7 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
 }
 
 /** A page action on the floating stack (e.g. Add), so pages need no in-content button rows. */
-data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val onClick: () -> Unit)
+data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val active: Boolean = false, val onClick: () -> Unit)
 
 @Composable
 private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier) {

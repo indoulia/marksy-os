@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.marksy.os.market.MarketIntelligenceRepository
+import com.marksy.os.market.ScorecardPeriod
 import com.marksy.os.market.ScorecardQuery
 import com.marksy.os.market.ScorecardSource
 
@@ -42,7 +43,10 @@ fun TrustScreen(
             val on = s.followKey in set
             FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggleFollow(s.followKey, s.name, !on) }
         } },
-        FloatingAction(Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards") { filtering = query }
+        FloatingAction(
+            Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards",
+            active = query.period != ScorecardPeriod.LIFETIME || query.horizon != null
+        ) { filtering = query }
     )
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
         ScorecardsView(

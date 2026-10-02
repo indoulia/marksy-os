@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -58,20 +57,19 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
     }
 }
 
-/** Marksy's open calls with where price sits between stop and target, and closed calls with their outcome. */
+/** Results: Marksy's track record, closed calls and calls that ended early, each with its outcome. Live calls are in Setups. */
 @Composable
 internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
-    var showClosed by rememberSaveable { mutableStateOf(false) }
+    var showEnded by rememberSaveable { mutableStateOf(false) }
     val open = remember { Paged { c -> repository.activePredictions(c).map { it.items to it.nextCursor } } }
     val closed = remember { Paged { c -> repository.closedPredictions(c).map { it.items to it.nextCursor } } }
     val summary by produceState<PerformanceSummaryDto?>(null) { value = (repository.performanceSummary() as? MarketDataState.Loaded)?.value }
-    LaunchedEffect(Unit) { open.more() }
-    LaunchedEffect(showClosed) { if (showClosed && closed.items.isEmpty()) closed.more() }
-    val quotes = rememberUpstoxQuotes(remember(open.items) { open.items.map { it.symbol }.distinct() })
-    val paged = if (showClosed) closed else open
-    // Ended calls stay listed, shown by default, with their ledger result; they never count or rank as open.
-    val (live, ended) = remember(open.items) { open.items.partition(LedgerCalls::isLive) }
-    var showEnded by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(Unit) { closed.more(); open.more() }
+    // Withdrawn or unpriced calls still sit in the active feed; they never count or rank as open.
+    val ended = remember(open.items) { open.items.filterNot(LedgerCalls::isLive) }
+    val quotes = rememberUpstoxQuotes(remember(ended) { ended.map { it.symbol }.distinct() })
+    val paged = if (showEnded) open else closed
+    val endedHint = "Calls withdrawn, invalidated or left without market data before closing appear here."
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
@@ -81,32 +79,22 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
         item(key = "record") { TrackRecordStrip(summary) }
         item(key = "segments") {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("Open" + (if (open.items.isEmpty()) "" else " (${live.size}${if (open.hasMore) "+" else ""})"), selected = !showClosed) { showClosed = false }
-                Pill("Closed", selected = showClosed) { showClosed = true }
+                Pill("Closed", selected = !showEnded) { showEnded = false }
+                Pill("Ended" + (if (ended.isEmpty()) "" else " (${ended.size}${if (open.hasMore) "+" else ""})"), selected = showEnded) { showEnded = true }
             }
         }
         when (val s = paged.state) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading Marksy calls...") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Calls unavailable", s.message) }
-            is MarketDataState.Empty -> item { EmptyState(if (showClosed) "No closed calls yet" else "No open Marksy calls", if (showClosed) "Calls appear here once their target, stop or horizon is reached." else "New calls appear here as Marksy makes them.") }
+            is MarketDataState.Empty -> item { EmptyState(if (showEnded) "No ended calls" else "No closed calls yet", if (showEnded) endedHint else "Calls appear here once their target, stop or horizon is reached.") }
             else -> {
-                if (showClosed) items(closed.items, key = { "c-${it.id}" }) { ClosedCallRow(it) { onOpenStock(it.symbol) } }
+                if (!showEnded) items(closed.items, key = { "c-${it.id}" }) { ClosedCallRow(it) { onOpenStock(it.symbol) } }
                 else {
-                    if (live.isEmpty() && !open.hasMore) item { EmptyState("No live Marksy calls", "Every open call has ended; new calls appear here as Marksy makes them.") }
-                    items(live, key = { "o-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol]?.lastPrice) { onOpenStock(p.symbol) } }
-                    if (ended.isNotEmpty()) item(key = "ended-toggle") {
-                        Text(
-                            "${if (showEnded) "Hide" else "Show"} ${ended.size} ended call${if (ended.size == 1) "" else "s"}",
-                            color = MarksyTheme.TextSecondary, fontSize = 12.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showEnded = !showEnded }.padding(horizontal = 4.dp, vertical = 6.dp)
-                        )
-                    }
-                    if (showEnded) items(ended, key = { "e-${it.predictionId}" }) { p ->
-                        Box(Modifier.alpha(0.55f)) { OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
-                    }
+                    if (ended.isEmpty() && !open.hasMore) item { EmptyState("No ended calls", endedHint) }
+                    items(ended, key = { "e-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
                 }
-                if (paged.hasMore) item(key = "more-$showClosed-${paged.items.size}") {
+                if (paged.hasMore) item(key = "more-$showEnded-${paged.items.size}") {
                     LaunchedEffect(Unit) { paged.more() }
                     MarksyLoader("Loading more...")
                 }

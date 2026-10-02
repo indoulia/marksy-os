@@ -51,7 +51,7 @@ fun TradingIntelligenceScreen(
     var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
     var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
     val actions = listOfNotNull(
-        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips") { onTipsStatusChange(tipsStatus.next()) } else null
+        if (selectedFilter == TAB_TIPS) FloatingAction(Icons.Default.FilterList, if (tipsStatus.next() == MyTipsStatus.FOLLOWING) "Show who you follow" else "Show ${tipsStatus.next().label.lowercase()} tips", active = tipsStatus != MyTipsStatus.OPEN) { onTipsStatusChange(tipsStatus.next()) } else null
     )
     // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
     Box(
@@ -75,7 +75,7 @@ fun TradingIntelligenceScreen(
         onFilterSelected = onFilterSelected,
         actions = actions,
         filterIsView = false,
-        extrasActive = show != ShowOnly.ALL,
+        extrasActive = selectedFilter == TAB_CAPTURED && show != ShowOnly.ALL,
         filterExtras = if (selectedFilter == TAB_CAPTURED) ({ CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) }) else null
     )
     }
@@ -111,7 +111,7 @@ private fun CapturedList(
 }
 
 private const val TAB_PICKS = "Setups"
-private const val TAB_PREDICTIONS = "Predictions"
+private const val TAB_PREDICTIONS = "Results"
 private const val TAB_TIPS = "My tips"
 private const val TAB_CAPTURED = "Captured"
 val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_CAPTURED)
@@ -127,7 +127,7 @@ fun tradingTitleNote(
 ): String = when (filter) {
     TAB_CAPTURED -> capturedNote ?: filter
     TAB_TIPS -> "$filter · ${tipsStatus.label}"
-    else -> filter + (if (filter == TAB_PICKS || filter == TAB_PREDICTIONS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
+    else -> filter + (if (filter == TAB_PICKS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
 }
 
 
