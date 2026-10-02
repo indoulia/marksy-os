@@ -387,6 +387,10 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         val picksScan by com.marksy.os.market.MarketIntelligenceRepository.latestScan.collectAsState()
+        // Unfiltered, so the badge and note are right before the Inbox tab is ever opened.
+        val inboxSummary = remember(inboxEvents, inboxHidden, learningProfile) {
+            SmartInboxModel.lanes(inboxEvents.filterNot { it.id in inboxHidden }, profile = learningProfile).summary
+        }
         val titleNote = when {
             showPlan -> planView
             hostOpen -> null
@@ -394,6 +398,7 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
+            selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
             else -> null
         }
         // Pages whose search sits behind a header icon; the field covers the header while open.
@@ -603,7 +608,13 @@ class MainActivity : ComponentActivity() {
                                 if (index == 2) watchView = ""
                                 selectedTab = index
                             },
-                            icon = { Icon(icon, contentDescription = label) },
+                            icon = {
+                                if (index == 1 && inboxSummary.needsYou > 0) {
+                                    BadgedBox(badge = {
+                                        Badge(containerColor = MarksyTheme.RedUrgent, contentColor = Color.White) { Text("${inboxSummary.needsYou}", fontSize = 10.sp) }
+                                    }) { Icon(icon, contentDescription = "$label, ${inboxSummary.needsYou} need you") }
+                                } else Icon(icon, contentDescription = label)
+                            },
                             label = { Text(label, fontSize = 11.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Color.Black,
@@ -739,6 +750,7 @@ class MainActivity : ComponentActivity() {
                     onDelete = { rows -> rows.forEach(deleteNow) },
                     onHide = { rows -> inboxHidden = inboxHidden + rows.map { it.id } },
                     learningProfile = learningProfile,
+                    onOpenHistory = { showTimeline = true },
                     actions = remember(vm) {
                         InboxActions(
                             markSeen = vm::markThreadSeen,
