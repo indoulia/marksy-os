@@ -64,9 +64,10 @@ private data class Sec(val key: String, val title: String, val sub: String, val 
 @Composable
 fun IpoDetailScreen(
     repository: MarketIntelligenceRepository, ipo: IpoListItemDto, padding: PaddingValues, now: ZonedDateTime,
-    reminderKeys: Set<String>, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
+    reminders: Map<String, Long>, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
     remindersOpen: Boolean, onRemindersClose: () -> Unit
 ) {
+    val reminderKeys = reminders.keys
     val detail by produceState(MarketDataState.Loading as MarketDataState<IpoDetailDto>, ipo.id) { value = repository.ipoDetail(ipo.id) }
     val history by produceState(MarketDataState.Loading as MarketDataState<List<IpoHistoryEntryDto>>, ipo.id) { value = repository.ipoHistory(ipo.id) }
     val loaded = (detail as? MarketDataState.Loaded)?.value
@@ -77,6 +78,10 @@ fun IpoDetailScreen(
     val events = IpoLifecycle.reminderEvents(dates, now)
     val keyOf = { e: IpoLifecycle.ReminderEvent -> IpoLifecycle.reminderKey(ipo.id, e.key) }
     var allotOpen by rememberSaveable { mutableStateOf(false) }
+    // A reminder set before a date moved re-arms for the new time.
+    LaunchedEffect(events, reminders) {
+        events.forEach { e -> reminders[keyOf(e)]?.takeIf { it != e.at.toInstant().toEpochMilli() }?.let { onReminder(e, true) } }
+    }
 
     val order = when (stage) {
         Lane.OPEN -> listOf("subs", "view", "calc", "dates")
@@ -95,7 +100,7 @@ fun IpoDetailScreen(
 
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = padding.calculateBottomPadding() + 20.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(key = "hero") { HeroCard(summary, loaded, lane, dates, now) { allotOpen = true } }
@@ -181,7 +186,11 @@ private fun buildSections(
             KvRow("Price band", fact(t?.priceBand, "₹"))
             KvRow("Lot size", fact(t?.lotSize, suffix = " shares"))
             KvRow("Exchanges", fact(t?.exchanges))
-            detail?.let { d -> KvRow("Anchor book", d.anchorCrore?.let { "₹${IpoDetailFormatter.number(it)} Cr" } ?: "Not out yet") }
+            detail?.let { d ->
+                // "No anchor round" and "a report Marksy cannot read" are different answers.
+                val unread = d.anchorState?.takeIf { it !in setOf("MISSING", "EMPTY", "AVAILABLE") }?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() }
+                KvRow("Anchor book", d.anchorCrore?.let { "₹${IpoDetailFormatter.number(it)} Cr" } ?: unread ?: "Not out yet")
+            }
         }
     )
 
@@ -271,7 +280,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             big = if (lane == Lane.TODAY) left?.let { "${L.leftText(it)} left" } ?: "Closing" else dates["close"]?.let { "Closes ${L.day(it)}, 5 pm" } ?: "Open now"
             sub = if (lane == Lane.TODAY) "Bid, then approve the UPI mandate in your UPI app, by 5 pm today (the usual cutoff)."
             else left?.let { "${L.leftText(it)} left. Approve the UPI mandate by 5 pm that day (the usual cutoff)." } ?: "Approve the UPI mandate by 5 pm on the closing day."
-            stats = listOf(Triple("Price band", bandText ?: "Not out yet", if (band != null) "per share" else ipo.terms?.priceBand.stateNote().orEmpty()), Triple("Min to bid", minBid, minNote), Triple("Subscribed", overall?.let(L::times) ?: "–", if (live) "live" else "so far"))
+            stats = listOf(Triple("Price band", bandText ?: "Not out yet", if (band != null) ipo.terms?.priceBand.stateNote() ?: "per share" else ipo.terms?.priceBand.stateNote().orEmpty()), Triple("Min to bid", minBid, minNote), Triple("Subscribed", overall?.let(L::times) ?: "–", if (live) "live" else "so far"))
         }
         Lane.UPCOMING -> {
             val opens = dates["open"]
@@ -283,7 +292,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             val size = ipo.terms?.issueSizeCrore.number()
             val fresh = ipo.terms?.freshIssueCrore.number()
             stats = listOf(
-                Triple("Price band", bandText ?: "Not out yet", if (band != null) "per share" else "due before opening"), Triple("Min to bid", minBid, minNote),
+                Triple("Price band", bandText ?: "Not out yet", if (band != null) ipo.terms?.priceBand.stateNote() ?: "per share" else "due before opening"), Triple("Min to bid", minBid, minNote),
                 Triple("Issue size", size?.let { "₹${IpoDetailFormatter.number(it)} Cr" } ?: "–", if (size != null && fresh != null && size > 0) "${(fresh / size * 100).toInt()}% fresh" else "")
             )
         }
@@ -315,7 +324,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             }
             val issue = o?.issuePrice ?: L.upper(ipo)
             stats = listOf(
-                Triple("Issue price", issue?.let { "₹${IpoDetailFormatter.number(it)}" } ?: "–", "upper band"),
+                Triple("Issue price", issue?.let { "₹${IpoDetailFormatter.number(it)}" } ?: "–", if (o?.issuePrice != null) "final" else "upper band"),
                 Triple("Listed at", o?.listingPrice?.let { "₹${IpoDetailFormatter.number(it)}" } ?: "–", ret?.let { L.pct(it) } ?: ""),
                 Triple("Marksy expected", exp?.let { L.pct(it) } ?: "–", "before listing")
             )
@@ -409,7 +418,7 @@ private fun KvRow(label: String, value: String, valueColor: Color = MarksyTheme.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SubscriptionBody(days: List<IpoLifecycle.SubscriptionDay>, sme: Boolean, live: Boolean, final: Boolean, now: ZonedDateTime) {
-    var pick by rememberSaveable { mutableIntStateOf(days.lastIndex) }
+    var pick by rememberSaveable(days.size) { mutableIntStateOf(days.lastIndex) }
     val i = pick.coerceIn(0, days.lastIndex)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         days.forEachIndexed { n, d ->
@@ -511,7 +520,8 @@ private fun CalculatorBody(
     val n = lots.coerceIn(cat.minLots, cat.maxLots)
     val poolTimes = if (stage == Lane.UPCOMING) null else ipo.subscription?.latest?.get(cat.pool)?.times
     val poolName = if (cat.pool == "RETAIL") poolLabel(ipo) else "NII"
-    val lowest = IpoLifecycle.gmpSummary(ipo.gmp, upper, now)?.lowestPremium
+    val gmp = IpoLifecycle.gmpSummary(ipo.gmp, upper, now)
+    val lowest = gmp?.lowestPremium
     val q = IpoLifecycle.lotQuote(cats, cat, n, lotSize, upper, poolTimes, lowest, poolName)
     val catName = cat.label.substringBefore(" · ")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -520,11 +530,12 @@ private fun CalculatorBody(
     Stepper(IpoLifecycle.lotsText(n), "${IpoDetailFormatter.number(n * lotSize)} shares", n > cat.minLots, n < cat.maxLots, { lots = n - 1 }, { lots = n + 1 })
     Column {
         Text(IpoLifecycle.inr(q.amount), color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Legend(if (cat.cutOff) "blocked in your bank at cut-off, ₹${IpoDetailFormatter.number(upper)} a share" else "blocked in your bank at ₹${IpoDetailFormatter.number(upper)} a share; HNI bids cannot use cut-off")
+        Legend((if (cat.cutOff) "blocked in your bank at cut-off, ₹${IpoDetailFormatter.number(upper)} a share" else "blocked in your bank at ₹${IpoDetailFormatter.number(upper)} a share; HNI bids cannot use cut-off") +
+            (IpoLifecycle.termsNote(ipo)?.let { " · price band or lot $it" } ?: ""))
     }
     KvRow("$catName range", if (cat.minLots == cat.maxLots) IpoLifecycle.lotsText(cat.minLots) else "${cat.minLots}–${cat.maxLots} lots")
     KvRow("Chance of allotment", q.chance)
-    q.gain?.let { KvRow("If allotted ${IpoLifecycle.lotsText(q.gainLots)} and it lists at the lowest grey-market quote", signedInr(it), if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent) }
+    q.gain?.let { KvRow("If allotted ${IpoLifecycle.lotsText(q.gainLots)} and it lists at the lowest grey-market quote${gmp?.asOf?.let { t -> " ($t)" }.orEmpty()}", signedInr(it), if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent) }
     q.callout?.let { Callout(it) }
     q.next?.let { next ->
         Row(verticalAlignment = Alignment.CenterVertically) {

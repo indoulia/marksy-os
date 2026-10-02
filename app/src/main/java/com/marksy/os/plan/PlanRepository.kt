@@ -135,8 +135,9 @@ class PlanRepository(
         alarms.schedule(item.copy(id = dao.insert(item)))
     }
 
-    fun observeIpoReminderKeys(prefix: String): Flow<Set<String>> = dao.observeAll().map { items ->
-        items.filter { it.status != PlanStatus.DONE.name && it.dedupeKey?.startsWith(prefix) == true }.mapNotNullTo(HashSet()) { it.dedupeKey }
+    /** Open IPO reminders as key → due time, so a reminder whose date moved can be re-armed. */
+    fun observeIpoReminders(prefix: String): Flow<Map<String, Long>> = dao.observeAll().map { items ->
+        items.filter { it.status != PlanStatus.DONE.name && it.dedupeKey?.startsWith(prefix) == true && it.dueAt != null }.associate { it.dedupeKey!! to it.dueAt!! }
     }
 
     suspend fun upsertBirthday(lookupKey: String, name: String, month: Int, day: Int) {

@@ -1,5 +1,6 @@
 package com.marksy.os.plan
 
+import kotlinx.coroutines.flow.first
 import androidx.room.Room
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
@@ -124,5 +125,10 @@ class PlanRepositoryTest {
         repo.setIpoReminder("ipo|kaveri|close", "", null)
         assertNull(db.planItemDao().byKey("ipo|kaveri|close"))
         assertTrue(item.id in cancelled)
+    }
+
+    @Test fun ipoRemindersReportTheirDueTimes() = runBlocking {
+        repo.setIpoReminder("ipo|kaveri|allot", "Kaveri Hospitals: allotment results", now + 7_200_000)
+        assertEquals(mapOf("ipo|kaveri|allot" to now + 7_200_000), repo.observeIpoReminders("ipo|").first())
     }
 }

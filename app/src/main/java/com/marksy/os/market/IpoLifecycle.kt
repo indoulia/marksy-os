@@ -98,6 +98,9 @@ object IpoLifecycle {
     fun lotCost(ipo: IpoListItemDto): Double? = upper(ipo)?.let { u -> lotSize(ipo)?.let { it * u } }
     fun minLots(ipo: IpoListItemDto) = if (ipo.isSme) 2 else 1
     fun minBid(ipo: IpoListItemDto): Double? = lotCost(ipo)?.let { it * minLots(ipo) } ?: ipo.terms?.minInvestment.number()
+    /** "sources disagree" or "as of 20 Sep" when the band or lot behind the money figures is not confirmed. */
+    fun termsNote(ipo: IpoListItemDto): String? = listOfNotNull(ipo.terms?.priceBand, ipo.terms?.lotSize).filter { it.value != null }.firstNotNullOfOrNull { it.stateNote() }
+
     fun closeAt(ipo: IpoListItemDto): ZonedDateTime? = ipo.closesOn.localDate()?.atTime(CUTOFF)?.atZone(IST)
 
     fun leftText(d: Duration): String {
@@ -111,7 +114,10 @@ object IpoLifecycle {
 
     fun times(x: Double): String = (if (x >= 100) "%.0f" else if (x >= 10) "%.1f" else "%.2f").format(Locale.ENGLISH, x) + "x"
     fun inr(n: Double): String = "₹" + IpoDetailFormatter.number(n.roundToLong())
-    fun pct(p: Double, decimals: Int = 1): String = (if (p >= 0) "+" else "−") + "%.${decimals}f".format(Locale.ENGLISH, abs(p)) + "%"
+    fun pct(p: Double, decimals: Int = 1): String {
+        val text = "%.${decimals}f".format(Locale.ENGLISH, abs(p))
+        return (if (p >= 0 || text.all { it == '0' || it == '.' }) "+" else "−") + text + "%"
+    }
     fun rupees(p: Double): String = (if (p >= 0) "+" else "−") + "₹" + IpoDetailFormatter.number(abs(p))
     fun lotsText(n: Int) = "$n lot${if (n == 1) "" else "s"}"
 
@@ -123,14 +129,14 @@ object IpoLifecycle {
 
     /** Marksy's estimate, else 1 ÷ the retail subscription, marked as an estimate. */
     fun retailOdds(ipo: IpoListItemDto): String? = ipo.retailAllocation?.probability?.let(::odds)
-        ?: ipo.subscription?.latest?.get("RETAIL")?.times?.let { x -> if (x <= 1) "Full allotment" else "About 1 in ${x.roundToInt()} (est.)" }
+        ?: ipo.subscription?.latest?.get("RETAIL")?.times?.let { x -> if (x <= 1) "Full allotment" else "About 1 in ${x.roundToInt().coerceAtLeast(2)} (est.)" }
 
     data class CardFacts(val stat: String, val statLabel: String, val statUp: Boolean?, val line: String, val chip: String? = null)
 
     fun cardFacts(ipo: IpoListItemDto, now: ZonedDateTime): CardFacts {
         val overall = ipo.subscription?.latest?.get("OVERALL")?.times
         val subscribed = overall?.let(::times) ?: "–"
-        val min = minBid(ipo)?.let { " · min ${inr(it)}" }.orEmpty()
+        val min = minBid(ipo)?.let { " · min ${inr(it)}" + (termsNote(ipo)?.let { n -> " ($n)" } ?: "") }.orEmpty()
         val lists = ipo.listsOn.localDate()
         return when (laneOf(ipo, now)) {
             Lane.TODAY -> CardFacts(
@@ -167,7 +173,7 @@ object IpoLifecycle {
 
     fun detailNote(ipo: IpoListItemDto, now: ZonedDateTime) = "${ipo.companyName} · ${stageWord(ipo, now)}"
 
-    data class GmpSummary(val text: String, val lowestPremium: Double)
+    data class GmpSummary(val text: String, val lowestPremium: Double, val asOf: String? = null)
 
     fun gmpPercent(r: IpoGmpReading, upper: Double?): Double? = r.premiumPercent ?: upper?.let { r.premium / it * 100 }
 
@@ -177,7 +183,7 @@ object IpoLifecycle {
         val b = hi.roundToInt()
         return when {
             a == b -> unit(lo)
-            a >= 0 -> unit(lo).removeSuffix("%") + "–" + unit(hi).drop(1).removePrefix("₹")
+            a >= 0 && b >= 0 -> unit(lo).removeSuffix("%") + "–" + unit(hi).drop(1).removePrefix("₹")
             else -> "${unit(lo)} to ${unit(hi)}"
         }
     }
@@ -192,8 +198,9 @@ object IpoLifecycle {
             pcts.all { it != null } -> range(pcts.minOf { it!! }, pcts.maxOf { it!! }) { pct(it, 0) }
             else -> range(rs.minOf { it.premium }, rs.maxOf { it.premium }) { rupees(it.roundToInt().toDouble()) }
         }
-        val parts = listOfNotNull("GMP $value", if (rs.size > 1) "${rs.size} sources" else null, "unofficial", asOfLabel(newest?.observedAt, now))
-        return GmpSummary(parts.joinToString(" · "), rs.minOf { it.premium })
+        val asOf = asOfLabel(newest?.observedAt, now)
+        val parts = listOfNotNull("GMP $value", if (rs.size > 1) "${rs.size} sources" else null, "unofficial", asOf)
+        return GmpSummary(parts.joinToString(" · "), rs.minOf { it.premium }, asOf)
     }
 
     data class SubscriptionDay(val date: LocalDate, val values: Map<String, Double>, val observedAt: String?)
@@ -234,7 +241,7 @@ object IpoLifecycle {
         val chance = when {
             poolTimes == null -> "Shows once bidding opens"
             !lottery -> "Full, if it stays under 1x"
-            else -> "About 1 in ${poolTimes.roundToInt()}"
+            else -> "About 1 in ${poolTimes.roundToInt().coerceAtLeast(2)}"
         }
         val got = if (lottery) cat.minLots else lots
         val callout = if (lottery && lots > cat.minLots) "$poolName is ${times(poolTimes!!)} subscribed, so allotment is a lottery for ${lotsText(cat.minLots)}. " +
@@ -260,4 +267,19 @@ object IpoLifecycle {
     ).filter { it.at.isAfter(now) }
 
     fun reminderKey(ipoId: String, event: String) = "ipo|$ipoId|$event"
+
+    /** Per-stage fetches merged; a stage that failed keeps its rows from [previous] so a lane never silently vanishes. */
+    fun mergeStages(results: List<Pair<String, MarketDataState<List<IpoListItemDto>>>>, previous: List<IpoListItemDto>): MarketDataState<List<IpoListItemDto>> {
+        val failed = results.filter { it.second is MarketDataState.Error || it.second is MarketDataState.Unavailable }.map { it.first }
+        val fresh = results.flatMap { (stage, r) ->
+            val rows = when (r) { is MarketDataState.Loaded -> r.value; is MarketDataState.Stale -> r.value; else -> emptyList() }
+            rows.filter { it.stage.equals(stage, ignoreCase = true) }
+        }
+        if (failed.isEmpty()) return if (fresh.isEmpty()) MarketDataState.Empty else MarketDataState.Loaded(fresh)
+        val kept = (fresh + previous.filter { p -> failed.any { p.stage.equals(it, ignoreCase = true) } }).distinctBy { it.id }
+        return when {
+            kept.isNotEmpty() -> MarketDataState.Stale(kept, ageSeconds = null)
+            else -> results.firstNotNullOfOrNull { it.second as? MarketDataState.Error } ?: MarketDataState.Unavailable
+        }
+    }
 }

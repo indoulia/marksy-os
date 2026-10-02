@@ -154,4 +154,12 @@ class IpoModelsTest {
         assertEquals("sources disagree", IpoValueDto("CONFLICTING", 434, null).stateNote())
         assertEquals(412.0 to 434.0, IpoValueDto("AVAILABLE", JSONObject("""{"lower":"412","upper":434}"""), null).bounds())
     }
+
+    @Test
+    fun parsesEverySubscriptionReadingAndListRowPastFifty() {
+        val readings = org.json.JSONArray((0 until 60).map { JSONObject().put("timesSubscribed", it / 10.0) })
+        assertEquals(60, IpoSubscriptionDto.parse(JSONObject().put("series", JSONObject().put("RETAIL", readings)))!!.series.getValue("RETAIL").size)
+        val rows = org.json.JSONArray((0 until 60).map { JSONObject().put("id", "ipo-$it").put("companyName", "Co $it") })
+        assertEquals(60, IpoListItemDto.parseList(rows).size)
+    }
 }

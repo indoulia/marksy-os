@@ -73,7 +73,10 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     val refresh = rememberRefreshState()
     var state by remember { mutableStateOf<MarketDataState<List<IpoListItemDto>>>(MarketDataState.Loading) }
     LaunchedEffect(refresh.key) {
-        state = liveIpos(repository)
+        val previous = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
+        state = liveIpos(repository, previous).also {
+            if (it is MarketDataState.Stale) android.widget.Toast.makeText(context, "Couldn't refresh every IPO stage; some rows may be out of date", android.widget.Toast.LENGTH_SHORT).show()
+        }
         refresh.done()
     }
     val listState = rememberLazyListState()
@@ -103,9 +106,12 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
 
     val plan = remember { MarksyContainer.plan(context) }
-    val reminderKeys by remember { plan.observeIpoReminderKeys("ipo|") }.collectAsState(emptySet())
+    val reminders by remember { plan.observeIpoReminders("ipo|") }.collectAsState(emptyMap())
+    val reminderKeys = reminders.keys
     val setReminder: (IpoListItemDto, IpoLifecycle.ReminderEvent, Boolean) -> Unit = { ipo, e, on ->
-        scope.launch { plan.setIpoReminder(IpoLifecycle.reminderKey(ipo.id, e.key), "${ipo.companyName}: ${e.title.lowercase()}", if (on) e.at.toInstant().toEpochMilli() else null) }
+        // The clock ticks every 30 s, so an event can pass between render and tap.
+        if (!on || e.at.isAfter(ZonedDateTime.now(IpoLifecycle.IST)))
+            scope.launch { plan.setIpoReminder(IpoLifecycle.reminderKey(ipo.id, e.key), "${ipo.companyName}: ${e.title.lowercase()}", if (on) e.at.toInstant().toEpochMilli() else null) }
     }
 
     val items = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
@@ -118,7 +124,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
         if (opened != null) {
             BackHandler { openedId = null; remindersOpen = false }
             IpoDetailScreen(
-                repository, opened, padding, now, reminderKeys, onReminder = { e, on -> setReminder(opened, e, on) },
+                repository, opened, padding, now, reminders, onReminder = { e, on -> setReminder(opened, e, on) },
                 remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }
             )
         } else {
@@ -126,7 +132,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = padding.calculateBottomPadding() + 20.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     when (val s = state) {
@@ -163,22 +169,11 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
 }
 
 /** Every issue in a live stage; stages with no issues are not fetched, since the unfiltered list is hundreds long. */
-private suspend fun liveIpos(repository: MarketIntelligenceRepository): MarketDataState<List<IpoListItemDto>> = coroutineScope {
+private suspend fun liveIpos(repository: MarketIntelligenceRepository, previous: List<IpoListItemDto>): MarketDataState<List<IpoListItemDto>> = coroutineScope {
     val counts = (repository.ipoStageCounts() as? MarketDataState.Loaded)?.value?.byStage
     val stages = IpoLifecycle.LIVE_STAGES.filter { counts == null || (counts[it] ?: 0) > 0 }
     if (stages.isEmpty()) return@coroutineScope MarketDataState.Empty
-    val results = stages.map { s -> async { s to repository.ipos(stage = s) } }.awaitAll()
-    val found = results.flatMap { (s, r) ->
-        val rows = when (r) { is MarketDataState.Loaded -> r.value; is MarketDataState.Stale -> r.value; else -> emptyList() }
-        // Keep only the asked-for stage even if the server returns more.
-        rows.filter { it.stage.equals(s, ignoreCase = true) }
-    }
-    when {
-        found.isNotEmpty() -> MarketDataState.Loaded(found)
-        else -> results.firstNotNullOfOrNull { it.second as? MarketDataState.Error }
-            ?: results.firstOrNull { it.second is MarketDataState.Unavailable }?.let { MarketDataState.Unavailable }
-            ?: MarketDataState.Empty
-    }
+    IpoLifecycle.mergeStages(stages.map { s -> async { s to repository.ipos(stage = s) } }.awaitAll(), previous)
 }
 
 private fun LazyListScope.ipoLanes(

@@ -1,5 +1,6 @@
 package com.marksy.os.market
 
+import org.junit.Assert.assertTrue
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -113,5 +114,32 @@ class IpoLifecycleTest {
         assertEquals(listOf("close", "allot"), IpoLifecycle.reminderEvents(dates, now).map { it.key })
         assertEquals(listOf("allot"), IpoLifecycle.reminderEvents(dates, now.withHour(15).withMinute(1)).map { it.key })
         assertEquals("ipo|kaveri|close", IpoLifecycle.reminderKey("kaveri", "close"))
+    }
+
+    @Test fun disputedTermsSayHowSureTheyAre() {
+        val terms = book[3].terms!!
+        val disputed = book[3].copy(terms = terms.copy(priceBand = IpoValueDto("CONFLICTING", JSONObject().put("lower", 412).put("upper", 434), null)))
+        assertEquals("₹412–434 · min ₹14,756 (sources disagree)", IpoLifecycle.cardFacts(disputed, now).line)
+        assertEquals("sources disagree", IpoLifecycle.termsNote(disputed))
+        assertNull(IpoLifecycle.termsNote(book[3]))
+    }
+
+    @Test fun oddsJustPastOneTimesAreStillALottery() {
+        val sub = IpoSubscriptionDto("AVAILABLE", null, emptyMap(), mapOf("RETAIL" to IpoSubscriptionReading(1.3, null)))
+        assertEquals("About 1 in 2 (est.)", IpoLifecycle.retailOdds(book[2].copy(retailAllocation = null, subscription = sub)))
+        val cats = IpoLifecycle.lotCategories(14_756.0, isSme = false)
+        assertEquals("About 1 in 2", IpoLifecycle.lotQuote(cats, cats[0], 1, 34, 434.0, 1.3, null, "Retail").chance)
+        val nearZero = IpoGmpDto("AVAILABLE", listOf(IpoGmpReading("a", -1.0, -0.3, null), IpoGmpReading("b", 48.0, 11.0, null)))
+        assertEquals("GMP +0–11% · 2 sources · unofficial", IpoLifecycle.gmpSummary(nearZero, 434.0, now)!!.text)
+    }
+
+    @Test fun aFailedStageKeepsItsLastRowsAndMarksTheListStale() {
+        val boom = MarketDataState.Error("boom")
+        val partial = IpoLifecycle.mergeStages(listOf("CLOSING_SOON" to boom, "UPCOMING" to MarketDataState.Loaded(listOf(book[3], book[4]))), previous = listOf(book[0], book[3]))
+        assertTrue(partial is MarketDataState.Stale<*>)
+        assertEquals(setOf("today", "up2", "up1"), (partial as MarketDataState.Stale<List<IpoListItemDto>>).value.map { it.id }.toSet())
+        assertEquals(listOf("today"), (IpoLifecycle.mergeStages(listOf("CLOSING_SOON" to boom), listOf(book[0])) as MarketDataState.Stale<List<IpoListItemDto>>).value.map { it.id })
+        assertEquals(boom, IpoLifecycle.mergeStages(listOf("CLOSING_SOON" to boom), emptyList()))
+        assertEquals(MarketDataState.Loaded(listOf(book[3])), IpoLifecycle.mergeStages(listOf("UPCOMING" to MarketDataState.Loaded(listOf(book[3]))), emptyList()))
     }
 }

@@ -85,7 +85,7 @@ data class IpoListItemDto(
             subscription = IpoSubscriptionDto.parse(json.optJSONObject("subscription")),
             retailAllocation = IpoAllocationDto.parse(json.optJSONObject("retailAllocationEstimate"))
         )
-        fun parseList(array: JSONArray?) = array.objects().map(::parse)
+        fun parseList(array: JSONArray?) = array.allObjects().map(::parse)
     }
 }
 
@@ -102,7 +102,7 @@ data class IpoRiskRunDto(val status: String, val ranAt: String?, val findingsCou
 data class IpoDetailDto(
     val summary: IpoListItemDto, val riskEngineRan: Boolean, val riskRun: IpoRiskRunDto?, val raw: JSONObject? = null,
     val keyDates: List<IpoKeyDate> = emptyList(), val decisionContexts: List<IpoDecisionContext> = emptyList(),
-    val outcome: IpoOutcomeDto? = null, val anchorCrore: Double? = null, val overview: IpoValueDto? = null
+    val outcome: IpoOutcomeDto? = null, val anchorCrore: Double? = null, val overview: IpoValueDto? = null, val anchorState: String? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = IpoDetailDto(
@@ -114,7 +114,8 @@ data class IpoDetailDto(
             decisionContexts = json.optJSONArray("decisionContexts").objects().map(IpoDecisionContext::parse),
             outcome = IpoOutcomeDto.parse(json.optJSONObject("outcome")),
             anchorCrore = json.optJSONObject("anchorBook")?.opt("totalAmountCrore").asDouble(),
-            overview = IpoValueDto.parse(json.optJSONObject("companyOverview"))
+            overview = IpoValueDto.parse(json.optJSONObject("companyOverview")),
+            anchorState = json.optJSONObject("anchorBook")?.textOrNull("state")
         )
     }
 }
@@ -173,6 +174,9 @@ data class IpoTrackingStateDto(val ipoId: String, val tracking: Boolean) {
     }
 }
 
+/** Every object in [this]; IPO lists and subscription series run past the shared 50-item cap. */
+private fun JSONArray?.allObjects(): List<JSONObject> = if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+
 internal fun Any?.asDouble(): Double? = when (this) { is Number -> toDouble(); is String -> toDoubleOrNull(); else -> null }
 
 /** The fact as a number; Marksy sends some decimals as strings. */
@@ -206,7 +210,7 @@ data class IpoGmpReading(val source: String, val premium: Double, val premiumPer
 data class IpoGmpDto(val state: String, val readings: List<IpoGmpReading>) {
     companion object {
         fun parse(json: JSONObject?): IpoGmpDto? = json?.let { g ->
-            IpoGmpDto(g.textOrNull("state") ?: "UNAVAILABLE", g.optJSONArray("readings").objects().mapNotNull { r ->
+            IpoGmpDto(g.textOrNull("state") ?: "UNAVAILABLE", g.optJSONArray("readings").allObjects().mapNotNull { r ->
                 r.opt("premium").asDouble()?.let { IpoGmpReading(r.textOrNull("source") ?: "Unknown", it, r.opt("premiumPercent").asDouble(), r.textOrNull("observedAt")) }
             })
         }
@@ -224,7 +228,7 @@ data class IpoSubscriptionDto(val state: String, val asOf: String?, val series: 
             val latest = json.optJSONObject("latest")
             return IpoSubscriptionDto(
                 state = json.textOrNull("state") ?: "UNAVAILABLE", asOf = json.textOrNull("asOf"),
-                series = series?.keys()?.asSequence()?.associateWith { k -> series.optJSONArray(k).objects().mapNotNull(::reading) }.orEmpty(),
+                series = series?.keys()?.asSequence()?.associateWith { k -> series.optJSONArray(k).allObjects().mapNotNull(::reading) }.orEmpty(),
                 latest = latest?.keys()?.asSequence()?.mapNotNull { k -> reading(latest.optJSONObject(k))?.let { k to it } }?.toMap().orEmpty()
             )
         }
