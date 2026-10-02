@@ -87,17 +87,21 @@ object UpstoxCandles {
 
     private val PERIODS = listOf("1W" to 7L, "1M" to 30L, "3M" to 91L, "6M" to 182L, "1Y" to 365L)
 
-    /** % change to [lastPrice] from the close on or before each period's start; periods the data doesn't reach are left out. */
-    fun returns(daily: List<Candle>, lastPrice: Double): Map<String, Double> {
+    /** Close on or before each period's start; periods the data doesn't reach are left out. */
+    fun bases(daily: List<Candle>): Map<String, Double> {
         val end = daily.lastOrNull()?.time ?: return emptyMap()
         return PERIODS.mapNotNull { (label, days) ->
             val start = end - days * DAY_MS
             // A fetched year can begin a few days after the exact mark (weekends, holidays); the first candle stands in.
             val base = (daily.lastOrNull { it.time <= start } ?: daily.first().takeIf { it.time - start <= PERIOD_SLACK_MS })
                 ?.close?.takeIf { it > 0 } ?: return@mapNotNull null
-            label to (lastPrice - base) / base * 100
+            label to base
         }.toMap()
     }
+
+    /** % change to [lastPrice] from each period's base. */
+    fun returns(daily: List<Candle>, lastPrice: Double): Map<String, Double> =
+        bases(daily).mapValues { (_, base) -> (lastPrice - base) / base * 100 }
 
     fun averageVolume(daily: List<Candle>, sessions: Int): Long? = daily.takeLast(sessions).takeIf { it.isNotEmpty() }?.map { it.volume }?.average()?.toLong()
 
