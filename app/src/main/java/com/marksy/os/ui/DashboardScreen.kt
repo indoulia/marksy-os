@@ -92,8 +92,7 @@ fun DashboardScreen(
     val group = GroupSwipe(
         markRead = { s -> onMarkRead(s.allRows.map { it.id }) },
         markUnread = { s -> onMarkUnread(s.allRows.map { it.id }) },
-        archive = { s -> onArchive(s.allRows) },
-        delete = { s -> onDelete(s.allRows) }
+        archive = { s -> onArchive(s.allRows) }
     )
     // The AI reason stays visible as a line under each attention row.
     fun attentionNote(thread: SmartInboxModel.InboxThread): String? =

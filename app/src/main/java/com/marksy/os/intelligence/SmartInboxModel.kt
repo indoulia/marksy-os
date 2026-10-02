@@ -218,7 +218,9 @@ object SmartInboxModel {
         return if (thread.bucket == Bucket.PRIORITY && fresh) NeedReason("High attention", Urgency.FLAGGED) else null
     }
 
-    fun isSms(event: NotificationEventEntity): Boolean = CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS
+    // Truecaller often is the phone's SMS app; CaptureMedium stays as is because it mirrors what the tip ledger sends.
+    fun isSms(event: NotificationEventEntity): Boolean =
+        CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS || event.sourcePackage.trim().lowercase(Locale.ROOT) == "com.truecaller"
 
     // One SMS app carries the bank, the telco and the courier, so SMS stacks by sender; every other app is one stack.
     private fun stackKey(event: NotificationEventEntity): String {

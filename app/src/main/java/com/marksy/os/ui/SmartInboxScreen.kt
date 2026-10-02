@@ -26,8 +26,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -50,9 +48,8 @@ import com.marksy.os.intelligence.SmartInboxModel.InboxThread
 
 private const val NEEDS_VISIBLE = 3
 private const val STACK_VISIBLE = 3
-// Rows sit just right of a rail under the group icon's centre (12dp inset + half its 28dp).
-private val RAIL_X = 25.dp
-private val ROW_INDENT = 36.dp
+// Group rows start at the card's own inset: no rail, no wide indent.
+private val ROW_INDENT = 14.dp
 private const val NEEDS_KEY = "needs"
 private const val EARLIER_PREFIX = "e:"
 private const val HOUR_MS = 60 * 60 * 1000L
@@ -110,8 +107,7 @@ fun SmartInboxScreen(
         // Marking a group read holds its place for this visit, like opening it does.
         markRead = { s -> seenThisVisit = seenThisVisit + s.threads.map { it.key }; actions.markSeen(s.threads.flatMap { it.allIds }) },
         markUnread = { s -> actions.markUnread(s.threads.flatMap { it.allIds }) },
-        archive = { s -> onArchive(s.allRows) },
-        delete = { s -> onDelete(s.allRows) }
+        archive = { s -> onArchive(s.allRows) }
     )
 
     Box(
@@ -242,30 +238,18 @@ internal data class ThreadSwipe(
 internal data class GroupSwipe(
     val markRead: (SmartInboxModel.SourceStack) -> Unit,
     val markUnread: (SmartInboxModel.SourceStack) -> Unit,
-    val archive: (SmartInboxModel.SourceStack) -> Unit,
-    val delete: (SmartInboxModel.SourceStack) -> Unit
+    val archive: (SmartInboxModel.SourceStack) -> Unit
 )
 
-/** Header swipe for a whole group: read/unread, archive, then delete behind a confirmation (delete has no undo). */
+/** Header swipe for a whole group: read/unread and archive (with undo). No group delete: it's permanent and a group can be large. */
 @Composable
 private fun SwipeableGroup(stack: SmartInboxModel.SourceStack, group: GroupSwipe, stacked: Boolean = true, content: @Composable (headerDrag: Modifier) -> Unit) {
-    var confirming by remember { mutableStateOf(false) }
     val actions = listOf(
         if (stack.unread > 0) SwipeTrayAction(Icons.Default.DoneAll, "Mark all from ${stack.label} read", MarksyTheme.SecondaryCyan) { group.markRead(stack) }
         else SwipeTrayAction(Icons.Default.MarkEmailUnread, "Mark all from ${stack.label} unread", MarksyTheme.SecondaryCyan) { group.markUnread(stack) },
-        SwipeTrayAction(Icons.Default.Archive, "Archive all from ${stack.label}", MarksyTheme.PrimaryEmerald) { group.archive(stack) },
-        SwipeTrayAction(Icons.Default.Delete, "Delete all from ${stack.label}", MarksyTheme.RedUrgent) { confirming = true }
+        SwipeTrayAction(Icons.Default.Archive, "Archive all from ${stack.label}", MarksyTheme.PrimaryEmerald) { group.archive(stack) }
     )
     SwipeGroupCard(actions, stacked = stacked, content = content)
-    if (confirming) MarksyDialog(
-        onDismissRequest = { confirming = false },
-        title = { Text("Delete all ${stack.threads.size} from ${stack.label}?") },
-        text = { Text("This can't be undone. Archive keeps them instead.", color = MarksyTheme.TextSecondary, fontSize = 13.sp) },
-        dismissButton = { TextButton(onClick = { confirming = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
-        confirmButton = {
-            TextButton(onClick = { confirming = false; group.delete(stack) }) { Text("Delete", color = MarksyTheme.RedUrgent, fontWeight = FontWeight.Bold) }
-        }
-    )
 }
 
 @Composable
@@ -436,13 +420,12 @@ internal fun SourceStackCard(
                     Spacer(Modifier.width(12.dp))
                 }
             }
-            val rail = resolveSourceStyle(stack.threads.first().latest).iconBg
             (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEachIndexed { index, thread ->
                 if (index > 0) HorizontalDivider(Modifier.padding(start = ROW_INDENT), color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
                 // Swipe offset lives in the row's composition; keyed so a re-sort never leaves an open tray over another thread.
                 key(thread.key) {
                     Swipeable(thread, swipe) {
-                        StackRow(thread, stack.isSms, first = index == 0, note = note(thread), rail = rail, onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
+                        StackRow(thread, stack.isSms, first = index == 0, note = note(thread), onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
                     }
                 }
             }
@@ -465,15 +448,13 @@ internal fun SourceStackCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, note: String?, rail: Color, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, note: String?, onClick: () -> Unit, onLongClick: () -> Unit) {
     val text = rowText(thread.latest, smsStack)
     val unread = thread.unread
     Box(
         Modifier
             .fillMaxWidth()
             .background(MarksyTheme.Surface)
-            // The rail runs down from the group's icon, tying these rows to it without a wide indent.
-            .drawBehind { drawRect(rail.copy(alpha = 0.6f), topLeft = Offset(RAIL_X.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
             .padding(start = ROW_INDENT, end = 14.dp, top = 7.dp, bottom = 9.dp)
     ) {
@@ -625,9 +606,8 @@ private fun EarlierList(
                 val t = rowText(thread.latest, stack.isSms)
                 Row(
                     Modifier.fillMaxWidth()
-                        .drawBehind { drawRect(style.iconBg.copy(alpha = 0.6f), topLeft = Offset(23.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) }
                         .combinedClickable(onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) }, onLongClickLabel = "Thread actions")
-                        .padding(start = 34.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = ROW_INDENT, end = 12.dp, top = 6.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(

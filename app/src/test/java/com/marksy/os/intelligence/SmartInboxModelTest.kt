@@ -151,6 +151,18 @@ class SmartInboxModelTest {
     }
 
     @Test
+    fun truecallerTextsGroupBySenderLikeOtherSmsApps() {
+        val stacks = SmartInboxModel.sourceStacks(
+            listOf(
+                msg(1, "com.truecaller", "HDFC Bank", "Rs 500 debited", now - hour),
+                msg(2, "com.truecaller", "ET Money", "Bill due 5 Oct", now - 2 * hour)
+            ),
+            nowMillis = now
+        )
+        assertEquals(setOf("HDFC Bank", "ET Money"), stacks.map { it.label }.toSet())
+    }
+
+    @Test
     fun groupRowsPutUnreadFirstThenReadEachNewestFirst() {
         val stack = SmartInboxModel.sourceStacks(
             listOf(
