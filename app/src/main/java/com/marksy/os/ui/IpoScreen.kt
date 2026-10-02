@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 
-/** IPO home: every live issue in lifecycle lanes, filters and search on the floating stack. */
+/** IPO home: open issues first, other stages from the filter; Listed pages in as it scrolls. */
 @Composable
 fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, onSectionSelected: (String) -> Unit = {}, onTitleNote: (String?) -> Unit = {}) {
     val context = LocalContext.current
@@ -61,7 +62,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     val now by produceState(ZonedDateTime.now(IpoLifecycle.IST)) {
         while (true) { delay(30_000); value = ZonedDateTime.now(IpoLifecycle.IST) }
     }
-    var stageName by rememberSaveable { mutableStateOf(StageFilter.ALL.name) }
+    var stageName by rememberSaveable { mutableStateOf(StageFilter.OPEN.name) }
     var boardName by rememberSaveable { mutableStateOf(Board.ALL.name) }
     val stage = StageFilter.valueOf(stageName)
     val board = Board.valueOf(boardName)
@@ -73,14 +74,20 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     // Loaded above the detail branch so back returns to the same list and scroll position.
     val refresh = rememberRefreshState()
     var state by remember { mutableStateOf<MarketDataState<List<IpoListItemDto>>>(MarketDataState.Loading) }
+    var counts by remember { mutableStateOf<Map<String, Int>?>(null) }
     LaunchedEffect(refresh.key) {
         val previous = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
-        state = liveIpos(repository, previous).also {
+        val c = (repository.ipoStageCounts() as? MarketDataState.Loaded)?.value?.byStage
+        if (c != null) counts = c
+        state = liveIpos(repository, c, previous).also {
             if (it is MarketDataState.Stale) android.widget.Toast.makeText(context, "Couldn't refresh every IPO stage; some rows may be out of date", android.widget.Toast.LENGTH_SHORT).show()
         }
         refresh.done()
     }
     val listState = rememberLazyListState()
+    // Hundreds of listed issues, so they arrive a page at a time; All takes page one for the fold's best/worst.
+    val listed = remember(refresh.key) { Paged { c -> repository.iposPage(stage = IpoLifecycle.LISTED_STAGE, limit = LISTED_PAGE, cursor = c).map { it.items to it.nextCursor } } }
+    LaunchedEffect(listed, stage) { if ((stage == StageFilter.ALL || stage == StageFilter.LISTED) && listed.items.isEmpty()) listed.more() }
 
     // Server-side watch list; null until it loads so rows don't flash as unwatched.
     var watched by remember { mutableStateOf<Set<String>?>(null) }
@@ -115,10 +122,26 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             scope.launch { plan.setIpoReminder(IpoLifecycle.reminderKey(ipo.id, e.key), "${ipo.companyName}: ${e.title.lowercase()}", if (on) e.at.toInstant().toEpochMilli() else null) }
     }
 
-    val items = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
+    val live = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
+    // Watched issues and search hits outside the loaded pages, fetched by id or name.
+    var extra by remember(refresh.key) { mutableStateOf<List<IpoListItemDto>>(emptyList()) }
+    LaunchedEffect(watched, state, refresh.key) {
+        val have = (live + listed.items + extra).mapTo(HashSet()) { it.id }
+        val missing = watched.orEmpty().filter { it !in have }.take(MAX_IDS)
+        if (missing.isNotEmpty()) (repository.iposPage(ids = missing, limit = MAX_IDS) as? MarketDataState.Loaded)?.let { r -> extra = (extra + r.value.items).distinctBy { it.id } }
+    }
+    LaunchedEffect(query, refresh.key) {
+        val q = query.trim()
+        if (q.length < 2) return@LaunchedEffect
+        delay(300)
+        (repository.iposPage(query = q, limit = SEARCH_PAGE) as? MarketDataState.Loaded)?.let { r -> extra = (extra + r.value.items).distinctBy { it.id } }
+    }
+    val items = remember(live, listed.items, extra) { (live + listed.items + extra).distinctBy { it.id } }
+    val listedDone = !listed.hasMore && !listed.failed
+    val listedTotal = counts?.get(IpoLifecycle.LISTED_STAGE)?.takeIf { board == Board.ALL && !listedDone }
     // Allotment days and listing results live on the detail; fetched only for the few cards that show them.
     var details by remember { mutableStateOf<Map<String, IpoDetailDto>>(emptyMap()) }
-    LaunchedEffect(state) {
+    LaunchedEffect(items) {
         val at = ZonedDateTime.now(IpoLifecycle.IST)
         val wanted = items.filter { IpoLifecycle.needsDetail(it, details[it.id], at) }
             .sortedWith(compareBy({ IpoLifecycle.laneOf(it, at) != Lane.ALLOTMENT }, { -(it.listsOn.localDate()?.toEpochDay() ?: 0L) }))
@@ -153,10 +176,15 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                         is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
                         is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                         is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues are open, upcoming or recently listed.") }
-                        is MarketDataState.Loaded, is MarketDataState.Stale -> ipoLanes(
-                            items, stage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys, details,
-                            onOpen = { openedId = it.id }, onRemind = setReminder
-                        )
+                        is MarketDataState.Loaded, is MarketDataState.Stale -> {
+                            val listedShown = query.isBlank() && (stage == StageFilter.LISTED || (stage == StageFilter.ALL && listedOpen))
+                            ipoLanes(
+                                items, stage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys, details,
+                                listedTotal = listedTotal, pending = stage == StageFilter.LISTED && listed.items.isEmpty() && listed.hasMore,
+                                onOpen = { openedId = it.id }, onRemind = setReminder
+                            )
+                            if (listedShown) listedFooter(listed, IpoLifecycle.stageCount(items, StageFilter.LISTED, board, emptySet(), now, null, listedDone = true))
+                        }
                     }
                 }
             }
@@ -170,9 +198,9 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             onSearchChange = if (opened == null) ({ query = it }) else null,
             searchPlaceholder = "Search IPOs...",
             // Stage and board sit inside the section filter's panel, as Captured's options do on Trading.
-            extrasActive = opened == null && (stage != StageFilter.ALL || board != Board.ALL),
+            extrasActive = opened == null && (stage != StageFilter.OPEN || board != Board.ALL),
             filterExtras = if (opened == null) ({
-                IpoFilterSections(items, stage, board, watched.orEmpty(), now, onStage = { stageName = it.name }, onBoard = { boardName = it.name })
+                IpoFilterSections(items, stage, board, watched.orEmpty(), now, counts?.get(IpoLifecycle.LISTED_STAGE), listedDone, onStage = { stageName = it.name }, onBoard = { boardName = it.name })
             }) else null,
             actions = if (opened == null) emptyList()
             else {
@@ -186,27 +214,54 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
 }
 
-/** Every issue in a live stage; stages with no issues are not fetched, since the unfiltered list is hundreds long. */
-private suspend fun liveIpos(repository: MarketIntelligenceRepository, previous: List<IpoListItemDto>): MarketDataState<List<IpoListItemDto>> = coroutineScope {
-    val counts = (repository.ipoStageCounts() as? MarketDataState.Loaded)?.value?.byStage
-    val stages = IpoLifecycle.LIVE_STAGES.filter { counts == null || (counts[it] ?: 0) > 0 }
-    if (stages.isEmpty()) return@coroutineScope MarketDataState.Empty
+private const val LISTED_PAGE = 20
+private const val SEARCH_PAGE = 50
+private const val MAX_IDS = 100
+
+/** Every pre-listing issue, skipping empty stages; none live is still a list, since Listed pages in separately. */
+private suspend fun liveIpos(repository: MarketIntelligenceRepository, counts: Map<String, Int>?, previous: List<IpoListItemDto>): MarketDataState<List<IpoListItemDto>> = coroutineScope {
+    val stages = IpoLifecycle.PRE_LISTING_STAGES.filter { counts == null || (counts[it] ?: 0) > 0 }
+    if (stages.isEmpty()) return@coroutineScope MarketDataState.Loaded(emptyList())
     IpoLifecycle.mergeStages(stages.map { s -> async { s to repository.ipos(stage = s) } }.awaitAll(), previous)
+        .let { if (it is MarketDataState.Empty) MarketDataState.Loaded(emptyList()) else it }
+}
+
+private fun LazyListScope.listedFooter(listed: Paged<IpoListItemDto>, shown: Int?) {
+    val note = when {
+        listed.hasMore -> null
+        listed.failed -> "Couldn't load more listed IPOs · pull to refresh"
+        listed.items.isNotEmpty() -> "That's all ${shown ?: listed.items.size} listed"
+        else -> null
+    }
+    if (listed.hasMore) item(key = "more-listed-${listed.items.size}") {
+        LaunchedEffect(Unit) { listed.more() }
+        MarksyLoader("Loading more...")
+    } else if (note != null) item(key = "listed-end") {
+        Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
+    } else (listed.state as? MarketDataState.Error)?.let { e -> item(key = "listed-error") { EmptyState("Listed IPOs unavailable", e.message) } }
 }
 
 private fun LazyListScope.ipoLanes(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, query: String, watched: Set<String>, now: ZonedDateTime,
     listedOpen: Boolean, onToggleListed: () -> Unit, reminderKeys: Set<String>, details: Map<String, IpoDetailDto>,
+    listedTotal: Int?, pending: Boolean,
     onOpen: (IpoListItemDto) -> Unit, onRemind: (IpoListItemDto, IpoLifecycle.ReminderEvent, Boolean) -> Unit
 ) {
     val lanes = IpoLifecycle.lanes(items, stage, board, query, watched, now)
     if (lanes.isEmpty()) {
-        item { EmptyState("No IPOs match", if (stage == StageFilter.WATCHING) "Tap the bookmark on an IPO to watch it." else "Try another stage or board, or clear the search.") }
+        if (pending) return
+        item {
+            when {
+                stage == StageFilter.WATCHING -> EmptyState("No IPOs match", "Tap the bookmark on an IPO to watch it.")
+                stage == StageFilter.OPEN && query.isBlank() -> EmptyState("No IPOs open right now", "Opens soon, Allotment and Listed are in the filter.")
+                else -> EmptyState("No IPOs match", "Try another stage or board, or clear the search.")
+            }
+        }
         return
     }
     lanes.forEach { (lane, xs) ->
         val folded = lane == Lane.LISTED && stage == StageFilter.ALL && query.isBlank()
-        if (folded) item(key = "fold-listed") { ListedFold(xs.size, IpoLifecycle.listedSummary(xs, details), listedOpen, onToggleListed) }
+        if (folded) item(key = "fold-listed") { ListedFold(listedTotal ?: xs.size, IpoLifecycle.listedSummary(xs, details), listedOpen, onToggleListed) }
         else item(key = "lane-${lane.name}") { LaneLabel(lane.label, xs.size, laneColor(lane)) }
         if (!folded || listedOpen) items(xs, key = { it.id }) { ipo ->
             // The 3 pm nudge sits on the card only while it is still ahead.
@@ -320,14 +375,14 @@ private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail:
 @Composable
 private fun IpoFilterSections(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, watched: Set<String>, now: ZonedDateTime,
-    onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
+    listedTotal: Int?, listedDone: Boolean, onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
 ) {
     Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("STAGE", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             StageFilter.entries.forEach { f ->
-                val n = IpoLifecycle.lanes(items, f, board, "", watched, now).sumOf { it.second.size }
-                Pill("${f.label} $n", selected = f == stage) { onStage(f) }
+                val n = IpoLifecycle.stageCount(items, f, board, watched, now, listedTotal, listedDone)
+                Pill(if (n == null) f.label else "${f.label} $n", selected = f == stage) { onStage(f) }
             }
         }
         Text("BOARD", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)

@@ -40,6 +40,8 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
     var items by mutableStateOf<List<T>>(emptyList())
     var state by mutableStateOf<MarketDataState<Unit>>(MarketDataState.Loading)
     var hasMore by mutableStateOf(true)
+    /** A later page failed, so the list stopped short of its end. */
+    var failed by mutableStateOf(false)
     private var cursor: String? = null
     private var busy = false
 
@@ -49,7 +51,7 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
         when (val r = fetch(cursor)) {
             is MarketDataState.Loaded -> { items = items + r.value.first; cursor = r.value.second; hasMore = cursor != null; state = MarketDataState.Loaded(Unit) }
             is MarketDataState.Empty -> { hasMore = false; state = if (items.isEmpty()) MarketDataState.Empty else MarketDataState.Loaded(Unit) }
-            is MarketDataState.Error -> { hasMore = false; if (items.isEmpty()) state = r }
+            is MarketDataState.Error -> { hasMore = false; failed = true; if (items.isEmpty()) state = r }
             is MarketDataState.Unavailable -> { hasMore = false; state = r }
             else -> Unit
         }

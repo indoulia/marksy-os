@@ -89,6 +89,13 @@ data class IpoListItemDto(
     }
 }
 
+/** One `GET /ipos?limit=` page; [nextCursor] is null on the last. */
+data class IpoPageDto(val items: List<IpoListItemDto>, val nextCursor: String?) {
+    companion object {
+        fun parse(envelope: JSONObject) = IpoPageDto(IpoListItemDto.parseList(envelope.optJSONArray("data")), envelope.optJSONObject("meta")?.textOrNull("nextCursor"))
+    }
+}
+
 data class IpoRiskRunDto(val status: String, val ranAt: String?, val findingsCount: Int) {
     companion object {
         fun parse(json: JSONObject?): IpoRiskRunDto? {

@@ -65,7 +65,7 @@ class IpoScreenTest {
     }
 
     @Test
-    fun upcomingIssuesShowInTheOpensSoonLane() {
+    fun homeOpensOnOpenSoUpcomingWaitsBehindTheFilter() {
         val repository = MarketIntelligenceRepository(
             FixtureIpoClient(list = listOf(ipo("ipo-2", "Nilgiri Foods", "UPCOMING")), counts = IpoStageCountsDto(byStage = mapOf("UPCOMING" to 1), total = 1))
         )
@@ -73,7 +73,7 @@ class IpoScreenTest {
         compose.setContent { IpoScreen(repository = repository, padding = PaddingValues()) }
         compose.waitForIdle()
 
-        compose.onNodeWithText("OPENS SOON", substring = true).assertExists()
-        compose.onNodeWithText("Nilgiri Foods").assertExists()
+        compose.onNodeWithText("No IPOs open right now").assertExists()
+        compose.onNodeWithText("Nilgiri Foods").assertDoesNotExist()
     }
 }
