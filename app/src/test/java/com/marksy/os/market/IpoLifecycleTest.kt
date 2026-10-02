@@ -142,4 +142,52 @@ class IpoLifecycleTest {
         assertEquals(boom, IpoLifecycle.mergeStages(listOf("CLOSING_SOON" to boom), emptyList()))
         assertEquals(MarketDataState.Loaded(listOf(book[3])), IpoLifecycle.mergeStages(listOf("UPCOMING" to MarketDataState.Loaded(listOf(book[3]))), emptyList()))
     }
+
+    private fun detail(ipo: IpoListItemDto, allot: String? = null, outcome: IpoOutcomeDto? = null) = IpoDetailDto(
+        summary = ipo, riskEngineRan = false, riskRun = null,
+        keyDates = listOfNotNull(allot?.let { IpoKeyDate("Allotment", v(it)) }), outcome = outcome
+    )
+
+    @Test fun allotmentCardsNameTheResultsDayOnceTheDetailIsIn() {
+        assertEquals("Allotment Mon 5 Oct · retail about 1 in 4 · lists Wed 7 Oct", IpoLifecycle.cardFacts(book[2], now, detail(book[2], "2026-10-05")).line)
+        assertEquals("Results tonight · retail about 1 in 4 · lists Wed 7 Oct", IpoLifecycle.cardFacts(book[2], now, detail(book[2], "2026-10-01")).line)
+        assertEquals("Allotment out, check by PAN · lists Wed 7 Oct", IpoLifecycle.cardFacts(book[2], now.withHour(18).withMinute(5), detail(book[2], "2026-10-01")).line)
+    }
+
+    @Test fun listedCardsShowTheListingGainAndTheFoldNamesBestAndWorst() {
+        val up = detail(book[5], outcome = IpoOutcomeDto(570.0, 637.0, 11.75, 9.5))
+        val facts = IpoLifecycle.cardFacts(book[5], now, up)
+        assertEquals("+11.8%" to "on listing", facts.stat to facts.statLabel)
+        assertEquals(true, facts.statUp)
+        assertEquals("Listed Mon 28 Sep at ₹637", facts.line)
+        val other = book[5].copy(id = "l2", companyName = "Co l2")
+        val down = detail(other, outcome = IpoOutcomeDto(100.0, 97.0, -3.0, null))
+        assertEquals("Best Co listed +11.8% · worst Co l2 −3.0%", IpoLifecycle.listedSummary(listOf(book[5], other), mapOf("listed" to up, "l2" to down)))
+        assertEquals("Best Co listed +11.8%", IpoLifecycle.listedSummary(listOf(book[5]), mapOf("listed" to up)))
+        assertNull(IpoLifecycle.listedSummary(listOf(book[5]), emptyMap()))
+    }
+
+    @Test fun homeNoteMentionsAllotmentsTonightWhenNothingClosesToday() {
+        val items = listOf(book[1], book[2])
+        assertEquals("IPOs · 1 open · 1 allotment tonight", IpoLifecycle.homeNote(items, IpoLifecycle.StageFilter.ALL, IpoLifecycle.Board.ALL, "", now, mapOf("allot" to detail(book[2], "2026-10-01"))))
+    }
+
+    @Test fun holidayNoteNamesMarketHolidaysInsideTheIssueWindow() {
+        val holidays = mapOf(LocalDate.of(2026, 10, 2) to "Gandhi Jayanti")
+        assertEquals("Fri 2 Oct is a market holiday (Gandhi Jayanti), so these dates skip it.", IpoLifecycle.holidayNote(holidays, LocalDate.of(2026, 9, 29), LocalDate.of(2026, 10, 7)))
+        assertNull(IpoLifecycle.holidayNote(holidays, LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 9)))
+    }
+
+    @Test fun detailsAreRefetchedUntilTheyCarryWhatTheCardNeeds() {
+        assertEquals(true, IpoLifecycle.needsDetail(book[2], null, now))
+        assertEquals(true, IpoLifecycle.needsDetail(book[2], detail(book[2]), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[2], detail(book[2], "2026-10-05"), now))
+        assertEquals(true, IpoLifecycle.needsDetail(book[5], detail(book[5]), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[5], detail(book[5], outcome = IpoOutcomeDto(570.0, 637.0, 11.75, null)), now))
+        assertEquals(false, IpoLifecycle.needsDetail(book[1], null, now))
+    }
+
+    @Test fun holidaysOnAWeekendAreNotSkippedDates() {
+        assertNull(IpoLifecycle.holidayNote(mapOf(LocalDate.of(2026, 10, 3) to "Saturday holiday"), LocalDate.of(2026, 9, 29), LocalDate.of(2026, 10, 7)))
+    }
 }

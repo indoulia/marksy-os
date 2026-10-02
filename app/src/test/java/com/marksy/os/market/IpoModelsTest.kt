@@ -162,4 +162,10 @@ class IpoModelsTest {
         val rows = org.json.JSONArray((0 until 60).map { JSONObject().put("id", "ipo-$it").put("companyName", "Co $it") })
         assertEquals(60, IpoListItemDto.parseList(rows).size)
     }
+
+    @Test
+    fun parsesTheListedSymbol() {
+        assertEquals("KAVERI", IpoDetailDto.parse(JSONObject("""{"summary":{"id":"kaveri","companyName":"Kaveri"},"listedSymbol":"KAVERI"}""")).listedSymbol)
+        assertNull(IpoDetailDto.parse(JSONObject("""{"summary":{"id":"kaveri","companyName":"Kaveri"},"listedSymbol":null}""")).listedSymbol)
+    }
 }

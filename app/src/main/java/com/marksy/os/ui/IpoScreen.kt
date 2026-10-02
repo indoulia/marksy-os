@@ -40,7 +40,9 @@ import com.marksy.os.market.IpoLifecycle
 import com.marksy.os.market.IpoLifecycle.Board
 import com.marksy.os.market.IpoLifecycle.Lane
 import com.marksy.os.market.IpoLifecycle.StageFilter
+import com.marksy.os.market.IpoDetailDto
 import com.marksy.os.market.IpoListItemDto
+import com.marksy.os.market.localDate
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.display
@@ -115,8 +117,20 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
 
     val items = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
+    // Allotment days and listing results live on the detail; fetched only for the few cards that show them.
+    var details by remember { mutableStateOf<Map<String, IpoDetailDto>>(emptyMap()) }
+    LaunchedEffect(state) {
+        val at = ZonedDateTime.now(IpoLifecycle.IST)
+        val wanted = items.filter { IpoLifecycle.needsDetail(it, details[it.id], at) }
+            .sortedWith(compareBy({ IpoLifecycle.laneOf(it, at) != Lane.ALLOTMENT }, { -(it.listsOn.localDate()?.toEpochDay() ?: 0L) }))
+            .map { it.id }.take(12)
+        if (wanted.isNotEmpty()) details = details + coroutineScope {
+            wanted.map { id -> async { id to (repository.ipoDetail(id) as? MarketDataState.Loaded)?.value } }.awaitAll()
+        }.mapNotNull { (id, d) -> d?.let { id to it } }
+    }
+    val holidays by produceState(emptyMap<java.time.LocalDate, String>()) { value = com.marksy.os.upstox.UpstoxHolidays.load(context, java.time.LocalDate.now(IpoLifecycle.IST)) }
     val opened = openedId?.let { id -> items.firstOrNull { it.id == id } }
-    val note = opened?.let { IpoLifecycle.detailNote(it, now) } ?: IpoLifecycle.homeNote(items, stage, board, query, now)
+    val note = opened?.let { IpoLifecycle.detailNote(it, now) } ?: IpoLifecycle.homeNote(items, stage, board, query, now, details)
     LaunchedEffect(note) { onTitleNote(note) }
     DisposableEffect(Unit) { onDispose { onTitleNote(null) } }
 
@@ -125,7 +139,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             BackHandler { openedId = null; remindersOpen = false }
             IpoDetailScreen(
                 repository, opened, padding, now, reminders, onReminder = { e, on -> setReminder(opened, e, on) },
-                remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }
+                remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }, holidays = holidays
             )
         } else {
             MarksyRefreshBox(refresh) {
@@ -141,7 +155,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                         is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                         is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues are open, upcoming or recently listed.") }
                         is MarketDataState.Loaded, is MarketDataState.Stale -> ipoLanes(
-                            items, stage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys,
+                            items, stage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys, details,
                             onOpen = { openedId = it.id }, onRemind = setReminder
                         )
                     }
@@ -178,7 +192,7 @@ private suspend fun liveIpos(repository: MarketIntelligenceRepository, previous:
 
 private fun LazyListScope.ipoLanes(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, query: String, watched: Set<String>, now: ZonedDateTime,
-    listedOpen: Boolean, onToggleListed: () -> Unit, reminderKeys: Set<String>,
+    listedOpen: Boolean, onToggleListed: () -> Unit, reminderKeys: Set<String>, details: Map<String, IpoDetailDto>,
     onOpen: (IpoListItemDto) -> Unit, onRemind: (IpoListItemDto, IpoLifecycle.ReminderEvent, Boolean) -> Unit
 ) {
     val lanes = IpoLifecycle.lanes(items, stage, board, query, watched, now)
@@ -188,13 +202,13 @@ private fun LazyListScope.ipoLanes(
     }
     lanes.forEach { (lane, xs) ->
         val folded = lane == Lane.LISTED && stage == StageFilter.ALL && query.isBlank()
-        if (folded) item(key = "fold-listed") { ListedFold(xs.size, listedOpen, onToggleListed) }
+        if (folded) item(key = "fold-listed") { ListedFold(xs.size, IpoLifecycle.listedSummary(xs, details), listedOpen, onToggleListed) }
         else item(key = "lane-${lane.name}") { LaneLabel(lane.label, xs.size, laneColor(lane)) }
         if (!folded || listedOpen) items(xs, key = { it.id }) { ipo ->
             // The 3 pm nudge sits on the card only while it is still ahead.
             val close = if (lane == Lane.TODAY) IpoLifecycle.reminderEvents(mapOf("close" to now.toLocalDate()), now).firstOrNull() else null
             val key = IpoLifecycle.reminderKey(ipo.id, "close")
-            IpoCard(ipo, lane, now, ipo.id in watched, reminderSet = key in reminderKeys,
+            IpoCard(ipo, lane, now, details[ipo.id], ipo.id in watched, reminderSet = key in reminderKeys,
                 onRemind = close?.let { e -> { onRemind(ipo, e, key !in reminderKeys) } }) { onOpen(ipo) }
         }
     }
@@ -222,7 +236,7 @@ private fun LaneLabel(text: String, count: Int, dot: Color) {
 }
 
 @Composable
-private fun ListedFold(count: Int, open: Boolean, onToggle: () -> Unit) {
+private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onToggle).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -230,8 +244,13 @@ private fun ListedFold(count: Int, open: Boolean, onToggle: () -> Unit) {
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(MarksyTheme.TextMuted))
         Spacer(Modifier.width(8.dp))
-        Text("LISTED", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        Text(" · $count recent", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Row {
+                Text("LISTED", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                Text(" · $count recent", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            }
+            summary?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
         Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp).rotate(if (open) 180f else 0f))
     }
 }
@@ -252,8 +271,8 @@ internal fun SmeTag() = Text(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, watched: Boolean, reminderSet: Boolean, onRemind: (() -> Unit)?, onClick: () -> Unit) {
-    val facts = IpoLifecycle.cardFacts(ipo, now)
+private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail: IpoDetailDto?, watched: Boolean, reminderSet: Boolean, onRemind: (() -> Unit)?, onClick: () -> Unit) {
+    val facts = IpoLifecycle.cardFacts(ipo, now, detail)
     val gmp = IpoLifecycle.gmpSummary(ipo.gmp, IpoLifecycle.upper(ipo), now)
     val shape = RoundedCornerShape(14.dp)
     Card(
@@ -281,7 +300,8 @@ private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, watched
                 }
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(facts.stat, color = if (facts.statUp == true) MarksyTheme.PrimaryEmerald else MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    val statColor = when { facts.statUp == true -> MarksyTheme.PrimaryEmerald; facts.statUp == false && lane == Lane.LISTED -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextPrimary }
+                    Text(facts.stat, color = statColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(facts.statLabel, color = MarksyTheme.TextMuted, fontSize = 10.sp)
                 }
             }

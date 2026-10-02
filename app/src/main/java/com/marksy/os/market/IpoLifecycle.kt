@@ -79,15 +79,18 @@ object IpoLifecycle {
         }
     }
 
-    fun homeNote(items: List<IpoListItemDto>, stage: StageFilter, board: Board, query: String, now: ZonedDateTime): String {
+    fun homeNote(items: List<IpoListItemDto>, stage: StageFilter, board: Board, query: String, now: ZonedDateTime, details: Map<String, IpoDetailDto> = emptyMap()): String {
         if (stage != StageFilter.ALL || board != Board.ALL || query.isNotBlank())
             return listOfNotNull("IPOs", board.takeIf { it != Board.ALL }?.label, stage.takeIf { it != StageFilter.ALL }?.label, query.trim().takeIf(String::isNotEmpty)?.let { "“$it”" }).joinToString(" · ")
         val lanes = items.distinctBy { it.id }.mapNotNull { laneOf(it, now) }
         val open = lanes.count { it == Lane.TODAY || it == Lane.OPEN }
         val today = lanes.count { it == Lane.TODAY }
         val soon = lanes.count { it == Lane.UPCOMING }
+        val tonight = items.distinctBy { it.id }.count { laneOf(it, now) == Lane.ALLOTMENT && allotDate(details[it.id]).let { d -> d == now.toLocalDate() && !allotOut(d, now) } }
+        val tonightText = "$tonight allotment${if (tonight == 1) "" else "s"} tonight"
         return when {
-            open > 0 -> "IPOs · $open open" + if (today > 0) " · $today closing today" else ""
+            open > 0 -> "IPOs · $open open" + if (today > 0) " · $today closing today" else if (tonight > 0) " · $tonightText" else ""
+            tonight > 0 -> "IPOs · $tonightText"
             soon > 0 -> "IPOs · $soon opening soon"
             else -> "IPOs"
         }
@@ -133,7 +136,18 @@ object IpoLifecycle {
 
     data class CardFacts(val stat: String, val statLabel: String, val statUp: Boolean?, val line: String, val chip: String? = null)
 
-    fun cardFacts(ipo: IpoListItemDto, now: ZonedDateTime): CardFacts {
+    fun allotDate(detail: IpoDetailDto?): LocalDate? = detail?.keyDates?.firstOrNull { it.label == "Allotment" }?.date.localDate()
+    fun allotOut(allot: LocalDate?, now: ZonedDateTime): Boolean = allot != null && !now.isBefore(allot.atTime(18, 0).atZone(IST))
+
+    /** Whether a home card still lacks the detail fact it shows: the allotment day, or a recent listing's result. */
+    fun needsDetail(ipo: IpoListItemDto, detail: IpoDetailDto?, now: ZonedDateTime): Boolean = when (laneOf(ipo, now)) {
+        Lane.ALLOTMENT -> allotDate(detail) == null
+        Lane.LISTED -> ipo.listsOn.localDate()?.isAfter(now.toLocalDate().minusDays(15)) == true && detail?.outcome?.listingReturnPercent == null
+        else -> false
+    }
+
+    /** [detail], when loaded, adds the allotment day and the listing result. */
+    fun cardFacts(ipo: IpoListItemDto, now: ZonedDateTime, detail: IpoDetailDto? = null): CardFacts {
         val overall = ipo.subscription?.latest?.get("OVERALL")?.times
         val subscribed = overall?.let(::times) ?: "–"
         val min = minBid(ipo)?.let { " · min ${inr(it)}" + (termsNote(ipo)?.let { n -> " ($n)" } ?: "") }.orEmpty()
@@ -144,11 +158,18 @@ object IpoLifecycle {
                 closeAt(ipo)?.let { Duration.between(now, it) }?.takeIf { !it.isNegative }?.let { "Closes today · ${leftText(it)} left" } ?: "Closes today"
             )
             Lane.OPEN -> CardFacts(subscribed, "subscribed", overall?.let { it >= 1 }, (ipo.closesOn.localDate()?.let { "Closes ${day(it)}" } ?: "Open") + min)
-            Lane.ALLOTMENT -> CardFacts(
-                subscribed, "final", overall?.let { it >= 1 },
-                listOfNotNull(retailOdds(ipo)?.let { "${if (ipo.isSme) "Individual" else "Retail"} ${it.replaceFirstChar(Char::lowercase)}" }, lists?.let { "lists ${day(it)}" })
-                    .joinToString(" · ").replaceFirstChar(Char::uppercase).ifEmpty { "Bidding closed" }
-            )
+            Lane.ALLOTMENT -> {
+                val allot = allotDate(detail)
+                val odds = retailOdds(ipo)?.let { "${if (ipo.isSme) "individual" else "retail"} ${it.replaceFirstChar(Char::lowercase)}" }
+                val listing = lists?.let { "lists ${day(it)}" }
+                val parts = when {
+                    allotOut(allot, now) -> listOfNotNull("Allotment out, check by PAN", listing)
+                    allot == now.toLocalDate() -> listOfNotNull("Results tonight", odds, listing)
+                    allot != null -> listOfNotNull("Allotment ${day(allot)}", odds, listing)
+                    else -> listOfNotNull(odds, listing)
+                }
+                CardFacts(subscribed, "final", overall?.let { it >= 1 }, parts.joinToString(" · ").replaceFirstChar(Char::uppercase).ifEmpty { "Bidding closed" })
+            }
             Lane.UPCOMING -> {
                 val opens = ipo.opensOn.localDate()
                 val band = ipo.terms?.priceBand.bounds()
@@ -158,7 +179,11 @@ object IpoLifecycle {
                         ?: ("Price band not out yet" + (opens?.let { o -> " · bids ${dm(o)}" + (ipo.closesOn.localDate()?.let { " – ${dm(it)}" } ?: "") } ?: ""))
                 )
             }
-            Lane.LISTED, null -> CardFacts(lists?.let(::dm) ?: "–", "listed", null, lists?.let { "Listed ${day(it)}" } ?: "Listed")
+            Lane.LISTED, null -> {
+                val ret = detail?.outcome?.listingReturnPercent
+                val price = detail?.outcome?.listingPrice?.let { " at ₹${IpoDetailFormatter.number(it)}" }.orEmpty()
+                CardFacts(ret?.let { pct(it) } ?: lists?.let(::dm) ?: "–", if (ret != null) "on listing" else "listed", ret?.let { it >= 0 }, lists?.let { "Listed ${day(it)}$price" } ?: "Listed")
+            }
         }
     }
 
@@ -172,6 +197,23 @@ object IpoLifecycle {
     }
 
     fun detailNote(ipo: IpoListItemDto, now: ZonedDateTime) = "${ipo.companyName} · ${stageWord(ipo, now)}"
+
+    /** "Best X +11.8% · worst Y −3.0%" across issues whose listing result is in. */
+    fun listedSummary(items: List<IpoListItemDto>, details: Map<String, IpoDetailDto>): String? {
+        val results = items.mapNotNull { i -> details[i.id]?.outcome?.listingReturnPercent?.let { i to it } }.sortedByDescending { it.second }
+        if (results.isEmpty()) return null
+        val best = "Best ${results.first().first.companyName} ${pct(results.first().second)}"
+        return if (results.size > 1) "$best · worst ${results.last().first.companyName} ${pct(results.last().second)}" else best
+    }
+
+    /** Market holidays strictly between [from] and [to], which the issue's dates step over. */
+    fun holidayNote(holidays: Map<LocalDate, String>, from: LocalDate?, to: LocalDate?): String? {
+        if (from == null || to == null) return null
+        val inside = holidays.filterKeys { it.isAfter(from) && it.isBefore(to) && it.dayOfWeek.value <= 5 }.toSortedMap()
+        if (inside.isEmpty()) return null
+        if (inside.size == 1) return inside.entries.first().let { (d, name) -> "${day(d)} is a market holiday ($name), so these dates skip it." }
+        return inside.entries.joinToString(", ") { (d, name) -> "${day(d)} ($name)" } + " are market holidays, so these dates skip them."
+    }
 
     data class GmpSummary(val text: String, val lowestPremium: Double, val asOf: String? = null)
 

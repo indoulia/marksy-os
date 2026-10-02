@@ -65,7 +65,7 @@ private data class Sec(val key: String, val title: String, val sub: String, val 
 fun IpoDetailScreen(
     repository: MarketIntelligenceRepository, ipo: IpoListItemDto, padding: PaddingValues, now: ZonedDateTime,
     reminders: Map<String, Long>, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
-    remindersOpen: Boolean, onRemindersClose: () -> Unit
+    remindersOpen: Boolean, onRemindersClose: () -> Unit, holidays: Map<LocalDate, String> = emptyMap()
 ) {
     val reminderKeys = reminders.keys
     val detail by produceState(MarketDataState.Loading as MarketDataState<IpoDetailDto>, ipo.id) { value = repository.ipoDetail(ipo.id) }
@@ -74,6 +74,10 @@ fun IpoDetailScreen(
     val summary = loaded?.summary?.takeIf { it.companyName.isNotBlank() } ?: ipo
     val lane = IpoLifecycle.laneOf(summary, now)
     val stage = if (lane == Lane.TODAY) Lane.OPEN else lane
+    val symbol = loaded?.listedSymbol?.takeIf { stage == Lane.LISTED }
+    val nowPrice by produceState<Double?>(null, symbol) {
+        value = symbol?.let { s -> (repository.liveQuotes(listOf(s)) as? MarketDataState.Loaded)?.value?.quotes?.firstOrNull { it.symbol.equals(s, ignoreCase = true) }?.price }
+    }
     val dates = IpoLifecycle.keyDates(loaded, summary)
     val events = IpoLifecycle.reminderEvents(dates, now)
     val keyOf = { e: IpoLifecycle.ReminderEvent -> IpoLifecycle.reminderKey(ipo.id, e.key) }
@@ -96,14 +100,14 @@ fun IpoDetailScreen(
         null -> emptyList()
         else -> order
     }
-    val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder)
+    val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder, nowPrice, holidays)
 
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
         contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item(key = "hero") { HeroCard(summary, loaded, lane, dates, now) { allotOpen = true } }
+        item(key = "hero") { HeroCard(summary, loaded, lane, dates, now, nowPrice) { allotOpen = true } }
         when (val d = detail) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading IPO details...") }
             is MarketDataState.Error -> item { EmptyState("Details unavailable", d.message) }
@@ -123,7 +127,8 @@ private fun poolLabel(ipo: IpoListItemDto) = if (ipo.isSme) "Individual" else "R
 private fun buildSections(
     ipo: IpoListItemDto, detail: IpoDetailDto?, history: List<IpoHistoryEntryDto>, stage: Lane?, now: ZonedDateTime,
     dates: Map<String, LocalDate>, events: List<IpoLifecycle.ReminderEvent>, reminderKeys: Set<String>,
-    keyOf: (IpoLifecycle.ReminderEvent) -> String, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit
+    keyOf: (IpoLifecycle.ReminderEvent) -> String, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
+    nowPrice: Double?, holidays: Map<LocalDate, String>
 ): Map<String, Sec> {
     val out = LinkedHashMap<String, Sec>()
     fun add(s: Sec?) { s?.let { out[it.key] = it } }
@@ -154,13 +159,15 @@ private fun buildSections(
     add(
         if (lotCost != null && lotSize != null && upper != null) Sec("calc", "Lot calculator", IpoLifecycle.minBid(ipo)?.let { "From ${IpoLifecycle.inr(it)}" } ?: "") {
             CalculatorBody(ipo, stage, lotCost, lotSize, upper, now, events.firstOrNull { it.key == "open" }, reminderKeys, keyOf, onReminder)
-        } else Sec("calc", "Lot calculator", "Needs the price band") { MutedText("The price band and lot size are not out yet.") }
+        } else Sec("calc", "Lot calculator", "Needs the price band") {
+            if (upper == null && (stage == Lane.UPCOMING || stage == null)) BandAlertBody(ipo) else MutedText("The lot size is not out yet.")
+        }
     )
 
     detail?.outcome?.let { o ->
         val issue = o.issuePrice ?: upper
         if (issue != null && lotSize != null && o.listingPrice != null)
-            add(Sec("gain", "If you were allotted", o.listingReturnPercent?.let { "${IpoLifecycle.pct(it)} on listing" } ?: "Listed") { GainBody(ipo, lotSize, issue, o.listingPrice) })
+            add(Sec("gain", "If you were allotted", o.listingReturnPercent?.let { "${IpoLifecycle.pct(it)} on listing" } ?: "Listed") { GainBody(ipo, lotSize, issue, o.listingPrice, nowPrice) })
     }
 
     add(
@@ -168,7 +175,10 @@ private fun buildSections(
             "dates", "Key dates",
             if (stage == Lane.LISTED) dates["list"]?.let { "Listed ${IpoLifecycle.dm(it)}" } ?: "Listed"
             else events.firstOrNull()?.let { "Next: ${it.title.lowercase()} ${IpoLifecycle.dm(it.at.toLocalDate())}" } ?: dates["list"]?.let { "Lists ${IpoLifecycle.dm(it)}" } ?: "Dates not out yet"
-        ) { DatesBody(ipo, dates, events, now, reminderKeys, keyOf, onReminder) }
+        ) {
+            DatesBody(ipo, dates, events, now, reminderKeys, keyOf, onReminder)
+            IpoLifecycle.holidayNote(holidays, dates["open"], dates["list"])?.let { Legend(it) }
+        }
     )
 
     detail?.overview?.value?.let { it as? String }?.takeIf { it.isNotBlank() }?.let { text ->
@@ -257,7 +267,7 @@ private fun chipBg(lane: Lane?) = when (lane) {
 }
 
 @Composable
-private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, dates: Map<String, LocalDate>, now: ZonedDateTime, onCheckAllotment: () -> Unit) {
+private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, dates: Map<String, LocalDate>, now: ZonedDateTime, nowPrice: Double?, onCheckAllotment: () -> Unit) {
     val L = IpoLifecycle
     val band = ipo.terms?.priceBand.bounds()
     val bandText = band?.let { (lo, hi) -> "₹${IpoDetailFormatter.number(lo)}–${IpoDetailFormatter.number(hi)}" }
@@ -326,7 +336,8 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             stats = listOf(
                 Triple("Issue price", issue?.let { "₹${IpoDetailFormatter.number(it)}" } ?: "–", if (o?.issuePrice != null) "final" else "upper band"),
                 Triple("Listed at", o?.listingPrice?.let { "₹${IpoDetailFormatter.number(it)}" } ?: "–", ret?.let { L.pct(it) } ?: ""),
-                Triple("Marksy expected", exp?.let { L.pct(it) } ?: "–", "before listing")
+                nowPrice?.let { p -> Triple("Now", "₹${IpoDetailFormatter.number(p)}", issue?.let { L.pct((p - it) / it * 100) } ?: "live") }
+                    ?: Triple("Marksy expected", exp?.let { L.pct(it) } ?: "–", "before listing")
             )
         }
         null -> {
@@ -551,7 +562,7 @@ private fun CalculatorBody(
 }
 
 @Composable
-private fun GainBody(ipo: IpoListItemDto, lotSize: Int, issuePrice: Double, listingPrice: Double) {
+private fun GainBody(ipo: IpoListItemDto, lotSize: Int, issuePrice: Double, listingPrice: Double, nowPrice: Double?) {
     val lo = IpoLifecycle.minLots(ipo)
     val hi = if (ipo.isSme) 10 else floor(200_000 / (lotSize * issuePrice)).toInt().coerceAtLeast(lo)
     var lots by rememberSaveable(ipo.id) { mutableIntStateOf(lo) }
@@ -564,7 +575,24 @@ private fun GainBody(ipo: IpoListItemDto, lotSize: Int, issuePrice: Double, list
         Legend("paid at the issue price, ₹${IpoDetailFormatter.number(issuePrice)} a share")
     }
     KvRow("Sold at listing, ₹${IpoDetailFormatter.number(listingPrice)}", "${signedInr(gain)} · ${IpoLifecycle.pct((listingPrice - issuePrice) / issuePrice * 100)}", if (gain >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent)
+    nowPrice?.let { p ->
+        val held = shares * (p - issuePrice)
+        KvRow("Held, now ₹${IpoDetailFormatter.number(p)}", "${signedInr(held)} · ${IpoLifecycle.pct((p - issuePrice) / issuePrice * 100)}", if (held >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent)
+    }
     Legend("Before brokerage and tax. Shares sold within a year are taxed as short-term capital gain.")
+}
+
+@Composable
+private fun BandAlertBody(ipo: IpoListItemDto) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val watching by remember { com.marksy.os.alerts.IpoBandWatch.watching(context) }.collectAsState()
+    val on = ipo.id in watching.orEmpty()
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
+    MutedText("The price band and lot size are not out yet.")
+    Pill(if (on) "Marksy will tell you when it is out" else "Tell me when it is out", selected = on) {
+        com.marksy.os.alerts.IpoBandWatch.set(context, ipo.id, ipo.companyName, !on)
+        if (!on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
 }
 
 @Composable
