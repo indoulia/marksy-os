@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -64,15 +65,16 @@ fun MarketScreen(
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
     var openTip by remember { mutableStateOf<String?>(null) }
     openTip?.let { TipDetailDialog(repository, it, onOpenStock = null) { openTip = null } }
+    var portfolioQuery by rememberSaveable { mutableStateOf("") }
+    var portfolioSort by remember { mutableStateOf(false) }
+    val portfolioHoldings by PortfolioChrome.hasHoldings.collectAsState()
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         when (tab) {
             MarketTab.WATCHLIST -> Unit
-            MarketTab.PORTFOLIO -> Box(Modifier.padding(18.dp)) {
-                EmptyState("Portfolio — coming soon", "Your holdings and their performance will show here.")
-            }
+            MarketTab.PORTFOLIO -> PortfolioScreen(inner, portfolioQuery, portfolioSort, { portfolioSort = false }) { onOpenStock?.invoke(it) }
             MarketTab.OVERVIEW -> {
                 val refresh = rememberRefreshState()
                 val cached = repository.lastOverview
@@ -144,12 +146,18 @@ fun MarketScreen(
                 items(marketEvents, key = { "mkt-${it.id}" }) { event -> MarketUpdateCard(event) { onEventSelected(event) } }
             }
         }
+        // Search and sort only once there are holdings to search.
+        val portfolioTools = tab == MarketTab.PORTFOLIO && portfolioHoldings
         // The IPO page draws its own stack (filters, search, reminders, watch).
         if (tab != MarketTab.IPOS) OneHandControls(
             filters = MarketSections,
             selectedFilter = tab.name,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
+            searchQuery = portfolioQuery.takeIf { portfolioTools },
+            onSearchChange = if (portfolioTools) { q -> portfolioQuery = q } else null,
+            searchPlaceholder = "Search holdings...",
             actions = listOfNotNull(
+                FloatingAction(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Sort, "Sort and show") { portfolioSort = true }.takeIf { portfolioTools },
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
                     ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.NotificationsActive, "Price alert for ${t.symbol}") { alerting = t } },
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
