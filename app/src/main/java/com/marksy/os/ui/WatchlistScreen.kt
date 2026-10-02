@@ -180,7 +180,8 @@ fun WatchlistScreen(
                 padding = inner,
                 onOpen = onOpenStock,
                 onRemove = { symbol -> scope.launch { repository.remove(list.id, symbol) } },
-                onMove = { moving = it }
+                onMove = { moving = it },
+                onAdd = { quickAdding = true }
             )
         }
         OneHandQuickMenu(
@@ -196,8 +197,7 @@ fun WatchlistScreen(
             filters = MarketSections,
             selectedFilter = MarketTab.WATCHLIST.name,
             filterIsView = false,
-            onFilterSelected = onSectionSelected,
-            actions = listOfNotNull(list?.let { l -> FloatingAction(Icons.Default.Add, "Add stocks to ${l.name}") { quickAdding = true } })
+            onFilterSelected = onSectionSelected
         )
     }
 
@@ -334,14 +334,14 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
 }
 
 @Composable
-private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit) {
+private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit, onAdd: () -> Unit) {
     val quotes = rememberUpstoxQuotes(remember(rows) { rows.map { it.symbol } })
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 18.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding())
     ) {
-        if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Tap + to add up to ${WatchlistRepository.MAX_STOCKS} stocks.") }
+        if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Add up to ${WatchlistRepository.MAX_STOCKS} stocks below.") }
         items(rows, key = { "w-${it.watchlistId}-${it.symbol}" }) { row ->
             // Same swipe tray as Home: actions show first and only run when tapped.
             SwipeActionsRow(
@@ -351,6 +351,23 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
                 )
             ) { WatchRow(row, quotes[row.symbol]) { onOpen(row.symbol) } }
         }
+        // Right under the last stock, where the eye already is; hidden once the list is full.
+        if (rows.size < WatchlistRepository.MAX_STOCKS) item(key = "add") { AddStocksButton(rows.size, onAdd) }
+    }
+}
+
+@Composable
+private fun AddStocksButton(count: Int, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().clip(shape).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+        Text(
+            "  Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+        )
     }
 }
 

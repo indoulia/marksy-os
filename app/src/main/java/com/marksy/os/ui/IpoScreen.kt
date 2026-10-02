@@ -68,7 +68,6 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     var query by rememberSaveable { mutableStateOf("") }
     var openedId by rememberSaveable { mutableStateOf<String?>(null) }
     var listedOpen by rememberSaveable { mutableStateOf(false) }
-    var filtersOpen by rememberSaveable { mutableStateOf(false) }
     var remindersOpen by rememberSaveable { mutableStateOf(false) }
 
     // Loaded above the detail branch so back returns to the same list and scroll position.
@@ -170,7 +169,12 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             searchQuery = if (opened == null) query else null,
             onSearchChange = if (opened == null) ({ query = it }) else null,
             searchPlaceholder = "Search IPOs...",
-            actions = if (opened == null) listOf(FloatingAction(Icons.Default.Tune, "IPO stage and board", active = stageName != StageFilter.ALL.name || boardName != Board.ALL.name) { filtersOpen = true })
+            // Stage and board sit inside the section filter's panel, as Captured's options do on Trading.
+            extrasActive = opened == null && (stage != StageFilter.ALL || board != Board.ALL),
+            filterExtras = if (opened == null) ({
+                IpoFilterSections(items, stage, board, watched.orEmpty(), now, onStage = { stageName = it.name }, onBoard = { boardName = it.name })
+            }) else null,
+            actions = if (opened == null) emptyList()
             else {
                 val on = opened.id in watched.orEmpty()
                 listOf(
@@ -179,7 +183,6 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                 )
             }
         )
-        if (filtersOpen) IpoFiltersDialog(items, stage, board, watched.orEmpty(), now, onStage = { stageName = it.name }, onBoard = { boardName = it.name }) { filtersOpen = false }
     }
 }
 
@@ -315,28 +318,21 @@ private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IpoFiltersDialog(
+private fun IpoFilterSections(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, watched: Set<String>, now: ZonedDateTime,
-    onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit, onDismiss: () -> Unit
+    onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
 ) {
-    MarksyDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald) } },
-        title = { Text("IPOs") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Stage", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StageFilter.entries.forEach { f ->
-                        val n = IpoLifecycle.lanes(items, f, board, "", watched, now).sumOf { it.second.size }
-                        Pill("${f.label} $n", selected = f == stage) { onStage(f) }
-                    }
-                }
-                Text("Board", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Board.entries.forEach { b -> Pill(b.label, selected = b == board) { onBoard(b) } }
-                }
+    Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("STAGE", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            StageFilter.entries.forEach { f ->
+                val n = IpoLifecycle.lanes(items, f, board, "", watched, now).sumOf { it.second.size }
+                Pill("${f.label} $n", selected = f == stage) { onStage(f) }
             }
         }
-    )
+        Text("BOARD", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Board.entries.forEach { b -> Pill(b.label, selected = b == board) { onBoard(b) } }
+        }
+    }
 }
