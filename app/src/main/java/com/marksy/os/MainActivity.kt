@@ -392,12 +392,14 @@ class MainActivity : ComponentActivity() {
         val inboxSummary = remember(inboxEvents, inboxHidden, learningProfile) {
             SmartInboxModel.lanes(inboxEvents.filterNot { it.id in inboxHidden }, profile = learningProfile).summary
         }
+        val portfolioNote by com.marksy.os.ui.PortfolioChrome.note.collectAsStateWithLifecycle()
         val titleNote = when {
             showPlan -> planView
             hostOpen -> null
             onWatchlist -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
             selectedTab == 2 && marketTabName == MarketTab.IPOS.name -> ipoNote
+            selectedTab == 2 && marketTabName == MarketTab.PORTFOLIO.name -> portfolioNote
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)

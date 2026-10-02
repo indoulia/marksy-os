@@ -18,6 +18,12 @@ import com.marksy.os.upstox.UpstoxApiClient
 import com.marksy.os.upstox.UpstoxAuthException
 import com.marksy.os.upstox.UpstoxIndices
 import com.marksy.os.upstox.UpstoxTokenStore
+import com.marksy.os.upstox.UpstoxOAuth
+import com.marksy.os.upstox.UpstoxOAuthStore
+import com.marksy.os.portfolio.PortfolioRepository
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -103,7 +109,85 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
         }
         if (busy) MarksyInlineLoader("Contacting Upstox…")
         status?.let { Text(it.message, color = if (it.ok) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 13.sp) }
+        HoldingsSignInSection()
     }
+}
+
+/** Portfolio's daily Upstox sign-in: app keys, today's status, and Disconnect behind a confirmation. */
+@Composable
+private fun HoldingsSignInSection() {
+    val context = LocalContext.current
+    val repo = remember { PortfolioRepository(context) }
+    var version by remember { mutableIntStateOf(0) }
+    val hasKeys = remember(version) { repo.store.hasCredentials() }
+    val signedIn = remember(version) { repo.store.accessToken() != null }
+    val hasData = remember(version) { hasKeys || repo.store.holdings() != null }
+    var keysOpen by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+
+    HorizontalDivider(color = MarksyTheme.BorderGlow, modifier = Modifier.padding(vertical = 6.dp))
+    Text(
+        "Market › Portfolio reads your holdings with a daily Upstox sign-in through your own Upstox app (OAuth). " +
+            "The app keys and the day's token are stored encrypted on this phone and only sent to api.upstox.com. Read-only: no orders.",
+        color = MarksyTheme.TextSecondary, fontSize = 13.sp
+    )
+    Text(
+        when {
+            signedIn -> "Holdings: signed in until 3:30 am"
+            hasKeys -> "Holdings: app keys saved · sign in from Market › Portfolio"
+            else -> "Holdings: not set up"
+        },
+        color = if (signedIn) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = { keysOpen = true }) { Text(if (hasKeys) "Change app keys" else "Set up", color = MarksyTheme.PrimaryEmerald) }
+        if (hasData) TextButton(onClick = { confirm = true }) { Text("Disconnect", color = MarksyTheme.RedUrgent) }
+    }
+    if (keysOpen) UpstoxAppKeysDialog(repo.store, onDismiss = { keysOpen = false }) { keysOpen = false; version++ }
+    if (confirm) MarksyDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Disconnect Upstox holdings?") },
+        text = { Text("Marksy forgets your Upstox app keys, today's sign-in, the saved holdings and Upstox's login cookies. Your Analytics Token stays.") },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
+        confirmButton = {
+            TextButton(onClick = { repo.disconnect(); confirm = false; version++ }) { Text("Disconnect", color = MarksyTheme.RedUrgent, fontWeight = FontWeight.Bold) }
+        }
+    )
+}
+
+/** The user's own Upstox app keys for the holdings sign-in; a blank secret keeps the saved one. */
+@Composable
+internal fun UpstoxAppKeysDialog(store: UpstoxOAuthStore, onDismiss: () -> Unit, onSaved: () -> Unit) {
+    val existing = remember { store.credentials() }
+    var key by remember { mutableStateOf(existing?.apiKey.orEmpty()) }
+    var secret by remember { mutableStateOf("") }
+    var redirect by remember { mutableStateOf(existing?.redirectUri ?: UpstoxOAuth.DEFAULT_REDIRECT) }
+    val valid = key.isNotBlank() && (secret.isNotBlank() || existing != null) && (redirect.startsWith("http://") || redirect.startsWith("https://"))
+    MarksyDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Connect your Upstox app") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("In Upstox Developer Apps, create an app with this redirect URL, then paste its API key and secret. They're stored encrypted on this phone and only sent to api.upstox.com.")
+                CompactTextField(redirect, { redirect = it.trim() }, Modifier.fillMaxWidth(), label = "Redirect URL")
+                CompactTextField(key, { key = it.trim() }, Modifier.fillMaxWidth(), label = "API key")
+                CompactTextField(
+                    secret, { secret = it.trim() }, Modifier.fillMaxWidth(), label = "API secret",
+                    placeholder = if (existing != null) "Leave blank to keep the saved one" else "",
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
+                )
+                Text("Read-only: Marksy reads holdings and never places orders.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                store.saveCredentials(key, secret.ifBlank { existing?.apiSecret.orEmpty() }, redirect)
+                onSaved()
+            }) { Text("Continue", color = if (valid) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontWeight = FontWeight.Bold) }
+        }
+    )
 }
 
 private data class Check(val ok: Boolean, val rejected: Boolean, val message: String)

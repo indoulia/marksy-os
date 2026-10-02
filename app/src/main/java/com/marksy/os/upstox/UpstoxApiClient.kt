@@ -9,7 +9,7 @@ import java.net.URLEncoder
 
 class UpstoxAuthException(message: String) : IOException(message)
 
-/** Read-only Upstox market-data client (quotes and candles). Never add order endpoints against this token. */
+/** Read-only Upstox client: market data, plus holdings when given an OAuth token. Never add order, modify or GTT endpoints. */
 class UpstoxApiClient(private val token: () -> String?) {
     suspend fun ltp(instrumentKeys: List<String>): Map<String, UpstoxLtp> = withContext(Dispatchers.IO) {
         val query = URLEncoder.encode(instrumentKeys.joinToString(","), "UTF-8")
@@ -62,6 +62,11 @@ class UpstoxApiClient(private val token: () -> String?) {
     suspend fun news(instrumentKey: String, pageSize: Int = 15): List<NewsItem> = withContext(Dispatchers.IO) {
         val k = URLEncoder.encode(instrumentKey, "UTF-8")
         UpstoxFundamentals.news(get("$V2_URL/news?category=instrument_keys&instrument_keys=$k&page_number=1&page_size=$pageSize"), instrumentKey)
+    }
+
+    /** Delivery holdings; needs the user's OAuth access token (an Analytics Token would need a static IP). */
+    suspend fun longTermHoldings(): List<UpstoxHolding> = withContext(Dispatchers.IO) {
+        UpstoxHoldings.parse(get("$V2_URL/portfolio/long-term-holdings"))
     }
 
     private fun get(url: String): String {

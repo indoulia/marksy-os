@@ -61,6 +61,13 @@
             android:exported="true"
             android:label="WhatsApp Connector Settings" />
 
+        <!-- Upstox holdings sign-in: OAuth in a WebView that catches the redirect itself. -->
+        <activity
+            android:name=".ui.UpstoxSignInActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|fontScale|density"
+            android:windowSoftInputMode="adjustResize" />
+
         <receiver
             android:name=".notification.ListenerRebindReceiver"
             android:exported="false">
