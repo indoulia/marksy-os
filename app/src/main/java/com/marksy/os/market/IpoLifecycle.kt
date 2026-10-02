@@ -10,6 +10,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -189,4 +190,69 @@ object IpoLifecycle {
         val parts = listOfNotNull("GMP $value", if (rs.size > 1) "${rs.size} sources" else null, "unofficial", asOfLabel(newest?.observedAt, now))
         return GmpSummary(parts.joinToString(" · "), rs.minOf { it.premium })
     }
+
+    data class SubscriptionDay(val date: LocalDate, val values: Map<String, Double>, val observedAt: String?)
+
+    /** One entry per IST day with readings, holding each category's last reading that day; Day N = index + 1. */
+    fun subscriptionDays(sub: IpoSubscriptionDto?): List<SubscriptionDay> {
+        val byDay = sortedMapOf<LocalDate, MutableMap<String, IpoSubscriptionReading>>()
+        fun at(r: IpoSubscriptionReading) = timeOf(r.observedAt)?.toInstant() ?: Instant.MIN
+        val series = sub?.series.orEmpty().ifEmpty { sub?.latest.orEmpty().mapValues { listOf(it.value) } }
+        series.forEach { (category, readings) ->
+            readings.forEach { r ->
+                val d = dateOf(r.observedAt) ?: return@forEach
+                val slot = byDay.getOrPut(d) { mutableMapOf() }
+                if (slot[category]?.let { at(it) <= at(r) } != false) slot[category] = r
+            }
+        }
+        return byDay.map { (d, m) -> SubscriptionDay(d, m.mapValues { it.value.times }, m.values.maxByOrNull(::at)?.observedAt) }
+    }
+
+    data class LotCategory(val key: String, val label: String, val minLots: Int, val maxLots: Int, val pool: String, val cutOff: Boolean)
+
+    fun lotCategories(lotCost: Double, isSme: Boolean): List<LotCategory> {
+        if (isSme) return listOf(LotCategory("IND", "Individual · 2 lots", 2, 2, "RETAIL", true), LotCategory("HNI", "HNI · 3 lots and up", 3, 50, "NII", false))
+        val retailMax = floor(200_000 / lotCost).toInt().coerceAtLeast(1)
+        val smallMax = floor(1_000_000 / lotCost).toInt().coerceAtLeast(retailMax + 1)
+        return listOf(
+            LotCategory("RET", "Retail · up to ₹2 lakh", 1, retailMax, "RETAIL", true),
+            LotCategory("SHNI", "Small HNI · ₹2–10 lakh", retailMax + 1, smallMax, "NII", false),
+            LotCategory("BHNI", "Big HNI · over ₹10 lakh", smallMax + 1, smallMax * 5, "NII", false)
+        )
+    }
+
+    data class LotQuote(val amount: Double, val chance: String, val gain: Double?, val gainLots: Int, val callout: String?, val next: LotCategory?)
+
+    fun lotQuote(categories: List<LotCategory>, cat: LotCategory, lots: Int, lotSize: Int, upper: Double, poolTimes: Double?, lowestGmp: Double?, poolName: String): LotQuote {
+        val amount = lots * lotSize * upper
+        val lottery = poolTimes != null && poolTimes > 1
+        val chance = when {
+            poolTimes == null -> "Shows once bidding opens"
+            !lottery -> "Full, if it stays under 1x"
+            else -> "About 1 in ${poolTimes.roundToInt()}"
+        }
+        val got = if (lottery) cat.minLots else lots
+        val callout = if (lottery && lots > cat.minLots) "$poolName is ${times(poolTimes!!)} subscribed, so allotment is a lottery for ${lotsText(cat.minLots)}. " +
+            "Bidding ${lotsText(lots)} blocks ${inr(amount)} for the same chance as ${lotsText(cat.minLots)} (${inr(cat.minLots * lotSize * upper)})." else null
+        val next = categories.getOrNull(categories.indexOf(cat) + 1)?.takeIf { lots >= cat.maxLots }
+        return LotQuote(amount, chance, lowestGmp?.let { got * lotSize * it }, got, callout, next)
+    }
+
+    data class ReminderEvent(val key: String, val title: String, val whenText: String, val at: ZonedDateTime)
+
+    private val KEY_DATE_LABELS = mapOf("Opens" to "open", "Closes" to "close", "Allotment" to "allot", "Refunds" to "refund", "Shares in demat" to "demat", "Lists" to "list")
+
+    /** The detail's key dates by event key; the summary's own dates fill any gap. */
+    fun keyDates(detail: IpoDetailDto?, ipo: IpoListItemDto): Map<String, LocalDate> =
+        listOfNotNull(ipo.opensOn.localDate()?.let { "open" to it }, ipo.closesOn.localDate()?.let { "close" to it }, ipo.listsOn.localDate()?.let { "list" to it }).toMap() +
+            detail?.keyDates.orEmpty().mapNotNull { k -> KEY_DATE_LABELS[k.label]?.let { key -> k.date.localDate()?.let { key to it } } }
+
+    fun reminderEvents(dates: Map<String, LocalDate>, now: ZonedDateTime): List<ReminderEvent> = listOfNotNull(
+        dates["open"]?.let { ReminderEvent("open", "Bidding opens", "${day(it)}, 10:00 am", it.atTime(10, 0).atZone(IST)) },
+        dates["close"]?.let { ReminderEvent("close", "Last day to bid", "${day(it)}, 3:00 pm · 2 h before the 5 pm cutoff", it.atTime(15, 0).atZone(IST)) },
+        dates["allot"]?.let { ReminderEvent("allot", "Allotment results", "${day(it)}, 6:00 pm", it.atTime(18, 0).atZone(IST)) },
+        dates["list"]?.let { ReminderEvent("list", "Listing day", "${day(it)}, 9:55 am · trading starts at 10:00", it.atTime(9, 55).atZone(IST)) }
+    ).filter { it.at.isAfter(now) }
+
+    fun reminderKey(ipoId: String, event: String) = "ipo|$ipoId|$event"
 }

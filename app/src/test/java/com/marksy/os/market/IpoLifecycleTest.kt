@@ -74,4 +74,41 @@ class IpoLifecycleTest {
         assertEquals("GMP +9–11% · 2 sources · unofficial", IpoLifecycle.gmpSummary(agree, 434.0, now)!!.text)
         assertNull(IpoLifecycle.gmpSummary(IpoGmpDto("EMPTY", emptyList()), 434.0, now))
     }
+
+    @Test fun subscriptionDaysKeepEachCategorysLastReadingPerIstDay() {
+        val sub = IpoSubscriptionDto("AVAILABLE", null, mapOf(
+            "RETAIL" to listOf(IpoSubscriptionReading(0.5, "2026-09-29T06:00:00Z"), IpoSubscriptionReading(1.18, "2026-09-29T11:30:00Z"), IpoSubscriptionReading(2.41, "2026-09-30T11:30:00Z")),
+            "QIB" to listOf(IpoSubscriptionReading(0.93, "2026-09-30T11:30:00Z"))
+        ), emptyMap())
+        val days = IpoLifecycle.subscriptionDays(sub)
+        assertEquals(listOf(LocalDate.of(2026, 9, 29), LocalDate.of(2026, 9, 30)), days.map { it.date })
+        assertEquals(mapOf("RETAIL" to 1.18), days[0].values)
+        assertEquals(mapOf("RETAIL" to 2.41, "QIB" to 0.93), days[1].values)
+    }
+
+    @Test fun lotCategoriesFollowRupeeLimits() {
+        val main = IpoLifecycle.lotCategories(14_756.0, isSme = false)
+        assertEquals(listOf(1 to 13, 14 to 67), main.take(2).map { it.minLots to it.maxLots })
+        assertEquals(68, main[2].minLots)
+        assertEquals(listOf(2 to 2, 3 to 50), IpoLifecycle.lotCategories(120_000.0, isSme = true).map { it.minLots to it.maxLots })
+    }
+
+    @Test fun calculatorWarnsThatMoreLotsDoNotRaiseOddsPastOneTimes() {
+        val cats = IpoLifecycle.lotCategories(14_756.0, isSme = false)
+        val q = IpoLifecycle.lotQuote(cats, cats[0], lots = 5, lotSize = 34, upper = 434.0, poolTimes = 3.92, lowestGmp = 40.0, poolName = "Retail")
+        assertEquals(73_780.0, q.amount, 1e-6)
+        assertEquals("About 1 in 4", q.chance)
+        assertEquals(1, q.gainLots)
+        assertEquals(1_360.0, q.gain!!, 1e-6)
+        assertEquals("Retail is 3.92x subscribed, so allotment is a lottery for 1 lot. Bidding 5 lots blocks ₹73,780 for the same chance as 1 lot (₹14,756).", q.callout)
+        assertNull(IpoLifecycle.lotQuote(cats, cats[0], 5, 34, 434.0, 0.8, null, "Retail").callout)
+        assertEquals("SHNI", IpoLifecycle.lotQuote(cats, cats[0], 13, 34, 434.0, null, null, "Retail").next?.key)
+    }
+
+    @Test fun reminderEventsSkipTimesAlreadyPast() {
+        val dates = mapOf("open" to LocalDate.of(2026, 9, 29), "close" to LocalDate.of(2026, 10, 1), "allot" to LocalDate.of(2026, 10, 5))
+        assertEquals(listOf("close", "allot"), IpoLifecycle.reminderEvents(dates, now).map { it.key })
+        assertEquals(listOf("allot"), IpoLifecycle.reminderEvents(dates, now.withHour(15).withMinute(1)).map { it.key })
+        assertEquals("ipo|kaveri|close", IpoLifecycle.reminderKey("kaveri", "close"))
+    }
 }
