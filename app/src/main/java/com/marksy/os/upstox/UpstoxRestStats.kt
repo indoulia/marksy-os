@@ -27,6 +27,7 @@ object UpstoxRestStats {
             path.contains("option/") -> "options"
             "fundamentals" in path -> "fundamentals"
             "news" in path -> "news"
+            "portfolio/" in path -> "holdings"
             else -> "other"
         }
     }

@@ -37,4 +37,15 @@ class PrivacyBoundaryTest {
         }
         assertEquals(emptyList<String>(), offenders)
     }
+
+    // Holdings go from Upstox straight to the phone; nothing on the portfolio path may reach the Marksy backend.
+    @Test
+    fun portfolioNeverTalksToTheMarksyBackend() {
+        val forbidden = Regex("MarksyContainer|MarketApiClient|MarketIntelligenceRepository|com\\.marksy\\.os\\.gateway|MarksyTipsApiClient")
+        val java = File(main, "java/com/marksy/os")
+        assertTrue(File(java, "portfolio").isDirectory)
+        val files = File(java, "portfolio").walkTopDown().filter { it.extension == "kt" }.toList() +
+            listOf("upstox/UpstoxOAuth.kt", "upstox/UpstoxOAuthStore.kt", "upstox/UpstoxHoldings.kt", "ui/PortfolioScreen.kt", "ui/UpstoxSignInActivity.kt").map { File(java, it) }.filter { it.exists() }
+        assertEquals(emptyList<String>(), files.filter { forbidden.containsMatchIn(it.readText()) }.map { it.name })
+    }
 }
