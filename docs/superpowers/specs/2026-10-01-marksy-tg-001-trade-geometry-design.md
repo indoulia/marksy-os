@@ -1,6 +1,6 @@
 # Marksy TG-001 trade geometry validation — design
 
-Status: draft for review 2026-10-01 · Repo: marksy-api (owner), new package `app/trade_geometry/`. SPG-001
+Status: approved 2026-10-01, amended 2026-10-02 (A1, §24) · Repo: marksy-api (owner), new package `app/trade_geometry/`. SPG-001
 (`app/selection_gate/**`) is frozen and only imported. marksy-os and admin-app: no change this phase.
 
 ## 1. Goal and separation
@@ -194,6 +194,7 @@ and the `OPERATION_TRADE_GEOMETRY` execution row.
   untouched.
 - **Market bars are not evidence.** TG may read official bars of any month, including SPG's exam month. Bars are
   market data, already examined by SPG the day before, and nothing TG derives from them flows back to SPG.
+  **Amendment A1 (§24.2):** the pre-merge evaluation reads nothing dated after 2026-07-31.
 - **Frozen choices are independent.** SPG's configuration is frozen. TG's geometry is chosen from walk-forward data
   only and frozen before TG's held-out paths are read. Neither depends on the other's held-out outcome.
 
@@ -1020,3 +1021,136 @@ Brief assumptions checked against SPG code (`e5812e5`), each resolved on the TG 
 9. **SPG does persist every WF candidate, all dispositions** (`write_trades`), so this brief assumption holds. The
    exceptions are `EVALUATION_FAILED` decisions, which have no trade rows, and walk-forward-only runs, which write
    no decision. Both give `NO_BOUND_SELECTION_DECISION`.
+
+## 24. Amendment A1 (2026-10-02): SEL-002 diagnostics and the evidence cutoff
+
+The user approved A1 on 2026-10-02, after SEL-002 graded SEL-001 A and before any TG data was read. A1 changes no
+part of the decision. §13.3 eligibility, the §15 rule, every threshold, the grid and `grid_sha256` stay exactly as
+they are. Everything in §24.3 is report-only.
+
+### 24.1 Evidence
+
+Source: the SEL-002 report, marksy-os `docs/superpowers/reports/2026-10-02-marksy-sel-002-selection-diagnostic-report.md`.
+
+- At K=10, hold-to-horizon net excess is +0.505% (h3) and +0.875% (h5), against `tg_min_net_excess` = 0.50%. Under
+  the flat 0.30% cost that leaves about 0.5 bp of headroom at h3.
+- About 75% of the edge comes from the high-ATR tercile, and about 45% from the low-liquidity tercile.
+- The CI for down-market net excess includes 0.
+- The hit rate is below 50%.
+- The top 5% of sessions carry 72–80% of the total.
+
+### 24.2 Evidence cutoff for the pre-merge evaluation
+
+SEL-002 holds out August 2026 and every later month. Its exam start is 2026-08-01, and the first session in it is
+2026-08-03. The TG pre-merge evaluation reads nothing dated after **2026-07-31**: no price, corporate action, label,
+outcome or selection. It writes no `tg_*` row.
+
+- **Source**: SEL-002's `snapshot.db`, read-only. Before use, its SHA-256 is checked against the SEL-002 report
+  value `5f59b9bc929f5d0c3f8fcdada419d705f0e6e9a3c0e26efb72d79ae2f0579a8b`. From it, TG takes:
+  - `market_prices` rows whose IST session date (`timestamp` + 5:30) is ≤ 2026-07-31
+  - `corporate_actions` rows with `effective_date` ≤ 2026-07-31
+  - `stocks`, unchanged
+- **SPG tables**: a read-only production export, with no fresh `market_prices` export.
+  - `selection_gate_decisions` without any `ho_*` or `holdout_*` column.
+  - `selection_gate_trades` with `stage = 'WALK_FORWARD' AND session_date <= '2026-07-31'`. The row count must equal
+    the `WALK_FORWARD` count without the date filter.
+- **Run guard**: `run_trade_geometry(…, data_through=date)`, or `--data-through YYYY-MM-DD` on the script. It is
+  accepted only in walk-forward-only mode. Any other mode raises `ValueError`.
+  - Before the dataset build, the run fails closed if the read source holds any of the following. Failing closed
+    means it raises, the execution row is `FAILED`, and no `tg_*` row is written.
+    - a `market_prices` row, from any source, whose IST date is after `data_through`
+    - a corporate action with `effective_date` after `data_through`
+    - a `WALK_FORWARD` `selection_gate_trades` row with `session_date` after `data_through`
+  - After the build, the run re-checks that `max(session_dates)` ≤ `data_through`.
+  - The report carries `data_through` and the three maximum dates.
+- **Loader guard**: `load_tg_snapshot(csv_dir, url, *, data_through=None)` scans the CSVs before any write, and raises
+  `ValueError` on the same later-dated rows.
+  - `--data-through` sets the date.
+  - `--manifest PATH` writes the data manifest. Per table, it holds the row count, the minimum and maximum date, and
+    the CSV's SHA-256. It also records `data_through`.
+- **Tail rule (all modes)**: `T_σ` also drops every session `D` with `i(D) + max(tg_holding_horizons)` > the last
+  index of `S`.
+  - The rule depends only on the session list, so it is label-independent.
+  - In production `S` runs to the run date, so the rule never binds.
+  - In the pre-merge run, it drops the bound sessions whose 7-session hold would pass 2026-07-31. Without it, those
+    sessions would be unresolved at `H` ≥ 5.
+  - The dropped candidates count within `wf_protected_excluded`, and the selector report also gives them as
+    `wf_tail_excluded`.
+
+Production runs after a deploy follow SPG's rolling windows. A deploy needs its own decision (§22).
+
+### 24.3 Diagnostics (report-only)
+
+`app/trade_geometry/diagnostics.py` is pure. It runs for every geometry run: the 37 walk-forward runs per selector
+and every held-out run. Each run's `diagnostics` dict goes to three places:
+- the new nullable JSON column `tg_geometry_results.diagnostics` (migration 0190, not yet merged)
+- every geometry row of the selector report
+- the text report
+
+Rules that apply throughout:
+- Only accepted trades are used, with `e_j = r_j − c − b_g(D_j)` (§15.1).
+- A CI is `block_bootstrap_ci` over the subset's per-session sums and counts, in ascending session order, with
+  `L = H`, `B = tg_bootstrap_draws` and `seed = tg_bootstrap_seed`. It is undefined when `m < 2H`.
+- A share is undefined when the denominator total is ≤ 0.
+
+The diagnostics:
+
+1. **Cost sensitivity**: setting `tg_cost_sensitivity = (0.0030, 0.0050, 0.0075, 0.0100)`, included in the snapshot.
+   - For each `c'`, the report gives `mean_excess`, `ci_low` and `ci_high`, each minus `(c' − c)`. This is exact:
+     `c` is a per-trade constant and `b` carries no cost, so every bootstrap mean shifts by the same amount.
+   - `breakeven_cost_zero = mean_excess + c`
+   - `breakeven_cost_threshold = mean_excess + c − tg_min_net_excess`
+   - `breakeven_cost_ci = ci_low + c`
+   - The decision always uses `c` = 0.0030.
+2. **Market direction (DOWN / FLAT / UP)**: cut points are fixed per selector and `H` from the walk-forward stage.
+   - The values are `v(D) = b_(H,None,None)(D)` over the sessions of `T_σ` that are benchmarkable at `H`, in
+     ascending order with ties by session index.
+   - SEL-002's tercile rule applies: for rank `r` among `n`, a value is LOW if `3r < n`, MID if `3r < 2n`, and HIGH
+     otherwise.
+   - `low_cut` is the largest LOW value, and `high_cut` is the largest MID value.
+   - A trade in either stage is DOWN if `v(D_j) ≤ low_cut`, FLAT if `v(D_j) ≤ high_cut`, and UP otherwise.
+   - The held-out stage reuses the walk-forward cut points.
+   - When `n < 3` there are no buckets.
+3. **ATR attribution (LOW / MID / HIGH)**: each path row gets its within-session tercile of `atr`, taken over the
+   path set's rows for that session (all of `U(D)`), with ties broken by row order. A trade takes its row's label.
+4. **Bucket statistics** for 2 and 3, in fixed order:
+   - per bucket: `trades`, `sessions`, `mean_excess`, `ci_low`, `ci_high`, `contribution = Σe`,
+     `share = contribution / Σe(all)`, `target_rate`, `stop_rate`, `expired_rate` and `ambiguous_rate`
+   - per dimension: `herfindahl = Σ(|C_g| / Σ|C|)²` and `largest_share`
+5. **Return distribution**:
+   - quantiles of `e` at 1, 5, 10, 25, 50, 75, 90, 95 and 99 (numpy `linear`)
+   - `hit_rate`, the share with `e > 0`
+   - `negative_net_share`, the share with `r − c < 0`
+   - the median, p10 and p90 of the per-session sums `C_s`
+6. **Session concentration**, where `m` is the number of sessions with at least one trade:
+   - `top1_share` and `top5_share`: the sum of the `⌈1%·m⌉` or `⌈5%·m⌉` largest `C_s`, divided by `ΣC`
+   - `herfindahl = Σ(|C_s| / Σ|C|)²`
+   - `largest_share = max C_s / ΣC`
+   - `ex_top1`: drop the `⌈1%·m⌉` sessions with the largest `C_s` (ties by session, ascending), then report
+     `trades`, `mean_excess`, `ci_low` and `ci_high` for the rest
+
+Left out, decided on 2026-10-02:
+- **No grid change.** ATR-scaled barriers are already in §10.1, and SEL-002 supports them.
+- **No liquidity-tiered cost.** TG-DS-001 has no liquidity column.
+- **No cost threshold of any kind** in the decision.
+
+### 24.4 Tests (in addition to §21)
+
+- **Cost sensitivity**: it equals a full `evaluate_stage` at each cost (mean and CI, within 1e-12), and the
+  break-even values hold.
+- **ATR terciles**: they are within-session and follow SEL-002's rule and tie order.
+- **Direction**: the cut points come from the walk-forward stage, and the held-out stage reuses them unchanged.
+- **Bucket totals**: bucket contributions sum to the total, and the rates are per bucket.
+- **Distribution and concentration**: they match a hand-checked example, including an undefined share when the total
+  is ≤ 0.
+- **Report-only**: changing `tg_cost_sensitivity` leaves `g*`, every reason and `reality_check_p` unchanged.
+- **Tail rule**: it drops exactly the sessions whose longest hold passes the end of `S`.
+- **`data_through`**:
+  - It fails closed on a later-dated price, corporate action or walk-forward trade, and writes no `tg_*` row.
+  - It is refused outside walk-forward-only mode.
+- **Loader**: it refuses later-dated rows before any write, and it writes the manifest.
+- **Schema**: `tg_geometry_results.diagnostics` exists, and the snapshot holds `tg_cost_sensitivity`.
+
+### 24.5 Freeze
+
+A1 lands before the Task 13 freeze, so `tg_holdout_not_before` stays `"2026-11"` (§22.3).

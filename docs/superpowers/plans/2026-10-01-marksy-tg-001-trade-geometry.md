@@ -5437,3 +5437,144 @@ No merge, deploy or migration until the user approves the report.
 - the selector report keys used by `render_report` and the script's `result_summary`
 
 **Review Focus:** five uncovered input classes were identified, and each has its test in the owning task (Tasks 4, 7, 8, 9 and 10).
+
+---
+
+## Amendment A1 (2026-10-02): tasks and deltas
+
+Spec §24. A1 resumes from the verified Task 6 checkpoint, on branch `feat/tg-001-trade-geometry` rebased onto
+`main` `0183d09`. Tasks 7–12 run as written above, with **Task A1** inserted after Task 9 and the deltas below
+applied to Tasks 10, 12, 13 and 14. Unlike the rest of this plan, A1's code was not prototyped. Write it test-first
+from §24.
+
+Constraints that bind every A1 step:
+- Report-only. No A1 output may feed `stage_reasons`, eligibility, `reality_check`, `choose_geometry`,
+  `decide_geometry` or any threshold.
+- `grid_sha256` stays pinned. SPG stays frozen.
+- The pre-merge run reads nothing dated after 2026-07-31.
+
+### Task A1: diagnostics, the tail rule, the column and the cost setting (after Task 9)
+
+**Files:**
+- Create: `app/trade_geometry/diagnostics.py`, `tests/test_trade_geometry_diagnostics.py`
+- Modify:
+  - `app/trade_geometry/windows.py` and `tests/test_trade_geometry_windows.py`: the tail rule
+  - `app/settings.py`, `app/trade_geometry/config.py` and `tests/test_trade_geometry_config.py`: `tg_cost_sensitivity`
+  - `app/models.py`, `migrations/versions/0190_trade_geometry.py` and `tests/test_trade_geometry_schema.py`: a nullable
+    JSON `diagnostics` column on `tg_geometry_results`
+
+**Interfaces** (`diagnostics.py`, pure, numpy only):
+- `tercile_labels(values) -> np.ndarray`: `"LOW"`, `"MID"` or `"HIGH"` per value, in input order. It uses a stable
+  ascending rank, so ties go by input order. A value is LOW if `3r < n`, MID if `3r < 2n`, and HIGH otherwise.
+- `atr_terciles(session_index, atr) -> np.ndarray`: the label per path row, ranked within its session.
+- `direction_cuts(values) -> tuple[float, float] | None`:
+  - `values` are the walk-forward `v(D)` in ascending session order.
+  - The result is `(largest LOW, largest MID)` under `tercile_labels`, or `None` when `n < 3`.
+- `direction_label(value, cuts) -> str`: `"DOWN"` if `value ≤ low_cut`, `"FLAT"` if `≤ high_cut`, else `"UP"`.
+- `geometry_diagnostics(run, *, paths, atr_labels, cuts, cost, costs, min_net_excess, draws, seed) -> dict`:
+  - It takes the run's `ACCEPTED` `TradeRow`s.
+  - `e = gross_return − cost − benchmark_return`, and the direction value is `hold_benchmark_return`.
+  - The ATR label comes from `atr_labels[paths.locate(...)]`.
+  - The keys are `cost_sensitivity`, `direction`, `atr`, `distribution` and `concentration`, with the fields of
+    §24.3.
+  - Every value is JSON-safe: `NaN` becomes `None`, and numpy scalars become Python floats and ints.
+  - Bucket CIs and `ex_top1` call `block_bootstrap_ci(sums, counts, block_length=H, draws=draws, seed=seed)` over the
+    subset's sessions in ascending order.
+- `windows.walk_forward_sessions(candidate_indices, *, max_horizon, protected, last_index=None)`: it additionally
+  excludes sessions with `i + max_horizon > last_index` when `last_index` is given.
+
+**Tests**, written first and confirmed red:
+- `test_trade_geometry_diagnostics.py`:
+  - `test_cost_sensitivity_equals_a_re_evaluation_at_each_cost`: `evaluate_stage` at each `c'` matches mean,
+    `ci_low` and `ci_high` within 1e-12. Also checks the three break-even values.
+  - `test_atr_terciles_are_within_session_and_follow_the_sel002_rule`:
+    - `n = 5` gives LOW, LOW, MID, MID, HIGH.
+    - Ties go by row order.
+    - Two sessions are ranked independently.
+  - `test_direction_cut_points_come_from_walk_forward_and_held_out_reuses_them`
+  - `test_bucket_contributions_sum_to_the_total_and_rates_are_per_bucket`
+  - `test_distribution_and_session_concentration_on_a_hand_checked_example`:
+    - `top1_share` is `None` when `ΣC ≤ 0`.
+    - `ex_top1` drops the largest session, with ties by session ascending.
+- `test_trade_geometry_windows.py::test_sessions_whose_longest_hold_passes_the_last_session_are_dropped`
+- The config test asserts `snapshot["tg_cost_sensitivity"] == [0.003, 0.005, 0.0075, 0.01]`.
+- The schema test asserts `diagnostics` is in the `tg_geometry_results` columns.
+
+Run: `DATABASE_URL="sqlite:///$SCRATCH/tg-a1.db" python -m pytest tests/test_trade_geometry_*.py -q -p no:cacheprovider`.
+Commit: `TG-001 A1: report-only diagnostics, tail rule, diagnostics column and cost sweep setting`.
+
+### Task 10 delta (runner, records, report)
+
+- **Tail rule.** `_bind`/`T_σ` passes `last_index=len(dataset.session_dates) - 1` to `walk_forward_sessions`. The
+  selector report gains `wf_tail_excluded`, the candidates excluded by the tail rule alone. They stay inside
+  `wf_protected_excluded`.
+- **Diagnostics.**
+  - Compute `atr_terciles` once per `PathSet`, once for pass 1 and once for pass 2.
+  - Compute `direction_cuts` once per `(selector, H)` from `benchmarks.value(hold_geometry(H), i)` over `T_σ` sessions
+    that are benchmarkable at `H`.
+  - After every `evaluate_geometry`, call `geometry_diagnostics`. This covers the 37 walk-forward runs and both
+    held-out runs, and the held-out stage reuses the walk-forward cuts.
+  - Put the result in the selector report row as `diagnostics`, and have `write_results` store it in
+    `tg_geometry_results.diagnostics`.
+- **Evidence cutoff.**
+  - `run_trade_geometry(…, data_through: date | None = None)` raises `ValueError` unless `walk_forward_only`.
+  - When it is set, the run fails closed before the dataset build, as a shared-phase failure, if the read session
+    holds any of:
+    - a `market_prices` row whose IST date (`naive_utc(timestamp) + 5:30`) is after `data_through`
+    - a `corporate_actions.effective_date` after `data_through`
+    - a `selection_gate_trades` row with `stage = 'WALK_FORWARD'` and `session_date` after `data_through`
+  - Those reads are explicit-column `max()` queries. The `selection_gate_trades` query keeps the `WALK_FORWARD`
+    predicate.
+  - After the build, `max(session_dates) ≤ data_through` is asserted.
+  - `report["dataset"]` gains `data_through` and the three maximum dates.
+- **Report.** `render_report` adds a "Diagnostics (report-only)" block per selector. It has one line per geometry
+  for each of: cost sweep and break-evens, DOWN/FLAT/UP, ATR LOW/MID/HIGH, distribution, and concentration.
+- **Tests** (in the Task 10 runner test file):
+  - `test_data_through_fails_closed_on_any_later_dated_row`, parametrized over a price, a corporate action and a
+    walk-forward trade. It raises and leaves zero `tg_*` rows.
+  - `test_data_through_needs_walk_forward_only`
+  - `test_every_geometry_row_carries_report_only_diagnostics`: all 37 rows have the five keys. Changing
+    `tg_cost_sensitivity` leaves `chosen`, `tolerance_set`, every row's `reasons` and `reality_check_p` unchanged.
+
+### Task 12 delta
+
+`scripts/run_trade_geometry.py` gains `--data-through YYYY-MM-DD` (`date.fromisoformat`), which it passes to the runner.
+
+### Task 13 delta
+
+- **Before the review:** implement Steps 1–4, the loader and its test, together with this delta, so the whole-phase
+  review covers them.
+- `load_tg_snapshot(csv_dir, url, *, data_through=None)` scans the CSVs first, before any write.
+  - It raises `ValueError` on a `market_prices` row whose IST date is after `data_through`, a `corporate_actions`
+    `effective_date` after it, or a `selection_gate_trades` `session_date` after it.
+  - `--data-through` sets the date.
+  - `write_manifest(csv_dir, url, path, *, data_through)` and `--manifest PATH` write JSON. It holds `data_through`,
+    plus per table the row count, the minimum and maximum date column, and the CSV SHA-256.
+- Tests:
+  - `test_rows_after_data_through_are_refused_before_any_write`, parametrized over the 3 tables. It also checks that
+    the snapshot database has no table.
+  - `test_the_manifest_lists_counts_date_ranges_and_hashes`.
+- **Step 6 is replaced. Snapshot source:**
+  1. Check `sha256(snapshot.db) == 5f59b9bc929f5d0c3f8fcdada419d705f0e6e9a3c0e26efb72d79ae2f0579a8b`, the SEL-002
+     snapshot, read-only.
+  2. Export `stocks` in full, `corporate_actions WHERE effective_date <= '2026-07-31'`, and `market_prices` whose IST
+     date is ≤ 2026-07-31, to CSV in `$SCRATCH/tg-snapshot`.
+  3. Read-only from production:
+     - `selection_gate_decisions`, with the explicit non-held-out column list of the original Step 6
+     - `selection_gate_trades WHERE stage = 'WALK_FORWARD' AND session_date <= '2026-07-31'`
+     - the `WALK_FORWARD` count without the date filter, which must be equal
+  4. Load with `--data-through 2026-07-31 --manifest $SCRATCH/tg-data-manifest.json`.
+  5. Record `sha256(tg-snapshot.db)` as the frozen snapshot.
+- **Step 7 adds** `--data-through 2026-07-31` to the run. The rest is unchanged: walk-forward-only, an ephemeral
+  store, and no `tg_*` row.
+
+### Task 14 delta
+
+The review report adds these sections:
+- **Data manifest and cutoff proof:** the manifest, the run's three maximum dates, and the boundary tests.
+- **Diagnostics per selector**, as views beside the official decision metrics, which stay unchanged:
+  - cost sweep and break-evens
+  - DOWN/FLAT/UP
+  - ATR LOW/MID/HIGH
+  - return distribution
+  - session concentration
