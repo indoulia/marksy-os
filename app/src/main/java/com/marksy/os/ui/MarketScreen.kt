@@ -34,8 +34,7 @@ import com.marksy.os.market.MarketIntelligenceRepository
 // Watchlist is Market's home; Predictions live on Trading (Marksy picks).
 enum class MarketTab(val label: String) { WATCHLIST("Watchlist"), PORTFOLIO("Portfolio"), OVERVIEW("Overview"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
 
-/** Market's section filter, shared with WatchlistScreen, which MainActivity shows for WATCHLIST. */
-// STOCKS only hosts the stock detail page, reached via search or stock links; its blank landing page was dropped.
+/** Market's section filter, shared with WatchlistScreen (shown for WATCHLIST); STOCKS only hosts stock detail. */
 val MarketSections = MarketTab.entries.filter { it != MarketTab.STOCKS }.map { it.name to it.label }
 
 /** Section and symbol are hoisted so the Stocks search can sit in the app header. */
