@@ -89,8 +89,9 @@ fun SmartInboxScreen(
     }
     val byId = remember(events) { events.associateBy { it.id } }
     fun rowsOf(thread: InboxThread) = thread.allIds.mapNotNull { byId[it] }
+    fun holdPlace(thread: InboxThread) { if (lanes.holdsOnOpen(thread.key)) seenThisVisit = seenThisVisit + thread.key }
     fun openThread(thread: InboxThread) {
-        seenThisVisit = seenThisVisit + thread.key
+        holdPlace(thread)
         actions.markSeen(thread.allIds)
         onEventSelected(thread.latest)
     }
@@ -193,7 +194,9 @@ fun SmartInboxScreen(
         (lanes.needsYou.map { it.thread } + (lanes.fresh + lanes.earlier).flatMap { it.threads }).firstOrNull { it.key == key }
     }
     if (actionThread != null) {
-        ThreadActionsDialog(actionThread, actions, onDismiss = { actionThreadKey = null })
+        // "Mark read" here must hold the thread's lane just like opening it does.
+        val dialogActions = actions.copy(markSeen = { ids -> holdPlace(actionThread); actions.markSeen(ids) })
+        ThreadActionsDialog(actionThread, dialogActions, onDismiss = { actionThreadKey = null })
     }
 }
 
@@ -393,8 +396,11 @@ private fun SourceStackCard(
             }
             (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEachIndexed { index, thread ->
                 if (index > 0) HorizontalDivider(Modifier.padding(start = 50.dp), color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
-                Swipeable(thread, swipe) {
-                    StackRow(thread, stack.isSms, first = index == 0, onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
+                // Swipe offset lives in the row's composition; keyed so a re-sort never leaves an open tray over another thread.
+                key(thread.key) {
+                    Swipeable(thread, swipe) {
+                        StackRow(thread, stack.isSms, first = index == 0, onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) })
+                    }
                 }
             }
             if (hidden > 0) {

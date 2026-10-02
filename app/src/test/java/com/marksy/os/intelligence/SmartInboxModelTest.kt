@@ -254,6 +254,40 @@ class SmartInboxModelTest {
         assertTrue(lanes.needsYou.all { it.reason.urgency == SmartInboxModel.Urgency.FAILURE })
     }
 
+    // Device 2026-10-02: 51 day-old trading items flooded Needs you; a bare high score needs the user only while fresh and unread.
+    @Test
+    fun highAttentionAloneNeedsYouOnlyWhileFreshAndUnread() {
+        val hot = msg(1, "com.zerodha.kite3", "Order executed", "SELL 18 NATSEC executed at 410", now - hour, category = "TRADING", priority = 100)
+        assertEquals(SmartInboxModel.NeedReason("High attention", SmartInboxModel.Urgency.FLAGGED), SmartInboxModel.lanes(listOf(hot), nowMillis = now).needsYou.single().reason)
+        val read = hot.copy(isRead = true, lifecycleState = "ACTIVE")
+        assertTrue(SmartInboxModel.lanes(listOf(read), nowMillis = now).needsYou.isEmpty())
+        assertEquals(1, SmartInboxModel.lanes(listOf(read), nowMillis = now, seenThisVisit = setOf(EventIntelligence.threadKey(read))).needsYou.size)
+        assertTrue(SmartInboxModel.lanes(listOf(hot), nowMillis = now + 30 * hour).needsYou.isEmpty())
+    }
+
+    // Review minor (re-graded): a tip saying "rejected" is not the user's order being rejected.
+    @Test
+    fun tipSayingRejectedIsNoOrderRejection() {
+        val tip = msg(1, SMS, "TIPS", "NIFTY rejected from 24600, SELL below 24500 target 24400 SL 24650", now - hour, category = "TRADING")
+        assertTrue(SmartInboxModel.lanes(listOf(tip), nowMillis = now).needsYou.none { it.reason.chip == "Order rejected" })
+    }
+
+    // Review I3: opening a thread pins only New and Needs-you threads; one opened from Earlier stays in Earlier.
+    @Test
+    fun threadOpenedFromEarlierStaysInEarlier() {
+        val old = msg(1, WA, "Papa", "Ok", now - 2 * hour, read = true)
+        val fresh = msg(2, WA, "Mom", "Call me", now - hour)
+        val lanes = SmartInboxModel.lanes(listOf(old, fresh), nowMillis = now)
+        val oldKey = EventIntelligence.threadKey(old)
+        val freshKey = EventIntelligence.threadKey(fresh)
+        assertTrue(!lanes.holdsOnOpen(oldKey))
+        assertTrue(lanes.holdsOnOpen(freshKey))
+        val seen = setOf(oldKey, freshKey).filter(lanes::holdsOnOpen).toSet()
+        val after = SmartInboxModel.lanes(listOf(old, fresh.copy(isRead = true, lifecycleState = "ACTIVE")), nowMillis = now, seenThisVisit = seen)
+        assertEquals(listOf(1L), after.earlier.flatMap { it.threads }.map { it.latest.id })
+        assertEquals(listOf(2L), after.fresh.flatMap { it.threads }.map { it.latest.id })
+    }
+
     companion object {
         const val WA = "com.whatsapp"
         const val SMS = "com.google.android.apps.messaging"

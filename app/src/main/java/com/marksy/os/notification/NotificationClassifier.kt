@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 13
+    const val VERSION = 14
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -208,18 +208,29 @@ object NotificationClassifier {
     private val priceBefore = Regex("""(?:\b(?:cmp|ltp|sl|tgt|targets?|entry|stop[\s-]*loss|above|below|around|near|at|rs\.?|inr)|₹|@)[\s:=\-]*$""")
 
     // User rule 2026-10-02: only a sure code is dropped, so amounts, masks (XX1234), dates, refs and phone numbers never count.
-    private val secretCodeWords = Regex("""\b(?:otp|one[\s-]?time\s+(?:password|passcode|pin|code)|(?:verification|security|login|authentication|auth)\s+code|passcode|password|t?pin|mpin)\b""")
-    private val codeCandidate = Regex("""(?<![\w.,#*/])(?<!\d-)\d{4,8}(?![\d.,]*\d)(?![a-z])(?![-/]\d)(?!\s*(?:hrs?|hours?|mins?|minutes?|am|pm|%|/-))""")
+    private val secretCodeWords = Regex("""\b(?:otp|one[\s-]?time\s+(?:password|passcode|pin|code)|(?:verification|security|login|authentication|auth)\s+code|passcode|password|tpin|mpin|pin(?!\s*code))\b""")
+    // Not glued to letters or symbols, and no group of a spaced phone number ("1800 425 3800") or a "2, 2026" date.
+    private val codeCandidate = Regex("""(?<![\w.,#*/])(?<!\d[ -])(?<!\d, )\d{4,8}(?![\d.,]*\d)(?![a-z])(?![ /-]\d)(?!\s*(?:hrs?|hours?|mins?|minutes?|am|pm|%|/-))""")
     private val notACodeBefore = Regex(
         """(?:\b(?:rs|inr|usd|amt|amount|bal|balance|limit|a/?c|acct|account|card|ending(?:\s+(?:in|with))?|no|number|ref|reference|txn|transaction|order|awb|id|upi|call|sms|dial|""" +
             """debited|credited|spent|paid|sent|received|withdrawn|worth|for|cmp|ltp|sl|tgt|targets?|entry|stop[\s-]*loss|above|below|around|near|at|qty|""" +
-            """jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|₹|\$|@)[\s:=#.\-]*$"""
+            """policy|folio|loan|emi|invoice|bill|consumer|customer|cust|ticket|complaint|claim|application|member|pnr|tracking|shipment|parcel|imei|ifsc|branch|vehicle|flight|train|pin\s*code|pincode|""" +
+            """jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|\bx{2,}|\*{2,}|₹|\$|@)[\s:=#.\-]*$"""
     )
+    // An Indian postal PIN is six digits right after a bare "PIN"; a delivery PIN is usually four.
+    private val postalPinBefore = Regex("""\bpin[\s:.\-]*$""")
 
     fun isOneTimeCode(title: String, body: String): Boolean {
-        val text = "$title $body".lowercase()
-        return secretCodeWords.containsMatchIn(text) &&
-            codeCandidate.findAll(text).any { m -> !notACodeBefore.containsMatchIn(text.substring(maxOf(0, m.range.first - 24), m.range.first)) }
+        val raw = "$title $body".lowercase()
+        // A tip quoting levels sits beside its "never share your OTP" footer, so there the code word must be next to the number.
+        val call = isStructuredTradingCall(raw) || priceLevels.findAll(raw).count() >= 2
+        val text = if (call) raw.replace(otpWarning, " ") else raw
+        if (!secretCodeWords.containsMatchIn(text)) return false
+        return codeCandidate.findAll(text).any { m ->
+            val before = text.substring(maxOf(0, m.range.first - 24), m.range.first)
+            !notACodeBefore.containsMatchIn(before) && !(m.value.length == 6 && postalPinBefore.containsMatchIn(before)) &&
+                (!call || secretCodeWords.containsMatchIn(text.substring(maxOf(0, m.range.first - 20), minOf(text.length, m.range.last + 21))))
+        }
     }
 
     fun carriesOneTimeCode(title: String, body: String): Boolean = carriesOneTimeCode("$title $body".lowercase())

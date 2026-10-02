@@ -205,7 +205,17 @@ class NotificationClassifierTest {
             "HDFC Bank" to "Your credit card statement for Oct 2026 is ready. Never share your OTP.",
             "Amazon" to "Your order #40312345 has shipped. Never share OTP with anyone.",
             "PhonePe" to "Transaction of Rs 1500 failed due to incorrect OTP.",
-            "Google" to "Your password was changed on 02/10/2026 at 10:45."
+            "Google" to "Your password was changed on 02/10/2026 at 10:45.",
+            // Review C2: tips, comma dates, spaced phones and masks, postal PIN codes and policy numbers are no codes.
+            "KISHAN" to "BUY RELIANCE 1450 SL 1400 TGT 1500. Never share your OTP with anyone.",
+            "KISHAN" to "BUY NIFTY 24500 CE ABOVE 120 TGT 150 SL 100. Never share your OTP",
+            "Google" to "Your password was changed on Oct 2, 2026 at 10:45 AM.",
+            "Google" to "Your password was changed on October 2, 2026.",
+            "SBI" to "Your SBI Debit Card PIN has been changed. Not you? Call 1800 425 3800",
+            "HDFC Bank" to "PIN for Debit Card XXXX 1234 was changed",
+            "Amazon" to "Deliver to PIN code 560034",
+            "Amazon" to "Arriving today at Indiranagar, Bengaluru. PIN: 560034",
+            "LIC" to "Premium of Rs 5000 for policy 12345678 due on 5 Oct. Never share OTP."
         )
         codes.forEach { (t, b) -> assertTrue("code: $b", NotificationClassifier.isOneTimeCode(t, b)) }
         kept.forEach { (t, b) -> assertTrue("kept: $b", !NotificationClassifier.isOneTimeCode(t, b)) }

@@ -2,6 +2,7 @@ package com.marksy.os.intelligence
 
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.notification.CaptureMedium
+import com.marksy.os.notification.NotificationClassifier
 import java.util.Locale
 
 /** Presentation-ready grouping for Smart Inbox. All decisions remain deterministic and local. */
@@ -145,8 +146,6 @@ object SmartInboxModel {
         return Inbox(sections, snoozedThreads)
     }
 
-    // ---- Inbox redesign (spec 2026-10-02): lanes + source stacks ------------------------
-
     data class NeedThread(val thread: InboxThread, val reason: NeedReason)
 
     data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) {
@@ -165,6 +164,9 @@ object SmartInboxModel {
     ) {
         val isEmpty: Boolean get() = needsYou.isEmpty() && fresh.isEmpty() && earlier.isEmpty()
         val summary: InboxSummary get() = InboxSummary(needsYou.size, fresh.sumOf { it.unread })
+        /** Only New and Needs-you threads keep their place once opened; an Earlier thread must not jump up into New. */
+        fun holdsOnOpen(threadKey: String): Boolean =
+            needsYou.any { it.thread.key == threadKey } || fresh.any { s -> s.threads.any { it.key == threadKey } }
     }
 
     /** [seenThisVisit] holds thread keys opened since the user entered the tab; they keep their lane until the next visit. */
@@ -181,7 +183,7 @@ object SmartInboxModel {
         val needs = mutableListOf<NeedThread>()
         val rest = mutableListOf<InboxThread>()
         inbox.sections.filterKeys { it != Bucket.RESOLVED }.values.flatten().forEach { thread ->
-            val reason = needReason(thread, profile, nowMillis)
+            val reason = needReason(thread, profile, nowMillis, seenThisVisit)
             if (reason == null) rest += thread
             else needs += NeedThread(thread, reason)
         }
@@ -195,13 +197,15 @@ object SmartInboxModel {
     }
 
     // Action beats an explicit "Always important", which beats a bare high score: the chip names the most useful reason.
-    private fun needReason(thread: InboxThread, profile: PersonalLearning.Profile, nowMillis: Long): NeedReason? {
+    private fun needReason(thread: InboxThread, profile: PersonalLearning.Profile, nowMillis: Long, seenThisVisit: Set<String>): NeedReason? {
         val open = thread.events.filter { it.lifecycleState != EventLifecycle.State.RESOLVED.name }
         actionFor(open, nowMillis)?.let { return it.second }
         val pinned = PersonalLearning.subjectsOf(thread.latest)
             .any { profile.of(it.type, it.key)?.override == PersonalLearning.Preference.ALWAYS_IMPORTANT }
         if (pinned) return NeedReason("Always important", Urgency.FLAGGED)
-        return if (thread.bucket == Bucket.PRIORITY) NeedReason("High attention", Urgency.FLAGGED) else null
+        // A bare high score is no task (device: 51 day-old trading items flooded the lane), so it needs the user only while fresh and unread.
+        val fresh = nowMillis - thread.latest.postedAt < NEW_WINDOW_MS && (thread.unread || thread.key in seenThisVisit)
+        return if (thread.bucket == Bucket.PRIORITY && fresh) NeedReason("High attention", Urgency.FLAGGED) else null
     }
 
     fun isSms(event: NotificationEventEntity): Boolean = CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS
@@ -271,7 +275,7 @@ object SmartInboxModel {
             latest.category == "BILLS" -> "Bill that may need payment" to NeedReason("Bill due", Urgency.DUE)
             latest.category == "REMINDERS" -> "Due or reminder to act on" to NeedReason("Reminder", Urgency.DUE)
             latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed" to NeedReason("Payment failed", Urgency.FAILURE)
-            latest.category == "TRADING" && text.contains("rejected") -> "Your order was rejected" to NeedReason("Order rejected", Urgency.FAILURE)
+            latest.category == "TRADING" && text.contains("rejected") && NotificationClassifier.isOwnOrderEvent(latest.title, latest.body) -> "Your order was rejected" to NeedReason("Order rejected", Urgency.FAILURE)
             latest.category == "DELIVERY" && DELIVERY_FAILURE_TERMS.any { text.contains(it) } -> "A delivery attempt failed" to NeedReason("Delivery failed", Urgency.FAILURE)
             else -> null
         }
