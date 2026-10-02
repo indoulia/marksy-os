@@ -145,6 +145,8 @@ class IngestionPipeline(
         // An adapter bug must not stop capture: fall back to the unadapted capture.
         val adapter = ConnectorRegistry.adapterFor(input.connectorId, input.sourcePackage)
         val raw = if (adapted) input else adapter?.let { a -> runCatching { a.adapt(input) }.getOrNull() } ?: input
+        // User rule 2026-10-02: one-time codes are never stored, not even as an update to an existing row.
+        if (NotificationClassifier.isOneTimeCode(raw.title, raw.body)) return Result.Empty
         return try {
             val result = NotificationClassifier.classify(raw.sourcePackage, raw.title, raw.body)
             val isTrading = result.category == NotificationClassifier.Category.TRADING

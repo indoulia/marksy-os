@@ -65,6 +65,11 @@ class NotificationRepository(
         if (prefs.getInt(KEY_CLASSIFIER_VERSION, 0) >= com.marksy.os.notification.NotificationClassifier.VERSION) return
         var changed = 0
         dao.findNonTrading().forEach { event ->
+            // User rule 2026-10-02: codes captured before capture dropped them are deleted, not re-filed.
+            if (com.marksy.os.notification.NotificationClassifier.isOneTimeCode(event.title, event.body)) {
+                dao.deleteById(event.id)
+                return@forEach
+            }
             val result = com.marksy.os.notification.NotificationClassifier.classify(event.sourcePackage, event.title, event.body)
             if (result.category.name != event.category) {
                 val trading = result.category == com.marksy.os.notification.NotificationClassifier.Category.TRADING

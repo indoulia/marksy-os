@@ -57,6 +57,18 @@ class IngestionPipelineTest {
     private fun counters() = runBlocking { db.metricsDao().range("2000-01-01", "2100-01-01") }
     private fun count(metric: String, scope: String = "all") = counters().filter { it.metric == metric && it.scope == scope }.sumOf { it.value }
 
+    // User rule 2026-10-02: a one-time code never reaches the database, on first post or on a re-post.
+    @Test
+    fun oneTimeCodesAreNeverStoredButAlertsMentioningOtpAre() = runBlocking {
+        assertEquals(IngestionPipeline.Result.Empty, pipeline.ingest(raw("com.google.android.apps.messaging", "s1", "SBI", "482913 is your OTP for login. Do not share.")))
+        val chat = pipeline.ingest(raw("com.google.android.apps.messaging", "s2", "Mom", "Reached home")) as IngestionPipeline.Result.Stored
+        assertEquals(IngestionPipeline.Result.Empty, pipeline.ingest(raw("com.google.android.apps.messaging", "s2", "Mom", "Reached home\nMy OTP is 4821, enter it")))
+        assertEquals("Reached home", db.notificationEventDao().getById(chat.eventId)!!.body)
+        val alert = pipeline.ingest(raw("com.snapwork.hdfc", "k9", "HDFC Bank", "Rs 500 debited from a/c XX1234. Never share your OTP.")) as IngestionPipeline.Result.Stored
+        assertEquals("BANKING", db.notificationEventDao().getById(alert.eventId)!!.category)
+        assertEquals(2, db.notificationEventDao().countAll())
+    }
+
     @Test
     fun storesClassifiesProcessesAndCountsPerConnectorAndSource() = runBlocking {
         val r = pipeline.ingest(raw("com.snapwork.hdfc", "k1", "Debited", "Rs 500 debited. UPI Ref 426712345678"))

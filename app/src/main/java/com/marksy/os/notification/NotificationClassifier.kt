@@ -2,7 +2,7 @@ package com.marksy.os.notification
 
 object NotificationClassifier {
     /** Bump when rules change so stored events are reclassified once on next launch. */
-    const val VERSION = 12
+    const val VERSION = 13
 
     enum class Category {
         TRADING, BANKING, BILLS, PAYMENTS, OTP, REMINDERS, MESSAGES,
@@ -207,6 +207,21 @@ object NotificationClassifier {
     private val standaloneNumber = Regex("""(?<![\d.,])\d{4,8}(?![\d.,]*\d)""")
     private val priceBefore = Regex("""(?:\b(?:cmp|ltp|sl|tgt|targets?|entry|stop[\s-]*loss|above|below|around|near|at|rs\.?|inr)|₹|@)[\s:=\-]*$""")
 
+    // User rule 2026-10-02: only a sure code is dropped, so amounts, masks (XX1234), dates, refs and phone numbers never count.
+    private val secretCodeWords = Regex("""\b(?:otp|one[\s-]?time\s+(?:password|passcode|pin|code)|(?:verification|security|login|authentication|auth)\s+code|passcode|password|t?pin|mpin)\b""")
+    private val codeCandidate = Regex("""(?<![\w.,#*/])(?<!\d-)\d{4,8}(?![\d.,]*\d)(?![a-z])(?![-/]\d)(?!\s*(?:hrs?|hours?|mins?|minutes?|am|pm|%|/-))""")
+    private val notACodeBefore = Regex(
+        """(?:\b(?:rs|inr|usd|amt|amount|bal|balance|limit|a/?c|acct|account|card|ending(?:\s+(?:in|with))?|no|number|ref|reference|txn|transaction|order|awb|id|upi|call|sms|dial|""" +
+            """debited|credited|spent|paid|sent|received|withdrawn|worth|for|cmp|ltp|sl|tgt|targets?|entry|stop[\s-]*loss|above|below|around|near|at|qty|""" +
+            """jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?|₹|\$|@)[\s:=#.\-]*$"""
+    )
+
+    fun isOneTimeCode(title: String, body: String): Boolean {
+        val text = "$title $body".lowercase()
+        return secretCodeWords.containsMatchIn(text) &&
+            codeCandidate.findAll(text).any { m -> !notACodeBefore.containsMatchIn(text.substring(maxOf(0, m.range.first - 24), m.range.first)) }
+    }
+
     fun carriesOneTimeCode(title: String, body: String): Boolean = carriesOneTimeCode("$title $body".lowercase())
 
     private fun carriesOneTimeCode(text: String): Boolean = codeWords.containsMatchIn(text) &&
@@ -245,7 +260,7 @@ object NotificationClassifier {
         // broker package or other text also contains trading-looking language.
         val otpRule = rules.first { it.category == Category.OTP }
         val otpText = if (priceLevels.findAll(notificationText).count() >= 2 && !carriesOneTimeCode(notificationText)) notificationText.replace(otpWarning, " ") else notificationText
-        if (otpRule.terms.any { term -> otpText.containsRuleTerm(term) }) {
+        if (otpRule.terms.any { term -> otpText.containsRuleTerm(term) } && isOneTimeCode(title, body)) {
             return Result(otpRule.category, otpRule.priority, otpRule.confidence)
         }
 
@@ -272,7 +287,7 @@ object NotificationClassifier {
         // The OTP rule leads this list too, so it must not see a tip's stripped footer either.
         val haystack = "$normalizedPackage $otpText"
         val rule = rules.firstOrNull { candidate ->
-            candidate.category != Category.TRADING && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
+            candidate.category != Category.TRADING && candidate.category != Category.OTP && candidate.terms.any { term -> haystack.containsRuleTerm(term) }
         }
         val hinted = packageHints.firstOrNull { (token, _) -> normalizedPackage.contains(token) }?.second
         // In a mail app, weak words ("reminder", "meeting") describe the email; dues, money and promos still win.
