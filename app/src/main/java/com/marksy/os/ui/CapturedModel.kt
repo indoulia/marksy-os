@@ -100,7 +100,9 @@ object CapturedModel {
     private fun buildRow(e: NotificationEventEntity, insight: TradingInsight, symbolOf: (String) -> String?): CapturedRow {
         val symbol = symbolOf("${e.title} ${e.body}")
         if (e.deliveryState == DeliveryState.NOT_APPLICABLE.name) {
-            return CapturedRow(e, insight, null, insight.headline + (symbol?.let { " · $it" } ?: ""))
+            val generic = insight.headline == "Trading event detected"
+            val first = e.body.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: insight.headline
+            return CapturedRow(e, insight, null, if (generic) first else insight.headline + (symbol?.let { " · $it" } ?: ""))
         }
         val side = insight.marksyRecommendation?.let { SIDE.find(it)?.value }
             ?: SIDE.find(e.body)?.value ?: SIDE.find(e.title)?.value
@@ -129,7 +131,7 @@ object CapturedModel {
     private fun humanise(state: String): String =
         state.trim().replace('_', ' ').replace('-', ' ').lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }
 
-    private fun sourceLabel(e: NotificationEventEntity): String =
+    internal fun sourceLabel(e: NotificationEventEntity): String =
         if (CaptureMedium.of(e.sourcePackage).isChat) e.title.ifBlank { e.sourceName } else e.sourceName
 
     private fun foldKey(body: String) = body.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
