@@ -44,14 +44,14 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             else -> if (live.isEmpty()) item {
                 EmptyState(
                     "No live Marksy setups right now",
-                    if (all.isNotEmpty()) "All ${all.size} open calls have ended. See Predictions for their results."
+                    if (all.isNotEmpty()) "All ${all.size} open calls have ended. See Results for how they did."
                     else "Marksy's new calls appear here after each market close." + scan?.let(PicksBasis::label)?.let { " Last scan: $it." }.orEmpty()
                 )
             }
         }
         items(live, key = { "m-${it.predictionId}" }) { p ->
             val basis = PicksBasis.label(p) ?: p.lastPriceAt?.let { "as of ${asOf(it)}" }
-            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = "Marksy${basis?.let { " · $it" }.orEmpty()}") { onOpenStock(p.symbol) }
+            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = basis) { onOpenStock(p.symbol) }
         }
     }
 }

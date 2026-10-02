@@ -108,6 +108,8 @@ object SmartInboxModel {
         val count: Int get() = events.size
         // isRead (inbox UI) and lifecycle NEW (EPIC-010) are kept in step; either marks the thread unread.
         val unread: Boolean get() = events.any { !it.isRead || it.lifecycleState == EventLifecycle.State.NEW.name }
+        // Same cut-off as EventIntelligence's CRITICAL level.
+        val critical: Boolean get() = attentionScore >= 90
         val sources: List<String> get() = (events + duplicates).map { it.sourceName }.distinct()
         /** Every row the thread represents, so an action on the thread also covers folded duplicates. */
         val allIds: List<Long> get() = (events + duplicates).map { it.id }
@@ -152,6 +154,14 @@ object SmartInboxModel {
         val unread: Int get() = threads.count { it.unread }
         val latestAt: Long get() = threads.maxOf { it.latest.postedAt }
         val topAttention: Int get() = threads.maxOf { it.attentionScore }
+        /** Every row in the group, folded duplicates included, for whole-group actions. */
+        val allRows: List<NotificationEventEntity> get() = threads.flatMap { it.events + it.duplicates }
+    }
+
+    /** [events] as Inbox's source groups, for Home; [byRecency] orders groups newest first instead of by attention. */
+    fun sourceStacks(events: List<NotificationEventEntity>, nowMillis: Long = System.currentTimeMillis(), byRecency: Boolean = false): List<SourceStack> {
+        val grouped = stacks(inbox(events, nowMillis = nowMillis).sections.values.flatten())
+        return if (byRecency) grouped.sortedByDescending { it.latestAt } else grouped
     }
 
     data class InboxSummary(val needsYou: Int, val newUnread: Int)
@@ -222,7 +232,7 @@ object SmartInboxModel {
                 val latest = group.maxBy { it.latest.postedAt }.latest
                 val sms = isSms(latest)
                 val label = if (sms) latest.title.ifBlank { latest.sourceName } else latest.sourceName.ifBlank { "System" }
-                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.attentionScore }.thenByDescending { it.latest.postedAt }))
+                SourceStack(key, label, sms, group.sortedWith(compareByDescending<InboxThread> { it.unread }.thenByDescending { it.latest.postedAt }))
             }
             .sortedWith(compareByDescending<SourceStack> { it.topAttention }.thenByDescending { it.latestAt })
 

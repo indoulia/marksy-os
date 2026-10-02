@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,16 +29,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
 import com.marksy.os.intelligence.HomeCategoryStats
 import com.marksy.os.intelligence.HomePeriod
 import com.marksy.os.intelligence.NotificationTrend
+import com.marksy.os.intelligence.SmartInboxModel
 import com.marksy.os.weather.Weather
 import com.marksy.os.upstox.UpstoxIndices
 import com.marksy.os.upstox.UpstoxLiveState
+
+// Latest Activity: the newest groups from a recent window of captures.
+private const val LATEST_POOL = 40
+private const val LATEST_GROUPS = 5
 
 @Composable
 fun DashboardScreen(
@@ -59,15 +64,41 @@ fun DashboardScreen(
     onOpenTrading: () -> Unit = {},
     onOpenAsk: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
-    onArchive: (NotificationEventEntity) -> Unit = {},
-    onDelete: (NotificationEventEntity) -> Unit = {},
-    onHide: (NotificationEventEntity) -> Unit = {},
+    // Swipes act on a whole thread or, from a group header, on every row in the group.
+    onArchive: (List<NotificationEventEntity>) -> Unit = {},
+    onDelete: (List<NotificationEventEntity>) -> Unit = {},
+    onHide: (List<NotificationEventEntity>) -> Unit = {},
+    onMarkRead: (List<Long>) -> Unit = {},
+    onMarkUnread: (List<Long>) -> Unit = {},
     planItems: List<com.marksy.os.data.local.PlanItemEntity> = emptyList(),
     onOpenPlan: () -> Unit = {},
     onAddReminder: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTimeFilter by remember { mutableStateOf("Today") }
+    var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+    fun toggle(key: String) { expanded = if (key in expanded) expanded - key else expanded + key }
+    val scores = remember(snapshot) { snapshot.topAttention.associateBy { it.eventId } }
+    val attention = remember(snapshot, events) {
+        SmartInboxModel.sourceStacks(events.filter { it.id in scores }, snapshot.generatedAt)
+            .sortedByDescending { s -> s.allRows.maxOf { scores[it.id]?.attentionScore ?: 0 } }
+    }
+    val latest = remember(events) { SmartInboxModel.sourceStacks(events.take(LATEST_POOL), snapshot.generatedAt, byRecency = true).take(LATEST_GROUPS) }
+    val swipe = ThreadSwipe(
+        archive = { onArchive(it.events + it.duplicates) },
+        delete = { onDelete(it.events + it.duplicates) },
+        hide = { onHide(it.events + it.duplicates) }
+    )
+    val group = GroupSwipe(
+        markRead = { s -> onMarkRead(s.allRows.map { it.id }) },
+        markUnread = { s -> onMarkUnread(s.allRows.map { it.id }) },
+        archive = { s -> onArchive(s.allRows) },
+        delete = { s -> onDelete(s.allRows) }
+    )
+    // The AI reason stays visible as a line under each attention row.
+    fun attentionNote(thread: SmartInboxModel.InboxThread): String? =
+        thread.events.mapNotNull { scores[it.id] }.maxByOrNull { it.attentionScore }
+            ?.let { r -> listOfNotNull("${r.attentionScore}/100", EventText.usefulReasons(r.reasons).firstOrNull()).joinToString(" · ") }
 
     LazyColumn(
         modifier = modifier.background(MarksyTheme.Background),
@@ -266,7 +297,7 @@ fun DashboardScreen(
 
         item { SectionTitle("AI Attention Required") }
 
-        if (snapshot.topAttention.isEmpty()) {
+        if (attention.isEmpty()) {
             item {
                 EmptyDashboardCard(
                     "Nothing needs attention yet.",
@@ -275,17 +306,19 @@ fun DashboardScreen(
             }
         } else {
             // Keys are namespaced per section: the same event can be in both Attention and Latest Activity.
-            items(snapshot.topAttention, key = { "attention-${it.eventId}" }) { result ->
-                events.firstOrNull { it.id == result.eventId }?.let { event ->
-                    SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
-                        AttentionCard(result, event, snapshot.generatedAt) { onEventSelected(event) }
-                    }
+            items(attention, key = { "attention-${it.key}" }) { stack ->
+                Box(Modifier.padding(horizontal = 18.dp)) {
+                    SourceStackCard(
+                        stack, expanded = "a-${stack.key}" in expanded, swipe = swipe, group = group,
+                        onToggle = { toggle("a-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) },
+                        note = ::attentionNote
+                    )
                 }
             }
         }
 
-        item { SectionTitle("Latest Activity") }
-        if (events.isEmpty()) {
+        item { SectionTitle("Latest Activity", link = "Timeline", onLink = onOpenTimeline) }
+        if (latest.isEmpty()) {
             item {
                 EmptyDashboardCard(
                     "Everything is quiet.",
@@ -293,9 +326,12 @@ fun DashboardScreen(
                 )
             }
         } else {
-            items(events.take(5), key = { "latest-${it.id}" }) { event ->
-                SwipeActionsRow(onDelete = { onDelete(event) }, onArchive = { onArchive(event) }, onHide = { onHide(event) }) {
-                    CompactEventCard(event, snapshot.generatedAt) { onEventSelected(event) }
+            items(latest, key = { "latest-${it.key}" }) { stack ->
+                Box(Modifier.padding(horizontal = 18.dp)) {
+                    SourceStackCard(
+                        stack, expanded = "l-${stack.key}" in expanded, swipe = swipe, group = group,
+                        onToggle = { toggle("l-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) }
+                    )
                 }
             }
         }
@@ -582,150 +618,16 @@ private fun AiSummaryBanner(summary: String) {
 }
 
 @Composable
-private fun SectionTitle(title: String) = Text(
-    title,
-    color = MarksyTheme.TextPrimary,
-    fontSize = 18.sp,
-    fontWeight = FontWeight.Bold,
-    modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)
-)
-
-@Composable
-private fun AttentionCard(
-    result: EventIntelligence.Result,
-    event: NotificationEventEntity,
-    nowMillis: Long,
-    onClick: () -> Unit
-) = Card(
-    colors = CardDefaults.cardColors(
-        containerColor = if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) MarksyTheme.BadgeUrgentBg else MarksyTheme.Surface
-    ),
-    shape = RoundedCornerShape(14.dp),
-    modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 18.dp)
-        .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
-    onClick = onClick
+private fun SectionTitle(title: String, link: String? = null, onLink: () -> Unit = {}) = Row(
+    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+    verticalAlignment = Alignment.CenterVertically
 ) {
-    Column(Modifier.padding(horizontal = 14.dp, vertical = 9.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Icon(
-                    attentionIcon(result),
-                    contentDescription = attentionLabel(result),
-                    tint = if (result.attentionLevel == EventIntelligence.AttentionLevel.CRITICAL) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    event.sourceName.ifBlank { "Unknown source" },
-                    color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Text(
-                "${result.attentionScore}/100 • ${compactTime(event.postedAt, nowMillis).orEmpty()}",
-                color = MarksyTheme.TextMuted,
-                fontSize = 10.sp
-            )
-        }
-        Spacer(Modifier.height(6.dp))
+    Text(title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+    link?.let {
         Text(
-            event.title.ifBlank { "Untitled notification" },
-            color = MarksyTheme.TextPrimary,
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            "$it ›", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onLink).padding(horizontal = 6.dp, vertical = 4.dp)
         )
-        val body = EventText.body(event.title, event.body)
-        if (body.isNotBlank()) {
-            Text(body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
-        }
-        val reasons = EventText.usefulReasons(result.reasons)
-        if (reasons.isNotEmpty()) {
-            Text(
-                reasons.take(2).joinToString(" • "),
-                color = MarksyTheme.TextMuted,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 5.dp)
-            )
-        }
-    }
-}
-
-private fun attentionLabel(result: EventIntelligence.Result): String = when (result.attentionLevel) {
-    EventIntelligence.AttentionLevel.CRITICAL -> "CRITICAL"
-    EventIntelligence.AttentionLevel.HIGH -> "HIGH ATTENTION"
-    EventIntelligence.AttentionLevel.NORMAL -> "NORMAL"
-    EventIntelligence.AttentionLevel.LOW -> "LOW"
-}
-
-private fun attentionIcon(result: EventIntelligence.Result): ImageVector = when (result.attentionLevel) {
-    EventIntelligence.AttentionLevel.CRITICAL -> Icons.Default.ReportProblem
-    EventIntelligence.AttentionLevel.HIGH -> Icons.Default.PriorityHigh
-    EventIntelligence.AttentionLevel.NORMAL -> Icons.Default.NotificationsActive
-    EventIntelligence.AttentionLevel.LOW -> Icons.Default.LowPriority
-}
-
-@Composable
-private fun CompactEventCard(
-    event: NotificationEventEntity,
-    nowMillis: Long,
-    onClick: () -> Unit
-) = Card(
-    colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-    shape = RoundedCornerShape(14.dp),
-    modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 18.dp)
-        .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
-    onClick = onClick
-) {
-    Column(Modifier.padding(horizontal = 13.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                event.sourceName.ifBlank { "Unknown source" },
-                color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (event.isTrading) {
-                    Text(
-                        deliveryLabel(event.deliveryState),
-                        color = MarksyTheme.PrimaryEmerald,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(6.dp))
-                }
-                Text(
-                    compactTime(event.postedAt, nowMillis).orEmpty(),
-                    color = MarksyTheme.TextMuted,
-                    fontSize = 10.sp
-                )
-            }
-        }
-        Text(
-            event.title.ifBlank { "Untitled notification" },
-            color = MarksyTheme.TextPrimary,
-            fontSize = 13.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        val body = EventText.body(event.title, event.body)
-        if (body.isNotBlank()) {
-            Text(body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-        }
     }
 }
 
@@ -742,12 +644,4 @@ private fun EmptyDashboardCard(title: String, description: String) = Card(
         Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
         Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
     }
-}
-
-private fun deliveryLabel(state: String): String = when (state) {
-    DeliveryState.DELIVERED.name -> "MARKSY ✓"
-    DeliveryState.PENDING.name -> "PENDING"
-    DeliveryState.IN_FLIGHT.name -> "ANALYZING"
-    DeliveryState.FAILED.name -> "FAILED"
-    else -> "LOCAL"
 }

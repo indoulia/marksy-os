@@ -65,10 +65,11 @@ fun PlanScreen(
         OneHandControls(
             filters = PlanViews.map { it to it },
             selectedFilter = view,
+            filterIsView = false,
             onFilterSelected = onViewSelected,
             actions = listOfNotNull(
-                FloatingAction(Icons.Default.Cake, "Import birthdays from contacts", onImportBirthdays).takeIf { !contactsAccess },
-                FloatingAction(Icons.Default.Add, "Add reminder", onAdd)
+                FloatingAction(Icons.Default.Cake, "Import birthdays from contacts", onClick = onImportBirthdays).takeIf { !contactsAccess },
+                FloatingAction(Icons.Default.Add, "Add reminder", onClick = onAdd)
             )
         )
     }

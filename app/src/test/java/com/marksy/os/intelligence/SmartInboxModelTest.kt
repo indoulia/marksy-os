@@ -136,6 +136,34 @@ class SmartInboxModelTest {
         assertTrue(SmartInboxModel.inbox(listOf(e), query = "flipkart", nowMillis = now).isEmpty)
     }
 
+    @Test
+    fun homeStacksGroupBySourceNewestFirst() {
+        val stacks = SmartInboxModel.sourceStacks(
+            listOf(
+                msg(1, WA, "Mom", "Call me", now - 3 * hour),
+                msg(2, "com.zomato", "Order", "Delivered", now - hour),
+                msg(3, WA, "Platform team", "Build is green", now - 2 * hour)
+            ),
+            nowMillis = now, byRecency = true
+        )
+        assertEquals(listOf("com.zomato", WA.lowercase()), stacks.map { it.key })
+        assertEquals(listOf(1L, 3L), stacks[1].allRows.map { it.id }.sorted())
+    }
+
+    @Test
+    fun groupRowsPutUnreadFirstThenReadEachNewestFirst() {
+        val stack = SmartInboxModel.sourceStacks(
+            listOf(
+                msg(1, WA, "Mom", "Call me", now - 4 * hour),
+                msg(2, WA, "Platform team", "Build is green", now - hour, read = true),
+                msg(3, WA, "Ravi", "Lunch?", now - 2 * hour),
+                msg(4, WA, "Bank group", "Statement", now - 3 * hour, read = true)
+            ),
+            nowMillis = now
+        ).single()
+        assertEquals(listOf(3L, 1L, 2L, 4L), stack.threads.map { it.latest.id })
+    }
+
     private fun event(id: Long, category: String, title: String, postedAt: Long, sourcePackage: String = "pkg.broker", deliveryState: String = "NOT_APPLICABLE", priority: Int = 50, archived: Boolean = false) =
         NotificationEventEntity(
             id = id, sourcePackage = sourcePackage, sourceName = sourcePackage,
@@ -214,7 +242,7 @@ class SmartInboxModelTest {
     }
 
     @Test
-    fun rowsInAStackRankByAttentionThenRecency() {
+    fun rowsInAStackGoNewestFirstWhateverTheirAttention() {
         val lanes = SmartInboxModel.lanes(
             listOf(
                 msg(1, WA, "Residents", "Water off Saturday", now - 10 * 60_000, priority = 20),
@@ -222,7 +250,7 @@ class SmartInboxModelTest {
             ),
             nowMillis = now
         )
-        assertEquals(listOf("Mom", "Residents"), lanes.fresh.single().threads.map { it.latest.title })
+        assertEquals(listOf("Residents", "Mom"), lanes.fresh.single().threads.map { it.latest.title })
     }
 
     @Test

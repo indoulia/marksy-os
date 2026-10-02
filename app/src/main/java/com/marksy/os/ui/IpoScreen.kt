@@ -165,11 +165,12 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
         OneHandControls(
             filters = MarketSections,
             selectedFilter = MarketTab.IPOS.name,
+            filterIsView = false,
             onFilterSelected = onSectionSelected,
             searchQuery = if (opened == null) query else null,
             onSearchChange = if (opened == null) ({ query = it }) else null,
             searchPlaceholder = "Search IPOs...",
-            actions = if (opened == null) listOf(FloatingAction(Icons.Default.Tune, "IPO stage and board") { filtersOpen = true })
+            actions = if (opened == null) listOf(FloatingAction(Icons.Default.Tune, "IPO stage and board", active = stageName != StageFilter.ALL.name || boardName != Board.ALL.name) { filtersOpen = true })
             else {
                 val on = opened.id in watched.orEmpty()
                 listOf(

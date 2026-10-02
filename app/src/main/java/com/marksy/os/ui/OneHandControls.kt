@@ -82,10 +82,9 @@ fun BoxScope.OneHandControls(
     onSearchChange: ((String) -> Unit)? = null,
     searchPlaceholder: String = "Search...",
     actions: List<FloatingAction> = emptyList(),
-    // False when the view list is a switcher, not a filter: the button then shows X only for [extrasActive].
+    // False when the view list is a switcher, not a filter: the button's dot then marks only [extrasActive].
     filterIsView: Boolean = true,
     extrasActive: Boolean = false,
-    onClearExtras: () -> Unit = {},
     filterExtras: (@Composable () -> Unit)? = null
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -107,10 +106,9 @@ fun BoxScope.OneHandControls(
     ) {
         if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
-            // With a filter applied the button becomes X: one tap closes the list and resets the filter.
-            val showClose = filtersOpen || filterActive
-            FloatingRoundButton(if (showClose) Icons.Default.Close else Icons.Default.FilterList, if (filterActive) "Clear filter" else "Filters", false) {
-                if (filterActive) { if (filterIsView) onFilterSelected(filters.first().first) else onClearExtras(); filtersOpen = false } else filtersOpen = !filtersOpen
+            // Always opens the list so filters switch in place; the dot marks one applied, the list's default resets it.
+            FloatingRoundButton(if (filtersOpen) Icons.Default.Close else Icons.Default.FilterList, if (filtersOpen) "Close filters" else "Filters", filterActive && !filtersOpen) {
+                filtersOpen = !filtersOpen
                 searchOpen = false
             }
         }
@@ -127,14 +125,14 @@ fun BoxScope.OneHandControls(
             }
         }
         actions.forEach { action ->
-            FloatingRoundButton(action.icon, action.label, false) { filtersOpen = false; action.onClick() }
+            FloatingRoundButton(action.icon, action.label, action.active) { filtersOpen = false; action.onClick() }
         }
     }
 }
 
 /** Bottom-left twin of the filter button, for a page's second switcher (e.g. which watchlist). */
 @Composable
-fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: String?, onSelected: (String) -> Unit, icon: ImageVector, label: String) {
+fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: String?, onSelected: (String) -> Unit, icon: ImageVector, label: String, action: FloatingAction? = null) {
     var open by rememberSaveable { mutableStateOf(false) }
     if (open) {
         Box(Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = false })
@@ -143,8 +141,20 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
         Modifier.align(Alignment.BottomStart).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (open) FloatingMenuPanel(options, selected, Alignment.Start) { onSelected(it); open = false }
+        if (open) FloatingMenuPanel(options, selected, Alignment.Start, action?.let { a -> { MenuActionRow(a) { open = false; a.onClick() } } }) { onSelected(it); open = false }
         FloatingRoundButton(if (open) Icons.Default.Close else icon, label, false) { open = !open }
+    }
+}
+
+@Composable
+private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(action.label, color = MarksyTheme.PrimaryEmerald, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -180,7 +190,7 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
 }
 
 /** A page action on the floating stack (e.g. Add), so pages need no in-content button rows. */
-data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val onClick: () -> Unit)
+data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val active: Boolean = false, val onClick: () -> Unit)
 
 @Composable
 private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier) {
