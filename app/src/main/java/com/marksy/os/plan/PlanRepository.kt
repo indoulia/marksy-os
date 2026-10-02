@@ -4,6 +4,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.data.local.PlanItemDao
 import com.marksy.os.data.local.PlanItemEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.ZoneId
 
@@ -114,6 +115,28 @@ class PlanRepository(
                 origin = PlanOrigin.REMIND_ME.name, sourceEventId = eventId, dedupeKey = key, createdAt = now, updatedAt = now
             )
         )
+    }
+
+    /** An IPO date reminder ([key] = `ipo|<id>|<event>`); a null [at] removes it. */
+    suspend fun setIpoReminder(key: String, title: String, at: Long?) {
+        val existing = dao.byKey(key)
+        if (at == null) { existing?.let { delete(it.id) }; return }
+        val now = clock()
+        if (existing != null) {
+            val item = existing.copy(title = title, dueAt = at, status = PlanStatus.TODO.name, completedAt = null, updatedAt = now)
+            dao.update(item)
+            alarms.schedule(item)
+            return
+        }
+        val item = PlanItemEntity(
+            kind = PlanKind.FOLLOW_UP.name, title = title, dueAt = at, recurrence = Recurrence.NONE.name, status = PlanStatus.TODO.name,
+            origin = PlanOrigin.IPO.name, dedupeKey = key, createdAt = now, updatedAt = now
+        )
+        alarms.schedule(item.copy(id = dao.insert(item)))
+    }
+
+    fun observeIpoReminderKeys(prefix: String): Flow<Set<String>> = dao.observeAll().map { items ->
+        items.filter { it.status != PlanStatus.DONE.name && it.dedupeKey?.startsWith(prefix) == true }.mapNotNullTo(HashSet()) { it.dedupeKey }
     }
 
     suspend fun upsertBirthday(lookupKey: String, name: String, month: Int, day: Int) {
