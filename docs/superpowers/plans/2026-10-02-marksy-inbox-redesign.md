@@ -26,7 +26,7 @@
 ## Review Focus
 
 1. **Thread read during this visit:** it must not jump from New to Earlier while the user is still on the tab. Pinned by `readThisVisitStaysInNewUntilTheNextVisit` (Task 2).
-2. **Expired OTP:** it must leave Needs you the minute its stated validity ends, even before the retirement worker runs. Pinned by `otpNeedsYouUntilItsStatedValidityEnds` (Task 1).
+2. **One-time codes (user rule 2026-10-02):** a sure code never reaches the database, on first post or as an update; an alert that only mentions OTP is kept and not filed as OTP. Pinned by `onlyAMessageThatSurelyCarriesACodeIsAOneTimeCode`, `oneTimeCodesAreNeverStoredButAlertsMentioningOtpAre` and `storedOneTimeCodesAreDeletedOnceAndOtpMentionsAreRefiled` (Task 1b).
 3. **Seen BILLS, REMINDERS, kept, reminder-set, failed-delivery or high-attention rows:** these must never auto-retire. Pinned by `unreadKeptRemindedDueFailedAndImportantItemsNeverGoStale` (Task 3).
 4. **Retirement pass:** it must not touch unread rows, and History must keep what it retires. Pinned by `seenLowAttentionItemRetiresAfterTwoDays` (Task 3, Room in-memory).
 5. **SMS from different senders in one SMS app:** these must not merge into one stack, while WhatsApp chats do merge. Pinned by `oneStackPerAppButSmsSplitsBySender` (Task 2).
@@ -40,7 +40,7 @@
 - Test: `app/src/test/java/com/marksy/os/intelligence/SmartInboxModelTest.kt`
 
 **Interfaces:**
-- Produces: `enum class SmartInboxModel.Urgency { FAILURE, DUE, FLAGGED }`, `data class SmartInboxModel.NeedReason(val chip: String, val urgency: Urgency)`, `internal fun SmartInboxModel.actionFor(open: List<NotificationEventEntity>, nowMillis: Long): Pair<String, NeedReason>?` (why-string, chip), `internal fun SmartInboxModel.otpCode(body: String): String?`. `bucketFor` keeps its signature.
+- Produces: `enum class SmartInboxModel.Urgency { FAILURE, DUE, FLAGGED }`, `data class SmartInboxModel.NeedReason(val chip: String, val urgency: Urgency)`, `internal fun SmartInboxModel.actionFor(open: List<NotificationEventEntity>, nowMillis: Long): Pair<String, NeedReason>?` (why-string, chip). `bucketFor` keeps its signature.
 
 This task changes only `bucketFor`'s internals, so the tests go through `inbox()` buckets. Task 2's tests cover the chips.
 
@@ -73,13 +73,6 @@ This task changes only `bucketFor`'s internals, so the tests go through `inbox()
         assertEquals(SmartInboxModel.Bucket.NEEDS_ACTION, buckets[2L])
         assertTrue(buckets[3L] != SmartInboxModel.Bucket.NEEDS_ACTION)
     }
-
-    @Test
-    fun otpNeedsActionUntilItsStatedValidityEnds() {
-        val otp = msg(1, SMS, "SBI", "482913 is your OTP for login. Valid for 30 minutes.", now - 20 * 60_000, category = "OTP")
-        assertEquals(SmartInboxModel.Bucket.NEEDS_ACTION, bucketsOf(otp)[1L])
-        assertTrue(bucketsOf(otp, at = now + 11 * 60_000)[1L] != SmartInboxModel.Bucket.NEEDS_ACTION)
-    }
 ```
 
 And add at the bottom of the class:
@@ -95,7 +88,7 @@ And add at the bottom of the class:
 - [ ] **Step 2: Run the tests and confirm they fail.**
 
 Run: `./gradlew --no-daemon :app:testDebugUnitTest --tests "com.marksy.os.intelligence.SmartInboxModelTest"`
-Expected: FAIL. The rejected order and the failed delivery are not NEEDS_ACTION. The OTP is NEEDS_ACTION only for 10 minutes after posting, so at 20 minutes it is not.
+Expected: FAIL. The rejected order and the failed delivery are not NEEDS_ACTION.
 
 - [ ] **Step 3: Implement.** Replace `bucketFor` and the constants block in `SmartInboxModel.kt` with:
 
@@ -125,21 +118,12 @@ Expected: FAIL. The rejected order and the failed delivery are not NEEDS_ACTION.
             open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry" to NeedReason("Retry needed", Urgency.FAILURE)
             latest.category == "BILLS" -> "Bill that may need payment" to NeedReason("Bill due", Urgency.DUE)
             latest.category == "REMINDERS" -> "Due or reminder to act on" to NeedReason("Reminder", Urgency.DUE)
-            latest.category == "OTP" -> otpMinutesLeft(latest, nowMillis)?.let { "Fresh one-time code" to NeedReason("Code · $it min left", Urgency.DUE) }
             latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed" to NeedReason("Payment failed", Urgency.FAILURE)
             latest.category == "TRADING" && text.contains("rejected") -> "Your order was rejected" to NeedReason("Order rejected", Urgency.FAILURE)
             latest.category == "DELIVERY" && DELIVERY_FAILURE_TERMS.any { text.contains(it) } -> "A delivery attempt failed" to NeedReason("Delivery failed", Urgency.FAILURE)
             else -> null
         }
     }
-
-    // An OTP needs the user for as long as its own text says it is valid (EventExpiry), not a fixed window.
-    private fun otpMinutesLeft(event: NotificationEventEntity, nowMillis: Long): Long? {
-        val left = (EventExpiry.of(event)?.atMillis ?: return null) - nowMillis
-        return if (left > 0) maxOf(1L, left / 60_000L) else null
-    }
-
-    internal fun otpCode(body: String): String? = OTP_CODE.find(body)?.value
 ```
 
 Replace the constants at the bottom of the object with the following. `OTP_ACTION_WINDOW_MS` is removed; `ATTENTION_THRESHOLD` and `RECENT_WINDOW_MS` stay because `section()` still uses them.
@@ -149,7 +133,6 @@ Replace the constants at the bottom of the object with the following. `OTP_ACTIO
     private const val IMPORTANT_THRESHOLD = 60
     private val FAILURE_TERMS = listOf("failed", "declined", "unsuccessful", "reversed")
     private val DELIVERY_FAILURE_TERMS = listOf("failed", "unsuccessful", "undelivered", "could not be delivered")
-    private val OTP_CODE = Regex("\\b\\d{4,8}\\b")
 
     private const val ATTENTION_THRESHOLD = 70
     private const val RECENT_WINDOW_MS = 2 * 60 * 60 * 1000L
@@ -164,10 +147,18 @@ Expected: PASS, including the existing `bucketsAreDeterministicAndExplained`, wh
 
 ```bash
 git add app/src/main/java/com/marksy/os/intelligence/SmartInboxModel.kt app/src/test/java/com/marksy/os/intelligence/SmartInboxModelTest.kt
-git commit -m "feat(inbox): need reasons; rejected orders, failed deliveries and valid OTPs need action
+git commit -m "feat(inbox): need reasons; rejected orders and failed deliveries need action
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 1b: Never capture or store one-time codes (user rule 2026-10-02, added during execution)
+
+**Files:** `notification/NotificationClassifier.kt` (`isOneTimeCode`, OTP category only for a sure code, `VERSION` 13), `connector/ConnectorFramework.kt` (`IngestionPipeline.ingestNow` returns `Result.Empty` for a code before any lookup), `data/NotificationRepository.kt` (`reclassifyIfClassifierChanged` deletes stored codes). Tests: `NotificationClassifierTest.onlyAMessageThatSurelyCarriesACodeIsAOneTimeCode`, `IngestionPipelineTest.oneTimeCodesAreNeverStoredButAlertsMentioningOtpAre`, `ReclassificationTest.storedOneTimeCodesAreDeletedOnceAndOtpMentionsAreRefiled`.
+
+A code is a code word (OTP, one-time password, verification/security/login code, passcode, password, PIN, TPIN, MPIN) plus a standalone 4–8 digit number that is no amount, balance, mask, date, time, phone, order/ref id or call level. Anything uncertain is kept.
 
 ---
 
@@ -178,13 +169,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Test: `app/src/test/java/com/marksy/os/intelligence/SmartInboxModelTest.kt`
 
 **Interfaces:**
-- Consumes: `actionFor`, `otpCode`, `NeedReason`, `Urgency` (Task 1); existing `inbox()`, `InboxThread`, `PersonalLearning.subjectsOf`, `PersonalLearning.Profile.of`; `com.marksy.os.notification.CaptureMedium.of(packageName)` (TipTextCleaner.kt:16).
+- Consumes: `actionFor`, `NeedReason`, `Urgency` (Task 1); existing `inbox()`, `InboxThread`, `PersonalLearning.subjectsOf`, `PersonalLearning.Profile.of`; `com.marksy.os.notification.CaptureMedium.of(packageName)` (TipTextCleaner.kt:16).
 - Produces (used by Tasks 4 and 5):
 
 ```kotlin
 fun SmartInboxModel.lanes(events: List<NotificationEventEntity>, filter: Filter = Filter.ALL, query: String = "", nowMillis: Long = System.currentTimeMillis(), profile: PersonalLearning.Profile = PersonalLearning.Profile.EMPTY, seenThisVisit: Set<String> = emptySet(), zone: ZoneId = ZoneId.systemDefault()): Lanes
 data class Lanes(val needsYou: List<NeedThread>, val fresh: List<SourceStack>, val earlier: List<SourceStack>, val snoozedCount: Int) { val isEmpty: Boolean; val summary: InboxSummary }
-data class NeedThread(val thread: InboxThread, val reason: NeedReason, val otpCode: String?)
+data class NeedThread(val thread: InboxThread, val reason: NeedReason)
 data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) { val unread: Int; val latestAt: Long; val topAttention: Int }
 data class InboxSummary(val needsYou: Int, val newUnread: Int)
 fun SmartInboxModel.isSms(event: NotificationEventEntity): Boolean
@@ -263,15 +254,6 @@ fun SmartInboxModel.isSms(event: NotificationEventEntity): Boolean
     }
 
     @Test
-    fun otpNeedsYouUntilItsStatedValidityEnds() {
-        val otp = msg(1, SMS, "SBI", "482913 is your OTP for login. Valid for 30 minutes.", now - 20 * 60_000, category = "OTP")
-        val need = SmartInboxModel.lanes(listOf(otp), nowMillis = now).needsYou.single()
-        assertEquals("Code · 10 min left", need.reason.chip)
-        assertEquals("482913", need.otpCode)
-        assertTrue(SmartInboxModel.lanes(listOf(otp), nowMillis = now + 11 * 60_000).needsYou.isEmpty())
-    }
-
-    @Test
     fun failedOrdersAndDeliveriesShowFailureChips() {
         val lanes = SmartInboxModel.lanes(
             listOf(
@@ -295,7 +277,7 @@ Expected: FAIL to compile, with unresolved reference `lanes`, `Lanes`, `InboxSum
 ```kotlin
     // ---- Inbox redesign (spec 2026-10-02): lanes + source stacks ------------------------
 
-    data class NeedThread(val thread: InboxThread, val reason: NeedReason, val otpCode: String?)
+    data class NeedThread(val thread: InboxThread, val reason: NeedReason)
 
     data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) {
         val unread: Int get() = threads.count { it.unread }
@@ -331,7 +313,7 @@ Expected: FAIL to compile, with unresolved reference `lanes`, `Lanes`, `InboxSum
         inbox.sections.filterKeys { it != Bucket.RESOLVED }.values.flatten().forEach { thread ->
             val reason = needReason(thread, profile, nowMillis)
             if (reason == null) rest += thread
-            else needs += NeedThread(thread, reason, if (thread.latest.category == "OTP") otpCode(thread.latest.body) else null)
+            else needs += NeedThread(thread, reason)
         }
         val (fresh, earlier) = rest.partition { t ->
             nowMillis - t.latest.postedAt < NEW_WINDOW_MS && (t.unread || t.key in seenThisVisit)
@@ -354,7 +336,7 @@ Expected: FAIL to compile, with unresolved reference `lanes`, `Lanes`, `InboxSum
 
     fun isSms(event: NotificationEventEntity): Boolean = CaptureMedium.of(event.sourcePackage) == CaptureMedium.SMS
 
-    // One SMS app carries the bank, the telco and OTPs, so SMS stacks by sender; every other app is one stack.
+    // One SMS app carries the bank, the telco and the courier, so SMS stacks by sender; every other app is one stack.
     private fun stackKey(event: NotificationEventEntity): String {
         val pkg = event.sourcePackage.trim().lowercase(Locale.ROOT)
         return if (isSms(event)) "$pkg|${event.title.trim().lowercase(Locale.ROOT)}" else pkg
@@ -547,8 +529,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -591,12 +571,11 @@ fun SmartInboxScreen(
     var earlierOpen by rememberSaveable { mutableStateOf(false) }
     // Opened this visit keeps its place until the user leaves the tab, so the list never jumps under the thumb.
     var seenThisVisit by remember { mutableStateOf(setOf<String>()) }
-    val clipboard = LocalClipboardManager.current
 
     val filter = SmartInboxModel.Filter.entries.firstOrNull { it.name == selectedFilterName }
         ?: SmartInboxModel.Filter.ALL
 
-    // Re-evaluated every minute so snoozes, OTP countdowns and the 24 h window move without new data.
+    // Re-evaluated every minute so snoozes and the 24 h window move without new data.
     val now by produceState(System.currentTimeMillis()) {
         while (true) {
             kotlinx.coroutines.delay(60_000)
@@ -649,8 +628,7 @@ fun SmartInboxScreen(
                             onClick = { openThread(need.thread) },
                             onLongClick = { actionThreadKey = need.thread.key },
                             onDone = { actions.resolve(need.thread.allIds) },
-                            onSnooze = { actions.snooze(need.thread.allIds, System.currentTimeMillis() + HOUR_MS) },
-                            onCopy = { clipboard.setText(AnnotatedString(it)) }
+                            onSnooze = { actions.snooze(need.thread.allIds, System.currentTimeMillis() + HOUR_MS) }
                         )
                     }
                 }
@@ -773,11 +751,10 @@ private fun urgencyColors(urgency: SmartInboxModel.Urgency): Pair<Color, Color> 
     SmartInboxModel.Urgency.FLAGGED -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
 }
 
-private fun urgencyIcon(urgency: SmartInboxModel.Urgency, otp: Boolean): ImageVector = when {
-    otp -> Icons.Default.VpnKey
-    urgency == SmartInboxModel.Urgency.FAILURE -> Icons.Default.Error
-    urgency == SmartInboxModel.Urgency.DUE -> Icons.Default.Schedule
-    else -> Icons.Default.Star
+private fun urgencyIcon(urgency: SmartInboxModel.Urgency): ImageVector = when (urgency) {
+    SmartInboxModel.Urgency.FAILURE -> Icons.Default.Error
+    SmartInboxModel.Urgency.DUE -> Icons.Default.Schedule
+    SmartInboxModel.Urgency.FLAGGED -> Icons.Default.Star
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -787,8 +764,7 @@ private fun NeedCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDone: () -> Unit,
-    onSnooze: () -> Unit,
-    onCopy: (String) -> Unit
+    onSnooze: () -> Unit
 ) {
     val event = need.thread.latest
     val (tint, tintBg) = urgencyColors(need.reason.urgency)
@@ -808,7 +784,7 @@ private fun NeedCard(
                 Modifier.clip(RoundedCornerShape(50)).background(tintBg).padding(start = 7.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(urgencyIcon(need.reason.urgency, need.otpCode != null), contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+                Icon(urgencyIcon(need.reason.urgency), contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(5.dp))
                 Text(need.reason.chip, color = tint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
@@ -839,7 +815,6 @@ private fun NeedCard(
         ) {
             Pill("Done", onClick = onDone)
             Pill("Snooze 1h", onClick = onSnooze)
-            need.otpCode?.let { code -> Pill("Copy $code", onClick = { onCopy(code) }) }
         }
     }
 }
@@ -1147,7 +1122,7 @@ private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
 - [ ] **Step 2: Compile.**
 
 Run: `./gradlew --no-daemon :app:compileDebugKotlin`
-Expected: BUILD SUCCESSFUL. Deprecation warnings (`LocalClipboardManager`, filled `ShowChart`/`Chat`) are acceptable because warnings are not errors in this project. If the `rememberScrollState`/`verticalScroll` imports become unused after pasting `ThreadActionsDialog`, they are still used by it; leave them.
+Expected: BUILD SUCCESSFUL. Deprecation warnings (filled `ShowChart`/`Chat`) are acceptable because warnings are not errors in this project. If the `rememberScrollState`/`verticalScroll` imports become unused after pasting `ThreadActionsDialog`, they are still used by it; leave them.
 
 - [ ] **Step 3: Commit.**
 
@@ -1228,7 +1203,7 @@ Expected: BUILD SUCCESSFUL with 0 test failures. Paste the summary line in the P
 
 - [ ] **Step 2: Offscreen visual check.** The emulator does not boot on this machine, so render with Robolectric. Create a **throwaway** test at `app/src/test/java/com/marksy/os/ui/ScratchInboxPreview.kt` (never commit it). It should:
   - use `@RunWith(RobolectricTestRunner::class)`, `@GraphicsMode(GraphicsMode.Mode.NATIVE)` and `@Config(sdk = [34], qualifiers = "w400dp-h2600dp-xxhdpi")`;
-  - call `createComposeRule().setContent { MarksyMaterialTheme { SmartInboxScreen(events = sample, padding = PaddingValues(), onEventSelected = {}, selectedFilterName = "ALL", onFilterSelected = {}) } }`. Build `sample` from the mockup's data: an SBI OTP, an HDFC failed payment, a rejected Kite order, an Airtel bill, a failed Delhivery delivery, 4 WhatsApp chats, 4 Gmail mails, 3 HDFC SMS, a Kite stack and 10 older seen rows;
+  - call `createComposeRule().setContent { MarksyMaterialTheme { SmartInboxScreen(events = sample, padding = PaddingValues(), onEventSelected = {}, selectedFilterName = "ALL", onFilterSelected = {}) } }`. Build `sample` from the mockup's data (minus its OTP card, since codes are never stored): an HDFC failed payment, a rejected Kite order, an Airtel bill, a failed Delhivery delivery, 4 WhatsApp chats, 4 Gmail mails, 3 HDFC SMS, a Kite stack and 10 older seen rows;
   - write `onRoot().captureToImage().asAndroidBitmap()` to a PNG in the session scratchpad.
 
   Render once collapsed, then once after `onNodeWithText("2 more", substring = true).performClick()` and `onNodeWithText("Earlier", substring = true).performClick()`. Also render at `w360dp`. Look at the PNGs and check:
@@ -1250,7 +1225,8 @@ git push -u origin feat/inbox-redesign
 gh pr create --base main --title "Inbox redesign: Needs you, source stacks, folded Earlier, stale retirement" --body "$(cat <<'EOF'
 Implements docs/superpowers/specs/2026-10-02-marksy-inbox-redesign-design.md.
 
-- Needs you lane with reason chips, inline Done/Snooze/Copy code
+- Needs you lane with reason chips, inline Done/Snooze
+- One-time codes (OTP/PIN) are never captured; stored ones are purged once; alerts that only mention OTP are kept
 - One stack per app (SMS per sender), top 2 shown, expander names the rest
 - Earlier folded by default with Clear all (undo)
 - Seen low-attention items retire after 2 days; History keeps them

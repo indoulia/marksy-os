@@ -27,7 +27,7 @@ The screen is one `LazyColumn` with three lanes. A lane with nothing in it is no
 
 Rules for this lane:
 - Threads are sorted by attention, then newest. The top 3 show, and the rest sit behind a "▾ N more need you · names" row.
-- Each thread is a full card. It has a reason chip, source line, title, a 2-line body, and inline **Done** (resolve) and **Snooze 1h** buttons. OTP cards also get a **Copy ⟨code⟩** button.
+- Each thread is a full card. It has a reason chip, source line, title, a 2-line body, and inline **Done** (resolve) and **Snooze 1h** buttons.
 - Chip colour follows `Urgency`: FAILURE uses RedUrgent on BadgeUrgentBg, DUE uses YellowImportant on BadgeImportantBg, FLAGGED uses PrimaryEmerald on BadgeTradingBg. The card border mixes the urgency colour into BorderGlow, with no side stripe.
 
 **New** (dot: PrimaryEmerald). A non-needs thread is here when it was posted less than 24 h ago and either it is unread or it was read during this visit to the Inbox. Threads are grouped into **source stacks**:
@@ -57,11 +57,14 @@ Tapping a row marks its thread seen, as today. The thread stays in its lane unti
 | **new:** DELIVERY + delivery-failure term ("failed", "unsuccessful", "undelivered", "could not be delivered") | "Delivery failed" | FAILURE |
 | BILLS | "Bill due" | DUE |
 | REMINDERS | "Reminder" | DUE |
-| OTP still valid | "Code · N min left" | DUE |
 | attention ≥ 90, no action | "High attention" | FLAGGED |
 | Always important override | "Always important" | FLAGGED |
 
-An action reason always wins over a FLAGGED one. "OTP still valid" changes from the fixed 10-minute window to `EventExpiry.of(latest)?.atMillis > now`, so a code stated as valid for 30 minutes stays in Needs you for 30 minutes. N is the whole minutes left, at least 1. The OTP code is the first 4–8 digit run in the body.
+An action reason always wins over a FLAGGED one. The old "Fresh one-time code" reason is removed: one-time codes are no longer stored (below).
+
+### One-time codes are never captured
+
+User rule (2026-10-02): Marksy must not capture or store OTPs, PINs or similar codes, and must keep anything it is not sure about. `NotificationClassifier.isOneTimeCode(title, body)` is true only when the text names a code (OTP, one-time password, verification/security/login code, passcode, password, PIN, TPIN, MPIN) and carries a standalone 4–8 digit number that is no amount, balance, account or card mask (XX1234), date, time, phone number, order or reference id, or call level. `IngestionPipeline` drops such a capture before storage, including a re-post that would update an existing row. `classify` files a message as OTP only when it is such a code, so an alert that merely says "never share your OTP" keeps its real category. Classifier version 13 re-files stored rows once and deletes stored codes (non-trading rows).
 
 ### Retirement of seen, low-attention items
 
@@ -113,7 +116,7 @@ data class Lanes(
     val snoozedCount: Int
 ) { val isEmpty: Boolean; val summary: InboxSummary }
 
-data class NeedThread(val thread: InboxThread, val reason: NeedReason, val otpCode: String?)
+data class NeedThread(val thread: InboxThread, val reason: NeedReason)
 data class NeedReason(val chip: String, val urgency: Urgency)
 enum class Urgency { FAILURE, DUE, FLAGGED }
 data class SourceStack(val key: String, val label: String, val isSms: Boolean, val threads: List<InboxThread>) {
@@ -140,7 +143,8 @@ Unit tests only, under the project's test budget: logic, not layout. Never conne
   - A row read this visit stays in New; a row read earlier goes to Earlier.
   - Stacking puts WhatsApp chats in one stack and splits SMS by sender.
   - Rows inside a stack rank by attention then recency.
-  - The new reasons are covered: order rejected, delivery failed, and OTP valid until its stated expiry with the minutes-left chip and code.
+  - The new reasons are covered: order rejected and delivery failed.
+- `NotificationClassifierTest`, `IngestionPipelineTest`, `ReclassificationTest`: real-style codes (login OTP, TPIN, delivery PIN, card-txn OTP) are dropped and purged; bank, UPI, tip, statement, shipping and password-change alerts that mention OTP are kept and not filed as OTP.
 - `EventExpiryTest`: `staleSeen` retires seen, low-attention items that are 48 h or older. It keeps unread, kept, reminder, BILLS/REMINDERS, failed-delivery and high-attention rows, and anything under 48 h.
 - Existing suites stay green: `SmartInboxModelTest`, `EventExpiryTest`, DailyBriefing tests and AdaptiveRankerTest.
 - Visual check on the phone at a representative size, next to an existing Marksy screen, before the PR (UI consistency rule).
