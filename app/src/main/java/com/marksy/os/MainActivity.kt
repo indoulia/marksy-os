@@ -436,7 +436,7 @@ class MainActivity : ComponentActivity() {
                     marketTabName = stockReturnMarketTab ?: MarketTab.OVERVIEW.name
                     when (origin) { "ask" -> showAsk = true; "briefing" -> showBriefing = true; else -> selectedTab = origin.toInt() }
                 }
-                else -> { marketSymbol = null; stockQuery = "" }
+                else -> { marketSymbol = null; stockQuery = ""; marketTabName = MarketTab.WATCHLIST.name }
             }
         }
         val onHome = selectedTab == 0 && !hostOpen
@@ -681,7 +681,7 @@ class MainActivity : ComponentActivity() {
                             AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); showPlan = true }
                             AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
                             AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.WATCHLIST.name; selectedTab = 2 }
-                            AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.STOCKS.name; selectedTab = 2 }
+                            AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.WATCHLIST.name; selectedTab = 2 }
                             AskMarksy.Page.TRUST -> selectedTab = 4
                             AskMarksy.Page.SETTINGS -> selectedTab = tabs.size
                         }

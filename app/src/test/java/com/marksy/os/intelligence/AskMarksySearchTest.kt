@@ -107,6 +107,7 @@ class AskMarksySearchTest {
         assertEquals(Page.TRUST, nav("open scorecards").page)
         assertEquals(Page.TRUST, nav("open trust score").page)
         assertEquals("IPOS" to Page.MARKET, nav("take me to IPOs").let { it.arg to it.page })
+        assertEquals("WATCHLIST" to Page.MARKET, nav("open stock search").let { it.arg to it.page })
         assertEquals("Board" to Page.PLAN, nav("open my to do board").let { it.arg to it.page })
         assertEquals(Page.SETTINGS, nav("open settings").page)
 
@@ -123,7 +124,7 @@ class AskMarksySearchTest {
             val valid = when (a.page) {
                 Page.PLAN -> a.arg == null || a.arg in com.marksy.os.ui.PlanViews
                 Page.TRADING -> a.arg == null || a.arg in com.marksy.os.ui.TradingFilters
-                Page.MARKET -> a.arg == null || a.arg in com.marksy.os.ui.MarketTab.entries.map { it.name }
+                Page.MARKET -> a.arg == null || a.arg in com.marksy.os.ui.MarketSections.map { it.first }
                 Page.INBOX -> a.arg == null || a.arg in SmartInboxModel.Filter.entries.map { it.name }
                 else -> true
             }

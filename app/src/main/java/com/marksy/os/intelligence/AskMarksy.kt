@@ -616,7 +616,7 @@ object AskMarksy {
         "trust" to act(Page.TRUST), "trust score" to act(Page.TRUST), "trust scores" to act(Page.TRUST),
         "captured" to act(Page.TRADING, "Captured", "Captured"), "captured trades" to act(Page.TRADING, "Captured", "Captured"),
         "market" to act(Page.MARKET, "OVERVIEW"), "overview" to act(Page.MARKET, "OVERVIEW", "Overview"), "market overview" to act(Page.MARKET, "OVERVIEW", "Overview"),
-        "indices" to act(Page.MARKET, "OVERVIEW", "Overview"), "stocks" to act(Page.MARKET, "STOCKS", "Stocks"), "stock search" to act(Page.MARKET, "STOCKS", "Stocks"),
+        "indices" to act(Page.MARKET, "OVERVIEW", "Overview"), "stocks" to act(Page.MARKET, "WATCHLIST", "Watchlist"), "stock search" to act(Page.MARKET, "WATCHLIST", "Watchlist"),
         "ipo" to act(Page.MARKET, "IPOS", "IPOs"), "ipos" to act(Page.MARKET, "IPOS", "IPOs"),
         "updates" to act(Page.MARKET, "UPDATES", "Updates"), "market updates" to act(Page.MARKET, "UPDATES", "Updates"),
         "market news" to act(Page.MARKET, "UPDATES", "Updates"), "news" to act(Page.MARKET, "UPDATES", "Updates"),

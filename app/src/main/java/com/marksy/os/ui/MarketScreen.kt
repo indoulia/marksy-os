@@ -35,7 +35,8 @@ import com.marksy.os.market.MarketIntelligenceRepository
 enum class MarketTab(val label: String) { WATCHLIST("Watchlist"), PORTFOLIO("Portfolio"), OVERVIEW("Overview"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
 
 /** Market's section filter, shared with WatchlistScreen, which MainActivity shows for WATCHLIST. */
-val MarketSections = MarketTab.entries.map { it.name to it.label }
+// STOCKS only hosts the stock detail page, reached via search or stock links; its blank landing page was dropped.
+val MarketSections = MarketTab.entries.filter { it != MarketTab.STOCKS }.map { it.name to it.label }
 
 /** Section and symbol are hoisted so the Stocks search can sit in the app header. */
 @Composable
@@ -94,7 +95,7 @@ fun MarketScreen(
                 if (query.length >= 3 && !query.equals(symbol, ignoreCase = true)) {
                     StockSuggestions(query, inner, onSymbolSelected)
                 } else if (symbol == null) {
-                    Box(Modifier.padding(18.dp)) { EmptyState("Look up a stock", "Tap search above and type a symbol, e.g. RELIANCE.") }
+                    LaunchedEffect(Unit) { onTabSelected(MarketTab.WATCHLIST.name) }
                 } else {
                     val refresh = rememberRefreshState()
                     val state by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.InstrumentLifecycleDto>, symbol, refresh.key) {
