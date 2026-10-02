@@ -277,7 +277,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             val opens = dates["open"]
             val n = opens?.let { ChronoUnit.DAYS.between(now.toLocalDate(), it) }
             chip = opens?.let { "Opens ${L.day(it)}" } ?: "Opens soon"
-            big = when { n == null -> "Opening soon"; n <= 0 -> "Opens today"; n == 1L -> "Opens tomorrow"; else -> "In $n days" }
+            big = when { n == null || n < 0 -> "Opening soon"; n == 0L -> "Opens today"; n == 1L -> "Opens tomorrow"; else -> "In $n days" }
             val window = listOfNotNull(opens?.let(L::dm), dates["close"]?.let(L::day)).joinToString(" – ")
             sub = (if (band == null) "Price band not out yet" else "") + (if (window.isNotEmpty()) "${if (band == null) " · bidding" else "Bidding"} $window" else "")
             val size = ipo.terms?.issueSizeCrore.number()

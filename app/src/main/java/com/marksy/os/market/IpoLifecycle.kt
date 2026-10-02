@@ -40,7 +40,12 @@ object IpoLifecycle {
     }
 
     fun laneOf(ipo: IpoListItemDto, now: ZonedDateTime): Lane? = when (ipo.stage?.uppercase(Locale.ROOT)) {
-        "OPEN", "CLOSING_SOON" -> if (ipo.closesOn.localDate() == now.toLocalDate()) Lane.TODAY else Lane.OPEN
+        // Bids stop at the 5 pm cutoff even when the server has not moved the stage yet.
+        "OPEN", "CLOSING_SOON" -> when {
+            closeAt(ipo)?.let { !now.isBefore(it) } == true -> Lane.ALLOTMENT
+            ipo.closesOn.localDate() == now.toLocalDate() -> Lane.TODAY
+            else -> Lane.OPEN
+        }
         "CLOSED", "ALLOTMENT" -> Lane.ALLOTMENT
         "UPCOMING" -> Lane.UPCOMING
         "RECENTLY_LISTED" -> Lane.LISTED

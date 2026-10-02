@@ -33,6 +33,9 @@ class IpoLifecycleTest {
             listOf("TODAY" to listOf("today"), "OPEN" to listOf("later"), "ALLOTMENT" to listOf("allot"), "UPCOMING" to listOf("up1", "up2"), "LISTED" to listOf("listed")),
             lanes.map { (l, xs) -> l.name to xs.map { it.id } }
         )
+        // A stage the server has not moved yet still stops taking bids at the 5 pm cutoff.
+        assertEquals(IpoLifecycle.Lane.ALLOTMENT, IpoLifecycle.laneOf(book[0], now.withHour(17).withMinute(5)))
+        assertEquals(IpoLifecycle.Lane.ALLOTMENT, IpoLifecycle.laneOf(book[1], now.plusDays(5)))
     }
 
     @Test fun filtersCombineBoardSearchAndWatching() {

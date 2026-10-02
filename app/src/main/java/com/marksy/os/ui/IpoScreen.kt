@@ -114,7 +114,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     LaunchedEffect(note) { onTitleNote(note) }
     DisposableEffect(Unit) { onDispose { onTitleNote(null) } }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(MarksyTheme.Background)) {
         if (opened != null) {
             BackHandler { openedId = null; remindersOpen = false }
             IpoDetailScreen(
