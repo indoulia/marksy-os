@@ -1,6 +1,6 @@
 # Marksy TG-001 trade geometry validation — design
 
-Status: approved 2026-10-01, amended 2026-10-02 (A1, §24) · Repo: marksy-api (owner), new package `app/trade_geometry/`. SPG-001
+Status: approved 2026-10-01, amended 2026-10-02 (A1, §24; A2, §25) · Repo: marksy-api (owner), new package `app/trade_geometry/`. SPG-001
 (`app/selection_gate/**`) is frozen and only imported. marksy-os and admin-app: no change this phase.
 
 ## 1. Goal and separation
@@ -1154,3 +1154,60 @@ Left out, decided on 2026-10-02:
 ### 24.5 Freeze
 
 A1 lands before the Task 13 freeze, so `tg_holdout_not_before` stays `"2026-11"` (§22.3).
+
+## 25. Amendment A2 (2026-10-02): frozen exam geometry
+
+The user decided on 2026-10-02, after the pre-merge walk-forward report and before any exam. The November 2026 exam
+tests the frozen walk-forward geometry. It does not re-select a geometry on August–October data.
+
+### 25.1 Binding
+
+`TG_EXAM_BINDING` (`app/trade_geometry/constants.py`) is immutable:
+
+| h_sel | exam geometry | bound SPG decision | WF direction cuts (report-only) |
+|---|---|---|---|
+| 3 | `H5:Tnone:Snone` | 3 | (−0.010014675, 0.014342062) |
+| 5 | `H7:Tnone:Snone` | 5 | (−0.011376791, 0.018948435) |
+
+- **Evidence:** the walk-forward-only run at `73f6d6a`, on data through 2026-07-31, with `dataset_sha256 = 6be6521f…2930`.
+- **Configured copy:** `tg_exam_geometries` holds the same pairs and is part of the configuration snapshot.
+  - Every production run fails closed (`EVALUATION_FAILED` for both selectors, then the run raises) before it reads anything for the exam when any of these holds:
+    - the configured copy differs from the binding
+    - the selectors differ
+    - a geometry is not on the predeclared grid
+- **Configuration:** a production run also fails closed unless its configuration hash equals `TG_FROZEN_CONFIG_SHA256`. Any change to a snapshotted value re-pins that hash, and §22.3 then moves `tg_holdout_not_before`.
+
+### 25.2 Production runs
+
+Production runs are every run that is not walk-forward-only. They replace §13.2–§13.4's choice with the binding:
+- They never run the grid, the reality check or the robust choice. They read no `selection_gate_trades` row.
+- Order of work:
+  1. the two guards
+  2. the session list, which holds anchors and dates only
+  3. `M_TG` and the window registration
+  4. §13.5 checks 1–3 and the freeze of the bound geometry
+  5. pass 2, which builds the dataset and the exam paths
+- No price bar is read before every freeze of the run is committed.
+- The usage row and the decision carry:
+  - the bound geometry
+  - `bound_spg_decision_id` = the bound SPG decision
+  - `dataset_sha256` = the frozen walk-forward dataset hash
+  - `wf_selection_sha256` = the binding hash. This is the SHA-256 of the canonical binding: rule, selector, geometry, bound decision, walk-forward dataset hash, evidence cutoff and frozen code version.
+- The decision also records:
+  - `wf_result = PASS` and `wf_reasons = []`, from the frozen evidence. The other `wf_*` and reality-check fields are null.
+  - no `tg_geometry_results` rows
+  - only the exam's `tg_trades`
+- The held-out diagnostics reuse the binding's walk-forward direction cuts, which matches A1's rule.
+- The §15.7 rule is unchanged. `GEOMETRY_PASS` needs walk-forward `PASS`, which is the frozen evidence, and a held-out `PASS`. The held-out thresholds are unchanged.
+- §13.5's checks, single use, append-only storage and the decision-equals-freeze check are unchanged.
+
+### 25.3 Unchanged
+
+- Walk-forward-only mode (§13.6, A1) still evaluates the full grid and writes nothing. It is the evidence mode. It can never set the exam geometry.
+- §22.4's comparison of a production run's walk-forward numbers no longer applies, because production runs compute none.
+
+### 25.4 Exam boundary
+
+- If deployment lands before 2026-11-01, November 2026 is the exam, scored on 12 Dec 2026.
+- Otherwise `tg_holdout_not_before` moves forward, and the configuration hash is re-pinned. A partly deployed or changed protocol never consumes November.
+- Nothing may run against November before the exam.

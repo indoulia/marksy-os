@@ -1,6 +1,6 @@
 # Marksy TG-001 trade geometry — pre-merge walk-forward report
 
-Date: 2026-10-02 · Rule TG-001 · Spec `docs/superpowers/specs/2026-10-01-marksy-tg-001-trade-geometry-design.md` (amended A1, §24) · Code marksy-api `feat/tg-001-trade-geometry` at **73f6d6a** (frozen, not pushed) · Mode: walk-forward-only, `--data-through 2026-07-31`.
+Date: 2026-10-02 · Rule TG-001 · Spec `docs/superpowers/specs/2026-10-01-marksy-tg-001-trade-geometry-design.md` (amended A1, §24) · Code marksy-api `feat/tg-001-trade-geometry` at **73f6d6a** (frozen, not pushed) · Mode: walk-forward-only, `--data-through 2026-07-31`. Exam-path audit `e2c78ae` and frozen exam geometry (A2) `2f09b1e`, both after this run, which they do not change (§10, §11).
 
 ## 1. Outcome
 
@@ -19,6 +19,7 @@ The h5 selector:
 Walk-forward-only mode registers, consumes and scores no exam month, and writes no `tg_*` row (spec §13.6).
 - Under `tg_holdout_not_before = "2026-11"`, the first TG exam is November 2026, scored on 12 Dec 2026.
 - `GEOMETRY_PASS` needs that exam to pass (§15.7).
+- The exam tests exactly these two geometries. No later run re-selects them (decision A2, §11).
 - SEL-001 stays `SHADOW_ONLY`, no publication outcome changes, and SPG's decisions are untouched.
 
 The chosen geometries are the simplest rows within 0.10% of the best `ci_low` (§15.6). They are not the highest-mean rows:
@@ -259,7 +260,8 @@ None was run, by design:
 - the purist first month, `tg_holdout_not_before = "2026-11"`
 - the 2026-07-31 evidence cutoff
 
-The first possible TG exam is November 2026, scored on 12 Dec 2026, and only after a deploy decision.
+The first possible TG exam is November 2026, scored on 12 Dec 2026, and only after a deploy decision. It tests the
+frozen `H5:Tnone:Snone` at h3 and `H7:Tnone:Snone` at h5 (§11).
 
 ## 9. Tests and validation
 
@@ -301,22 +303,81 @@ The A1 additions are in diagnostics, windows, runner, snapshot, config and schem
   - One fix wave (73f6d6a) fixed I-1, plus Minors M-1, M-2 and M-3.
   - A scoped re-review found all four addressed and nothing new broken.
 
-## 10. Parked findings
+## 10. Findings after review
 
-These are for the deploy decision, not this run:
-- M-4: `ho_shadow_artefacts` counts only the first row's artefact per covered session.
-- M-5: `freeze` treats any `IntegrityError` as already consumed.
-- M-6: `_record_failure` can raise inside the `_write` handler.
+Resolved by the exam-path audit of 2026-10-02 (marksy-api `e2c78ae`). None of them could read exam outcomes or change a frozen geometry. Each test failed before its fix.
+- **M-4, RESOLVED.** `ho_shadow_artefacts` now counts every artefact of a covered session.
+  - Before, it was an audit-only under-count. SPG's shadow job writes one artefact per session, so a mixed session cannot occur in production.
+  - Test: `test_the_artefact_tally_counts_every_artefact_of_a_covered_session`.
+- **M-5, RESOLVED.** `freeze` now reads only an existing usage row for the label as consumed. Any other `IntegrityError` re-raises, so the selector is `EVALUATION_FAILED` with no usage row and no pass-2 read.
+  - Before, the record falsely said `HOLDOUT_ALREADY_CONSUMED` and left the month examinable.
+  - Tests:
+    - `test_an_integrity_error_other_than_the_spent_label_is_raised_and_spends_nothing`
+    - `test_a_freeze_failure_that_is_not_the_spent_label_fails_closed_without_spending_or_reading_the_month`
+- **M-6, RESOLVED.** A failure record now works in three steps:
+  - It tries the run's own values first, then a record from the run context that keeps the spent month linked.
+  - A record that still fails is logged, and the next selector is still decided.
+  - The run then raises, so the execution row is `FAILED`.
+  - Before, a spent month could end with no decision row.
+  - Tests:
+    - `test_a_failure_record_falls_back_to_the_run_context_and_keeps_the_spent_month_linked[values|write]`
+    - `test_an_unrecordable_selector_never_blocks_the_others_record_and_fails_the_run`
+- **Configuration freeze, RESOLVED.**
+  - Before, any post-freeze threshold change (an env var or a code default) applied to the exam without being blocked.
+  - Now every production run fails closed unless the configuration hash equals `TG_FROZEN_CONFIG_SHA256`.
+  - The hash was re-pinned to `6f57daba…00ee` when A2 added `tg_exam_geometries` to the snapshot.
+  - SPG's hash is unchanged at `8fee8432…1bc4`, which equals the hash recorded on production's SPG decisions.
+
+Still parked, with no effect on exam integrity:
 - M-7: `dataset_sha256` is the slowest TG step after the dataset build.
 - A failed walk-forward-only run does not write `--report-json`. Stdout carries the report.
 
-M-4 to M-6 affect only the production held-out path, and should be fixed before any deploy that can reach an exam.
+## 11. Frozen exam geometry (decision A2, 2026-10-02) and deploy status
 
-## 11. On deploy (not requested; nothing pushed, merged, deployed or migrated)
+**Decision.** The November 2026 exam tests the frozen walk-forward geometry. It does not re-select on August–October data (spec §25).
 
-- **What deploying adds:** migration `0190_trade_geometry`, with five empty append-only tables plus the `diagnostics` and `ho_diagnostics` columns, and one monthly CronJob (02:00 IST on the 12th). No publication change.
-- **Open point for that decision:** production runs bind SPG's latest decision. After SPG's 11 Oct run, that decision's walk-forward window will include August 2026.
-- **After the first production run** (§22.4): its walk-forward numbers must equal this report's for the same `dataset_sha256` and `bound_spg_decision_id`. They will differ here by design, because the dataset is cut at 2026-07-31. Any other difference is reported.
+The binding is the immutable `TG_EXAM_BINDING`:
+- h3 tests `H5:Tnone:Snone`, bound to SPG decision 3, binding hash `637dde3f…acee`.
+- h5 tests `H7:Tnone:Snone`, bound to SPG decision 5, binding hash `47f3bcdd…4cd4`.
+
+The evidence is this report's walk-forward run: code `73f6d6a`, data through 2026-07-31, `dataset_sha256 = 6be6521f…2930`.
+
+A production run:
+- never runs the grid, the reality check or the robust choice, and never reads `selection_gate_trades`
+- fails closed when `tg_exam_geometries` or the configuration hash differs from the frozen values
+- reads only session dates, the registries and shadow scores until both freezes are committed
+- reads its first price bar in pass 2
+- records `wf_result = PASS` from the frozen evidence; the walk-forward numbers are this report's
+- keeps the decision rule, the held-out thresholds, §13.5's checks and single use unchanged
+
+The A2 regression tests are in `tests/test_trade_geometry_exam.py`, on a November-2026 world with the production `"2026-11"` boundary:
+1. The November exam tests H5 at h3: `test_the_november_exam_tests_the_frozen_geometry[3]`.
+2. The November exam tests H7 at h5: `test_the_november_exam_tests_the_frozen_geometry[5]`.
+3. Changing either geometry fails closed before any exam read: `test_changing_either_exam_geometry_fails_closed_before_any_exam_read[3-…, 5-…]`. `test_the_exam_binding_is_immutable_and_pinned_to_the_frozen_walk_forward_choice` pins the binding's values and immutability.
+4. The walk-forward cannot re-select: `test_august_to_october_walk_forward_cannot_reselect_the_exam_geometry`.
+   - Walk-forward-only mode on the same world would choose H7 at h3.
+   - The exam still freezes H5, with every selection step patched to fail and no `selection_gate_trades` read.
+5. Bars are read only after both freezes: `test_november_bars_are_read_only_after_both_freezes_are_durable`. Every price-bar read sees both usage rows committed.
+6. A consumed exam is never re-run: `test_a_consumed_november_exam_is_never_rerun`. The rerun records `HOLDOUT_ALREADY_CONSUMED` and reads no bar.
+7. The configuration hash is still enforced: `test_the_frozen_configuration_hash_is_still_enforced`.
+
+**Exam boundary.**
+- If deployment lands before 2026-11-01, November 2026 is the exam.
+- Otherwise `tg_holdout_not_before` moves forward, and the configuration hash is re-pinned. A partly deployed or changed protocol never consumes November.
+- Nothing runs against November early.
+
+**Status.**
+- TG-001 walk-forward: FROZEN
+- M-4, M-5, M-6: FIXED
+- Configuration freeze: FIXED
+- November exam protocol: PINNED to H5 and H7
+- Exam run: NOT AUTHORIZED
+- Deploy: HOLD pending approval
+- SEL-002: untouched
+
+**What deploying adds:** migration `0190_trade_geometry`, with five empty append-only tables plus the `diagnostics` and `ho_diagnostics` columns, and one monthly CronJob (02:00 IST on the 12th). There is no publication change.
+- The 12 Oct and 12 Nov runs have no exam month. They read only session dates and record `HOLDOUT_NOT_YET_AVAILABLE` under the pinned geometry.
+- §22.4's walk-forward comparison no longer applies, because production runs compute no walk-forward.
 
 ## 12. Rulings made during execution (ledger)
 
@@ -335,6 +396,8 @@ M-4 to M-6 affect only the production held-out path, and should be fixed before 
 - Ruling T13: SPG verdict fields (decision, primary_stage, primary_reason, reasons) mix SPG's August exam into the verdict, so the TG snapshot withholds them: decision='WITHHELD', reasons='[]', primary_stage/primary_reason empty. TG reads primary_reason for display only. Trades exported only for SEL-001 decisions. Cost if wrong: the report shows no SPG verdict text.
 - Ruling T14: fix wave = I-1, M-1, M-2 (review's list) + M-3 (loader enforces Ruling T13 when data_through is set) because the user made the cutoff absolute. Park M-4..M-7 (production held-out paths / runtime note; none touches the pre-merge WF-only run). Cost if wrong: M-5/M-6 fail-closed edge cases remain for the production exam path, revisit before deploy.
 - Ruling T15: stdout (tee'd) carries the text+JSON report and the execution row names failing horizons. Cost if wrong: a failed run's JSON file is missing.
+- Ruling T16 (user, exam-path audit): fix M-4..M-6 and pin the configuration hash before any deploy; the walk-forward result stays frozen. Cost if wrong: none.
+- Ruling T17 (user, A2): production runs examine only the frozen H5/H7 binding; walk-forward-only mode stays the evidence mode and can never set the exam geometry. Cost if wrong: a better geometry found on later data waits for a new rule version.
 
 ## Appendix A. All 37 walk-forward geometry rows per selector
 
