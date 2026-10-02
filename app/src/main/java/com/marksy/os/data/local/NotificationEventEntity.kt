@@ -70,7 +70,9 @@ data class NotificationEventEntity(
     /** EPIC-011: hidden from the inbox until this time; persisted so snoozes survive restarts. */
     val snoozedUntil: Long? = null,
     /** Chats only: whether it was a group conversation, null when unknown. Only groups leave the phone. */
-    val chatGroup: Boolean? = null
+    val chatGroup: Boolean? = null,
+    /** Fixed code only (never message text): why a row failed or stayed on the phone. */
+    val deliveryNote: String? = null
 )
 
 enum class DeliveryState {

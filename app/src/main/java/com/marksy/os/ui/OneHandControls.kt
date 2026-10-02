@@ -81,11 +81,16 @@ fun BoxScope.OneHandControls(
     searchQuery: String? = null,
     onSearchChange: ((String) -> Unit)? = null,
     searchPlaceholder: String = "Search...",
-    actions: List<FloatingAction> = emptyList()
+    actions: List<FloatingAction> = emptyList(),
+    // False when the view list is a switcher, not a filter: the button then shows X only for [extrasActive].
+    filterIsView: Boolean = true,
+    extrasActive: Boolean = false,
+    onClearExtras: () -> Unit = {},
+    filterExtras: (@Composable () -> Unit)? = null
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
-    val filterActive = filters.isNotEmpty() && selectedFilter != filters.first().first
+    val filterActive = filters.isNotEmpty() && (if (filterIsView) selectedFilter != filters.first().first else extrasActive)
     val searchActive = !searchQuery.isNullOrEmpty()
 
     // Tapping outside the open filter list dismisses it.
@@ -100,12 +105,12 @@ fun BoxScope.OneHandControls(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End) { onFilterSelected(it); filtersOpen = false }
+        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
             // With a filter applied the button becomes X: one tap closes the list and resets the filter.
             val showClose = filtersOpen || filterActive
             FloatingRoundButton(if (showClose) Icons.Default.Close else Icons.Default.FilterList, if (filterActive) "Clear filter" else "Filters", false) {
-                if (filterActive) { onFilterSelected(filters.first().first); filtersOpen = false } else filtersOpen = !filtersOpen
+                if (filterActive) { if (filterIsView) onFilterSelected(filters.first().first) else onClearExtras(); filtersOpen = false } else filtersOpen = !filtersOpen
                 searchOpen = false
             }
         }
@@ -144,7 +149,7 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 }
 
 @Composable
-private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, onPick: (String) -> Unit) {
+private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, extras: (@Composable () -> Unit)? = null, onPick: (String) -> Unit) {
     Column(
         Modifier
             .shadow(10.dp, RoundedCornerShape(16.dp))
@@ -170,6 +175,7 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
                     .padding(horizontal = 18.dp, vertical = 10.dp)
             )
         }
+        extras?.invoke()
     }
 }
 

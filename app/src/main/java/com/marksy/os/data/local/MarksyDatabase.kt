@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -155,6 +155,12 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                addColumn(database, "deliveryNote", "TEXT")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -164,7 +170,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build()
                     .also { INSTANCE = it }
             }

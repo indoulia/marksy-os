@@ -13,5 +13,8 @@ object TradingDeliveryPolicy {
     fun retryState(error: Throwable): DeliveryState =
         if (shouldRetry(error)) DeliveryState.PENDING else DeliveryState.FAILED
 
+    /** A fixed code for a terminal failure; the exception message could carry notification content. */
+    fun failureCode(error: Throwable): String = if (error is MarksyTerminalException) "rejected" else "invalid"
+
     fun staleCutoff(nowMillis: Long): Long = nowMillis - STALE_IN_FLIGHT_MS
 }

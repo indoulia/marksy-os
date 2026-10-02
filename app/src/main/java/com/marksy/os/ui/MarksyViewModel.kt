@@ -102,9 +102,9 @@ class MarksyViewModel(
         DashboardSnapshot.from(events)
     }
 
-    val tradingInsights: Flow<List<TradingInsight>> = tradingEvents.map { events ->
-        events.mapNotNull(NotificationEventEntity::toTradingInsight)
-    }
+    val capturedEvents: Flow<List<NotificationEventEntity>> = repository.observeCaptured()
+
+    fun retryDelivery(eventId: Long, onQueued: () -> Unit) { viewModelScope.launch { if (repository.retryDelivery(eventId)) onQueued() } }
 
     fun eventsForCategory(category: String): Flow<List<NotificationEventEntity>> =
         repository.observeCategory(category)

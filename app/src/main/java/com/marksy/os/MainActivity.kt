@@ -167,6 +167,7 @@ class MainActivity : ComponentActivity() {
         whatsappConnectorEnabled = WhatsAppConnectorStatus.isAccessibilityServiceEnabled(this)
     }
 
+    private fun openBatterySettings() = startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     private fun openNotificationAccess() = startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     private fun openWhatsAppConnector() = startActivity(Intent(this, WhatsAppSettingsActivity::class.java))
 
@@ -212,7 +213,9 @@ class MainActivity : ComponentActivity() {
         val historyEvents by vm.historyEvents.collectAsStateWithLifecycle(initialValue = emptyList())
         val trend by vm.notificationTrend.collectAsStateWithLifecycle(initialValue = NotificationTrend(0, 0, 0, List(7) { 0 }, 0))
         val categoryStats by vm.homeCategoryStats.collectAsStateWithLifecycle(initialValue = emptyMap())
-        val tradingInsights by vm.tradingInsights.collectAsStateWithLifecycle(initialValue = emptyList())
+        val capturedEvents by vm.capturedEvents.collectAsStateWithLifecycle(initialValue = emptyList())
+        var showCaptureHealth by rememberSaveable { mutableStateOf(false) }
+        val capturedNote = remember(capturedEvents) { com.marksy.os.ui.capturedNote(com.marksy.os.ui.CapturedModel.lanes(capturedEvents, System.currentTimeMillis())) }
 
         var locationGranted by remember { mutableStateOf(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
         val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { locationGranted = it }
@@ -389,7 +392,7 @@ class MainActivity : ComponentActivity() {
             hostOpen -> null
             onWatchlist -> com.marksy.os.ui.watchlistLabel(watchView, watchlists, watchItems)
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> marketSymbol
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus)
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             else -> null
         }
@@ -552,7 +555,8 @@ class MainActivity : ComponentActivity() {
                                 Text(
                                     it, color = MarksyTheme.PrimaryEmerald, fontSize = if (tabPage) 15.sp else 10.sp, lineHeight = if (tabPage) 18.sp else 12.sp,
                                     fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false).let { m -> if (selectedTab == 3 && tradingFilter == "Captured") m.clickable { showCaptureHealth = true } else m }
                                 )
                             }
                             if (titleLive) {
@@ -759,13 +763,18 @@ class MainActivity : ComponentActivity() {
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
-                        tradingInsights, PaddingValues(bottom = padding.calculateBottomPadding()), market,
+                        capturedEvents, PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
                         onFilterSelected = { tradingFilter = it },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                         tipsStatus = tipsStatus,
-                        onTipsStatusChange = { tipsStatus = it }
+                        onTipsStatusChange = { tipsStatus = it },
+                        onRetry = { id -> vm.retryDelivery(id) { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) } },
+                        onSendNow = { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) },
+                        onAllowBackground = ::openBatterySettings,
+                        showHealth = showCaptureHealth,
+                        onHealthDismiss = { showCaptureHealth = false }
                     )
                 }
                 selectedTab == 2 -> MarketScreen(

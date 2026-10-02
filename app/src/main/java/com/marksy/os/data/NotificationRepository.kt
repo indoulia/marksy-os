@@ -25,6 +25,10 @@ class NotificationRepository(
     fun observeTrading(limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeTrading(limit)
 
+    fun observeCaptured(limit: Int = 300): Flow<List<NotificationEventEntity>> = dao.observeCaptured(limit)
+
+    suspend fun retryDelivery(eventId: Long): Boolean = dao.requeueFailed(eventId) > 0
+
     fun observeCategory(category: String, limit: Int = 50): Flow<List<NotificationEventEntity>> =
         dao.observeByCategory(category, limit)
 
