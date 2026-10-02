@@ -31,7 +31,7 @@ Rules for this lane:
 - Chip colour follows `Urgency`: FAILURE uses RedUrgent on BadgeUrgentBg, DUE uses YellowImportant on BadgeImportantBg, FLAGGED uses PrimaryEmerald on BadgeTradingBg. The card border mixes the urgency colour into BorderGlow, with no side stripe.
 
 **New** (dot: PrimaryEmerald). A non-needs thread is here when it was posted less than 24 h ago and either it is unread or it was read during this visit to the Inbox. Threads are grouped into **source stacks**:
-- Stack key: for SMS packages (`SourceRegistry.isSms`, a new helper that takes over `TipTextCleaner`'s private `SMS_PACKAGES`), package + normalised sender (`latest.title`). Otherwise, the source package. One WhatsApp card holds every chat, one Gmail card holds every email, and SMS splits into "HDFC Bank", "Airtel" and so on.
+- Stack key: for SMS packages (`CaptureMedium.of(pkg) == CaptureMedium.SMS`, exposed as `SmartInboxModel.isSms`), package + normalised sender (`latest.title`). Otherwise, the source package. One WhatsApp card holds every chat, one Gmail card holds every email, and SMS splits into "HDFC Bank", "Airtel" and so on.
 - Rows are threads, sorted by attention then newest, so a busy group chat cannot push a high-attention chat out of view. Stacks are sorted by their top attention, then newest.
 - The stack header shows the source icon (same icon and colour as today's `resolveSourceStyle`, without the pill), the source name ("HDFC Bank" with an "SMS" suffix for SMS), "N new", the latest time and a mark-all-read icon button.
 - The top 2 rows show. The first row's body gets 2 lines; other rows get 1. A row's headline is whatever the stack label does not already say: the sender for app stacks, the subject or body for SMS stacks.
@@ -71,11 +71,11 @@ There is a new rule next to the expiry rules: a thread leaves the active views o
 - `max(priority, importanceScore) < 60`;
 - not BILLS or REMINDERS, and not a trading row with `deliveryState == FAILED`.
 
-It is resolved with reason `"Retired: seen and older than 2 days"`, using the existing `EventExpiry.REASON_PREFIX` so learning still treats unseen retirements correctly. History (`observeHistory`) keeps these rows. The decision is a pure function `EventExpiry.staleSeen(event, nowMillis): Expiry?`. `NotificationRepository.retireExpired` applies it to a new DAO candidate query `findSeenOpen()` (NEW/ACTIVE, archived = 0, isRead = 1, kept = 0, remindAt IS NULL). Both existing callers, RetentionWorker and MainActivity start-up, pick it up unchanged.
+It is resolved with reason `"Retired: seen and older than 2 days"`, using the existing `EventExpiry.REASON_PREFIX` so learning still treats unseen retirements correctly. History (`observeHistory`) keeps these rows. The decision is a pure function `EventExpiry.staleSeen(event): Expiry?` (returns the retire time; the caller compares it with now, like `EventExpiry.of`). `NotificationRepository.retireExpired` applies it to a new DAO candidate query `findSeenOpen()` (NEW/ACTIVE, archived = 0, isRead = 1, kept = 0, remindAt IS NULL). Both existing callers, RetentionWorker and MainActivity start-up, pick it up unchanged.
 
 ### Header note and tab badge
 
-- `titleNote` for `selectedTab == 1` becomes "N need you · M new", or just "M new" when nothing needs the user, or "⟨Filter⟩ · K" when a filter is on. `SmartInboxScreen` reports an `InboxSummary(needsYou, newUnread)` through a new `onSummaryChanged` callback. MainActivity stores it in state and uses it for the note.
+- `titleNote` for `selectedTab == 1` becomes "N need you · M new", or just "M new" when nothing needs the user, or the filter label when a filter is on. MainActivity computes `SmartInboxModel.lanes(...).summary` (`InboxSummary(needsYou, newUnread)`) from the same unfiltered events, so the note and badge are right even before the Inbox tab is opened. With a filter on, the note is just the filter label.
 - The Inbox `NavigationBarItem` gets a `BadgedBox` showing the needs-you count (RedUrgent) when it is above 0.
 
 ### Kept as is
