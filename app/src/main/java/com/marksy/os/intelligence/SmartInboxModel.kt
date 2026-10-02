@@ -166,25 +166,35 @@ object SmartInboxModel {
         return InboxThread(key, events, duplicates, bucket, top.score, why, top.prediction)
     }
 
+    enum class Urgency { FAILURE, DUE, FLAGGED }
+    data class NeedReason(val chip: String, val urgency: Urgency)
+
     /** Deterministic bucket; the returned string is shown verbatim in "Why am I seeing this?". */
     internal fun bucketFor(events: List<NotificationEventEntity>, attention: Int, nowMillis: Long): Pair<Bucket, String> {
         val open = events.filter { it.lifecycleState != EventLifecycle.State.RESOLVED.name }
         if (open.isEmpty()) return Bucket.RESOLVED to "Resolved"
-        val latest = open.maxBy { it.postedAt }
-        val text = "${latest.title} ${latest.body}".lowercase()
-        val actionReason = when {
-            open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry"
-            latest.category == "BILLS" -> "Bill that may need payment"
-            latest.category == "REMINDERS" -> "Due or reminder to act on"
-            latest.category == "OTP" && nowMillis - latest.postedAt <= OTP_ACTION_WINDOW_MS -> "Fresh one-time code"
-            latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed"
-            else -> null
-        }
+        val action = actionFor(open, nowMillis)
         return when {
-            attention >= PRIORITY_THRESHOLD && actionReason == null -> Bucket.PRIORITY to "Very high attention score ($attention)"
-            actionReason != null -> Bucket.NEEDS_ACTION to actionReason
+            attention >= PRIORITY_THRESHOLD && action == null -> Bucket.PRIORITY to "Very high attention score ($attention)"
+            action != null -> Bucket.NEEDS_ACTION to action.first
             attention >= IMPORTANT_THRESHOLD -> Bucket.IMPORTANT to "Attention score $attention"
             else -> Bucket.INFORMATIONAL to "Informational (attention $attention)"
+        }
+    }
+
+    /** Why-string plus the short chip for anything the user should act on now; null when nothing is due. */
+    internal fun actionFor(open: List<NotificationEventEntity>, nowMillis: Long): Pair<String, NeedReason>? {
+        if (open.isEmpty()) return null
+        val latest = open.maxBy { it.postedAt }
+        val text = "${latest.title} ${latest.body}".lowercase()
+        return when {
+            open.any { it.isTrading && it.deliveryState == "FAILED" } -> "Marksy delivery failed and needs a retry" to NeedReason("Retry needed", Urgency.FAILURE)
+            latest.category == "BILLS" -> "Bill that may need payment" to NeedReason("Bill due", Urgency.DUE)
+            latest.category == "REMINDERS" -> "Due or reminder to act on" to NeedReason("Reminder", Urgency.DUE)
+            latest.category in setOf("PAYMENTS", "BANKING") && FAILURE_TERMS.any { text.contains(it) } -> "A payment or transaction failed" to NeedReason("Payment failed", Urgency.FAILURE)
+            latest.category == "TRADING" && text.contains("rejected") -> "Your order was rejected" to NeedReason("Order rejected", Urgency.FAILURE)
+            latest.category == "DELIVERY" && DELIVERY_FAILURE_TERMS.any { text.contains(it) } -> "A delivery attempt failed" to NeedReason("Delivery failed", Urgency.FAILURE)
+            else -> null
         }
     }
 
@@ -197,8 +207,8 @@ object SmartInboxModel {
 
     private const val PRIORITY_THRESHOLD = 90
     private const val IMPORTANT_THRESHOLD = 60
-    private const val OTP_ACTION_WINDOW_MS = 10 * 60 * 1000L
     private val FAILURE_TERMS = listOf("failed", "declined", "unsuccessful", "reversed")
+    private val DELIVERY_FAILURE_TERMS = listOf("failed", "unsuccessful", "undelivered", "could not be delivered")
 
     private const val ATTENTION_THRESHOLD = 70
     private const val RECENT_WINDOW_MS = 2 * 60 * 60 * 1000L

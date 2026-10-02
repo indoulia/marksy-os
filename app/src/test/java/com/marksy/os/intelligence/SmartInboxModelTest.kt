@@ -144,4 +144,37 @@ class SmartInboxModelTest {
             priority = priority, confidence = 0.95f, isTrading = category == "TRADING",
             deliveryState = deliveryState, archived = archived
         )
+
+    private val hour = 60 * 60 * 1000L
+
+    private fun msg(
+        id: Long, pkg: String, title: String, body: String, postedAt: Long,
+        category: String = "MESSAGES", priority: Int = 50, read: Boolean = false
+    ) = NotificationEventEntity(
+        id = id, sourcePackage = pkg, sourceName = SOURCE_NAMES[pkg] ?: pkg,
+        sourceKey = "$pkg-$id", eventFingerprint = "fp-$id", title = title, body = body,
+        postedAt = postedAt, category = category, priority = priority, confidence = 0.95f,
+        isTrading = category == "TRADING", isRead = read, lifecycleState = if (read) "ACTIVE" else "NEW"
+    )
+
+    private fun bucketsOf(vararg events: NotificationEventEntity, at: Long = now) =
+        SmartInboxModel.inbox(events.toList(), nowMillis = at).sections.flatMap { (b, ts) -> ts.map { it.latest.id to b } }.toMap()
+
+    @Test
+    fun rejectedOrdersAndFailedDeliveriesNeedAction() {
+        val buckets = bucketsOf(
+            msg(1, "com.zerodha.kite3", "Order rejected", "BUY 10 INFY rejected: insufficient margin", now - hour, category = "TRADING"),
+            msg(2, "com.delhivery", "Delivery attempt failed", "AWB 1490: you were not available", now - hour, category = "DELIVERY"),
+            msg(3, "com.delhivery", "Delivered", "Your parcel was delivered", now - hour, category = "DELIVERY")
+        )
+        assertEquals(SmartInboxModel.Bucket.NEEDS_ACTION, buckets[1L])
+        assertEquals(SmartInboxModel.Bucket.NEEDS_ACTION, buckets[2L])
+        assertTrue(buckets[3L] != SmartInboxModel.Bucket.NEEDS_ACTION)
+    }
+
+    companion object {
+        const val WA = "com.whatsapp"
+        const val SMS = "com.google.android.apps.messaging"
+        val SOURCE_NAMES = mapOf(WA to "WhatsApp", SMS to "Messages")
+    }
 }
