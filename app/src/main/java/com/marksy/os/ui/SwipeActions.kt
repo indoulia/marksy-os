@@ -167,6 +167,6 @@ internal fun swipeSettle(moved: Float, velocity: Float, anchor: Float, trayPx: F
 @Composable
 private fun ColumnScope.StackedAction(action: SwipeTrayAction, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().weight(1f).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(action.icon, contentDescription = action.label, tint = action.tint, modifier = Modifier.size(24.dp))
+        Icon(action.icon, contentDescription = action.label, tint = action.tint, modifier = Modifier.size(MarksySize.IconLarge))
     }
 }
