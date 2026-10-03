@@ -21,7 +21,6 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -133,7 +132,7 @@ private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier
         Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1)
         OutcomeBar(c.successful, c.failed, c.expired, c.open)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontFamily = FontFamily.Monospace, maxLines = 1, modifier = Modifier.weight(1f))
+            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, modifier = Modifier.weight(1f))
             ReturnBadge(body.performance.avgActualReturn, style = MarksyType.Small)
         }
     }
@@ -156,7 +155,7 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
             }
             OutcomeBar(c.successful, c.failed, c.expired, c.open)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
                 FollowPill(following, onToggleFollow, compact = true)
             }
         }
