@@ -20,6 +20,9 @@ object MarksyFormat {
     private val FULL_DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
     private val MONTH_YEAR = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
     private val TIME_12 = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+    private val WEEKDAY = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
+    private val WEEKDAY_TIME = DateTimeFormatter.ofPattern("EEE, HH:mm", Locale.ENGLISH)
+    private val SHORT_MONTH = DateTimeFormatter.ofPattern("MMM yy", Locale.ENGLISH)
 
     /** 1234567.891 -> "12,34,567.89" (no sign; callers add one). */
     fun number(v: Double, decimals: Int = 2): String {
@@ -44,6 +47,15 @@ object MarksyFormat {
     fun monthYear(at: TemporalAccessor): String = MONTH_YEAR.format(at)
     /** World clocks only; Marksy times are 24-hour everywhere else. */
     fun time12(at: TemporalAccessor): String = TIME_12.format(at)
+    fun weekday(at: TemporalAccessor): String = WEEKDAY.format(at)
+    fun weekdayTime(at: TemporalAccessor): String = WEEKDAY_TIME.format(at)
+    /** Chart axes: "Oct 26". */
+    fun shortMonth(at: TemporalAccessor): String = SHORT_MONTH.format(at)
+    fun month(m: java.time.Month, short: Boolean = true): String =
+        m.getDisplayName(if (short) java.time.format.TextStyle.SHORT else java.time.format.TextStyle.FULL, Locale.ENGLISH)
+
+    /** A value to edit in a text field: no grouping, ASCII minus. */
+    fun plain(v: Double, decimals: Int = 2): String = BigDecimal(v).setScale(decimals, RoundingMode.HALF_UP).toPlainString()
 
     // A value that rounds to zero is written unsigned, never "−0.00".
     private fun isNegative(v: Double, decimals: Int) = v < 0 && BigDecimal(abs(v)).setScale(decimals, RoundingMode.HALF_UP).signum() != 0

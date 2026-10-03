@@ -6,9 +6,8 @@ import java.io.File
 
 /**
  * Screens style themselves only through MarksyTheme, MarksyType, MarksyShape, MarksySpace, MarksySize, the shared
- * components and MarksyFormat. Each one-off choice below is counted per file against theme-baseline.txt: a count may
- * fall but never rise, and a new file starts at zero. The current counts are written to
- * build/theme-baseline.actual.txt; copy it over the baseline after a migration lowers them.
+ * components and MarksyFormat. Any one-off choice below fails the build, except the fixed [exceptions]; there is no
+ * baseline to refresh, so new styling cannot slip in by updating a counts file.
  */
 class ThemeGuardTest {
     private class Rule(val name: String, val pattern: Regex)
@@ -23,36 +22,44 @@ class ThemeGuardTest {
         Rule("toast", Regex("""Toast\.makeText""")),
         Rule("date pattern", Regex("""DateTimeFormatter\.ofPattern|SimpleDateFormat\(""")),
         Rule("number format", Regex("""String\.format\(|"%[-+0-9.,]*[df]"""")),
-        Rule("spacing literal", Regex("""(?:padding|spacedBy)\([^)]*?\d+(?:\.\d+)?\.dp""")),
+        Rule("spacing literal", Regex("""(?:(?:padding|spacedBy)\([^)]*?|Spacer\(Modifier\.(?:width|height)\()\d+(?:\.\d+)?\.dp""")),
         Rule("type override", Regex("""FontWeight\.Black|letterSpacing =|lineHeight ="""))
     )
+
     // The theme itself, and the loader that draws the one spinner.
     private val themeFiles = setOf(
         "com/marksy/os/ui/MarksyTheme.kt", "com/marksy/os/ui/MarksyComponents.kt", "com/marksy/os/MarksyFormat.kt", "com/marksy/os/ui/Refresh.kt"
     )
 
+    // Not display styling; each entry is exact (a stale one fails too). Add one only with the user's agreement.
+    private val exceptions = mapOf(
+        // Parses dates out of message text.
+        "com/marksy/os/intelligence/EventExtractor.kt" to mapOf("date pattern" to 2),
+        // Formats coordinates into the weather API URL.
+        "com/marksy/os/weather/WeatherRepository.kt" to mapOf("number format" to 1)
+    )
+
     @Test
     fun noScreenAddsItsOwnStyling() {
-        val baseline = javaClass.classLoader!!.getResource("theme-baseline.txt")!!.readText().lines()
-            .filter { it.isNotBlank() && !it.startsWith("#") }
-            .associate { line -> line.split(" ").let { it[0] to it.drop(1).map(String::toInt) } }
         val root = File("src/main/java")
-        val counts = root.walkTopDown().filter { it.extension == "kt" }.map { it.relativeTo(root).invariantSeparatorsPath to it }
+        val found = root.walkTopDown().filter { it.extension == "kt" }
+            .map { it.relativeTo(root).invariantSeparatorsPath to it }
             .filter { (path, _) -> path !in themeFiles }
-            .map { (path, file) ->
+            .flatMap { (path, file) ->
                 val code = file.readLines().filterNot { it.trimStart().startsWith("import ") }.joinToString("\n")
-                path to rules.map { it.pattern.findAll(code).count() }
+                rules.map { Triple(path, it.name, it.pattern.findAll(code).count()) }
             }
-            .filter { (_, n) -> n.any { it > 0 } }
-            .sortedBy { it.first }.toList()
-        File("build/theme-baseline.actual.txt").writeText(
-            "# path ${rules.joinToString(" ") { it.name.replace(' ', '-') }} -- counts may only go down; see ThemeGuardTest\n" +
-                counts.joinToString("") { (path, n) -> "$path ${n.joinToString(" ")}\n" }
-        )
-        val grown = counts.flatMap { (path, n) ->
-            val allowed = baseline[path] ?: List(rules.size) { 0 }
-            rules.indices.filter { n[it] > allowed.getOrElse(it) { 0 } }.map { "$path: ${n[it]} ${rules[it].name} literals, baseline ${allowed.getOrElse(it) { 0 }}" }
+            .filter { it.third > 0 }
+            .toList()
+        val problems = found.mapNotNull { (path, rule, n) ->
+            val allowed = exceptions[path]?.get(rule) ?: 0
+            if (n > allowed) "$path: $n $rule${if (allowed > 0) " (allowed $allowed)" else ""}" else null
+        } + exceptions.flatMap { (path, allowed) ->
+            allowed.mapNotNull { (rule, n) ->
+                val actual = found.firstOrNull { it.first == path && it.second == rule }?.third ?: 0
+                if (actual < n) "$path: exception for $n $rule but only $actual found; tighten the exception" else null
+            }
         }
-        assertTrue("Use the Marksy theme instead:\n" + grown.joinToString("\n"), grown.isEmpty())
+        assertTrue("Use the Marksy theme instead:\n" + problems.joinToString("\n"), problems.isEmpty())
     }
 }

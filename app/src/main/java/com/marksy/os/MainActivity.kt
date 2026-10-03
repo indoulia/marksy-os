@@ -524,7 +524,7 @@ class MainActivity : ComponentActivity() {
                                 softWrap = false
                             )
                             titleNote?.let {
-                                if (!tabPage) Spacer(Modifier.width(4.dp))
+                                if (!tabPage) Spacer(Modifier.width(MarksySpace.Tight))
                                 // The title keeps its width; a long note wraps, then ellipsizes.
                                 Text(
                                     it, color = MarksyTheme.PrimaryEmerald, style = if (tabPage) MarksyType.Lead else MarksyType.Caption,
@@ -534,7 +534,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             if (titleLive) {
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(MarksySpace.Tight))
                                 MarksyBadge("LIVE", MarksyTheme.OnAccent, MarksyTheme.PrimaryEmerald)
                             }
                         }
@@ -931,7 +931,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Icon(Icons.Default.Person, contentDescription = null, tint = MarksyTheme.PrimaryEmerald)
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(MarksySpace.CardPadding))
                     Column(Modifier.weight(1f)) {
                         Text(signedInUserId ?: "Not signed in", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                         Text(if (signedInUserId != null) "Signed in" else "Tap to sign in", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small)
@@ -1008,7 +1008,7 @@ class MainActivity : ComponentActivity() {
             trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
         }
         Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
-        action?.let { Spacer(Modifier.height(2.dp)); it() }
+        action?.let { Spacer(Modifier.height(MarksySpace.Hair)); it() }
     }
 }
 

@@ -33,7 +33,7 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
     var product by remember { mutableStateOf("Delivery") }
     var type by remember { mutableStateOf("Market") }
     var quantity by remember { mutableStateOf(1) }
-    var limit by remember(intent) { mutableStateOf(intent.price?.let { MarksyFormat.number(it).replace(",", "") }.orEmpty()) }
+    var limit by remember(intent) { mutableStateOf(intent.price?.let { MarksyFormat.plain(it) }.orEmpty()) }
     var submitted by remember { mutableStateOf(false) }
     val tint = if (side == TradeSide.BUY) MarksyTheme.Positive else MarksyTheme.Negative
     val price = if (type == "Limit") limit.toDoubleOrNull() else intent.price

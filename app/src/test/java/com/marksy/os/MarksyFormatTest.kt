@@ -34,5 +34,16 @@ class MarksyFormatTest {
         assertEquals("3 Oct 2026", MarksyFormat.fullDay(LocalDate.of(2026, 10, 3)))
         assertEquals("October 2026", MarksyFormat.monthYear(LocalDate.of(2026, 10, 3)))
         assertEquals("9:05 AM", MarksyFormat.time12(at))
+        assertEquals("Sat", MarksyFormat.weekday(at))
+        assertEquals("Sat, 09:05", MarksyFormat.weekdayTime(at))
+        assertEquals("Oct 26", MarksyFormat.shortMonth(at))
+        assertEquals("Oct", MarksyFormat.month(java.time.Month.OCTOBER))
+        assertEquals("October", MarksyFormat.month(java.time.Month.OCTOBER, short = false))
+    }
+
+    @Test
+    fun plainNumbersSuitTextFields() {
+        assertEquals("1234.50", MarksyFormat.plain(1234.5))
+        assertEquals("-3", MarksyFormat.plain(-3.0, decimals = 0))
     }
 }

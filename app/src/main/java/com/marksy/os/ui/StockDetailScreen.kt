@@ -265,7 +265,7 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         if (q.low != null && q.high != null) RangeBar("Day range", q.low, q.high, q.lastPrice)
         year?.let { (lo, hi) -> RangeBar("52-week range", lo, hi, q.lastPrice) }
         com.marksy.os.upstox.Seasonality.allTime(live.monthly)?.let { (lo, hi) ->
-            fun month(ms: Long) = MarksyFormat.monthYear(at(ms))
+            fun month(ms: Long) = MarksyFormat.shortMonth(at(ms))
             RangeBar("All-time range (since ${month(live.monthly.first().time)})", lo.first, hi.first, q.lastPrice)
             Text("Low in ${month(lo.second)} · high in ${month(hi.second)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
