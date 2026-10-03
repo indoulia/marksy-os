@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,6 +57,7 @@ import java.time.ZonedDateTime
 fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, onSectionSelected: (String) -> Unit = {}, onTitleNote: (String?) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val notice = rememberNotice()
     val now by produceState(ZonedDateTime.now(IpoLifecycle.IST)) {
         while (true) { delay(30_000); value = ZonedDateTime.now(IpoLifecycle.IST) }
     }
@@ -80,7 +79,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
         val c = (repository.ipoStageCounts() as? MarketDataState.Loaded)?.value?.byStage
         if (c != null) counts = c
         state = liveIpos(repository, c, previous).also {
-            if (it is MarketDataState.Stale) android.widget.Toast.makeText(context, "Couldn't refresh every IPO stage; some rows may be out of date", android.widget.Toast.LENGTH_SHORT).show()
+            if (it is MarketDataState.Stale) notice("Couldn't refresh every IPO stage; some rows may be out of date")
         }
         refresh.done()
     }
@@ -107,7 +106,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                 is MarketDataState.Loaded -> watched = if (r.value.tracking) watched.orEmpty() + ipo.id else watched.orEmpty() - ipo.id
                 else -> {
                     watched = before
-                    android.widget.Toast.makeText(context, "Couldn't ${if (want) "watch" else "unwatch"} ${ipo.companyName}", android.widget.Toast.LENGTH_SHORT).show()
+                    notice("Couldn't ${if (want) "watch" else "unwatch"} ${ipo.companyName}")
                 }
             }
         }
@@ -168,19 +167,19 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             MarksyRefreshBox(refresh) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
                     contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
                 ) {
                     when (val s = state) {
-                        is MarketDataState.Loading -> item { MarksyLoader("Checking IPOs...") }
-                        is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
+                        is MarketDataState.Loading -> item { MarksyLoader("Checking IPOs…") }
+                        is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Add a Market API key in More → Configure Gateway.") }
                         is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                         is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues are open, upcoming or recently listed.") }
                         is MarketDataState.Loaded, is MarketDataState.Stale -> if (search != null) {
                             val failure = search.state as? MarketDataState.Error
                             when {
-                                search.items.isEmpty() && search.hasMore -> item(key = "searching") { MarksyLoader("Searching...") }
+                                search.items.isEmpty() && search.hasMore -> item(key = "searching") { MarksyLoader("Searching…") }
                                 search.items.isEmpty() && failure != null -> item(key = "search-error") { EmptyState("Search unavailable", failure.message) }
                                 else -> {
                                     ipoLanes(
@@ -210,7 +209,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             onFilterSelected = onSectionSelected,
             searchQuery = if (opened == null) query else null,
             onSearchChange = if (opened == null) ({ query = it }) else null,
-            searchPlaceholder = "Search IPOs...",
+            searchPlaceholder = "Search IPOs…",
             // Stage and board sit inside the section filter's panel, as Captured's options do on Trading.
             extrasActive = opened == null && (stage != StageFilter.OPEN || board != Board.ALL),
             filterExtras = if (opened == null) ({
@@ -248,9 +247,9 @@ private fun LazyListScope.pagedFooter(paged: Paged<IpoListItemDto>, key: String,
     }
     if (paged.hasMore) item(key = "more-$key-${paged.items.size}") {
         LaunchedEffect(Unit) { paged.more() }
-        MarksyLoader("Loading more...")
+        MarksyLoader("Loading more…")
     } else if (note != null) item(key = "$key-end") {
-        Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
+        Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
     } else (paged.state as? MarketDataState.Error)?.let { e -> item(key = "$key-error") { EmptyState("${what.replaceFirstChar(Char::titlecase)} unavailable", e.message) } }
 }
 
@@ -276,7 +275,7 @@ private fun LazyListScope.ipoLanes(
     lanes.forEach { (lane, xs) ->
         val folded = lane == Lane.LISTED && stage == StageFilter.ALL && query.isBlank()
         if (folded) item(key = "fold-listed") { ListedFold(listedTotal ?: xs.size, IpoLifecycle.listedSummary(xs, details), listedOpen, onToggleListed) }
-        else item(key = "lane-${lane.name}") { LaneLabel(lane.label, if (lane == Lane.LISTED) listedTotal ?: xs.size else xs.size, laneColor(lane)) }
+        else item(key = "lane-${lane.name}") { SectionLabel(lane.label, if (lane == Lane.LISTED) listedTotal ?: xs.size else xs.size, laneColor(lane)) }
         if (!folded || listedOpen) items(xs, key = { it.id }) { ipo ->
             // The 3 pm nudge sits on the card only while it is still ahead.
             val close = if (lane == Lane.TODAY) IpoLifecycle.reminderEvents(mapOf("close" to now.toLocalDate()), now).firstOrNull() else null
@@ -288,100 +287,75 @@ private fun LazyListScope.ipoLanes(
 }
 
 internal fun laneColor(lane: Lane?): Color = when (lane) {
-    Lane.TODAY -> MarksyTheme.RedUrgent
+    Lane.TODAY -> MarksyTheme.Negative
     Lane.OPEN -> MarksyTheme.PrimaryEmerald
-    Lane.ALLOTMENT -> MarksyTheme.YellowImportant
-    Lane.UPCOMING -> MarksyTheme.BlueFinance
+    Lane.ALLOTMENT -> MarksyTheme.Warning
+    Lane.UPCOMING -> MarksyTheme.Info
     Lane.LISTED, null -> MarksyTheme.TextMuted
 }
 
 @Composable
-private fun LaneLabel(text: String, count: Int, dot: Color) {
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width(8.dp))
-        Text(text.uppercase(), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        Spacer(Modifier.width(6.dp))
-        Text("$count", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(8.dp))
-        Box(Modifier.weight(1f).height(1.dp).background(MarksyTheme.BorderGlow))
-    }
-}
-
-@Composable
 private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onToggle).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onToggle).padding(horizontal = MarksySpace.CardPadding, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(MarksyTheme.TextMuted))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Row {
-                Text("LISTED", color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                Text(" · $count recent", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("LISTED", color = MarksyTheme.TextSecondary, style = MarksyType.Label)
+                Text(" · $count recent", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
-            summary?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            summary?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
-        Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp).rotate(if (open) 180f else 0f))
+        Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
     }
 }
 
 @Composable
 internal fun IpoAvatar(name: String, size: Int = 32) {
     val initials = name.split(' ').filter { it.firstOrNull()?.isUpperCase() == true }.take(2).joinToString("") { it.take(1) }.ifEmpty { name.take(1) }
-    Box(Modifier.size(size.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(1.dp, MarksyTheme.BorderGlow, CircleShape), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape), contentAlignment = Alignment.Center) {
         Text(initials, color = MarksyTheme.PrimaryEmerald, fontSize = (size * 0.38).sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-internal fun SmeTag() = Text(
-    "SME", color = MarksyTheme.YellowImportant, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(4.dp)).background(MarksyTheme.BadgeImportantBg).padding(horizontal = 4.dp, vertical = 1.dp)
-)
+internal fun SmeTag() = MarksyBadge("SME", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, Modifier.padding(start = 6.dp))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail: IpoDetailDto?, watched: Boolean, reminderSet: Boolean, onRemind: (() -> Unit)?, onClick: () -> Unit) {
     val facts = IpoLifecycle.cardFacts(ipo, now, detail)
     val gmp = IpoLifecycle.gmpSummary(ipo.gmp, IpoLifecycle.upper(ipo), now)
-    val shape = RoundedCornerShape(14.dp)
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = shape,
-        modifier = Modifier.fillMaxWidth().border(1.dp, if (lane == Lane.TODAY) MarksyTheme.RedUrgent else MarksyTheme.BorderGlow, shape)
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            facts.chip?.let {
-                Text(it, color = MarksyTheme.RedUrgent, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(MarksyTheme.BadgeUrgentBg).padding(horizontal = 8.dp, vertical = 3.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IpoAvatar(ipo.companyName)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(ipo.companyName, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        if (ipo.isSme) SmeTag()
-                        if (watched) Icon(Icons.Filled.BookmarkAdded, "Watching", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.padding(start = 4.dp).size(14.dp))
-                    }
-                    val board = if (ipo.isSme) ipo.terms?.exchanges.display() else "Mainboard"
-                    Text(listOfNotNull(ipo.sector, board).joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Spacer(Modifier.width(8.dp))
-                Column(horizontalAlignment = Alignment.End) {
-                    val statColor = when { facts.statUp == true -> MarksyTheme.PrimaryEmerald; facts.statUp == false && lane == Lane.LISTED -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextPrimary }
-                    Text(facts.stat, color = statColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(facts.statLabel, color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                }
-            }
-            Text(facts.line, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
-            gmp?.let { Text(it.text, color = MarksyTheme.TextMuted, fontSize = 11.sp, lineHeight = 14.sp) }
-            onRemind?.let { remind -> Pill(if (reminderSet) "Reminder at 3 pm" else "Remind me at 3 pm", selected = reminderSet, onClick = remind) }
+    MarksyCard(border = if (lane == Lane.TODAY) MarksyTheme.Negative else MarksyTheme.BorderGlow, onClick = onClick) {
+        facts.chip?.let {
+            Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.BadgeUrgentBg).padding(horizontal = 8.dp, vertical = 3.dp))
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IpoAvatar(ipo.companyName)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(ipo.companyName, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (ipo.isSme) SmeTag()
+                    if (watched) Icon(Icons.Filled.BookmarkAdded, "Watching", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                }
+                val board = if (ipo.isSme) ipo.terms?.exchanges.display() else "Mainboard"
+                Text(listOfNotNull(ipo.sector, board).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                val statColor = when { facts.statUp == true -> MarksyTheme.PrimaryEmerald; facts.statUp == false && lane == Lane.LISTED -> MarksyTheme.Negative; else -> MarksyTheme.TextPrimary }
+                Text(facts.stat, color = statColor, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                Text(facts.statLabel, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            }
+        }
+        Text(facts.line, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        gmp?.let { Text(it.text, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
+        onRemind?.let { remind -> Pill(if (reminderSet) "Reminder at 3 pm" else "Remind me at 3 pm", selected = reminderSet, onClick = remind) }
     }
 }
 
@@ -392,14 +366,14 @@ private fun IpoFilterSections(
     listedTotal: Int?, listedDone: Boolean, onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
 ) {
     Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("STAGE", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("STAGE", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             StageFilter.entries.forEach { f ->
                 val n = IpoLifecycle.stageCount(items, f, board, watched, now, listedTotal, listedDone)
                 Pill(if (n == null) f.label else "${f.label} $n", selected = f == stage) { onStage(f) }
             }
         }
-        Text("BOARD", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("BOARD", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Board.entries.forEach { b -> Pill(b.label, selected = b == board) { onBoard(b) } }
         }

@@ -36,51 +36,31 @@ fun BriefingScreen(
 
     Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         // Clears the three floating Morning / Evening / Overnight buttons.
-        contentPadding = PaddingValues(top = 8.dp, bottom = 180.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(top = 8.dp, bottom = oneHandStackBottomPadding(3)),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         val b = briefing
         if (b == null) {
-            item { Text("Preparing your briefing...", color = MarksyTheme.TextMuted, fontSize = 13.sp) }
+            item { Text("Preparing your briefing…", color = MarksyTheme.TextMuted, style = MarksyType.Body) }
             return@LazyColumn
         }
-        item { Text(b.headline, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+        item { Text(b.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Lead) }
         if (b.sections.isEmpty()) {
-            item { Text("Nothing needs your attention in this window.", color = MarksyTheme.TextSecondary, fontSize = 13.sp) }
+            item { Text("Nothing needs your attention in this window.", color = MarksyTheme.TextSecondary, style = MarksyType.Body) }
         }
         b.sections.forEach { section ->
             item(key = "h-${section.title}") {
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(section.title, color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "${section.lines.size}",
-                        color = MarksyTheme.PrimaryEmerald,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MarksyTheme.BadgeTradingBg)
-                            .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 8.dp, vertical = 1.dp)
-                    )
-                }
+                SectionLabel(section.title, section.lines.size)
             }
             items(section.lines, key = { "${section.title}-${it.eventIds.first()}-${it.text}" }) { line ->
-                Card(
-                    onClick = { onOpenEvent(line.eventIds.first()) },
-                    colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(12.dp))
-                ) {
-                    Column(Modifier.padding(10.dp)) {
-                        Text(line.text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, maxLines = 2)
-                        Text("Why: ${line.why}", color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 2)
-                        if (section.title == com.marksy.os.intelligence.DailyBriefing.MARKETS_SECTION) {
-                            val stocks = remember(line.text, isSymbol) { com.marksy.os.market.StockMentions.find(line.text, isSymbol) }
-                            StockLinkPills(stocks, onOpenStock, Modifier.padding(top = 4.dp))
-                        }
+                MarksyCard(onClick = { onOpenEvent(line.eventIds.first()) }) {
+                    Text(line.text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, maxLines = 2)
+                    Text("Why: ${line.why}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 2)
+                    if (section.title == com.marksy.os.intelligence.DailyBriefing.MARKETS_SECTION) {
+                        val stocks = remember(line.text, isSymbol) { com.marksy.os.market.StockMentions.find(line.text, isSymbol) }
+                        StockLinkPills(stocks, onOpenStock, Modifier.padding(top = 4.dp))
                     }
                 }
             }
