@@ -3,7 +3,6 @@ package com.marksy.os.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -51,11 +50,7 @@ fun MarketOverviewScreen(
         else -> "Data: Marksy · feed status unknown"
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background)) {
         when (state) {
             is MarketDataState.Loading -> item { MarksyLoader("Checking market…") }
             is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }

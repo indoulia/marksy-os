@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -227,11 +226,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     }
 
     MarksyRefreshBox(refresh) {
-        LazyColumn(
-            Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-            verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-            contentPadding = PaddingValues(top = MarksySpace.Tight, bottom = padding.calculateBottomPadding())
-        ) {
+        MarksyList {
             val snap = snapshot
             when (view) {
                 PortfolioView.LOADING -> item(key = "loading") { MarksyLoader("Loading your Upstox holdings…") }
@@ -368,13 +363,10 @@ private fun PortfolioHero(
 
 @Composable
 private fun PnlBox(title: String, pnl: Double?, pct: Double?, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = MarksyShape.Pill
-    Column(
-        modifier.clip(shape)
-            .background(if (selected) MarksyTheme.BadgeTradingBg else MarksyTheme.Background)
-            .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
-            .clickable(onClickLabel = "Show $title on every row", onClick = onClick)
-            .padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Gap)
+    MarksyCard(
+        modifier, border = if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
+        fill = if (selected) MarksyTheme.BadgeTradingBg else MarksyTheme.Background,
+        onClick = onClick, onClickLabel = "Show $title on every row"
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.weight(1f))
@@ -459,11 +451,7 @@ private fun NeedsCard(item: NeedsLook, sectorPct: Map<String, Double>, onWhy: ()
     val r = item.row
     val h = r.holding
     val (fg, bg) = severityColors(item.primary.severity)
-    Column(
-        Modifier.fillMaxWidth().marksyCard(fg.copy(alpha = .55f))
-            .clickable(onClickLabel = "Why ${h.symbol} needs a look", onClick = onWhy).padding(MarksySpace.CardPadding),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)
-    ) {
+    MarksyCard(border = fg.copy(alpha = .55f), onClick = onWhy, onClickLabel = "Why ${h.symbol} needs a look") {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MarksyBadge(item.primary.reason, fg, bg, icon = flagIcon(item.primary))
             Spacer(Modifier.weight(1f))
@@ -478,7 +466,7 @@ private fun NeedsCard(item: NeedsLook, sectorPct: Map<String, Double>, onWhy: ()
         )
         Text("${displayName(h.name)} · ${MarksyFormat.rupees(r.price)}", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(needBody(item, sectorPct), color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        FlowRow(Modifier.padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             Pill("Open stock", onClick = onOpen)
             Pill("Alert", onClick = onAlert)
             Pill("Hide today", onClick = onHide)
@@ -553,7 +541,7 @@ private fun HoldingsStack(
     onOpen: (String) -> Unit,
     onAlert: (HoldingRow) -> Unit
 ) {
-    Column(Modifier.marksyCard()) {
+    MarksyGroupCard {
         rows.forEachIndexed { i, r ->
             if (i > 0) MarksyDivider()
             HoldingLine(r, metric, period, flagged[r.holding.symbol], open == r.holding.symbol, { onToggle(r.holding.symbol) }, { onOpen(r.holding.symbol) }, { onAlert(r) })
@@ -577,7 +565,7 @@ private fun HoldingLine(
     val pct = r.pct(metric)
     Column(
         Modifier.fillMaxWidth().clickable(onClickLabel = if (expanded) "Collapse ${h.symbol}" else "Expand ${h.symbol}", onClick = onToggle)
-            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap)
+            .padding(vertical = MarksySpace.Gap)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -625,15 +613,10 @@ private fun HoldingDetail(r: HoldingRow, period: PortfolioPeriod, onOpen: () -> 
         Triple("Total P&L", MarksyFormat.signedRupees(r.totalPnl, 0), pnlColor(r.totalPnl)),
         Triple("Total return", r.totalPct?.let { MarksyFormat.percent(it) } ?: "—", pnlColor(r.totalPct))
     )
-    Column(Modifier.padding(top = MarksySpace.ListGap), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+    Column(Modifier.padding(top = MarksySpace.Gap), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
         cells.chunked(3).forEach { line ->
-            Row {
-                line.forEach { (label, value, color) ->
-                    Column(Modifier.weight(1f)) {
-                        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
-                        Text(value, color = color, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    }
-                }
+            MarksyStatRow {
+                line.forEach { (label, value, color) -> MarksyStat(label, value, Modifier.weight(1f), valueColor = color) }
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
@@ -696,11 +679,8 @@ private fun Caveat(text: String) {
 
 @Composable
 private fun MoreRow(label: String, who: String, onClick: () -> Unit) {
-    val shape = MarksyShape.Pill
-    Row(
-        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    MarksyRowCard(onClick = onClick) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (who.isEmpty()) 180f else 0f))
         Spacer(Modifier.width(MarksySpace.Inner))
         Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium)
@@ -708,6 +688,7 @@ private fun MoreRow(label: String, who: String, onClick: () -> Unit) {
             Spacer(Modifier.width(MarksySpace.Gap))
             Text(who, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
     }
 }
 

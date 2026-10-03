@@ -36,13 +36,13 @@ private fun Signal.label() = name.lowercase().replaceFirstChar { it.uppercase() 
 internal fun TechnicalCard(daily: List<Candle>, lastPrice: Double?) {
     val rating = remember(daily) { Technicals.rate(daily) } ?: return
     val history = remember(daily) { Technicals.history(daily, 6, IST) }
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+    MarksyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Technical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("as of ${ChartAxis.readout(com.marksy.os.upstox.ChartRange.Y1, rating.asOf)} close", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
         Box(
-            Modifier.padding(top = MarksySpace.Gap).fillMaxWidth().clip(MarksyShape.Panel).background(rating.trend.color().copy(alpha = .18f)).padding(vertical = MarksySpace.Gap),
+            Modifier.fillMaxWidth().clip(MarksyShape.Panel).background(rating.trend.color().copy(alpha = .18f)).padding(vertical = MarksySpace.Gap),
             contentAlignment = Alignment.Center
         ) { Text(rating.trend.label.uppercase(), color = rating.trend.color(), style = MarksyType.Subhead, fontWeight = FontWeight.Bold) }
         SignalGroup("Moving averages", rating.movingAverages, movingAverages = true)
@@ -60,8 +60,9 @@ private fun SignalGroup(title: String, readings: List<Reading>, movingAverages: 
     val bull = readings.count { it.signal == Signal.BULLISH }
     val neutral = readings.count { it.signal == Signal.NEUTRAL }
     val bear = readings.count { it.signal == Signal.BEARISH }
-    Column(Modifier.padding(top = MarksySpace.ListGap).fillMaxWidth().clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth()) {
+        MarksyDivider()
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Column(Modifier.width(130.dp)) {
                 Row(Modifier.fillMaxWidth()) {
@@ -77,7 +78,7 @@ private fun SignalGroup(title: String, readings: List<Reading>, movingAverages: 
             }
             Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = MarksySpace.Inner).size(18.dp).rotate(if (open) 180f else 0f))
         }
-        if (open) Column(Modifier.padding(start = MarksySpace.ListGap, end = MarksySpace.ListGap, bottom = MarksySpace.Gap)) {
+        if (open) Column(Modifier.padding(bottom = MarksySpace.Gap)) {
             Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Hair)) {
                 Text(if (movingAverages) "Period" else "Name", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1.4f))
                 Text(if (movingAverages) "Simple" else "Value", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
@@ -102,12 +103,13 @@ private fun SignalGroup(title: String, readings: List<Reading>, movingAverages: 
 @Composable
 private fun HistoryGroup(history: List<Pair<Candle, Trend>>) {
     var open by rememberSaveable { mutableStateOf(false) }
-    Column(Modifier.padding(top = MarksySpace.ListGap).fillMaxWidth().clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth()) {
+        MarksyDivider()
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Text("Historical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
         }
-        if (open) Column(Modifier.padding(start = MarksySpace.ListGap, end = MarksySpace.ListGap, bottom = MarksySpace.Gap)) {
+        if (open) Column(Modifier.padding(bottom = MarksySpace.Gap)) {
             history.forEach { (c, t) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight)) {
                     Text(ChartAxis.readout(com.marksy.os.upstox.ChartRange.Y1, c.time), color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
@@ -123,7 +125,7 @@ private fun HistoryGroup(history: List<Pair<Candle, Trend>>) {
 private fun PivotBlock(daily: List<Candle>, lastPrice: Double?) {
     var method by rememberSaveable { mutableStateOf(PivotMethod.CLASSIC) }
     val p = remember(daily, method) { Technicals.pivots(daily, LocalDate.now(IST), IST, method) } ?: return
-    Column(Modifier.padding(top = MarksySpace.CardPadding)) {
+    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Pivot levels", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             MarksySegmented(PivotMethod.entries.map { it.name }, method.name, { method = PivotMethod.valueOf(it) }, Modifier.width(190.dp), label = { it.lowercase().replaceFirstChar { c -> c.uppercase() } })
@@ -134,7 +136,7 @@ private fun PivotBlock(daily: List<Candle>, lastPrice: Double?) {
             listOfNotNull("Pivot" to p.pivot, lastPrice?.let { "LTP" to it }),
             listOf("S1" to p.s1, "S2" to p.s2, "S3" to p.s3)
         ).forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner)) {
+            Row(Modifier.fillMaxWidth()) {
                 row.forEach { (label, v) ->
                     Column(Modifier.weight(1f)) {
                         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
