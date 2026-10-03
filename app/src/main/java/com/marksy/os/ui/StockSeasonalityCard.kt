@@ -47,7 +47,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
     val averages = remember(table) { Seasonality.monthlyAverages(table) }
     val monthName = MarksyFormat.month(Month.of(month), short = false)
     val years = if (all) table.keys.toList() else table.keys.take(RECENT_YEARS)
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+    MarksyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Seasonality", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Text("Monthly change · Upstox", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
@@ -56,25 +56,22 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
             val fell = s.negative * 2 > s.years
             Text(
                 "${if (fell) s.negative else s.years - s.negative} of ${s.years} years $name has ${if (fell) "fallen" else "risen"} in $monthName.",
-                color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.padding(top = MarksySpace.Inner)
+                color = MarksyTheme.TextPrimary, style = MarksyType.Body
             )
             listOf(
                 listOf("Best" to "${signed(s.best.first)} (${s.best.second})", "Worst" to "${signed(s.worst.first)} (${s.worst.second})"),
                 listOf("Avg. gain" to (s.averageGain?.let(::signed) ?: "–"), "Avg. loss" to (s.averageLoss?.let(::signed) ?: "–"), "Average" to signed(s.average))
             ).forEach { row ->
-                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner)) {
+                MarksyStatRow {
                     row.forEach { (label, v) ->
-                        Column(Modifier.weight(1f)) {
-                            Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                            Text(v, color = if (v.startsWith(MarksyFormat.MINUS)) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
-                        }
+                        MarksyStat(label, v, Modifier.weight(1f), valueColor = if (v.startsWith(MarksyFormat.MINUS)) MarksyTheme.Negative else MarksyTheme.Positive)
                     }
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
         val scroll = rememberScrollState()
-        Row(Modifier.padding(top = MarksySpace.ListGap)) {
+        Row {
             Column(Modifier.width(44.dp)) {
                 Cell("Year", header = true)
                 Cell("Avg", header = true)
@@ -95,7 +92,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
         }
         if (table.size > RECENT_YEARS) Text(
             if (all) "Show recent years" else "Show all ${table.size} years", color = MarksyTheme.Positive, style = MarksyType.Small,
-            modifier = Modifier.padding(top = MarksySpace.Gap).clickable { all = !all }
+            modifier = Modifier.clickable { all = !all }
         )
     }
 }

@@ -38,13 +38,13 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
     val tint = if (side == TradeSide.BUY) MarksyTheme.Positive else MarksyTheme.Negative
     val price = if (type == "Limit") limit.toDoubleOrNull() else intent.price
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MarksyTheme.SurfaceRaised) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter).padding(bottom = MarksySpace.Gutter)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter).padding(bottom = MarksySpace.Gutter), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(intent.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Heading, modifier = Modifier.weight(1f))
                 intent.price?.let { Text("LTP ${MarksyFormat.rupees(it)}", color = MarksyTheme.TextSecondary, style = MarksyType.Body) }
             }
             MarksySegmented(
-                TradeSide.entries.map { it.name }, side.name, { side = TradeSide.valueOf(it); submitted = false }, Modifier.fillMaxWidth().padding(top = MarksySpace.CardPadding),
+                TradeSide.entries.map { it.name }, side.name, { side = TradeSide.valueOf(it); submitted = false }, Modifier.fillMaxWidth(),
                 color = { if (it == TradeSide.BUY.name) MarksyTheme.Positive else MarksyTheme.Negative }
             )
             Choice("Product", listOf("Delivery", "Intraday"), product) { product = it; submitted = false }
@@ -52,27 +52,24 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
             if (type == "Limit") CompactTextField(
                 value = limit, onValueChange = { v -> limit = v.filter { it.isDigit() || it == '.' }; submitted = false },
                 label = "Limit price", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)
+                modifier = Modifier.fillMaxWidth()
             )
-            Row(Modifier.fillMaxWidth().padding(top = MarksySpace.CardPadding), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Quantity", color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(1f))
                 Stepper("−") { if (quantity > 1) { quantity--; submitted = false } }
                 Text("$quantity", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
                 Stepper("+") { quantity++; submitted = false }
             }
-            price?.let { Text("Approx. ${MarksyFormat.rupees(it * quantity)}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(top = MarksySpace.Gap)) }
+            price?.let { Text("Approx. ${MarksyFormat.rupees(it * quantity)}", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
             if (intent.target != null || intent.stop != null) Text(
                 "Marksy levels · target ${intent.target?.let { MarksyFormat.rupees(it) } ?: "–"} · stop ${intent.stop?.let { MarksyFormat.rupees(it) } ?: "–"}",
-                color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Tight)
+                color = MarksyTheme.TextMuted, style = MarksyType.Meta
             )
-            Text(
-                "${side.name.lowercase().replaceFirstChar { it.uppercase() }} ${intent.symbol}", color = MarksyTheme.OnAccent, style = MarksyType.Lead, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = MarksySpace.Wide).fillMaxWidth().clip(CircleShape).background(tint).clickable { submitted = true }.padding(vertical = MarksySpace.CardPadding)
-            )
+            MarksyButton("${side.name.lowercase().replaceFirstChar { it.uppercase() }} ${intent.symbol}", { submitted = true }, Modifier.fillMaxWidth(), color = tint)
             Text(
                 if (submitted) "Coming soon — Marksy can't place orders yet. Nothing was sent to your broker." else "Orders aren't enabled in Marksy yet.",
                 color = if (submitted) MarksyTheme.Warning else MarksyTheme.TextMuted, style = MarksyType.Small, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -80,7 +77,7 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
 
 @Composable
 private fun Choice(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = MarksySpace.CardPadding), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(1f))
         MarksySegmented(options, selected, onSelect, Modifier.width(176.dp))
     }

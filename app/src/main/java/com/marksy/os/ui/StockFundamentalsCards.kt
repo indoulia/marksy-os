@@ -40,18 +40,15 @@ internal fun LazyListScope.fundamentalsContent(f: StockFundamentals, price: Doub
 
 @Composable
 private fun Section(title: String, note: String? = "Upstox", content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
-        }
+    MarksyCard {
+        SectionLabel(title, rule = false, trailing = note?.let { { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) } })
         content()
     }
 }
 
 @Composable
 private fun Chips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Row(Modifier.padding(top = MarksySpace.Gap).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         options.forEach { o -> Pill(o, selected = o == selected) { onSelect(o) } }
     }
 }
@@ -67,17 +64,12 @@ private fun AboutCard(f: StockFundamentals) {
     val p = f.profile ?: return
     var more by rememberSaveable { mutableStateOf(false) }
     Section("About") {
-        Row(Modifier.padding(top = MarksySpace.Inner)) {
-            listOfNotNull(p.sector?.let { "Sector" to it }, p.marketCapCr?.let { "Market cap" to "₹${crore(it)} Cr" }).forEach { (l, v) ->
-                Column(Modifier.weight(1f)) {
-                    Text(l, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                    Text(v, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
+        MarksyStatRow {
+            listOfNotNull(p.sector?.let { "Sector" to it }, p.marketCapCr?.let { "Market cap" to "₹${crore(it)} Cr" }).forEach { (l, v) -> MarksyStat(l, v, Modifier.weight(1f)) }
         }
         p.about?.let {
             Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = if (more) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = MarksySpace.Gap).clickable { more = !more })
+                modifier = Modifier.clickable { more = !more })
         }
     }
 }
@@ -85,24 +77,24 @@ private fun AboutCard(f: StockFundamentals) {
 @Composable
 private fun RatiosCard(f: StockFundamentals, price: Double?) {
     Section("Key ratios") {
-        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner, bottom = MarksySpace.Hair)) {
+        Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Hair)) {
             Text("Ratio", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1.2f))
             Text("Company", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
             Text("Sector", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
         }
-        f.ratios.forEach { r ->
+        Column { f.ratios.forEach { r ->
             Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight)) {
                 Text(r.name, color = MarksyTheme.TextPrimary, style = MarksyType.Small, modifier = Modifier.weight(1.2f))
                 Text(r.company, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 Text(r.sector ?: "–", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
             }
-        }
+        } }
         val pe = f.ratios.firstOrNull { it.name.equals("P/E", true) }?.companyValue
         val pb = f.ratios.firstOrNull { it.name.equals("P/B", true) }?.companyValue
         val graham = if (price != null && pe != null && pb != null) UpstoxFundamentals.grahamNumber(price, pe, pb) else null
         val dupont = UpstoxFundamentals.dupont(f.yearly, f.balance)
         if (graham != null || dupont != null) {
-            Text("Value checks · Marksy calculation", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.ListGap))
+            Text("Value checks · Marksy calculation", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             if (graham != null && price != null) {
                 val gap = (price - graham) / graham * 100
                 Text(
@@ -115,7 +107,7 @@ private fun RatiosCard(f: StockFundamentals, price: Double?) {
                 val sectorRoe = f.ratios.firstOrNull { it.name.equals("ROE", true) }?.sectorValue
                 Text(
                     "DuPont ROE ${pct(dupont.roe)} = margin ${pct(dupont.margin)} × turnover ${MarksyFormat.number(dupont.turnover) + "×"} × leverage ${MarksyFormat.number(dupont.multiplier) + "×"}",
-                    color = MarksyTheme.TextPrimary, style = MarksyType.Small, modifier = Modifier.padding(top = MarksySpace.Inner)
+                    color = MarksyTheme.TextPrimary, style = MarksyType.Small
                 )
                 Text("FY ${dupont.period}" + (sectorRoe?.let { " · sector ROE ${MarksyFormat.percent(it, 2, signed = false)}" } ?: ""), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             }
@@ -132,13 +124,13 @@ private fun FinancialsCard(f: StockFundamentals) {
     var yearly by rememberSaveable { mutableStateOf(f.quarterly.isEmpty()) }
     var category by rememberSaveable(tab) { mutableStateOf<String?>(null) }
     Section("Financials", note = "₹ Cr · consolidated · Upstox") {
-        MarksySegmented(tabs, tab, { tab = it }, Modifier.fillMaxWidth().padding(top = MarksySpace.Gap))
+        MarksySegmented(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
         when (tab) {
             "Income" -> {
                 val series = if (yearly) f.yearly else f.quarterly
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { SeriesChips(series, category) { category = it } }
-                    MarksySegmented(listOf("Quarterly", "Yearly"), if (yearly) "Yearly" else "Quarterly", { yearly = it == "Yearly" }, Modifier.padding(top = MarksySpace.Gap).width(170.dp))
+                    MarksySegmented(listOf("Quarterly", "Yearly"), if (yearly) "Yearly" else "Quarterly", { yearly = it == "Yearly" }, Modifier.width(170.dp))
                 }
                 (series.firstOrNull { it.category == category } ?: series.firstOrNull())?.let { Bars(it.history) }
             }
@@ -147,18 +139,18 @@ private fun FinancialsCard(f: StockFundamentals) {
                 (f.cashFlow.firstOrNull { it.category == category } ?: f.cashFlow.firstOrNull())?.let { Bars(it.history) }
             }
             else -> {
-                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap, bottom = MarksySpace.Hair)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Hair)) {
                     listOf("Period", "Assets", "Liabilities", "Equity").forEachIndexed { i, h ->
                         Text(h, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f), textAlign = if (i == 0) TextAlign.Start else TextAlign.End)
                     }
                 }
-                f.balance.take(5).forEach { b ->
+                Column { f.balance.take(5).forEach { b ->
                     Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight)) {
                         listOf(b.period, crore(b.totalAssets), crore(b.totalLiabilities), crore(b.totalAssets - b.totalLiabilities)).forEachIndexed { i, v ->
                             Text(v, color = if (i == 0) MarksyTheme.TextSecondary else MarksyTheme.TextPrimary, style = MarksyType.Small, modifier = Modifier.weight(1f), textAlign = if (i == 0) TextAlign.Start else TextAlign.End)
                         }
                     }
-                }
+                } }
             }
         }
     }
@@ -176,7 +168,7 @@ private fun SeriesChips(series: List<FinancialSeries>, selected: String?, onSele
 private fun Bars(history: List<FinancialPeriod>) {
     val periods = history.take(5).reversed()
     val peak = periods.maxOfOrNull { abs(it.value) }?.takeIf { it > 0 } ?: return
-    Row(Modifier.fillMaxWidth().height(150.dp).padding(top = MarksySpace.ListGap), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
         periods.forEach { p ->
             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
                 Text(crore(p.value), color = MarksyTheme.TextPrimary, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold, maxLines = 1)
@@ -198,23 +190,23 @@ private fun ShareholdingCard(series: List<FinancialSeries>) {
     val latest = series.mapNotNull { s -> s.history.firstOrNull()?.let { s.category to it } }
     if (latest.isEmpty()) return
     Section("Shareholding", note = "${latest.first().second.period} · Upstox") {
-        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap).height(10.dp).clip(MarksyShape.Badge)) {
+        Row(Modifier.fillMaxWidth().height(10.dp).clip(MarksyShape.Badge)) {
             latest.forEachIndexed { i, (_, p) -> if (p.value > 0) Box(Modifier.weight(p.value.toFloat()).fillMaxHeight().background(HOLDER_COLORS[i % HOLDER_COLORS.size])) }
         }
         latest.chunked(2).forEachIndexed { r, row ->
-            Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner)) {
+            Row(Modifier.fillMaxWidth()) {
                 row.forEachIndexed { c, (category, p) ->
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(HOLDER_COLORS[(r * 2 + c) % HOLDER_COLORS.size]))
                         Text(label(category), color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(start = MarksySpace.Inner).weight(1f))
-                        Text(MarksyFormat.percent(p.value, 2, signed = false), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = MarksySpace.ListGap))
+                        Text(MarksyFormat.percent(p.value, 2, signed = false), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = MarksySpace.Gap))
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         series.firstOrNull { it.category == "promoters" }?.history?.takeIf { it.size > 1 }?.let { h ->
-            Text("Promoters: " + h.take(4).joinToString(" · ") { "${it.period} ${MarksyFormat.percent(it.value, 2, signed = false)}" }, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Gap))
+            Text("Promoters: " + h.take(4).joinToString(" · ") { "${it.period} ${MarksyFormat.percent(it.value, 2, signed = false)}" }, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
     }
 }
@@ -224,7 +216,7 @@ private fun ActionsCard(f: StockFundamentals) {
     var open by rememberSaveable { mutableStateOf<Int?>(null) }
     Section("Corporate actions") {
         f.actions.take(8).forEachIndexed { i, a ->
-            Column(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner).clip(MarksyShape.Chip).clickable { open = if (open == i) null else i }.padding(vertical = MarksySpace.Hair)) {
+            Column(Modifier.fillMaxWidth().clip(MarksyShape.Chip).clickable { open = if (open == i) null else i }.padding(vertical = MarksySpace.Hair)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(a.name, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     (a.amount?.let { "₹${money(it)}" } ?: a.ratio)?.let { Text(it, color = MarksyTheme.Positive, style = MarksyType.Small, fontWeight = FontWeight.SemiBold) }
@@ -246,7 +238,7 @@ private fun PeersCard(f: StockFundamentals, onOpenSymbol: (String) -> Unit) {
     Section("Peers") {
         f.peers.take(8).forEach { (symbol, p) ->
             Row(
-                Modifier.fillMaxWidth().padding(top = MarksySpace.Inner).clip(MarksyShape.Chip).clickable(enabled = symbol != null) { symbol?.let(onOpenSymbol) }.padding(vertical = MarksySpace.Tight),
+                Modifier.fillMaxWidth().clip(MarksyShape.Chip).clickable(enabled = symbol != null) { symbol?.let(onOpenSymbol) }.padding(vertical = MarksySpace.Tight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
@@ -266,7 +258,7 @@ private fun NewsCard(f: StockFundamentals) {
         Section("News") {
         f.news.take(8).forEach { n ->
             Column(
-                Modifier.fillMaxWidth().padding(top = MarksySpace.Gap).clip(MarksyShape.Chip)
+                Modifier.fillMaxWidth().clip(MarksyShape.Chip)
                     .clickable(enabled = n.link?.startsWith("https://") == true) { n.link?.let { runCatching { uri.openUri(it) } } }.padding(vertical = MarksySpace.Hair)
             ) {
                 Text(n.heading, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)

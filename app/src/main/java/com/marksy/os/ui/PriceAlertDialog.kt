@@ -55,7 +55,7 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
                     )
                 }
                 if (mine.isNotEmpty()) {
-                    Text("Active", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Tight))
+                    Text("Active", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                     mine.forEach { a ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${if (a.above) "Above" else "Below"} ${MarksyFormat.rupees(a.price)}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.weight(1f))

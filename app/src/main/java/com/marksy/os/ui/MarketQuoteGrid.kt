@@ -24,10 +24,10 @@ import com.marksy.os.MarksyFormat
 @Composable
 internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Double?>>, watchable: Boolean = false, onOpen: ((String) -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
     MarksyCard {
-        Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-            Text(title, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold)
+        run {
+            SectionLabel(title, rule = false)
             items.chunked(2).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     row.forEach { (name, price, change) ->
                         Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
