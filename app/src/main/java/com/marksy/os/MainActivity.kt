@@ -480,6 +480,7 @@ class MainActivity : ComponentActivity() {
                 else scope.launch { snackbar.showSnackbar(message, duration = SnackbarDuration.Short) }
             }
         ) {
+        androidx.compose.runtime.CompositionLocalProvider(com.marksy.os.ui.LocalMarksySnackbar provides snackbar) {
         Scaffold(
             // Home's header is already the first item of its own list, so it scrolls natively.
             modifier = if (!onHome) Modifier.nestedScroll(headerState.connection) else Modifier,
@@ -814,6 +815,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         }
+        }
 
         selectedEvent?.let { opened ->
             // Follow the live row so Keep/Remind changes show immediately.
@@ -1034,8 +1036,8 @@ class MainActivity : ComponentActivity() {
 @Composable internal fun EmptyState(title: String, message: String) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+        shape = com.marksy.os.ui.MarksyShape.Card,
+        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, com.marksy.os.ui.MarksyShape.Card)
     ) {
         Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
