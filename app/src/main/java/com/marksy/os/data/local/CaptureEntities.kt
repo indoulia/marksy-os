@@ -104,6 +104,9 @@ interface CaptureDao {
     @Query("UPDATE capture_evidence SET state = :to, failureCode = :code, updatedAt = :at WHERE id = :id AND state = :from")
     suspend fun moveEvidence(id: Long, from: String, to: String, code: String?, at: Long): Int
 
+    @Query("SELECT failureCode FROM capture_evidence WHERE state = 'FAILED' ORDER BY capturedAt DESC, id DESC LIMIT 1")
+    suspend fun lastFailureCode(): String?
+
     @Insert
     suspend fun insertCandidate(candidate: TipCandidateEntity): Long
 

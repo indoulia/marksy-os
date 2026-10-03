@@ -44,8 +44,25 @@ object MarksyContainer {
             ruleRunner = rules(context),
             intelligence = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao())),
             onTradingCaptured = onTradingCaptured,
-            onStored = { event -> plan(app).captureFromEvent(event) },
+            onStored = { event ->
+                runCatching { plan(app).captureFromEvent(event) }
+                captureGateway(app).onNotificationStored(event)
+            },
             chatAllowList = { com.marksy.os.notification.WhatsAppSenderWatchlist.get(app) }
+        )
+    }
+
+    fun captureSources(context: Context): com.marksy.os.capture.CaptureSourceRegistry {
+        val app = context.applicationContext
+        val store = com.marksy.os.gateway.CaptureStore(app)
+        return com.marksy.os.capture.CaptureSourceRegistry(store::capturePackages, { com.marksy.os.notification.SourceRegistry.displayName(app, it) })
+    }
+
+    fun captureGateway(context: Context): com.marksy.os.capture.CaptureGateway {
+        val app = context.applicationContext
+        return com.marksy.os.capture.CaptureGateway(
+            database(app).captureDao(), captureSources(app), log = { android.util.Log.i("MarksyCapture", it) },
+            onDeliveryQueued = { com.marksy.os.gateway.TradingDeliveryScheduler.requestImmediateDelivery(app) }
         )
     }
 
