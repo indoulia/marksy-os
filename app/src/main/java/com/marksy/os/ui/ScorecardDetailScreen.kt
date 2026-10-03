@@ -273,14 +273,14 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp, 3.dp).background(tint))
                 Spacer(Modifier.width(MarksySpace.Inner))
-                Text("Avg realised${realised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+                Text("Realised${realised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Canvas(Modifier.size(14.dp, 3.dp)) {
                     drawLine(MarksyTheme.SecondaryCyan, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
                 }
                 Spacer(Modifier.width(MarksySpace.Inner))
-                Text("Avg promised${promised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+                Text("Promised${promised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
             Spacer(Modifier.weight(1f))
             if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
