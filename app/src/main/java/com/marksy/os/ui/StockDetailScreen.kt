@@ -30,11 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.InstrumentLifecycleDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
@@ -86,15 +87,15 @@ fun StockDetailScreen(
     val listState = rememberSaveable(symbol, saver = LazyListState.Saver) { LazyListState() }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(top = 0.dp, bottom = padding.calculateBottomPadding() + 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item { PriceHeader(instrument, symbol, live) }
         // Channels are listed only with a call here, but every engine is, so an engine-only box needs a tip.
         val calls = instrument?.calls?.takeIf { c -> c.engines.any { it.tips.isNotEmpty() } || c.channels.isNotEmpty() }
         calls?.let { c -> item(key = "calls") { CallsBox(c, live.quote?.lastPrice, analysis, onOpenTip, followed, onToggleFollow) } }
-        live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp) } }
+        live.note?.let { note -> item { Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Meta) } }
         val levels = LedgerCalls.chartLevels(LedgerCalls.leadingMarksyCall(instrument?.calls))
         if (live.quote != null || live.candles != null) item { ChartCard(live, range, onRangeSelected, levels, minutes, onMinutesSelected) }
         live.quote?.let { q ->
@@ -106,14 +107,14 @@ fun StockDetailScreen(
         live.key?.let { k -> item(key = "fno-$k") { DerivativesCard(k) } }
         fundamentalsContent(fundamentals, live.quote?.lastPrice, onOpenSymbol)
         if (mentions.isNotEmpty()) {
-            item { Text("In your notifications", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+            item { Text("In your notifications", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.SemiBold) }
             items(mentions.take(5), key = { "mention-${it.id}" }) { e ->
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MarksyTheme.Surface).clickable { onEventSelected(e) }.padding(10.dp)
+                    Modifier.fillMaxWidth().marksyCard().clickable { onEventSelected(e) }.padding(MarksySpace.CardPadding)
                 ) {
-                    Text(e.title.ifBlank { e.sourceName }, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                    Text(e.body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 2)
-                    Text("${e.sourceName} · ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(e.postedAt))}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                    Text(e.title.ifBlank { e.sourceName }, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, maxLines = 1)
+                    Text(e.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2)
+                    Text("${e.sourceName} · ${MarksyFormat.dayTime(at(e.postedAt))}", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 }
             }
         }
@@ -124,33 +125,30 @@ fun StockDetailScreen(
 private fun PriceHeader(instrument: InstrumentLifecycleDto?, symbol: String?, live: StockLive) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(instrument?.companyName ?: symbol ?: instrument?.symbol.orEmpty(), color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
+            Text(instrument?.companyName ?: symbol ?: instrument?.symbol.orEmpty(), color = MarksyTheme.TextPrimary, style = MarksyType.Heading, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, fill = false))
             (instrument?.symbol ?: symbol)?.let { WatchlistButton(it, Modifier.padding(start = 4.dp)) }
         }
-        Text(listOfNotNull(instrument?.symbol ?: symbol, instrument?.exchange?.ifBlank { null }, instrument?.sector, live.isin?.let { "ISIN $it" }).joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+        Text(listOfNotNull(instrument?.symbol ?: symbol, instrument?.exchange?.ifBlank { null }, instrument?.sector, live.isin?.let { "ISIN $it" }).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         val q = live.quote
         val price = q?.lastPrice ?: instrument?.market?.lastClosePrice
         if (price != null) Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
-            Text("₹${money(price)}", color = MarksyTheme.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text(MarksyFormat.rupees(price), color = MarksyTheme.TextPrimary, style = MarksyType.Display, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(8.dp))
             val change = q?.change
             val pct = q?.changePct
             if (change != null && pct != null) {
                 Text(
-                    "${if (change >= 0) "+" else ""}${money(change)} (${String.format(Locale.US, "%+.2f%%", pct)})",
-                    color = if (change >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    "${if (change >= 0) "+" else ""}${money(change)} (${MarksyFormat.percent(pct)})",
+                    color = if (change >= 0) MarksyTheme.Positive else MarksyTheme.Negative, style = MarksyType.Subhead, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 3.dp)
                 )
             } else if (q == null) {
-                Text("last close", color = MarksyTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+                Text("last close", color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.padding(bottom = 4.dp))
             }
             Spacer(Modifier.weight(1f))
-            if (live.streaming) Text(
-                "LIVE", color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp).clip(RoundedCornerShape(8.dp)).background(MarksyTheme.BadgeTradingBg).padding(horizontal = 6.dp, vertical = 2.dp)
-            )
+            if (live.streaming) MarksyBadge("LIVE", MarksyTheme.Positive, MarksyTheme.BadgeTradingBg, Modifier.padding(bottom = 4.dp))
         }
-        q?.lastTradeTime?.let { Text("Last trade ${SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(it))}", color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+        q?.lastTradeTime?.let { Text("Last trade ${MarksyFormat.dayTime(at(it))}", color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
     }
 }
 
@@ -162,7 +160,7 @@ private fun ChartCard(
     val prefs = rememberChartPrefs()
     var tuning by remember { mutableStateOf(false) }
     if (tuning) ChartSettingsDialog(prefs, range, minutes ?: range.defaultMinutes, onMinutesSelected) { tuning = false }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
         val candles = live.candles
         var selected by remember(candles) { mutableStateOf<Int?>(null) }
         val pick = selected?.let { candles?.getOrNull(it) }
@@ -172,19 +170,19 @@ private fun ChartCard(
         fun change(v: Double?) = v?.let { base?.takeIf { it > 0 }?.let { b -> (v - b) / b * 100 } }
         val overall = if (range == ChartRange.D1 && live.quote?.changePct != null) live.quote.changePct else change(last)
         val pct = if (pick != null) change(pick.close) else overall
-        fun tintOf(v: Double?) = if ((v ?: live.quote?.change ?: 0.0) >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent
+        fun tintOf(v: Double?) = if ((v ?: live.quote?.change ?: 0.0) >= 0) MarksyTheme.Positive else MarksyTheme.Negative
         val tint = tintOf(pct)
-        val day = SimpleDateFormat("d MMM", Locale.getDefault())
+        fun day(ms: Long) = MarksyFormat.day(at(ms).toLocalDate())
         // After hours the intraday feed can be empty and history may lag a session; say which day the chart is.
-        val session = candles?.lastOrNull()?.time?.let { day.format(Date(it)) }
-        val stale = range == ChartRange.D1 && session != null && live.quote?.lastTradeTime?.let { day.format(Date(it)) } != session
+        val session = candles?.lastOrNull()?.time?.let { day(it) }
+        val stale = range == ChartRange.D1 && session != null && live.quote?.lastTradeTime?.let { day(it) } != session
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val headline = when {
-                pick != null -> "₹${money(pick.close)}  " + (pct?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "")
-                pct != null -> "${String.format(Locale.US, "%+.2f%%", pct)} ${when (range) { ChartRange.D1 -> "today"; ChartRange.MAX -> "all time"; else -> "in ${range.label}" }}"
+                pick != null -> "${MarksyFormat.rupees(pick.close)}  " + (pct?.let { MarksyFormat.percent(it) } ?: "")
+                pct != null -> "${MarksyFormat.percent(pct)} ${when (range) { ChartRange.D1 -> "today"; ChartRange.MAX -> "all time"; else -> "in ${range.label}" }}"
                 else -> ""
             }
-            Text(headline, color = tint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(headline, color = tint, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
             ChartIconButton(if (prefs.candles) Icons.Default.CandlestickChart else Icons.Default.ShowChart, if (prefs.candles) "Show line" else "Show candles") { prefs.candles = !prefs.candles }
             Spacer(Modifier.width(6.dp))
             ChartIconButton(Icons.Default.Tune, "Indicators and interval", active = prefs.overlays.isNotEmpty()) { tuning = true }
@@ -192,18 +190,18 @@ private fun ChartCard(
         val detail = when {
             pick != null && prefs.candles -> "${ChartAxis.readout(range, pick.time)} · O ${money(pick.open)} H ${money(pick.high)} L ${money(pick.low)} C ${money(pick.close)} · Vol ${compact(pick.volume)}"
             pick != null -> "${ChartAxis.readout(range, pick.time)} · H ${money(pick.high)} · L ${money(pick.low)} · Vol ${compact(pick.volume)}"
-            !candles.isNullOrEmpty() -> listOfNotNull(if (stale) "$session session" else null, "Low ₹${money(candles.minOf { it.low })} · High ₹${money(candles.maxOf { it.high })}").joinToString(" · ")
+            !candles.isNullOrEmpty() -> listOfNotNull(if (stale) "$session session" else null, "Low ${MarksyFormat.rupees(candles.minOf { it.low })} · High ${MarksyFormat.rupees(candles.maxOf { it.high })}").joinToString(" · ")
             else -> ""
         }
-        Text(detail, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(detail, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val overlays = remember(candles, prefs.overlays, range) { candles?.let { chartOverlays(it, prefs.overlays, range) }.orEmpty() }
         if (overlays.isNotEmpty()) Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            overlays.distinctBy { it.label }.forEach { o -> Text(o.label, color = o.color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+            overlays.distinctBy { it.label }.forEach { o -> Text(o.label, color = o.color, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold) }
         }
         Box(Modifier.fillMaxWidth().height(if (prefs.volume) 224.dp else 200.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
             when {
-                candles == null -> MarksyLoader("Loading chart...")
-                candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                candles == null -> MarksyLoader("Loading chart…")
+                candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 else -> PriceChart(
                     candles, range, tintOf(overall), reference = live.quote?.prevClose?.takeIf { range == ChartRange.D1 }, selected = selected, onSelect = { selected = it },
                     levels = levels, candleMode = prefs.candles, overlays = overlays, showVolume = prefs.volume
@@ -216,9 +214,9 @@ private fun ChartCard(
                 val on = r == range
                 val fill by androidx.compose.animation.animateColorAsState(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent, label = "range")
                 Box(
-                    Modifier.clip(RoundedCornerShape(10.dp)).background(fill).clickable { onRangeSelected(r) }.padding(horizontal = 7.dp, vertical = 4.dp),
+                    Modifier.clip(MarksyShape.Pill).background(fill).clickable { onRangeSelected(r) }.padding(horizontal = 7.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
-                ) { Text(r.label, color = if (on) Color.Black else MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
+                ) { Text(r.label, color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium) }
             }
         }
     }
@@ -227,9 +225,9 @@ private fun ChartCard(
 @Composable
 private fun ChartIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
     Icon(
-        icon, contentDescription = label, tint = if (active) Color.Black else MarksyTheme.PrimaryEmerald,
+        icon, contentDescription = label, tint = if (active) MarksyTheme.OnAccent else MarksyTheme.PrimaryEmerald,
         modifier = Modifier.size(28.dp).clip(CircleShape).background(if (active) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
-            .border(1.dp, MarksyTheme.BorderGlow, CircleShape).clickable(onClick = onClick).padding(5.dp)
+            .border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape).clickable(onClick = onClick).padding(5.dp)
     )
 }
 
@@ -240,16 +238,16 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         "Open" to q.open?.let(::money), "Prev. close" to q.prevClose?.let(::money), "Avg. price" to q.averagePrice?.let(::money),
         "Day high" to q.high?.let(::money), "Day low" to q.low?.let(::money), "Volume" to q.volume?.let(::compact),
         "52W high" to year?.second?.let(::money), "52W low" to year?.first?.let(::money),
-        "From 52W high" to year?.second?.takeIf { it > 0 }?.let { String.format(Locale.US, "%+.1f%%", (q.lastPrice - it) / it * 100) },
+        "From 52W high" to year?.second?.takeIf { it > 0 }?.let { MarksyFormat.percent((q.lastPrice - it) / it * 100, 1) },
         "Upper circuit" to q.upperCircuit?.let(::money), "Lower circuit" to q.lowerCircuit?.let(::money),
         "Traded value" to q.volume?.let { v -> q.averagePrice?.let { "₹" + compact(Math.round(v * it)) } },
         "Avg. vol. (20D)" to live.averageVolume?.let(::compact),
-        "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f×", v.toDouble() / it) } },
+        "Vol. vs 20D" to q.volume?.let { v -> live.averageVolume?.takeIf { it > 0 }?.let { MarksyFormat.number(v.toDouble() / it, 1) + "×" } },
         "ATR (14)" to com.marksy.os.upstox.Technicals.atr(live.daily)?.let(::money),
-        "Volatility (1Y)" to com.marksy.os.upstox.Technicals.volatility(live.daily)?.let { String.format(Locale.US, "%.1f%%", it) },
-        "Beta (NIFTY 50)" to com.marksy.os.upstox.Technicals.beta(live.daily, live.index, java.time.ZoneId.of("Asia/Kolkata"))?.let { String.format(Locale.US, "%.2f", it) }
+        "Volatility (1Y)" to com.marksy.os.upstox.Technicals.volatility(live.daily)?.let { MarksyFormat.percent(it, 1, signed = false) },
+        "Beta (NIFTY 50)" to com.marksy.os.upstox.Technicals.beta(live.daily, live.index, java.time.ZoneId.of("Asia/Kolkata"))?.let(::money)
     ).filter { it.second != null }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
         val zone = java.time.ZoneId.of("Asia/Kolkata")
         val long = remember(live.monthly, q.lastPrice) { com.marksy.os.upstox.Seasonality.longReturns(live.monthly, q.lastPrice, zone) }
         val returns = listOf("1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "5Y", "10Y").mapNotNull { k -> (live.returns[k] ?: long[k])?.let { k to it } }
@@ -257,8 +255,8 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
             returns.forEach { (label, raw) ->
                 val pct = if (kotlin.math.abs(raw) < .05) 0.0 else raw
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                    Text(String.format(Locale.US, "%+.1f%%", pct), color = if (pct >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                    Text(MarksyFormat.percent(pct, 1), color = if (pct >= 0) MarksyTheme.Positive else MarksyTheme.Negative, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -266,8 +264,8 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 row.forEach { (label, value) ->
                     Column(Modifier.weight(1f)) {
-                        Text(label, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1)
-                        Text(value!!, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1)
+                        Text(value!!, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -278,7 +276,7 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
         com.marksy.os.upstox.Seasonality.allTime(live.monthly)?.let { (lo, hi) ->
             val month = SimpleDateFormat("MMM yyyy", Locale.getDefault())
             RangeBar("All-time range (since ${month.format(Date(live.monthly.first().time))})", lo.first, hi.first, q.lastPrice)
-            Text("Low in ${month.format(Date(lo.second))} · high in ${month.format(Date(hi.second))}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+            Text("Low in ${month.format(Date(lo.second))} · high in ${month.format(Date(hi.second))}", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
         VolumeTrend(live.daily, live.averageVolume)
     }
@@ -289,20 +287,19 @@ private fun StatsCard(q: UpstoxQuote, live: StockLive) {
 private fun VolumeTrend(daily: List<Candle>, average: Long?) {
     val days = daily.takeLast(7).takeIf { it.size >= 2 } ?: return
     val peak = (days.maxOf { it.volume }.toDouble()).coerceAtLeast(average?.toDouble() ?: 0.0).takeIf { it > 0 } ?: return
-    val day = SimpleDateFormat("d MMM", Locale.getDefault())
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Row {
-            Text("Volume trend", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            average?.let { Text("20D avg ${compact(it)}", color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+            Text("Volume trend", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
+            average?.let { Text("20D avg ${compact(it)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
         }
         Row(Modifier.fillMaxWidth().height(90.dp).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
             days.forEach { c ->
                 val above = average != null && c.volume > average
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
-                    Text(if (c.volume >= 10_000_000) String.format(Locale.US, "%.1fCr", c.volume / 1e7) else if (c.volume >= 100_000) "${c.volume / 100_000}L" else count(c.volume), color = MarksyTheme.TextSecondary, fontSize = 8.sp, maxLines = 1)
+                    Text(if (c.volume >= 10_000_000) MarksyFormat.number(c.volume / 1e7, 1) + "Cr" else if (c.volume >= 100_000) "${c.volume / 100_000}L" else count(c.volume), color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1)
                     Box(Modifier.fillMaxWidth(.7f).fillMaxHeight((c.volume / peak * .6).toFloat().coerceAtLeast(.02f)).clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                        .background(if (above) MarksyTheme.PrimaryEmerald.copy(alpha = .8f) else MarksyTheme.TextMuted.copy(alpha = .5f)))
-                    Text(day.format(Date(c.time)), color = MarksyTheme.TextMuted, fontSize = 8.sp, maxLines = 1)
+                        .background(if (above) MarksyTheme.Positive.copy(alpha = .8f) else MarksyTheme.TextMuted.copy(alpha = .5f)))
+                    Text(MarksyFormat.day(at(c.time).toLocalDate()), color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
                 }
             }
         }
@@ -312,49 +309,49 @@ private fun VolumeTrend(daily: List<Candle>, average: Long?) {
 @Composable
 private fun RangeBar(label: String, low: Double, high: Double, price: Double) {
     Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        Text(label, color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         val at = if (high > low) ((price - low) / (high - low)).coerceIn(0.0, 1.0).toFloat() else .5f
         Canvas(Modifier.fillMaxWidth().height(14.dp)) {
             val mid = size.height / 2
-            drawLine(Color(0x33FFFFFF), Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.Divider, Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
             drawLine(MarksyTheme.PrimaryEmerald, Offset(0f, mid), Offset(size.width * at, mid), 4.dp.toPx(), StrokeCap.Round)
-            drawCircle(Color.White, 5.dp.toPx(), Offset(size.width * at, mid))
+            drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(size.width * at, mid))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("₹${money(low)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-            Text("₹${money(high)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+            Text(MarksyFormat.rupees(low), color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+            Text(MarksyFormat.rupees(high), color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
         }
     }
 }
 
 @Composable
 private fun DepthCard(q: UpstoxQuote) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
-        Text("Market depth", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+        Text("Market depth", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
         val deepest = (q.bids + q.asks).take(10).maxOfOrNull { it.quantity }?.takeIf { it > 0 } ?: 1L
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            DepthSide("Buy", q.bids, MarksyTheme.PrimaryEmerald, sell = false, deepest, Modifier.weight(1f))
+            DepthSide("Buy", q.bids, MarksyTheme.Positive, sell = false, deepest, Modifier.weight(1f))
             Spacer(Modifier.width(10.dp))
-            DepthSide("Sell", q.asks, MarksyTheme.RedUrgent, sell = true, deepest, Modifier.weight(1f))
+            DepthSide("Sell", q.asks, MarksyTheme.Negative, sell = true, deepest, Modifier.weight(1f))
         }
         val buy = q.totalBuyQty
         val sell = q.totalSellQty
         if (buy != null && sell != null && buy + sell > 0) {
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("Total", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(count(buy), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Total", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(count(buy), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(10.dp))
-                Text(count(sell), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("Total", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(count(sell), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Total", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
             }
             val share = buy.toFloat() / (buy + sell)
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(RoundedCornerShape(3.dp))) {
-                Box(Modifier.weight(share.coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.PrimaryEmerald))
-                Box(Modifier.weight((1 - share).coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.RedUrgent))
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(6.dp).clip(MarksyShape.Badge)) {
+                Box(Modifier.weight(share.coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.Positive))
+                Box(Modifier.weight((1 - share).coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.Negative))
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${Math.round(share * 100)}% buyers", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-                Text("${100 - Math.round(share * 100)}% sellers", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("${Math.round(share * 100)}% buyers", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+                Text("${100 - Math.round(share * 100)}% sellers", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
         }
     }
@@ -364,17 +361,17 @@ private fun DepthCard(q: UpstoxQuote) {
 @Composable
 private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell: Boolean, deepest: Long, modifier: Modifier) {
     @Composable
-    fun RowScope.cells(qty: String, orders: String, price: String, qtyColor: Color, priceColor: Color, size: Int) {
+    fun RowScope.cells(qty: String, orders: String, price: String, qtyColor: Color, priceColor: Color, style: TextStyle) {
         val first = if (sell) price to priceColor else qty to qtyColor
         val last = if (sell) qty to qtyColor else price to priceColor
-        Text(first.first, color = first.second, fontSize = size.sp, modifier = Modifier.weight(1f))
-        Text(orders, color = MarksyTheme.TextMuted, fontSize = size.sp, modifier = Modifier.weight(.6f), textAlign = TextAlign.Center)
-        Text(last.first, color = last.second, fontSize = size.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+        Text(first.first, color = first.second, style = style, modifier = Modifier.weight(1f))
+        Text(orders, color = MarksyTheme.TextMuted, style = style, modifier = Modifier.weight(.6f), textAlign = TextAlign.Center)
+        Text(last.first, color = last.second, style = style, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
     Column(modifier) {
-        Text(title, color = tint, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)) { cells("Qty", "Orders", "Price", MarksyTheme.TextMuted, MarksyTheme.TextMuted, 10) }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(tint.copy(alpha = .5f)))
+        Text(title, color = tint, style = MarksyType.Small, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)) { cells("Qty", "Orders", "Price", MarksyTheme.TextMuted, MarksyTheme.TextMuted, MarksyType.Caption) }
+        Box(Modifier.fillMaxWidth().height(MarksySpace.Border).background(tint.copy(alpha = .5f)))
         levels.take(5).forEach { l ->
             Box(Modifier.fillMaxWidth().padding(top = 3.dp).height(22.dp), contentAlignment = Alignment.CenterStart) {
                 // The bar grows from the centre of the book, so the two sides read against each other.
@@ -383,7 +380,7 @@ private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell
                         .fillMaxWidth((l.quantity.toFloat() / deepest).coerceIn(0f, 1f)).fillMaxHeight().background(tint.copy(alpha = .12f))
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    cells(count(l.quantity), l.orders.toString(), money(l.price), MarksyTheme.TextPrimary, tint, 12)
+                    cells(count(l.quantity), l.orders.toString(), money(l.price), MarksyTheme.TextPrimary, tint, MarksyType.Small)
                 }
             }
         }
@@ -391,24 +388,15 @@ private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell
 }
 
 /** Indian grouping, two decimals: 1234567.5 -> "12,34,567.50". */
-internal fun money(v: Double): String {
-    val negative = v < 0
-    val cents = Math.round(kotlin.math.abs(v) * 100)
-    return (if (negative) "-" else "") + indian(cents / 100) + "." + (cents % 100).toString().padStart(2, '0')
-}
+internal fun money(v: Double): String = (if (v < 0) MarksyFormat.MINUS else "") + MarksyFormat.number(v)
 
-internal fun count(v: Long): String = indian(v)
+internal fun count(v: Long): String = MarksyFormat.number(v.toDouble(), 0)
+
+private fun at(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
 
 /** Indian units for big counts: 13138735 -> "1.31 Cr", 452000 -> "4.52 L". */
 internal fun compact(v: Long): String = when {
     v >= 10_000_000 -> money(v / 1e7) + " Cr"
     v >= 100_000 -> money(v / 1e5) + " L"
-    else -> indian(v)
-}
-
-private fun indian(n: Long): String {
-    val s = n.toString()
-    if (s.length <= 3) return s
-    val head = s.dropLast(3)
-    return head.reversed().chunked(2).joinToString(",").reversed() + "," + s.takeLast(3)
+    else -> count(v)
 }

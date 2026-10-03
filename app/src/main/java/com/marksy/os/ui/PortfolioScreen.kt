@@ -28,23 +28,16 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -68,9 +62,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.alerts.PriceAlertStore
 import com.marksy.os.portfolio.AllocationBy
 import com.marksy.os.portfolio.AllocationSlice
@@ -234,8 +228,8 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
 
     MarksyRefreshBox(refresh) {
         LazyColumn(
-            Modifier.fillMaxSize().padding(horizontal = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
+            verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
             contentPadding = PaddingValues(top = 4.dp, bottom = padding.calculateBottomPadding())
         ) {
             val snap = snapshot
@@ -256,7 +250,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
                         )
                     }
                     if (q.isEmpty() && needs.isNotEmpty()) {
-                        item(key = "needs-lane") { Lane("Needs a look", needs.size, MarksyTheme.RedUrgent) }
+                        item(key = "needs-lane") { SectionLabel("Needs a look", needs.size, MarksyTheme.Negative) }
                         items(if (needsOpen) needs else needs.take(3), key = { "need-${it.row.holding.symbol}" }) { n ->
                             NeedsCard(
                                 n, sectorPct, onWhy = { why = n }, onOpen = { onOpenStock(n.row.holding.symbol) }, onAlert = { alerting = n.row },
@@ -274,7 +268,14 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
                     HoldingType.entries.forEach { type ->
                         val list = visible.filter { it.holding.type == type }
                         if (list.isNotEmpty()) {
-                            item(key = "lane-$type") { Lane(type.label, list.size, MarksyTheme.BlueFinance, list.sumOf { it.pnl(metric) ?: 0.0 }) }
+                            item(key = "lane-$type") {
+                                val sum = list.sumOf { it.pnl(metric) ?: 0.0 }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    SectionLabel(type.label, list.size, MarksyTheme.BlueFinance, modifier = Modifier.weight(1f))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(MarksyFormat.signedRupees(sum, 0), color = pnlColor(sum), style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+                                }
+                            }
                             item(key = "stack-$type") {
                                 HoldingsStack(list, metric, period, flagged, open, onToggle = { s -> open = if (open == s) null else s }, onOpen = onOpenStock, onAlert = { alerting = it })
                             }
@@ -282,7 +283,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
                     }
                     if (q.isNotEmpty() && visible.isEmpty()) item(key = "no-match") { EmptyState("No holding matches \"$q\"", "Search looks at symbols and company names.") }
                     if (q.isEmpty() && show == null) {
-                        item(key = "mf-lane") { Lane("Mutual funds", null, MarksyTheme.BlueFinance) }
+                        item(key = "mf-lane") { SectionLabel("Mutual funds", dot = MarksyTheme.BlueFinance) }
                         item(key = "mf") { MutualFundsPlaceholder() }
                     }
                     if (hidden.isNotEmpty()) item(key = "hidden") { HiddenFooter(hidden.size) { repo.unhideAll(); hidden = emptySet() } }
@@ -324,24 +325,21 @@ private fun PortfolioHero(
     allocationBy: AllocationBy,
     onAllocationBy: (AllocationBy) -> Unit
 ) {
-    Column(Modifier.portfolioCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.marksyCard().padding(MarksySpace.CardPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Current value", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                    Text("Current value", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                     badge?.let {
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            it, color = MarksyTheme.TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.background(MarksyTheme.SurfaceRaised, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
+                        MarksyBadge(it, MarksyTheme.TextSecondary, MarksyTheme.SurfaceRaised)
                     }
                 }
-                Text(rupees(totals.value), color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(MarksyFormat.rupees(totals.value, 0), color = MarksyTheme.TextPrimary, style = MarksyType.Display, fontWeight = FontWeight.Bold, maxLines = 1)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("Invested", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                Text(rupees(totals.invested), color = MarksyTheme.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("Invested", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+                Text(MarksyFormat.rupees(totals.invested, 0), color = MarksyTheme.TextSecondary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -350,46 +348,46 @@ private fun PortfolioHero(
         }
         if (series.size >= 2) {
             // Relative to the period start: Sparkline's scale always includes zero.
-            Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, Modifier.fillMaxWidth().height(52.dp))
+            Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.Positive else MarksyTheme.Negative, Modifier.fillMaxWidth().height(52.dp))
         }
         if (series.size >= 2 || nifty != null) Row(verticalAlignment = Alignment.CenterVertically) {
-            if (series.size >= 2) Text(if (period == PortfolioPeriod.D1) "9:15 am" else "${period.title} ago", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+            if (series.size >= 2) Text(if (period == PortfolioPeriod.D1) "9:15 am" else "${period.title} ago", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             Spacer(Modifier.weight(1f))
             nifty?.let {
-                Text("NIFTY 50 ", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                Text(signedPct(it), color = pnlColor(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                Text("NIFTY 50 ", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                Text(MarksyFormat.percent(it), color = pnlColor(it), style = MarksyType.Caption, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.weight(1f))
-            if (series.size >= 2) Text("now", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+            if (series.size >= 2) Text("now", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PortfolioPeriod.entries.forEach { p -> Pill(p.label, selected = p == period) { onPeriod(p) } }
         }
-        if (period != PortfolioPeriod.D1) Text("Assumes today's holdings for the whole period.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        if (period != PortfolioPeriod.D1) Text("Assumes today's holdings for the whole period.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         AllocationBar(rows, allocationOpen, onAllocationToggle, allocationBy, onAllocationBy)
     }
 }
 
 @Composable
 private fun PnlBox(title: String, pnl: Double?, pct: Double?, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = MarksyShape.Pill
     Column(
         modifier.clip(shape)
             .background(if (selected) MarksyTheme.BadgeTradingBg else MarksyTheme.Background)
-            .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
+            .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(onClickLabel = "Show $title on every row", onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            Text(title, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.weight(1f))
             if (selected) Icon(Icons.Default.Check, contentDescription = "Rows show $title", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(14.dp))
         }
-        Text(pnl?.let(::signedRupees) ?: "—", color = pnlColor(pnl), fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(pct?.let(::signedPct) ?: " ", color = pnlColor(pct), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(pnl?.let { MarksyFormat.signedRupees(it, 0) } ?: "—", color = pnlColor(pnl), style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(pct?.let { MarksyFormat.percent(it) } ?: " ", color = pnlColor(pct), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
     }
 }
 
-private val SliceColors = listOf(MarksyTheme.BlueFinance, Color(0xFF5C9BFF), Color(0xFF8DB8FF), Color(0xFFC2D9FF))
+private val SliceColors = listOf(MarksyTheme.BlueFinance, MarksyTheme.EmailBlue, MarksyTheme.BlueFinance.copy(alpha = .6f), MarksyTheme.BlueFinance.copy(alpha = .35f))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -398,10 +396,10 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
     val top = sectors.take(4)
     val rest = sectors.drop(4)
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) "Hide allocation" else "Show allocation", onClick = onToggle),
+        Modifier.fillMaxWidth().clip(MarksyShape.Chip).clickable(onClickLabel = if (open) "Hide allocation" else "Show allocation", onClick = onToggle),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().height(8.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             top.forEachIndexed { i, s -> Box(Modifier.weight(s.pct.toFloat().coerceAtLeast(0.5f)).fillMaxHeight().background(SliceColors[i])) }
             if (rest.isNotEmpty()) Box(Modifier.weight(rest.sumOf { it.pct }.toFloat().coerceAtLeast(0.5f)).fillMaxHeight().background(MarksyTheme.BorderGlow))
         }
@@ -410,7 +408,7 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
                 top.forEachIndexed { i, s -> Legend(SliceColors[i], "${s.name} ${s.pct.roundToInt()}%") }
                 if (rest.isNotEmpty()) Legend(MarksyTheme.TextMuted, "${rest.size} more ${rest.sumOf { it.pct }.roundToInt()}%")
             }
-            Icon(if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
         }
     }
     if (open) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -423,7 +421,7 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
         list.forEach { s -> AllocationRow(s, max, line = PortfolioFlags.CONCENTRATION_PCT.takeIf { by == AllocationBy.HOLDING }) }
         if (by == AllocationBy.HOLDING) Text(
             "Amber line at ${PortfolioFlags.CONCENTRATION_PCT.roundToInt()}%: a holding past it shows under Needs a look.",
-            color = MarksyTheme.TextMuted, fontSize = 11.sp
+            color = MarksyTheme.TextMuted, style = MarksyType.Meta
         )
     }
 }
@@ -432,17 +430,17 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
 private fun AllocationRow(slice: AllocationSlice, max: Double, line: Double?) {
     val over = line != null && PortfolioFlags.concentrated(slice.pct)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(slice.name, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(92.dp))
+        Text(slice.name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(92.dp))
         BoxWithConstraints(Modifier.weight(1f).height(8.dp)) {
-            Box(Modifier.fillMaxWidth().height(6.dp).align(Alignment.Center).clip(RoundedCornerShape(3.dp)).background(MarksyTheme.SurfaceRaised))
+            Box(Modifier.fillMaxWidth().height(6.dp).align(Alignment.Center).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised))
             Box(
                 Modifier.fillMaxWidth((slice.pct / max).coerceIn(0.0, 1.0).toFloat()).height(6.dp).align(Alignment.CenterStart)
-                    .clip(RoundedCornerShape(3.dp)).background(if (over) MarksyTheme.YellowImportant else MarksyTheme.BlueFinance)
+                    .clip(MarksyShape.Badge).background(if (over) MarksyTheme.YellowImportant else MarksyTheme.BlueFinance)
             )
             line?.let { Box(Modifier.offset(x = maxWidth * (it / max).toFloat()).width(2.dp).fillMaxHeight().background(MarksyTheme.YellowImportant)) }
         }
         Text(
-            "${one(slice.pct)}%", color = if (over) MarksyTheme.YellowImportant else MarksyTheme.TextPrimary, fontSize = 11.sp,
+            "${MarksyFormat.number(slice.pct, 1)}%", color = if (over) MarksyTheme.YellowImportant else MarksyTheme.TextPrimary, style = MarksyType.Meta,
             textAlign = TextAlign.End, modifier = Modifier.width(44.dp)
         )
     }
@@ -451,28 +449,9 @@ private fun AllocationRow(slice: AllocationSlice, max: Double, line: Double?) {
 @Composable
 private fun Legend(color: Color, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
+        Box(Modifier.size(8.dp).clip(MarksyShape.Badge).background(color))
         Spacer(Modifier.width(4.dp))
-        Text(text, color = MarksyTheme.TextSecondary, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun Lane(title: String, count: Int?, lamp: Color, sum: Double? = null) {
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(lamp))
-        Spacer(Modifier.width(6.dp))
-        Text(title.uppercase(Locale.ROOT), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        count?.let {
-            Spacer(Modifier.width(6.dp))
-            Text("$it", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(Modifier.weight(1f).height(1.dp).background(MarksyTheme.BorderGlow))
-        sum?.let {
-            Spacer(Modifier.width(8.dp))
-            Text(signedRupees(it), color = pnlColor(it), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        }
+        Text(text, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
     }
 }
 
@@ -482,26 +461,25 @@ private fun NeedsCard(item: NeedsLook, sectorPct: Map<String, Double>, onWhy: ()
     val r = item.row
     val h = r.holding
     val (fg, bg) = severityColors(item.primary.severity)
-    val shape = RoundedCornerShape(16.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, fg.copy(alpha = .55f), shape)
-            .clickable(onClickLabel = "Why ${h.symbol} needs a look", onClick = onWhy).padding(12.dp),
+        Modifier.fillMaxWidth().marksyCard(fg.copy(alpha = .55f))
+            .clickable(onClickLabel = "Why ${h.symbol} needs a look", onClick = onWhy).padding(MarksySpace.CardPadding),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Chip(flagIcon(item.primary), item.primary.reason, fg, bg)
             Spacer(Modifier.weight(1f))
-            r.dayPnl?.let { Text("${signedRupees(it)} today", color = pnlColor(it), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            r.dayPnl?.let { Text("${MarksyFormat.signedRupees(it, 0)} today", color = pnlColor(it), style = MarksyType.Small, fontWeight = FontWeight.Bold) }
         }
         Text(
             listOfNotNull(
                 if (h.type == HoldingType.ETF) "ETF" else "Stock", h.sector?.takeIf { h.type == HoldingType.STOCK },
                 (item.flags.size - 1).takeIf { it > 0 }?.let { "$it more reason${if (it > 1) "s" else ""}" }
             ).joinToString(" · "),
-            color = MarksyTheme.TextMuted, fontSize = 11.sp
+            color = MarksyTheme.TextMuted, style = MarksyType.Meta
         )
-        Text("${displayName(h.name)} · ₹${money(r.price)}", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(needBody(item, sectorPct), color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Text("${displayName(h.name)} · ${MarksyFormat.rupees(r.price)}", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(needBody(item, sectorPct), color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 3, overflow = TextOverflow.Ellipsis)
         FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Pill("Open stock", onClick = onOpen)
             Pill("Alert", onClick = onAlert)
@@ -515,24 +493,24 @@ private fun needBody(item: NeedsLook, sectorPct: Map<String, Double>): String {
     val h = r.holding
     val parts = item.flags.mapNotNull { f ->
         when (f.kind) {
-            FlagKind.BELOW_AVERAGE -> "${signedRupees(r.totalPnl)} on ${plural(h.quantity.toInt(), "share")}; you paid ₹${money(h.averagePrice)} on average."
-            FlagKind.CONCENTRATION -> "${rupees(r.value)} in one holding" +
+            FlagKind.BELOW_AVERAGE -> "${MarksyFormat.signedRupees(r.totalPnl, 0)} on ${plural(h.quantity.toInt(), "share")}; you paid ${MarksyFormat.rupees(h.averagePrice)} on average."
+            FlagKind.CONCENTRATION -> "${MarksyFormat.rupees(r.value, 0)} in one holding" +
                 (h.sector?.takeIf { h.type == HoldingType.STOCK }?.let { s -> sectorPct[s]?.let { "; $s make up ${it.roundToInt()}% of the portfolio" } } ?: "") + "."
             FlagKind.NEAR_ALERT, FlagKind.DAY_MOVE -> if (f == item.primary) null else "${f.reason}."
         }
     }.toMutableList()
     val total = r.totalPct
-    if (item.flags.none { it.kind == FlagKind.BELOW_AVERAGE } && total != null && total < -5) parts += "${one(-total)}% below your ₹${money(h.averagePrice)} average."
-    if (parts.isEmpty()) parts += "${plural(h.quantity.toInt(), "share")}, ${rupees(r.value)} at today's price."
+    if (item.flags.none { it.kind == FlagKind.BELOW_AVERAGE } && total != null && total < -5) parts += "${MarksyFormat.number(-total, 1)}% below your ${MarksyFormat.rupees(h.averagePrice)} average."
+    if (parts.isEmpty()) parts += "${plural(h.quantity.toInt(), "share")}, ${MarksyFormat.rupees(r.value, 0)} at today's price."
     return parts.joinToString(" ")
 }
 
 @Composable
 private fun Chip(icon: ImageVector, text: String, fg: Color, bg: Color) {
-    Row(Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 7.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = 7.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(4.dp))
-        Text(text, color = fg, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(text, color = fg, style = MarksyType.Meta, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -544,9 +522,9 @@ private fun flagIcon(f: HoldingFlag): ImageVector = when (f.kind) {
 }
 
 private fun severityColors(s: FlagSeverity): Pair<Color, Color> = when (s) {
-    FlagSeverity.CRITICAL -> MarksyTheme.RedUrgent to MarksyTheme.BadgeUrgentBg
-    FlagSeverity.WARNING -> MarksyTheme.YellowImportant to MarksyTheme.BadgeImportantBg
-    FlagSeverity.POSITIVE -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
+    FlagSeverity.CRITICAL -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
+    FlagSeverity.WARNING -> MarksyTheme.Warning to MarksyTheme.BadgeImportantBg
+    FlagSeverity.POSITIVE -> MarksyTheme.Positive to MarksyTheme.BadgeTradingBg
 }
 
 private fun ruleText(kind: FlagKind): String = when (kind) {
@@ -566,12 +544,12 @@ private fun WhyDialog(item: NeedsLook, onOpen: () -> Unit, onDismiss: () -> Unit
                 item.flags.forEach { f ->
                     val (fg, bg) = severityColors(f.severity)
                     Chip(flagIcon(f), f.reason, fg, bg)
-                    Text("Marksy flags a holding when ${ruleText(f.kind)}.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                    Text("Marksy flags a holding when ${ruleText(f.kind)}.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } },
-        confirmButton = { TextButton(onClick = onOpen) { Text("Open stock", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+        dismissButton = { MarksyButton("Close", onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) },
+        confirmButton = { MarksyButton("Open stock", onOpen, style = MarksyButtonStyle.Text) }
     )
 }
 
@@ -586,9 +564,9 @@ private fun HoldingsStack(
     onOpen: (String) -> Unit,
     onAlert: (HoldingRow) -> Unit
 ) {
-    Column(Modifier.portfolioCard()) {
+    Column(Modifier.marksyCard()) {
         rows.forEachIndexed { i, r ->
-            if (i > 0) HorizontalDivider(color = MarksyTheme.BorderGlow.copy(alpha = .6f), thickness = 1.dp)
+            if (i > 0) MarksyDivider()
             HoldingLine(r, metric, period, flagged[r.holding.symbol], open == r.holding.symbol, { onToggle(r.holding.symbol) }, { onOpen(r.holding.symbol) }, { onAlert(r) })
         }
     }
@@ -610,31 +588,31 @@ private fun HoldingLine(
     val pct = r.pct(metric)
     Column(
         Modifier.fillMaxWidth().clickable(onClickLabel = if (expanded) "Collapse ${h.symbol}" else "Expand ${h.symbol}", onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 9.dp)
+            .padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Text(h.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(h.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 flag?.let {
                     Spacer(Modifier.width(6.dp))
                     Box(Modifier.size(7.dp).clip(CircleShape).background(severityColors(it).first))
                 }
             }
-            Text(pnl?.let(::signedRupees) ?: "—", color = pnlColor(pnl), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(pnl?.let { MarksyFormat.signedRupees(it, 0) } ?: "—", color = pnlColor(pnl), style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             Text(
-                pct?.let(::signedPct).orEmpty(), color = pnlColor(pct), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                pct?.let { MarksyFormat.percent(it) }.orEmpty(), color = pnlColor(pct), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 58.dp)
             )
         }
         Row {
-            Text("${count(h.quantity)} sh · avg ₹${money(h.averagePrice)}", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            Text("LTP ₹${money(r.price)}", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            Text("${count(h.quantity)} sh · avg ${MarksyFormat.rupees(h.averagePrice)}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
+            Text("LTP ${MarksyFormat.rupees(r.price)}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         if (!expanded) {
             // Full width is 25% of the portfolio.
             Box(
                 Modifier.padding(top = 5.dp).fillMaxWidth((r.weightPct / 25).coerceIn(0.0, 1.0).toFloat()).height(2.dp)
-                    .clip(RoundedCornerShape(1.dp)).background(MarksyTheme.BlueFinance.copy(alpha = .6f))
+                    .clip(MarksyShape.Badge).background(MarksyTheme.BlueFinance.copy(alpha = .6f))
             )
         } else {
             HoldingDetail(r, period, onOpen, onAlert, onToggle)
@@ -649,22 +627,22 @@ private fun HoldingDetail(r: HoldingRow, period: PortfolioPeriod, onOpen: () -> 
     val plain = MarksyTheme.TextPrimary
     val cells = listOf(
         Triple("Quantity", count(h.quantity), plain),
-        Triple("Avg price", "₹" + money(h.averagePrice), plain),
-        Triple("LTP", "₹" + money(r.price), plain),
-        Triple("Invested", rupees(r.invested), plain),
-        Triple("Current", rupees(r.value), plain),
-        Triple("Weight", "${one(r.weightPct)}%", plain),
-        Triple("${period.title} P&L", r.periodPnl?.let(::signedRupees) ?: "—", pnlColor(r.periodPnl)),
-        Triple("Total P&L", signedRupees(r.totalPnl), pnlColor(r.totalPnl)),
-        Triple("Total return", r.totalPct?.let(::signedPct) ?: "—", pnlColor(r.totalPct))
+        Triple("Avg price", MarksyFormat.rupees(h.averagePrice), plain),
+        Triple("LTP", MarksyFormat.rupees(r.price), plain),
+        Triple("Invested", MarksyFormat.rupees(r.invested, 0), plain),
+        Triple("Current", MarksyFormat.rupees(r.value, 0), plain),
+        Triple("Weight", "${MarksyFormat.number(r.weightPct, 1)}%", plain),
+        Triple("${period.title} P&L", r.periodPnl?.let { MarksyFormat.signedRupees(it, 0) } ?: "—", pnlColor(r.periodPnl)),
+        Triple("Total P&L", MarksyFormat.signedRupees(r.totalPnl, 0), pnlColor(r.totalPnl)),
+        Triple("Total return", r.totalPct?.let { MarksyFormat.percent(it) } ?: "—", pnlColor(r.totalPct))
     )
     Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         cells.chunked(3).forEach { line ->
             Row {
                 line.forEach { (label, value, color) ->
                     Column(Modifier.weight(1f)) {
-                        Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                        Text(value, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                        Text(value, color = color, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
             }
@@ -680,100 +658,86 @@ private fun HoldingDetail(r: HoldingRow, period: PortfolioPeriod, onOpen: () -> 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit) {
-    Column(Modifier.portfolioCard().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.marksyCard().padding(MarksySpace.CardPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
         Box(Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
             Icon(Icons.Default.PieChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(22.dp))
         }
-        Text("See what you own, next to live prices", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text("See what you own, next to live prices", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
         Text(
             "Holdings need an Upstox sign-in once a day; Upstox's market-data token can't read them. Sign in to see today's and " +
                 "total P&L, holdings that need a look, and your sector mix.",
-            color = MarksyTheme.TextSecondary, fontSize = 12.5.sp, lineHeight = 18.sp
+            color = MarksyTheme.TextSecondary, style = MarksyType.Small
         )
-        SignInButton(onSignIn, Modifier.fillMaxWidth())
+        MarksyButton("Sign in to Upstox", onSignIn, Modifier.fillMaxWidth())
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             providers.filterNot { it.available }.forEach { p -> Pill("${p.name} · ${p.note.lowercase(Locale.ROOT)}", enabled = false) {} }
             Pill("Mutual funds · coming soon", enabled = false) {}
         }
-        Text("Read-only. Holdings go from Upstox straight to this phone; Marksy's servers never see them.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        Text("Read-only. Holdings go from Upstox straight to this phone; Marksy's servers never see them.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }
 }
 
 @Composable
 private fun LoadFailedCard(message: String, onRetry: () -> Unit) {
-    Column(Modifier.portfolioCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Chip(Icons.Default.Schedule, "Couldn't load your holdings", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
-        Text(message, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-        Text("You're still signed in to Upstox; nothing is wrong with your keys.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+    Column(Modifier.marksyCard().padding(MarksySpace.CardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chip(Icons.Default.Schedule, "Couldn't load your holdings", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg)
+        Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        Text("You're still signed in to Upstox; nothing is wrong with your keys.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         Pill("Try again", onClick = onRetry)
     }
 }
 
 @Composable
 private fun SignedOutCard(fetchedAt: Long, livePrices: Boolean, reason: String?, onSignIn: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.YellowImportant.copy(alpha = .55f), shape).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        Modifier.fillMaxWidth().marksyCard(MarksyTheme.Warning.copy(alpha = .55f)).padding(MarksySpace.CardPadding),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
     ) {
-        Chip(Icons.Default.Schedule, "Signed out of Upstox", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
-        Text(reason ?: "Upstox ends every sign-in at 3:30 am", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Chip(Icons.Default.Schedule, "Signed out of Upstox", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg)
+        Text(reason ?: "Upstox ends every sign-in at 3:30 am", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
         Text(
             "Holdings as of ${compactTime(fetchedAt) ?: "your last sign-in"}; prices are ${if (livePrices) "live" else "from then too"}.",
-            color = MarksyTheme.TextSecondary, fontSize = 12.sp
+            color = MarksyTheme.TextSecondary, style = MarksyType.Small
         )
-        SignInButton(onSignIn)
-    }
-}
-
-@Composable
-private fun SignInButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
-        onClick = onClick, modifier = modifier,
-        colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald, contentColor = Color.Black),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text("Sign in to Upstox", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        MarksyButton("Sign in to Upstox", onSignIn)
     }
 }
 
 @Composable
 private fun Caveat(text: String) {
-    Text(text, color = MarksyTheme.YellowImportant, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 4.dp))
+    Text(text, color = MarksyTheme.Warning, style = MarksyType.Meta, modifier = Modifier.padding(horizontal = 4.dp))
 }
 
 @Composable
 private fun MoreRow(label: String, who: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = MarksyShape.Pill
     Row(
-        Modifier.fillMaxWidth().clip(shape).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
+        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(if (who.isEmpty()) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (who.isEmpty()) 180f else 0f))
         Spacer(Modifier.width(6.dp))
-        Text(label, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium)
         if (who.isNotEmpty()) {
             Spacer(Modifier.width(8.dp))
-            Text(who, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(who, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
 private fun MutualFundsPlaceholder() {
-    Column(Modifier.portfolioCard().padding(horizontal = 14.dp, vertical = 10.dp)) {
-        Text("Mutual funds · coming soon", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text("Marksy has no NAV source yet, so funds you hold don't show here.", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+    Column(Modifier.marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = 10.dp)) {
+        Text("Mutual funds · coming soon", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        Text("Marksy has no NAV source yet, so funds you hold don't show here.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }
 }
 
 @Composable
 private fun HiddenFooter(count: Int, onShow: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Text("$count hidden till the next open · ", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-        Text("Show", color = MarksyTheme.TextSecondary, fontSize = 11.sp, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable(onClick = onShow).padding(4.dp))
+        Text("$count hidden till the next open · ", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        Text("Show", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable(onClick = onShow).padding(4.dp))
     }
 }
 
@@ -785,34 +749,25 @@ private fun PortfolioSortDialog(sort: HoldingSort, show: HoldingType?, onSort: (
         title = { Text("Sort and show") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Sort", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                Text("Sort", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     HoldingSort.entries.forEach { s -> Pill(s.label, selected = s == sort) { onSort(s) } }
                 }
-                Text("Show", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                Text("Show", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     (listOf<HoldingType?>(null) + HoldingType.entries).forEach { t -> Pill(t?.label ?: "All", selected = t == show) { onShow(t) } }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+        confirmButton = { MarksyButton("Done", onDismiss, style = MarksyButtonStyle.Text) }
     )
-}
-
-private fun Modifier.portfolioCard(): Modifier {
-    val shape = RoundedCornerShape(16.dp)
-    return fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
 }
 
 private val LEGAL_SUFFIX = Regex("\\s+(LTD|LIMITED)\\.?$", RegexOption.IGNORE_CASE)
 private fun displayName(name: String): String = name.replace(LEGAL_SUFFIX, "")
-private fun rupees(v: Double): String = "₹" + count(Math.round(abs(v)))
-private fun signedRupees(v: Double): String = (if (v < 0) "−" else "+") + rupees(v)
-private fun signedPct(v: Double): String = (if (v < 0) "−" else "+") + String.format(Locale.US, "%.2f", abs(v)) + "%"
-private fun one(v: Double): String = String.format(Locale.US, "%.1f", v)
 private fun plural(n: Int, word: String): String = "$n $word" + if (n == 1) "" else "s"
 private fun pnlColor(v: Double?): Color = when {
     v == null -> MarksyTheme.TextMuted
-    v < 0 -> MarksyTheme.RedUrgent
-    else -> MarksyTheme.PrimaryEmerald
+    v < 0 -> MarksyTheme.Negative
+    else -> MarksyTheme.Positive
 }
