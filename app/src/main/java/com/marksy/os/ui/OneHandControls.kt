@@ -200,7 +200,8 @@ data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVec
 @Composable
 internal fun MarksySearchField(
     value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier,
-    symbols: Boolean = false, onSubmit: (() -> Unit)? = null, lifted: Boolean = true
+    symbols: Boolean = false, onSubmit: (() -> Unit)? = null, lifted: Boolean = true, autoFocus: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -235,10 +236,11 @@ internal fun MarksySearchField(
                         Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
                     }
                 }
+                trailing?.invoke()
             }
         }
     )
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    if (autoFocus) LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
 /**

@@ -6,6 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.BookmarkAdded
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ColumnScope
@@ -280,10 +281,8 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text(
-                            when { has -> "✓"; pending == symbol -> "Adding…"; else -> "Add" },
-                            color = if (has) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold
-                        )
+                        if (has) Icon(Icons.Default.Check, contentDescription = "Added", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
+                        else Text(if (pending == symbol) "Adding…" else "Add", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -481,7 +480,7 @@ private fun AddToWatchlistDialog(
             lists.forEach { l ->
                 val n = counts[l.id] ?: 0
                 val has = l.id in holding
-                Pill(if (has) "${l.name} ✓" else "${l.name} $n/${WatchlistRepository.MAX_STOCKS}", selected = chosen == l.id && newName.isBlank(), enabled = !has && n < WatchlistRepository.MAX_STOCKS) {
+                Pill(if (has) "${l.name} · added" else "${l.name} $n/${WatchlistRepository.MAX_STOCKS}", selected = chosen == l.id && newName.isBlank(), enabled = !has && n < WatchlistRepository.MAX_STOCKS) {
                     chosen = l.id; userPicked = true; newName = ""
                 }
             }

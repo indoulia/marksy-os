@@ -47,9 +47,23 @@ object ClockZones {
         val id = time.zone.id
         // Android's zone data renders Asia/Kolkata as "GMT+05:30".
         if (id == "Asia/Kolkata" || id == "Asia/Calcutta") return "IST"
+        NAMED[id]?.let { (std, dst) -> return if (time.zone.rules.isDaylightSavings(time.toInstant())) dst else std }
         val short = java.util.TimeZone.getTimeZone(time.zone).getDisplayName(time.zone.rules.isDaylightSavings(time.toInstant()), java.util.TimeZone.SHORT, Locale.US)
         return if (short.startsWith("GMT") && short.length > 3) offsetLabel(time) else short
     }
+
+    // Android's zone data has no short names for these.
+    private val NAMED = mapOf(
+        "Europe/London" to ("GMT" to "BST"), "Europe/Berlin" to ("CET" to "CEST"), "Asia/Tokyo" to ("JST" to "JST"),
+        "Australia/Sydney" to ("AEST" to "AEDT"), "Asia/Singapore" to ("SGT" to "SGT"), "Asia/Dubai" to ("GST" to "GST")
+    )
+
+    /** Abbreviation and offset when they differ, the offset once otherwise. */
+    fun zoneLabel(abbreviation: String, offset: String): String = if (abbreviation == offset) offset else "$abbreviation · $offset"
+
+    /** Converter result rows: both chosen clocks, then the source and the phone when not already shown. */
+    fun resultZones(phone: ZoneId, first: ZoneId, second: ZoneId, source: ZoneId): List<ZoneId> =
+        listOf(first, second, source, phone).distinct()
 
     /** "UTC−4", "UTC+5:30". */
     fun offsetLabel(time: ZonedDateTime): String {

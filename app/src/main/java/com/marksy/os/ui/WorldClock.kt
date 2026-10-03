@@ -155,12 +155,15 @@ fun TimeZoneConverterDialog(onDismiss: () -> Unit) {
                     }
                 }
                 MarksyGroupCard {
-                    ZoneResult("First clock", from, from.withZoneSameInstant(first)) { picking = ZoneSlot.First }
-                    MarksyDivider()
-                    ZoneResult("Second clock", from, from.withZoneSameInstant(second)) { picking = ZoneSlot.Second }
-                    if (source != first && source != second) {
-                        MarksyDivider()
-                        ZoneResult("Source", from, from, null)
+                    ClockZones.resultZones(phone, first, second, source).forEachIndexed { index, zone ->
+                        if (index > 0) MarksyDivider()
+                        val at = from.withZoneSameInstant(zone)
+                        when {
+                            index == 0 -> ZoneResult("First clock", from, at) { picking = ZoneSlot.First }
+                            index == 1 -> ZoneResult("Second clock", from, at) { picking = ZoneSlot.Second }
+                            zone == source -> ZoneResult("Source", from, at, null)
+                            else -> ZoneResult("Phone", from, at, null)
+                        }
                     }
                 }
             }
@@ -248,7 +251,7 @@ fun ZonePickerDialog(title: String, onPick: (ZoneId) -> Unit, onDismiss: () -> U
                                     Text(entry.city, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
                                     if (entry.region.isNotEmpty()) Text(entry.region, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                                 }
-                                Text("${entry.abbreviation} · ${entry.offset}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Bold)
+                                Text(ClockZones.zoneLabel(entry.abbreviation, entry.offset), color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

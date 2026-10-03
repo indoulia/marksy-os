@@ -159,7 +159,7 @@ private fun PlanBoard(items: List<PlanItemEntity>, now: Long, onEdit: (PlanItemE
         items(PlanStatus.entries, key = { it.name }) { status ->
             val column = remember(items, status) { PlanModel.column(items, status) }
             MarksyCard(Modifier.width(272.dp).fillMaxHeight()) {
-                Text("${status.label} · ${column.size}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                MarksyCardHeader(status.label, trailing = { Text("${column.size}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold) })
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = OneHandListBottomPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     if (column.isEmpty()) Text("Nothing here", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                     column.forEach { BoardCard(it, now, onEdit, onStatus) }
@@ -201,14 +201,9 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
     val now = remember(items) { System.currentTimeMillis() }
     val upcoming = remember(items) { PlanModel.upcoming(items, 4) }
     MarksyCard(onClick = onOpenPlan) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.EventNote, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-                Spacer(Modifier.width(MarksySpace.Gap))
-                Text("Upcoming", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-            }
+        MarksyCardHeader("Upcoming", icon = Icons.Default.EventNote, trailing = {
             Icon(Icons.Default.Add, contentDescription = "Add reminder", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable(onClick = onAdd))
-        }
+        })
         if (upcoming.isEmpty()) {
             Text("No bills, EMIs or birthdays coming up", color = MarksyTheme.TextMuted, style = MarksyType.Small)
         }

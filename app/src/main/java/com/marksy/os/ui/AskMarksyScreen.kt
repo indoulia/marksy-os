@@ -38,21 +38,35 @@ import com.marksy.os.intelligence.AskMarksy
 import kotlinx.coroutines.launch
 import com.marksy.os.gateway.MarketState
 import com.marksy.os.MarksyFormat
+import androidx.compose.ui.graphics.vector.ImageVector
 import java.time.Instant
 import java.time.ZoneId
 
 private val promptOptions = listOf(
-    "💡 What happened today?",
-    "💬 Summarize my WhatsApp",
-    "📈 Show trading opportunities",
-    "✉️ How many emails today?",
-    "🗓️ What's coming up?",
-    "🔍 What did I miss?",
-    "💳 What payments did I make this week?",
-    "📦 What deliveries are coming tomorrow?",
-    "🧾 Which bills are due?",
-    "❓ What can you do?"
+    "What happened today?",
+    "Summarize my WhatsApp",
+    "Show trading opportunities",
+    "How many emails today?",
+    "What's coming up?",
+    "What did I miss?",
+    "What payments did I make this week?",
+    "What deliveries are coming tomorrow?",
+    "Which bills are due?",
+    "What can you do?"
 )
+
+private fun promptIcon(prompt: String): ImageVector = when {
+    "WhatsApp" in prompt -> Icons.Default.Chat
+    "trading" in prompt -> Icons.Default.TrendingUp
+    "emails" in prompt -> Icons.Default.Email
+    "coming up" in prompt -> Icons.Default.Event
+    "miss" in prompt -> Icons.Default.Search
+    "payments" in prompt -> Icons.Default.CreditCard
+    "deliveries" in prompt -> Icons.Default.LocalShipping
+    "bills" in prompt -> Icons.Default.Receipt
+    "can you do" in prompt -> Icons.Default.HelpOutline
+    else -> Icons.Default.Lightbulb
+}
 
 /**
  * Intents answered by the EPIC-016 grounded engine (typed retrieval over all stored rows incl. archived,
@@ -161,6 +175,8 @@ fun AskMarksyScreen(
                 itemsIndexed(promptOptions) { _, prompt ->
                     MarksyCard(onClick = { ask(prompt) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(promptIcon(prompt), contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
+                            Spacer(Modifier.width(MarksySpace.Gap))
                             Text(prompt, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
                         }
@@ -189,12 +205,9 @@ fun AskMarksyScreen(
                 .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CompactTextField(
-                value = input,
-                onValueChange = { input = it.take(200) },
-                modifier = Modifier.weight(1f),
-                placeholder = if (voice.listening) "Listening…" else "Ask about your notifications…",
-                shape = MarksyShape.Dialog,
+            MarksySearchField(
+                input, { input = it.take(200) }, if (voice.listening) "Listening…" else "Ask about your notifications…", Modifier.weight(1f),
+                onSubmit = { ask(input) }, lifted = false, autoFocus = false,
                 trailing = if (input.isNotBlank()) {
                     {
                         IconButton(onClick = { ask(input) }, modifier = Modifier.size(MarksySize.Button)) {
@@ -210,18 +223,16 @@ fun AskMarksyScreen(
                     .size(MarksySize.Touch)
                     .scale(micScale)
                     .clip(CircleShape)
-                    .background(
-                        if (voice.listening) Brush.linearGradient(listOf(MarksyTheme.Negative, MarksyTheme.OrangeDelivery))
-                        else Brush.linearGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.AccentGreen))
-                    )
+                    .background(if (voice.listening) MarksyTheme.Negative else MarksyTheme.SurfaceRaised)
+                    .border(MarksySpace.Border, if (voice.listening) MarksyTheme.Negative else MarksyTheme.PrimaryEmerald, CircleShape)
                     .clickable(onClick = onMic),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     if (voice.listening) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (voice.listening) "Stop listening" else "Speak a question",
-                    tint = MarksyTheme.OnAccent,
-                    modifier = Modifier.size(MarksySize.IconLarge)
+                    tint = if (voice.listening) MarksyTheme.OnAccent else MarksyTheme.PrimaryEmerald,
+                    modifier = Modifier.size(MarksySize.Icon)
                 )
             }
         }
@@ -326,7 +337,7 @@ private fun ExchangeView(
             }
             exchange.grounded?.let { g ->
                 g.action?.let { a ->
-                    Pill("${a.label} →", modifier = Modifier.padding(top = MarksySpace.Inner)) { onAction(a) }
+                    Pill(a.label, modifier = Modifier.padding(top = MarksySpace.Inner)) { onAction(a) }
                 }
                 val n = g.derivedFromEventIds.size
                 val basis = if (g.needsClarification) "Pick one to search" else

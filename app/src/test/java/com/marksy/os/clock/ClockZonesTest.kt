@@ -52,6 +52,20 @@ class ClockZonesTest {
         assertEquals("IST", ClockZones.abbreviation(summer.withZoneSameInstant(kolkata)))
     }
 
+    @Test fun zoneLabelShowsOffsetOnceWhenAbbreviationRepeats() {
+        assertEquals("UTC", ClockZones.zoneLabel("UTC", "UTC"))
+        assertEquals("EDT · UTC−4", ClockZones.zoneLabel("EDT", "UTC−4"))
+        val at = Instant.parse("2026-07-01T12:00:00Z")
+        assertEquals("BST", ClockZones.abbreviation(at.atZone(ZoneId.of("Europe/London"))))
+        assertEquals("JST", ClockZones.abbreviation(at.atZone(ZoneId.of("Asia/Tokyo"))))
+    }
+
+    @Test fun resultRowsAlwaysIncludePhoneOnce() {
+        val tokyo = ZoneId.of("Asia/Tokyo")
+        assertEquals(listOf(newYork, chicago, tokyo, kolkata), ClockZones.resultZones(kolkata, newYork, chicago, tokyo))
+        assertEquals(listOf(newYork, chicago), ClockZones.resultZones(newYork, newYork, chicago, chicago))
+    }
+
     @Test fun searchMatchesCityAbbreviationAndOffset() {
         val at = Instant.parse("2026-07-01T12:00:00Z")
         assertTrue(ClockZones.search("tokyo", at).any { it.zone.id == "Asia/Tokyo" })
