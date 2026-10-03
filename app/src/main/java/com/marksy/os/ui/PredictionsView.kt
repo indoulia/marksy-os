@@ -114,7 +114,9 @@ private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
     val s = summary ?: return
     if (s.closedCount == 0) return
     MarksyRowCard {
-        Text("Track record · ${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        MarksyCardHeader("Track record") {
+            Text("${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat("Target", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
             Stat("Stopped", s.stopLossRate?.let(::share), MarksyTheme.Negative)
@@ -206,7 +208,7 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
                 Text(LedgerCalls.closedLabel(c) ?: c.outcome?.let(::words) ?: "Closed", color = tint, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = MarksySpace.Gap))
             }
             Text(
-                listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.take(10), c.excludedReason?.let { "not scored" })
+                listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.let { runCatching { MarksyFormat.day(java.time.LocalDate.parse(it.take(10))) }.getOrDefault(it.take(10)) }, c.excludedReason?.let { "not scored" })
                     .joinToString(" · "),
                 color = MarksyTheme.TextMuted, style = MarksyType.Meta
             )
@@ -219,5 +221,5 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
 private fun words(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
 private fun share(f: Double) = MarksyFormat.percent(f * 100, 0, signed = false)
 // Returns arrive as fractions (0.032 = 3.2%).
-private fun returnPct(f: Double) = MarksyFormat.percent(f * 100, 1)
+private fun returnPct(f: Double) = MarksyFormat.percent(f * 100, 2)
 internal fun callRupees(v: Double) = MarksyFormat.rupees(v)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -392,10 +393,9 @@ private fun GmpBlock(ipo: IpoListItemDto, now: ZonedDateTime) {
 private fun Section(id: String, s: Sec, initiallyOpen: Boolean) {
     var open by rememberSaveable(id, s.key) { mutableStateOf(initiallyOpen) }
     MarksyCard {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
-            Text(s.title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-            Text(s.sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = MarksySpace.Gap))
-            Icon(Icons.Default.ExpandMore, if (open) "Fold ${s.title}" else "Show ${s.title}", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = MarksySpace.Tight).size(MarksySize.Icon).rotate(if (open) 180f else 0f))
+        MarksyCardHeader(s.title, Modifier.clickable { open = !open }) {
+            Text(s.sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
+            Icon(Icons.Default.ExpandMore, if (open) "Fold ${s.title}" else "Show ${s.title}", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
         }
         if (open) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) { s.body() }
     }
@@ -686,8 +686,9 @@ private fun AllotmentDialog(
 private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
     MarksyCard {
         val call = listOfNotNull(entry.decision?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() }, entry.expectedReturnPercent.display()?.let { "expected listing return $it%" })
-        Text(call.joinToString(" · ").ifBlank { "Prediction" }, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
-        Text(entry.predictedAt.take(16).replace('T', ' '), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+        MarksyCardHeader(call.joinToString(" · ").ifBlank { "Prediction" }, titleColor = MarksyTheme.PrimaryEmerald) {
+            Text(entry.predictedAt.take(16).replace('T', ' '), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+        }
         // Only the newest snapshot is shown in full; earlier ones are the call and when it was made.
         if (full) entry.raw?.let { raw ->
             IpoDetailFormatter.rows(raw, skip = setOf("predictedAt", "decision", "expectedReturnPercent")).forEach { DetailRow(it) }
@@ -699,7 +700,10 @@ private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
 internal fun DetailRow(row: IpoDetailFormatter.Row) {
     val indent = (row.depth * 12).dp
     if (row.paragraph) {
-        Text("• ${row.label}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(start = indent, top = MarksySpace.Hair))
+        Row(Modifier.padding(start = indent, top = MarksySpace.Hair), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+            Icon(Icons.Default.Circle, null, tint = MarksyTheme.TextMuted, modifier = Modifier.padding(top = MarksySpace.Inner).size(MarksySize.Dot))
+            Text(row.label, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        }
     } else if (row.value == null) {
         Text(row.label, color = if (row.depth == 0) MarksyTheme.TextPrimary else MarksyTheme.TextSecondary,
             style = if (row.depth == 0) MarksyType.Subhead else MarksyType.Small, fontWeight = FontWeight.SemiBold,
