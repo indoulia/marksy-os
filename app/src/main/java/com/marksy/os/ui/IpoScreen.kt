@@ -316,9 +316,7 @@ private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: ()
 @Composable
 internal fun IpoAvatar(name: String, size: Int = 32) {
     val initials = name.split(' ').filter { it.firstOrNull()?.isUpperCase() == true }.take(2).joinToString("") { it.take(1) }.ifEmpty { name.take(1) }
-    Box(Modifier.size(size.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape), contentAlignment = Alignment.Center) {
-        Text(initials, color = MarksyTheme.PrimaryEmerald, fontSize = (size * 0.38).sp, fontWeight = FontWeight.Bold)
-    }
+    MarksyAvatar(initials, size.dp)
 }
 
 @Composable

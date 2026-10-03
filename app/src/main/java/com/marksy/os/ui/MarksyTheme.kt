@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -64,6 +65,8 @@ object MarksyTheme {
     val Warning = YellowImportant
     val Info = BlueFinance
     val Divider = BorderGlow
+    /** Unfilled part of a gauge, bar or progress line. */
+    val Track = BorderGlow
 
     val DialogTitle = TextStyle(color = TextPrimary, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold)
     val DialogBody = TextStyle(color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
@@ -96,6 +99,10 @@ object MarksyType {
     /** Section and lane labels; callers uppercase the text. */
     val Label = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     val Caption = TextStyle(fontSize = 10.sp)
+    /** The MARKSY OS name on Home. */
+    val Wordmark = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+    /** Initials inside a round avatar of [size]. */
+    fun initials(size: Dp) = TextStyle(fontSize = (size.value * 0.38f).sp, fontWeight = FontWeight.Bold)
 }
 
 object MarksyShape {
@@ -106,17 +113,36 @@ object MarksyShape {
     val Card = RoundedCornerShape(14.dp)
     val Panel = RoundedCornerShape(16.dp)
     val Dialog = RoundedCornerShape(20.dp)
+    /** Top of a bar in a bar chart. */
+    val BarTop = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
 }
 
+/** The spacing scale; every padding and gap is one of these. */
 object MarksySpace {
-    /** Page side margin. */
-    val Gutter = 18.dp
+    val Hair = 2.dp
+    val Tight = 4.dp
+    /** Between lines inside a card. */
+    val Inner = 6.dp
+    val Gap = 8.dp
     /** Between cards and rows in a list. */
     val ListGap = 10.dp
     val CardPadding = 12.dp
-    /** Between lines inside a card. */
-    val Inner = 6.dp
+    val Section = 14.dp
+    val Wide = 16.dp
+    /** Page side margin. */
+    val Gutter = 18.dp
     val Border = 1.dp
+}
+
+object MarksySize {
+    val IconSmall = 14.dp
+    val Icon = 18.dp
+    val IconLarge = 24.dp
+    val Dot = 6.dp
+    val Avatar = 32.dp
+    val Button = 32.dp
+    /** Round floating buttons and the search field. */
+    val Touch = 44.dp
 }
 
 /** Marksy colours for every Material component (chips, checkboxes, pickers, snackbars) so none fall back to the stock light palette. */
