@@ -145,7 +145,7 @@ fun CaptureReviewDialog(
                 CompactTextField(horizon, { horizon = it }, Modifier.fillMaxWidth(), label = "Horizon", placeholder = "Intraday, swing, 3 weeks")
 
                 if (!candidate.sourceVerified) {
-                    Text("Which app is this from?", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+                    Text("Which app is this from? Kept on this phone only.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                         sources.forEach { s -> Pill(s.displayName, selected = picked == s.packageName) { picked = s.packageName } }
                         Pill("Other", selected = picked == null) { picked = null }
@@ -155,7 +155,7 @@ fun CaptureReviewDialog(
                 MarksyCard {
                     Text(
                         if (canSend) "Send to Marksy sends only: ${line.orEmpty()}, from $sourceName. Nothing else leaves your phone."
-                        else sendBlocked(line, source),
+                        else sendBlocked(candidate.sourceVerified, line, source),
                         color = MarksyTheme.TextPrimary, style = MarksyType.Small
                     )
                     Text("Keep on phone sends nothing.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -179,8 +179,8 @@ private fun LevelField(value: String, onChange: (String) -> Unit, label: String,
 
 private fun level(v: Double?): String = v?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
 
-private fun sendBlocked(line: String?, source: CaptureSource?): String = when {
+private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?): String = when {
+    !verified -> "Tips with a source you picked yourself stay on this phone."
     line == null -> "To send, add a symbol, buy or sell, and at least two of entry, target and stop loss."
-    source == null -> "Choose the app this came from to send it. Until then it stays on your phone."
-    else -> "${source.displayName} tips can't be sent to Marksy, so this one stays on your phone."
+    else -> "${source?.displayName ?: "This source"} tips can't be sent to Marksy, so this one stays on your phone."
 }

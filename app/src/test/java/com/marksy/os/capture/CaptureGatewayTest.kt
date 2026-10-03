@@ -118,9 +118,16 @@ class CaptureGatewayTest {
         assertEquals(CaptureState.REJECTED, gateway.review(rejected, TipFields(), null, ReviewDecision.REJECT))
         assertNull(dao.candidate(rejected)!!.extractedText)
 
-        val sent = candidateId(submit(hash = "c"))
-        gateway.review(sent, TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0), "com.research.app", ReviewDecision.SEND)
+        val sent = candidateId(submit(hash = "c", hint = "com.research.app", verified = true))
+        gateway.review(sent, TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0), null, ReviewDecision.SEND)
         assertEquals(DeliveryState.PENDING.name, dao.candidate(sent)!!.deliveryState)
+        assertEquals(1, queued)
+
+        // A source the user picked is only a label: it never queues and never becomes verified.
+        val picked = candidateId(submit(hash = "p"))
+        gateway.review(picked, TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0), "com.research.app", ReviewDecision.SEND)
+        assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(picked)!!.deliveryState)
+        assertFalse(dao.candidate(picked)!!.sourceVerified)
         assertEquals(1, queued)
 
         // Send without an allow-listed source is accepted but stays on the phone.

@@ -21,9 +21,9 @@ class CandidateDeliveryPolicyTest {
 
     private fun accepted(
         pkg: String? = "com.research.app", state: CaptureState = CaptureState.ACCEPTED, send: Boolean = true, side: String? = "BUY",
-        text: String? = ocr
+        text: String? = ocr, verified: Boolean = true
     ) = TipCandidateEntity(
-        id = 5, evidenceId = 1, method = CaptureMethod.USER_SHARED_IMAGE.name, sourcePackage = pkg, sourceName = "Research", sourceVerified = true,
+        id = 5, evidenceId = 1, method = CaptureMethod.USER_SHARED_IMAGE.name, sourcePackage = pkg, sourceName = "Research", sourceVerified = verified,
         capturedAt = 1_790_000_000_000L, evidenceRef = "sha256:ab", extractedText = text, confidence = .9, symbol = "ABC", side = side,
         entry = 500.0, target = 650.0, stopLoss = 470.0, horizon = "intraday", visibleTimestamp = "10:42 AM", ambiguities = "",
         state = state.name, userChoseSend = send, updatedAt = 0
@@ -81,5 +81,12 @@ class CandidateDeliveryPolicyTest {
         // A broker known on the phone but not in the server capture list stays local.
         assertEquals(CaptureGate.OUTSIDE_CAPTURE_SET, keep(accepted(pkg = "com.zerodha.kite3")))
         assertFalse(CandidateDeliveryPolicy.mayQueue(accepted(pkg = null), registry))
+    }
+
+    @Test
+    fun userPickedSourceNeverSends() {
+        val picked = accepted(verified = false)
+        assertEquals(CandidateDeliveryPolicy.UNVERIFIED_SOURCE, keep(picked))
+        assertFalse(CandidateDeliveryPolicy.mayQueue(picked, registry))
     }
 }

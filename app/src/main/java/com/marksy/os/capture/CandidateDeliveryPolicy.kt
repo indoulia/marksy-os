@@ -22,6 +22,7 @@ import java.util.Locale
 object CandidateDeliveryPolicy {
     const val NOT_ACCEPTED = "not-accepted"
     const val KEPT_ON_PHONE = "kept-on-phone"
+    const val UNVERIFIED_SOURCE = "unverified-source"
     const val CHAT_SOURCE = "chat-source"
     const val UNSUPPORTED_SOURCE = CaptureFailure.UNSUPPORTED_SOURCE
 
@@ -77,6 +78,8 @@ object CandidateDeliveryPolicy {
         return when {
             candidate.state != CaptureState.ACCEPTED.name -> NOT_ACCEPTED
             !candidate.userChoseSend -> KEPT_ON_PHONE
+            // A hand-picked source could forge another channel's record; only Android package identity may send.
+            !candidate.sourceVerified -> UNVERIFIED_SOURCE
             canonicalLine(candidate.fields) == null -> CaptureGate.NOT_A_CANDIDATE
             NotificationClassifier.isOwnOrderEvent("", text) -> CaptureGate.OWN_ORDER
             NotificationClassifier.isOwnAccountEvent("", text) -> CaptureGate.OWN_ACCOUNT
