@@ -50,15 +50,15 @@ fun stocksIn(event: NotificationEventEntity, isSymbol: (String) -> Boolean): Lis
 @Composable
 fun StockLinkPills(symbols: List<String>, onOpen: (String) -> Unit, modifier: Modifier = Modifier) {
     if (symbols.isEmpty()) return
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
         symbols.forEach { symbol ->
             Row(
                 Modifier.clip(MarksyShape.Chip).background(MarksyTheme.BadgeTradingBg).border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Chip)
-                    .clickable { onOpen(symbol) }.padding(horizontal = 8.dp, vertical = 3.dp),
+                    .clickable { onOpen(symbol) }.padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.ShowChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(3.dp))
+                Icon(Icons.Default.ShowChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
+                Spacer(Modifier.width(MarksySpace.Tight))
                 Text(symbol, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
             }
         }

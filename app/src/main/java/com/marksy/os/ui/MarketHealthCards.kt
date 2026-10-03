@@ -94,7 +94,7 @@ internal fun PredictionValidationCard(repo: MarketIntelligenceRepository) {
             Line("$label: ${s.closedCount} closed · target ${pct(s.targetHitRate)} · stop ${pct(s.stopLossRate)} · expired ${pct(s.horizonExpiryRate)} · avg ${ret(s.avgRealizedReturn)}${if (s.smallSample) " · small sample" else ""}")
         }
         horizons?.items?.sortedBy { it.key.filter(Char::isDigit).toIntOrNull() ?: 99 }?.takeIf { it.isNotEmpty() }?.let { items ->
-            Text("By horizon", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+            Text("By horizon", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = MarksySpace.Tight))
             items.forEach { i -> Line("${i.key.filter(Char::isDigit).ifEmpty { i.key }}-day: ${i.closedCount} closed · target ${pct(i.targetHitRate)} · avg ${ret(i.avgRealizedReturn)}${if (i.smallSample) " · small sample" else ""}") }
         }
     }

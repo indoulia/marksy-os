@@ -76,15 +76,15 @@ fun ChartSettingsDialog(prefs: ChartPrefs, range: ChartRange, minutes: Int?, onM
         onDismissRequest = onDismiss,
         title = { Text("Chart", color = MarksyTheme.TextPrimary, style = MarksyType.Lead) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Text("Style", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Pill("Line", selected = !prefs.candles) { prefs.candles = false }
                     Pill("Candles", selected = prefs.candles) { prefs.candles = true }
                     Pill("Volume", selected = prefs.volume) { prefs.volume = !prefs.volume }
                 }
                 Text("Indicators", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Indicator.entries.forEach { i ->
                         val usable = !i.intradayOnly || range.intervals.isNotEmpty()
                         Pill(i.label + if (usable) "" else " (1D/1W)", selected = usable && i in prefs.overlays, enabled = usable) { prefs.toggle(i) }
@@ -92,7 +92,7 @@ fun ChartSettingsDialog(prefs: ChartPrefs, range: ChartRange, minutes: Int?, onM
                 }
                 if (range.intervals.isNotEmpty()) {
                     Text("Candle interval · ${range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                         range.intervals.forEach { m -> Pill(if (m >= 60) "${m / 60}h" else "${m}m", selected = m == minutes) { onMinutesSelected(m) } }
                     }
                 }

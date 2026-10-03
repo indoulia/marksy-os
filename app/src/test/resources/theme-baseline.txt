@@ -1,18 +1,3 @@
 # path colour-code font-size corner-radius named-colour text-style stock-Material-control toast date-pattern number-format spacing-literal type-override -- counts may only go down; see ThemeGuardTest
 com/marksy/os/intelligence/EventExtractor.kt 0 0 0 0 0 0 0 2 0 0 0
-com/marksy/os/market/MarksyAnalysis.kt 0 0 0 0 0 0 0 0 4 0 0
-com/marksy/os/portfolio/PortfolioFlags.kt 0 0 0 0 0 0 0 0 2 0 0
-com/marksy/os/ui/ChartControls.kt 0 0 0 0 0 0 0 0 0 7 0
-com/marksy/os/ui/MarketHealthCards.kt 0 0 0 0 0 0 0 0 0 1 0
-com/marksy/os/ui/MarketQuoteGrid.kt 0 0 0 0 0 0 0 0 0 3 0
-com/marksy/os/ui/PortfolioScreen.kt 0 0 0 0 0 0 0 0 0 35 0
-com/marksy/os/ui/PriceAlertDialog.kt 0 0 0 0 0 0 0 0 4 5 0
-com/marksy/os/ui/StockChart.kt 0 0 0 0 0 0 0 1 0 0 0
-com/marksy/os/ui/StockDerivativesCard.kt 0 0 0 0 0 0 0 0 0 11 0
-com/marksy/os/ui/StockDetailScreen.kt 0 0 1 0 0 0 0 1 0 24 0
-com/marksy/os/ui/StockFundamentalsCards.kt 0 0 1 0 0 0 0 0 0 29 0
-com/marksy/os/ui/StockLinks.kt 0 0 0 0 0 0 0 0 0 3 0
-com/marksy/os/ui/StockSeasonalityCard.kt 0 0 0 0 0 0 0 0 0 5 0
-com/marksy/os/ui/StockTechnicalCard.kt 0 0 0 0 0 0 0 0 0 15 0
-com/marksy/os/ui/TradeTicket.kt 0 0 0 0 0 0 0 0 2 11 0
 com/marksy/os/weather/WeatherRepository.kt 0 0 0 0 0 0 0 0 1 0 0

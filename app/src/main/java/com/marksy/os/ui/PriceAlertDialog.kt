@@ -31,7 +31,7 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
     val context = LocalContext.current.applicationContext
     val all by PriceAlertStore.alerts(context).collectAsStateWithLifecycle()
     val mine = all.orEmpty().filter { it.symbol == symbol }
-    var text by remember { mutableStateOf(lastPrice?.let { String.format(Locale.US, "%.2f", it) }.orEmpty()) }
+    var text by remember { mutableStateOf(lastPrice?.let { MarksyFormat.number(it).replace(",", "") }.orEmpty()) }
     val target = text.replace(",", "").toDoubleOrNull()?.takeIf { it > 0 }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -39,13 +39,13 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
         onDismissRequest = onDismiss,
         title = { Text("Price alert · $symbol", color = MarksyTheme.TextPrimary, style = MarksyType.Lead) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 lastPrice?.let { Text("Now ${MarksyFormat.rupees(it)}", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 CompactTextField(text, { text = it.filter { c -> c.isDigit() || c == '.' } }, Modifier.fillMaxWidth(), placeholder = "Alert price",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 lastPrice?.let { p ->
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(-5, -2, 2, 5).forEach { pct -> Pill(MarksyFormat.percent(pct.toDouble(), 0)) { text = String.format(Locale.US, "%.2f", p * (1 + pct / 100.0)) } }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                        listOf(-5, -2, 2, 5).forEach { pct -> Pill(MarksyFormat.percent(pct.toDouble(), 0)) { text = MarksyFormat.number(p * (1 + pct / 100.0)).replace(",", "") } }
                     }
                 }
                 if (target != null && lastPrice != null) {
@@ -55,12 +55,12 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
                     )
                 }
                 if (mine.isNotEmpty()) {
-                    Text("Active", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = 4.dp))
+                    Text("Active", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Tight))
                     mine.forEach { a ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${if (a.above) "Above" else "Below"} ${MarksyFormat.rupees(a.price)}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.weight(1f))
                             Icon(Icons.Default.Close, "Remove alert", tint = MarksyTheme.TextSecondary,
-                                modifier = Modifier.size(28.dp).clip(CircleShape).clickable { PriceAlertStore.remove(context, listOf(a.id)) }.padding(5.dp))
+                                modifier = Modifier.size(28.dp).clip(CircleShape).clickable { PriceAlertStore.remove(context, listOf(a.id)) }.padding(MarksySpace.Inner))
                         }
                     }
                 }

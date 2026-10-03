@@ -36,7 +36,7 @@ internal fun DerivativesCard(instrumentKey: String) {
     Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding).animateContentSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Options", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-            Row(Modifier.weight(1f).padding(start = 10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.weight(1f).padding(start = MarksySpace.ListGap).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 list.take(4).forEach { e -> Pill(day(e), selected = e == expiry) { expiry = e } }
             }
         }
@@ -44,7 +44,7 @@ internal fun DerivativesCard(instrumentKey: String) {
             null -> MarksyInlineLoader("Loading option chain…")
             else -> c.fold(
                 onSuccess = { ch -> ChainBody(ch, expanded) { expanded = !expanded } },
-                onFailure = { Text("Option chain unavailable: ${it.message}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = 6.dp)) }
+                onFailure = { Text("Option chain unavailable: ${it.message}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Inner)) }
             )
         }
     }
@@ -52,14 +52,14 @@ internal fun DerivativesCard(instrumentKey: String) {
 
 @Composable
 private fun ChainBody(ch: UpstoxDerivatives.Chain, expanded: Boolean, onToggle: () -> Unit) {
-    if (ch.strikes.isEmpty()) { Text("No strikes for this expiry.", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = 6.dp)); return }
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+    if (ch.strikes.isEmpty()) { Text("No strikes for this expiry.", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Inner)); return }
+    Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap), horizontalArrangement = Arrangement.SpaceBetween) {
         Fact("PCR (OI)", ch.pcr?.let { MarksyFormat.number(it) })
         Fact("Support · max put OI", ch.support?.let(::strike))
         Fact("Resistance · max call OI", ch.resistance?.let(::strike))
     }
     val rows = ch.aroundSpot(if (expanded) 10 else 4)
-    Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = MarksySpace.ListGap, bottom = MarksySpace.Hair)) {
         listOf("Call OI", "Call LTP", "Strike", "Put LTP", "Put OI").forEach { h -> Text(h, color = MarksyTheme.TextMuted, style = MarksyType.Caption, textAlign = TextAlign.Center, modifier = Modifier.weight(1f)) }
     }
     val spot = ch.spot
@@ -68,23 +68,23 @@ private fun ChainBody(ch: UpstoxDerivatives.Chain, expanded: Boolean, onToggle: 
         val crossesSpot = spot != null && s.strike < spot && rows.getOrNull(i + 1)?.strike?.let { it >= spot } == true
         val itmCall = spot != null && s.strike < spot
         val itmPut = spot != null && s.strike > spot
-        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Border), verticalAlignment = Alignment.CenterVertically) {
             Cell(s.call?.oi?.let(::compact), Modifier.weight(1f), itmCall)
             Cell(s.call?.ltp?.let(::price), Modifier.weight(1f), itmCall, bold = true)
             Text(strike(s.strike), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             Cell(s.put?.ltp?.let(::price), Modifier.weight(1f), itmPut, bold = true)
             Cell(s.put?.oi?.let(::compact), Modifier.weight(1f), itmPut)
         }
-        if (crossesSpot) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (crossesSpot) Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Hair), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).height(MarksySpace.Border).background(MarksyTheme.Positive))
             Text(" Spot ${price(spot!!)} ", color = MarksyTheme.Positive, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold)
             Box(Modifier.weight(1f).height(MarksySpace.Border).background(MarksyTheme.Positive))
         }
     }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
         Text("Upstox option chain · expiry ${ch.expiry?.let(::day) ?: "—"}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f))
         Text(if (expanded) "Fewer strikes" else "More strikes", color = MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onToggle).padding(horizontal = 6.dp, vertical = 3.dp))
+            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onToggle).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Tight))
     }
 }
 
@@ -101,7 +101,7 @@ private fun Cell(text: String?, modifier: Modifier, inTheMoney: Boolean, bold: B
     Text(
         text ?: "—", color = if (bold) MarksyTheme.TextPrimary else MarksyTheme.TextSecondary, style = MarksyType.Meta,
         fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal, textAlign = TextAlign.Center,
-        modifier = modifier.background(if (inTheMoney) MarksyTheme.BadgeTradingBg else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = 3.dp)
+        modifier = modifier.background(if (inTheMoney) MarksyTheme.BadgeTradingBg else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = MarksySpace.Tight)
     )
 }
 
