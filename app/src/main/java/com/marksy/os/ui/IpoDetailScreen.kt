@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -102,11 +101,7 @@ fun IpoDetailScreen(
     }
     val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder, nowPrice, holidays)
 
-    LazyColumn(
-        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background), bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))) {
         item(key = "hero") { HeroCard(summary, loaded, lane, dates, now, nowPrice) { allotOpen = true } }
         when (val d = detail) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading IPO details…") }
@@ -354,12 +349,12 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             Spacer(Modifier.width(MarksySpace.Gap))
             Text(listOfNotNull(ipo.sector, if (ipo.isSme) "SME" else "Mainboard", ipo.terms?.exchanges.display()).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(chip, color = color, style = MarksyType.Meta, fontWeight = FontWeight.Bold, modifier = Modifier.clip(MarksyShape.Chip).background(chipBg(lane)).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight))
+        MarksyBadge(chip, color, chipBg(lane))
         Text(big, color = bigColor, style = MarksyType.Display)
         if (sub.isNotBlank()) Text(sub, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
-        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Hair), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             stats.forEach { (label, value, note) ->
-                Column(Modifier.weight(1f).clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Inner)) {
+                Column(Modifier.weight(1f)) {
                     Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(value, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (note.isNotBlank()) Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -396,13 +391,13 @@ private fun GmpBlock(ipo: IpoListItemDto, now: ZonedDateTime) {
 @Composable
 private fun Section(id: String, s: Sec, initiallyOpen: Boolean) {
     var open by rememberSaveable(id, s.key) { mutableStateOf(initiallyOpen) }
-    Column(Modifier.fillMaxWidth().marksyCard()) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.CardPadding), verticalAlignment = Alignment.CenterVertically) {
+    MarksyCard {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
             Text(s.title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
             Text(s.sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = MarksySpace.Gap))
             Icon(Icons.Default.ExpandMore, if (open) "Fold ${s.title}" else "Show ${s.title}", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = MarksySpace.Tight).size(MarksySize.Icon).rotate(if (open) 180f else 0f))
         }
-        if (open) Column(Modifier.fillMaxWidth().padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, bottom = MarksySpace.CardPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) { s.body() }
+        if (open) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) { s.body() }
     }
 }
 
@@ -472,7 +467,7 @@ private fun VerdictBody(d: IpoDetailDto) {
         Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(contextLabel(c.context), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(label, color = fg, style = MarksyType.Meta, fontWeight = FontWeight.Bold, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight))
+                MarksyBadge(label, fg, bg)
             }
             c.confidence?.let { Text("${if (it >= 0.7) "High" else if (it >= 0.4) "Medium" else "Low"} confidence", color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
             c.reason?.let { MutedText(it) }
@@ -503,11 +498,12 @@ private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 
 @Composable
 private fun Callout(text: String) {
-    val shape = MarksyShape.Chip
-    Row(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.BadgeImportantBg).border(MarksySpace.Border, MarksyTheme.Warning.copy(alpha = 0.5f), shape).padding(MarksySpace.ListGap)) {
+    MarksyCard(border = MarksyTheme.Warning.copy(alpha = 0.5f), fill = MarksyTheme.BadgeImportantBg) {
+      Row {
         Icon(Icons.Default.Info, null, tint = MarksyTheme.Warning, modifier = Modifier.size(MarksySize.IconSmall).padding(top = MarksySpace.Border))
         Spacer(Modifier.width(MarksySpace.Inner))
         Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Small)
+      }
     }
 }
 
@@ -688,7 +684,7 @@ private fun AllotmentDialog(
 
 @Composable
 private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
-    Column(Modifier.fillMaxWidth().border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Pill).padding(MarksySpace.ListGap)) {
+    MarksyCard {
         val call = listOfNotNull(entry.decision?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() }, entry.expectedReturnPercent.display()?.let { "expected listing return $it%" })
         Text(call.joinToString(" · ").ifBlank { "Prediction" }, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
         Text(entry.predictedAt.take(16).replace('T', ' '), color = MarksyTheme.TextMuted, style = MarksyType.Caption)

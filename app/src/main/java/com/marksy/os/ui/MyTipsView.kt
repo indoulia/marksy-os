@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -40,11 +39,7 @@ internal fun MyTipsView(repository: MarketIntelligenceRepository, status: MyTips
     var open by remember { mutableStateOf<String?>(null) }
     open?.let { id -> TipDetailDialog(repository, id, onOpenStock = { open = null; onOpenStock(it) }) { open = null } }
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
-    ) {
+    MarksyList(bottom = bottomPadding) {
         when (val s = paged.state) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading your tips…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }

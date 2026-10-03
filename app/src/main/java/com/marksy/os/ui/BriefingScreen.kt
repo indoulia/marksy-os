@@ -3,7 +3,6 @@ package com.marksy.os.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,16 +34,12 @@ fun BriefingScreen(
     val briefing by produceState<DailyBriefing.Briefing?>(null, kindName) { value = runCatching { load(kind) }.getOrNull() }
 
     Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        // Clears the three floating Morning / Evening / Overnight buttons.
-        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = oneHandStackBottomPadding(3)),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    // Bottom clears the three floating Morning / Evening / Overnight buttons.
+    MarksyList(Modifier.background(MarksyTheme.Background), bottom = oneHandStackBottomPadding(3)) {
         val b = briefing
         if (b == null) {
             item { Text("Preparing your briefing…", color = MarksyTheme.TextMuted, style = MarksyType.Body) }
-            return@LazyColumn
+            return@MarksyList
         }
         item { Text(b.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Lead) }
         if (b.sections.isEmpty()) {

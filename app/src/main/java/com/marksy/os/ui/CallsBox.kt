@@ -56,7 +56,7 @@ internal fun CallsBox(
         }
         AnalysisSection(analysis)
         if (calls.channels.isNotEmpty()) {
-            Text("EXTERNAL", color = MarksyTheme.TextSecondary, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.ListGap))
+            Text("EXTERNAL", color = MarksyTheme.TextSecondary, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.Gap))
         }
         calls.channels.forEach { c ->
             CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip, follow(FollowKey.channel(c.channelId), c.name))

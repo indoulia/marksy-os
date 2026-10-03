@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -165,12 +164,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             )
         } else {
             MarksyRefreshBox(refresh) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-                    contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
-                    verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-                ) {
+                MarksyList(state = listState, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))) {
                     when (val s = state) {
                         is MarketDataState.Loading -> item { MarksyLoader("Checking IPOs…") }
                         is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Add a Market API key in More → Configure Gateway.") }
@@ -296,10 +290,8 @@ internal fun laneColor(lane: Lane?): Color = when (lane) {
 
 @Composable
 private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onToggle).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    MarksyRowCard(onClick = onToggle) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(MarksyTheme.TextMuted))
         Spacer(Modifier.width(MarksySpace.Gap))
         Column(Modifier.weight(1f)) {
@@ -310,6 +302,7 @@ private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: ()
             summary?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
+      }
     }
 }
 
@@ -327,10 +320,10 @@ internal fun SmeTag() = MarksyBadge("SME", MarksyTheme.Warning, MarksyTheme.Badg
 private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail: IpoDetailDto?, watched: Boolean, reminderSet: Boolean, onRemind: (() -> Unit)?, onClick: () -> Unit) {
     val facts = IpoLifecycle.cardFacts(ipo, now, detail)
     val gmp = IpoLifecycle.gmpSummary(ipo.gmp, IpoLifecycle.upper(ipo), now)
-    MarksyCard(border = if (lane == Lane.TODAY) MarksyTheme.Negative else MarksyTheme.BorderGlow, onClick = onClick) {
+    MarksyRowCard(border = if (lane == Lane.TODAY) MarksyTheme.Negative else MarksyTheme.BorderGlow, onClick = onClick) {
+      Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         facts.chip?.let {
-            Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.BadgeUrgentBg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight))
+            MarksyBadge(it, MarksyTheme.Negative, MarksyTheme.BadgeUrgentBg)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IpoAvatar(ipo.companyName)
@@ -354,6 +347,7 @@ private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail:
         Text(facts.line, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         gmp?.let { Text(it.text, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
         onRemind?.let { remind -> Pill(if (reminderSet) "Reminder at 3 pm" else "Remind me at 3 pm", selected = reminderSet, onClick = remind) }
+      }
     }
 }
 

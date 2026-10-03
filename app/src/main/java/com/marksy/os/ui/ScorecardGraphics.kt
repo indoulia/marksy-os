@@ -152,9 +152,6 @@ object ScorecardGraphics {
     }
 }
 
-/** The stock page's card: the shared card surface, full width, padded. */
-internal fun Modifier.scoreCard(): Modifier = fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)
-
 /** A 0–1 ring; [dashed] draws the grey outline used while a value is unknown. */
 @Composable
 internal fun ValueRing(fraction: Float, color: Color, size: Dp, stroke: Dp, dashed: Boolean = false, content: @Composable BoxScope.() -> Unit = {}) {
