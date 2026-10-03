@@ -2,6 +2,10 @@ package com.marksy.os.ui
 
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,11 +82,10 @@ fun CalendarScreen(
             ) { _, delta -> dragged += delta }
         }) {
             Column {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    IconButton(onClick = { shiftMonth(-1) }) { Text("‹", style = MarksyType.Title, color = MarksyTheme.PrimaryEmerald) }
-                    Text(MarksyFormat.monthYear(month), color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-                    IconButton(onClick = { shiftMonth(1) }) { Text("›", style = MarksyType.Title, color = MarksyTheme.PrimaryEmerald) }
-                }
+                MarksyCardHeader(MarksyFormat.monthYear(month), trailing = {
+                    IconButton(onClick = { shiftMonth(-1) }) { Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon)) }
+                    IconButton(onClick = { shiftMonth(1) }) { Icon(Icons.Default.ChevronRight, contentDescription = "Next month", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon)) }
+                })
                 Row(Modifier.fillMaxWidth()) {
                     listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = MarksySpace.Hair)) }
                 }

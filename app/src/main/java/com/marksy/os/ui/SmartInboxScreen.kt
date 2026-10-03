@@ -462,20 +462,12 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
     val count = stacks.sumOf { it.threads.size }
     val rotation by animateFloatAsState(if (open) 180f else 0f, label = "earlier-chevron")
     MarksyRowCard(onClick = onToggle, onClickLabel = if (open) "Fold earlier" else "Show earlier") {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.History, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
-        Spacer(Modifier.width(MarksySpace.Gap))
-        Column(Modifier.weight(1f)) {
-            Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold)) { append("Earlier") }
-                    append(" · $count item${if (count == 1) "" else "s"} from ${stacks.size} source${if (stacks.size == 1) "" else "s"}")
-                },
-                color = MarksyTheme.TextSecondary, style = MarksyType.Body
-            )
-            Text("Seen, or older than a day", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-        }
-        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon).rotate(rotation))
+    Column {
+        MarksyCardHeader(
+            "Earlier", icon = Icons.Default.History, iconTint = MarksyTheme.TextSecondary,
+            trailing = { Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(rotation)) }
+        )
+        Text("$count item${if (count == 1) "" else "s"} from ${stacks.size} source${if (stacks.size == 1) "" else "s"} · Seen, or older than a day", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }
     }
 }

@@ -56,7 +56,7 @@ fun DailyDigestScreen(
 
         item {
             MarksyCard(border = MarksyTheme.PrimaryEmerald) {
-                Text(digest.title, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                MarksyCardHeader(digest.title)
 
                 DigestItemRow(
                     icon = Icons.Default.Notifications,
@@ -114,7 +114,7 @@ fun DailyDigestScreen(
         if (digest.attentionEvents.isNotEmpty()) {
             item {
                 MarksyCard {
-                    Text("Needs attention", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                    MarksyCardHeader("Needs attention")
                     digest.attentionEvents.take(MAX_ATTENTION_ROWS).forEach { event ->
                         AttentionRow(event) { onEventSelected(event) }
                     }
@@ -125,7 +125,7 @@ fun DailyDigestScreen(
         if (digest.topSources.isNotEmpty()) {
             item {
                 MarksyCard {
-                    Text("Top sources", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                    MarksyCardHeader("Top sources")
                     digest.topSources.forEach { (name, count) ->
                         Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

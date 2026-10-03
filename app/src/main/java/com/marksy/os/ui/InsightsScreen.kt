@@ -52,7 +52,7 @@ fun InsightsScreen(
 
         item {
             MarksyCard {
-                Text("Notification Breakdown", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                MarksyCardHeader("Notification breakdown")
                 if (breakdown.isEmpty()) {
                     InlineEmpty("No notifications in this period")
                 } else {
@@ -90,14 +90,14 @@ fun InsightsScreen(
             item { SectionLabel("Insights") }
             items(insights.size) { i ->
                 val (title, description, category) = insights[i]
-                AiInsightCard(title, description, categoryIcon(category), categoryColor(category), MarksyTheme.SurfaceRaised)
+                AiInsightCard(title, description, categoryIcon(category), categoryColor(category))
             }
         }
 
         if (observations.isNotEmpty()) {
             item {
                 MarksyCard {
-                    Text("Patterns", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                    MarksyCardHeader("Patterns")
                     observations.forEach { Text("• $it", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 }
             }
@@ -169,26 +169,10 @@ private fun AiInsightCard(
     title: String,
     description: String,
     icon: ImageVector,
-    iconColor: Color,
-    bgColor: Color
+    iconColor: Color
 ) {
     MarksyCard {
-        Row(verticalAlignment = Alignment.Top) {
-            Box(
-                modifier = Modifier
-                    .size(MarksySize.Avatar)
-                    .clip(CircleShape)
-                    .background(bgColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(MarksySize.Icon))
-            }
-            Spacer(Modifier.width(MarksySpace.Gap))
-            Column {
-                Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(MarksySpace.Tight))
-                Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
-            }
-        }
+        MarksyCardHeader(title, icon = icon, iconTint = iconColor)
+        Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
     }
 }

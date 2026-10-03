@@ -32,7 +32,7 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         if (r.diagnostics.isNotEmpty()) {
             items(r.diagnostics) { d ->
                 MarksyCard(border = color(d.level)) {
-                    Text(d.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
+                    MarksyCardHeader(d.title)
                     d.action?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
                 }
             }
@@ -97,7 +97,7 @@ private fun FeedStatsCard() {
     }
     fun ago(t: Long) = if (t <= 0) "never" else ((now - t) / 1000).let { if (it < 90) "${it}s ago" else "${it / 60}m ago" }
     MarksyGroupCard {
-        Text("Upstox feed · ${freshness.name.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }}", color = tone, style = MarksyType.Body)
+        MarksyCardHeader("Upstox feed", trailing = { Text(freshness.name.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }, color = tone, style = MarksyType.Body) })
         Text(
             "Last tick ${ago(lastTick)} · ${stats.subscribed} instruments · ${stats.ticks} updates · connects ${stats.connects}, drops ${stats.drops}" +
                 (if (stats.undecodable + stats.outOfOrder > 0) " · ${stats.undecodable} undecodable, ${stats.outOfOrder} out of order" else "") +
