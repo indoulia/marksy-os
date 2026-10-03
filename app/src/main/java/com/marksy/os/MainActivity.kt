@@ -31,7 +31,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -90,6 +89,13 @@ import com.marksy.os.data.LearningSettings
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ui.InsightsScreen
 import com.marksy.os.ui.MarksyTheme
+import com.marksy.os.ui.MarksyBadge
+import com.marksy.os.ui.MarksyButton
+import com.marksy.os.ui.MarksyButtonStyle
+import com.marksy.os.ui.MarksyCard
+import com.marksy.os.ui.MarksySpace
+import com.marksy.os.ui.MarksyType
+import com.marksy.os.ui.marksyCard
 import com.marksy.os.ui.MarksyViewModel
 import com.marksy.os.ui.MarksyViewModelFactory
 import com.marksy.os.ui.RulesScreen
@@ -513,8 +519,7 @@ class MainActivity : ComponentActivity() {
                             if (!tabPage) Text(
                                 screenTitle.orEmpty(),
                                 color = MarksyTheme.TextPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = MarksyType.Title,
                                 maxLines = 1,
                                 softWrap = false
                             )
@@ -522,7 +527,7 @@ class MainActivity : ComponentActivity() {
                                 if (!tabPage) Spacer(Modifier.width(4.dp))
                                 // The title keeps its width; a long note wraps, then ellipsizes.
                                 Text(
-                                    it, color = MarksyTheme.PrimaryEmerald, fontSize = if (tabPage) 15.sp else 10.sp, lineHeight = if (tabPage) 18.sp else 12.sp,
+                                    it, color = MarksyTheme.PrimaryEmerald, style = if (tabPage) MarksyType.Lead else MarksyType.Caption,
                                     fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false).let { m -> if (selectedTab == 3 && tradingFilter == "Captured") m.clickable { showCaptureHealth = true } else m }
@@ -530,15 +535,7 @@ class MainActivity : ComponentActivity() {
                             }
                             if (titleLive) {
                                 Spacer(Modifier.width(4.dp))
-                                Text(
-                                    "LIVE",
-                                    color = Color.Black,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .background(MarksyTheme.PrimaryEmerald, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
+                                MarksyBadge("LIVE", MarksyTheme.OnAccent, MarksyTheme.PrimaryEmerald)
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -573,13 +570,13 @@ class MainActivity : ComponentActivity() {
                             icon = {
                                 if (index == 1 && inboxSummary.needsYou > 0) {
                                     BadgedBox(badge = {
-                                        Badge(containerColor = MarksyTheme.RedUrgent, contentColor = Color.White) { Text("${inboxSummary.needsYou}", fontSize = 10.sp) }
+                                        Badge(containerColor = MarksyTheme.Negative, contentColor = MarksyTheme.TextPrimary) { Text("${inboxSummary.needsYou}", style = MarksyType.Caption) }
                                     }) { Icon(icon, contentDescription = "$label, ${inboxSummary.needsYou} need you") }
                                 } else Icon(icon, contentDescription = label)
                             },
-                            label = { Text(label, fontSize = 11.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium) },
+                            label = { Text(label, style = MarksyType.Meta, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color.Black,
+                                selectedIconColor = MarksyTheme.OnAccent,
                                 selectedTextColor = MarksyTheme.PrimaryEmerald,
                                 indicatorColor = MarksyTheme.PrimaryEmerald,
                                 unselectedIconColor = MarksyTheme.TextMuted,
@@ -879,7 +876,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
-@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { val links = rememberCollapsingHeaderState(); Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding()).nestedScroll(links.connection)) { Row(Modifier.collapsingHeader(links).padding(horizontal = 10.dp, vertical = 6.dp)) { TextButton(onClick = onOpenLearning) { Text("What Marksy learned", fontSize = 12.sp) }; TextButton(onClick = onOpenMemory) { Text("What Marksy remembers", fontSize = 12.sp) } }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { val links = rememberCollapsingHeaderState(); Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding()).nestedScroll(links.connection)) { Row(Modifier.collapsingHeader(links).padding(horizontal = 10.dp, vertical = 6.dp)) { MarksyButton("What Marksy learned", onClick = onOpenLearning, style = MarksyButtonStyle.Text); MarksyButton("What Marksy remembers", onClick = onOpenMemory, style = MarksyButtonStyle.Text) }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
 @Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
 
 @Composable private fun MoreScreen(
@@ -913,22 +910,15 @@ class MainActivity : ComponentActivity() {
     val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).signedInUserId() }
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
-        contentPadding = PaddingValues(18.dp),
+        contentPadding = PaddingValues(MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+            Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         }
         item {
             // Profile Banner Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
-                    .clickable(onClick = openGatewaySettings)
-            ) {
+            Box(Modifier.fillMaxWidth().marksyCard(MarksyTheme.PrimaryEmerald).clickable(onClick = openGatewaySettings)) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -943,14 +933,14 @@ class MainActivity : ComponentActivity() {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(signedInUserId ?: "Not signed in", color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(if (signedInUserId != null) "Signed in" else "Tap to sign in", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp)
+                        Text(signedInUserId ?: "Not signed in", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                        Text(if (signedInUserId != null) "Signed in" else "Tap to sign in", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small)
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted)
                 }
             }
         }
-        item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openDigest, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Daily Digest", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Daily Digest", "TODAY", "Summary of today's notifications, built on this device.") { MarksyButton("Open Daily Digest", onClick = openDigest) } }
         item {
             val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
             var pulseOn by remember { mutableStateOf(com.marksy.os.pulse.MarksyPulse.enabled(context)) }
@@ -965,84 +955,67 @@ class MainActivity : ComponentActivity() {
                         scope.launch { com.marksy.os.pulse.MarksyPulse.setEnabled(context, on) }
                         if (on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     },
-                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised),
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = MarksyTheme.OnAccent, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised),
                     modifier = Modifier.height(24.dp)
                 )
             })
         }
-        item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openBriefing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Briefing", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Daily Briefing", "LOCAL", "Morning, evening and overnight briefings built only from your notifications.") { MarksyButton("Open Briefing", onClick = openBriefing) } }
         item {
             SettingsCard(
                 "Upstox market data",
                 when { upstoxConnected -> "LIVE"; upstoxConfigured -> "SAVED"; else -> "OFF" },
                 if (upstoxConfigured) "Live NIFTY / BANK NIFTY on Home from your own Upstox token." else "Add your Upstox Analytics Token to see live index prices on Home."
             ) {
-                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openUpstox, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) {
-                    Text(if (upstoxConfigured) "Manage Upstox" else "Connect Upstox", color = Color.Black, fontSize = 12.sp)
-                }
+                MarksyButton(if (upstoxConfigured) "Manage Upstox" else "Connect Upstox", onClick = openUpstox)
             }
         }
-        item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openHealth, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Health", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openValidation, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Validation", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openRules, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Rules", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (access) "Manage Access" else "Open Access", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openWhatsAppAccess, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text(if (whatsappAccess) "Manage Connector" else "Set Up Connector", color = Color.Black, fontSize = 12.sp) } } }
+        item { SettingsCard("Marksy Health", "LIVE", "Capture, connectors, processing, storage and battery status.") { MarksyButton("Open Health", onClick = openHealth) } }
+        item { SettingsCard("30-day validation", "LOCAL", "Automatically collected accuracy, reliability and resource metrics.") { MarksyButton("Open Validation", onClick = openValidation) } }
+        item { SettingsCard("Rules & Automation", "LOCAL", "Create custom rules to filter, group and route notifications.") { MarksyButton("Open Rules", onClick = openRules) } }
+        item { SettingsCard("Notification access", if (access) "ON" else "OFF", if (access) "Marksy OS can capture notifications." else "Enable notification access to start capturing.") { MarksyButton(if (access) "Manage Access" else "Open Access", onClick = openAccess) } }
+        item { SettingsCard("WhatsApp connector", if (whatsappAccess) "ON" else "OPTIONAL", "Reads visible WhatsApp accessibility text for watchlist contacts.") { MarksyButton(if (whatsappAccess) "Manage Connector" else "Set Up Connector", onClick = openWhatsAppAccess) } }
         item {
             SettingsCard(
                 "Marksy Account",
                 if (signedInUserId != null) "SIGNED IN" else "NOT SIGNED IN",
                 if (signedInUserId != null) "Signed in as $signedInUserId." else "Sign in to enable Trading delivery and Market Intelligence."
             ) {
-                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openGatewaySettings, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) {
-                    Text(if (signedInUserId != null) "Manage Account" else "Sign In", color = Color.Black, fontSize = 12.sp)
-                }
+                MarksyButton(if (signedInUserId != null) "Manage Account" else "Sign In", onClick = openGatewaySettings)
             }
         }
         item {
             val zone by WorldClockSettings.secondZone
             SettingsCard("World clock", WorldClock.abbreviation(java.time.ZonedDateTime.now(zone)), "Home shows IST and ${WorldClock.cityName(zone)}. Tap the clocks to convert meeting times.") {
-                Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showZonePicker = true }, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Change Second Clock", color = Color.Black, fontSize = 12.sp) }
+                MarksyButton("Change Second Clock", onClick = { showZonePicker = true })
             }
         }
-        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openInsights, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Insights", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openTimeline, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Timeline", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = openCalendar, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Open Calendar", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Watchlists", "${watchlists.size} LISTS", "Delete a watchlist and the stocks in it.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { managingWatchlists = true }, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)) { Text("Manage Watchlists", color = Color.Black, fontSize = 12.sp) } } }
-        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { Button(modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), onClick = { showClear = true }, enabled = !clearing, colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.RedUrgent)) { Text(if (clearing) "Clearing…" else "Clear All Data", color = Color.White, fontSize = 12.sp) } } }
+        item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { MarksyButton("Open Insights", onClick = openInsights) } }
+        item { SettingsCard("Timeline", "LOCAL", "Review meaningful events chronologically.") { MarksyButton("Open Timeline", onClick = openTimeline) } }
+        item { SettingsCard("Calendar", "LOCAL", "Browse retained notification history by day.") { MarksyButton("Open Calendar", onClick = openCalendar) } }
+        item { SettingsCard("Watchlists", "${watchlists.size} LISTS", "Delete a watchlist and the stocks in it.") { MarksyButton("Manage Watchlists", onClick = { managingWatchlists = true }) } }
+        item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { MarksyButton(if (clearing) "Clearing…" else "Clear All Data", onClick = { showClear = true }, enabled = !clearing, color = MarksyTheme.Negative) } }
     }
     if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
     if (managingWatchlists) com.marksy.os.ui.ManageWatchlistsDialog(watchlist, watchlists, watchItems) { managingWatchlists = false }
-    if (showClear) com.marksy.os.ui.MarksyDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { TextButton(enabled = !clearing, onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }) { Text("Clear", color = MarksyTheme.RedUrgent) } }, dismissButton = { TextButton(enabled = !clearing, onClick = { showClear = false }) { Text("Cancel", color = MarksyTheme.TextSecondary) } })
+    if (showClear) com.marksy.os.ui.MarksyDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { MarksyButton("Clear", onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative, enabled = !clearing) }, dismissButton = { MarksyButton("Cancel", onClick = { showClear = false }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary, enabled = !clearing) })
 }
 
 @Composable private fun SettingsCard(title: String, status: String, description: String, trailing: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
-                trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-            action?.let { Spacer(Modifier.height(8.dp)); it() }
+    MarksyCard {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+            trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
         }
+        Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        action?.let { Spacer(Modifier.height(2.dp)); it() }
     }
 }
 
 @Composable internal fun EmptyState(title: String, message: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = com.marksy.os.ui.MarksyShape.Card,
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, com.marksy.os.ui.MarksyShape.Card)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(6.dp))
-            Text(message, color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-        }
+    Column(Modifier.fillMaxWidth().marksyCard().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+        Spacer(Modifier.height(MarksySpace.Inner))
+        Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
     }
 }
