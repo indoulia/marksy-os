@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -83,11 +82,8 @@ internal fun ScorecardDetailContent(
 ) {
     var openTip by remember(source) { mutableStateOf<String?>(null) }
     openTip?.let { id -> tipDialog(id) { openTip = null } }
-    LazyColumn(
-        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    var allRecent by remember(source) { mutableStateOf(false) }
+    MarksyList(Modifier.background(MarksyTheme.Background), bottom = bottomPadding) {
         when (state) {
             is MarketDataState.Loaded -> {
                 val d = state.value
@@ -103,23 +99,27 @@ internal fun ScorecardDetailContent(
                         DeliveredGauge(d.card.body.performance.returnRealizationPct, Modifier.weight(1f).fillMaxHeight())
                     }
                 }
-                if (d.recent.isNotEmpty()) item(key = "recent") { RecentCalls(d.recent) { openTip = it } }
-                if (d.topSymbols.isNotEmpty()) item(key = "symbols") {
-                    Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
-                        CardTitle("Most called")
-                        // One 48dp-tall scrolling row is the touch target, so each chip stays tight.
-                        LazyRow(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-                            items(d.topSymbols, key = { it.symbol }) { s -> SymbolChip(s) { onOpenStock(s.symbol) } }
+                if (d.recent.isNotEmpty()) {
+                    item(key = "recent-head") {
+                        SectionLabel("Recent calls") {
+                            if (d.recent.size > RECENT_PREVIEW) MarksyButton(if (allRecent) "Show less" else "Show all recent", { allRecent = !allRecent }, style = MarksyButtonStyle.Text)
+                        }
+                    }
+                    items(if (allRecent) d.recent else d.recent.take(RECENT_PREVIEW), key = { "recent-${it.tipId}" }) { t -> CallRow(t) { openTip = t.tipId } }
+                }
+                if (d.topSymbols.isNotEmpty()) {
+                    item(key = "symbols-head") { SectionLabel("Most called") }
+                    item(key = "symbols") {
+                        MarksyCard {
+                            LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+                                items(d.topSymbols, key = { it.symbol }) { s -> Pill("${s.symbol} · ${s.calls}", compact = true) { onOpenStock(s.symbol) } }
+                            }
                         }
                     }
                 }
                 d.callers?.takeIf { it.isNotEmpty() }?.let { callers ->
-                    item(key = "callers") {
-                        Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-                            CardTitle("Callers")
-                            callers.forEach { c -> CallerRow(c) { onOpenSource(ScorecardSource.caller(c)) } }
-                        }
-                    }
+                    item(key = "callers-head") { SectionLabel("Callers") }
+                    items(callers) { c -> CallerRow(c) { onOpenSource(ScorecardSource.caller(c)) } }
                 }
             }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
@@ -130,7 +130,7 @@ internal fun ScorecardDetailContent(
 }
 
 @Composable
-private fun CardTitle(text: String) = Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+private fun CardTitle(text: String) = Text(text.uppercase(), color = MarksyTheme.TextSecondary, style = MarksyType.Label)
 
 @Composable
 private fun Hero(d: ScorecardDetailDto, name: String, following: Boolean, onToggleFollow: (Boolean) -> Unit) {
@@ -180,53 +180,12 @@ private fun HitRateBandBar(band: TrustBandDto?, hitRatePct: Double?, trust: Scor
 private fun KpiTiles(d: ScorecardDetailDto) {
     val p = d.card.body.performance
     val c = d.card.body.counts
-    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-            KpiTile(p.hitRatePct?.let { MarksyFormat.percent(it, 1, signed = false) } ?: "—", "Hit rate", Modifier.weight(1f).fillMaxHeight()) {
-                ValueRing(ScorecardGraphics.ringFraction(p.hitRatePct), ScorecardGraphics.tone(p.hitRatePct), 48.dp, 6.dp, dashed = p.hitRatePct == null)
-            }
-            val ret = p.avgActualReturn
-            KpiTile(LedgerCalls.returnText(ret) ?: "—", "Avg return", Modifier.weight(1f).fillMaxHeight(), ScorecardGraphics.returnTone(ret).takeIf { ret != null }) {
-                IconDisc(
-                    if ((ret ?: 0.0) < 0) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp, ScorecardGraphics.returnTone(ret),
-                    when { ret == null -> MarksyTheme.SurfaceRaised; ret < 0 -> MarksyTheme.BadgeUrgentBg; else -> MarksyTheme.BadgeTradingBg }
-                )
-            }
-        }
-        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-            Column(Modifier.weight(1f).fillMaxHeight().scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${c.completed}", color = MarksyTheme.TextPrimary, style = MarksyType.Heading, modifier = Modifier.weight(1f))
-                    Text("/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
-                }
-                val done = ScorecardGraphics.shares(listOf(c.completed, (c.total - c.completed).coerceAtLeast(0))).first()
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
-                    if (done > 0f) Box(Modifier.fillMaxWidth(done).fillMaxHeight().background(MarksyTheme.SecondaryCyan))
-                }
-                Text("Completed", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
-            }
-            KpiTile(p.avgDaysToCompletion?.let { MarksyFormat.number(it, 1) + "d" } ?: "—", "To outcome", Modifier.weight(1f).fillMaxHeight()) {
-                IconDisc(Icons.Default.Schedule, MarksyTheme.Info, MarksyTheme.BadgeFinanceBg)
-            }
-        }
-    }
-}
-
-@Composable
-private fun KpiTile(value: String, label: String, modifier: Modifier, valueColor: Color? = null, graphic: @Composable () -> Unit) {
-    Row(modifier.scoreCard(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
-        graphic()
-        Column {
-            Text(value, color = valueColor ?: MarksyTheme.TextPrimary, style = MarksyType.Heading, maxLines = 1)
-            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-private fun IconDisc(icon: ImageVector, tint: Color, fill: Color) {
-    Box(Modifier.size(48.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(MarksySize.IconLarge))
+    val ret = p.avgActualReturn
+    MarksyStatRow(Modifier.height(IntrinsicSize.Min)) {
+        MarksyStat("Hit rate", p.hitRatePct?.let { MarksyFormat.percent(it, 1, signed = false) } ?: "—", Modifier.weight(1f).fillMaxHeight(), ScorecardGraphics.tone(p.hitRatePct).takeIf { p.hitRatePct != null } ?: MarksyTheme.TextPrimary)
+        MarksyStat("Avg return", LedgerCalls.returnText(ret) ?: "—", Modifier.weight(1f).fillMaxHeight(), ScorecardGraphics.returnTone(ret).takeIf { ret != null } ?: MarksyTheme.TextPrimary)
+        MarksyStat("Completed", "${c.completed}/${c.total}", Modifier.weight(1f).fillMaxHeight())
+        MarksyStat("To outcome", p.avgDaysToCompletion?.let { MarksyFormat.number(it, 1) + "d" } ?: "—", Modifier.weight(1f).fillMaxHeight())
     }
 }
 
@@ -239,10 +198,11 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
         Triple("Invalidated", c.invalidated, MarksyTheme.TextMuted.copy(alpha = .4f))
     )
     val segments = ScorecardGraphics.donut(parts.map { it.second })
-    Row(Modifier.scoreCard(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Wide), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(132.dp), contentAlignment = Alignment.Center) {
+    MarksyCard {
+      Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
-                val w = 18.dp.toPx()
+                val w = 14.dp.toPx()
                 val topLeft = Offset(w / 2, w / 2)
                 val arc = Size(size.width - w, size.height - w)
                 drawArc(MarksyTheme.SurfaceRaised, 0f, 360f, false, topLeft, arc, style = Stroke(w))
@@ -251,20 +211,21 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${c.total}", color = MarksyTheme.TextPrimary, style = MarksyType.Display)
+                Text("${c.total}", color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
                 Text("CALLS", color = MarksyTheme.TextSecondary, style = MarksyType.Caption)
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             parts.forEach { (label, n, color) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+                    Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(color))
                     Spacer(Modifier.width(MarksySpace.Gap))
                     Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Body, modifier = Modifier.weight(1f), maxLines = 1)
                     Text("$n", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
                 }
             }
         }
+      }
     }
 }
 
@@ -277,18 +238,14 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
     val promised = points.map { it.second }
     val tint = ScorecardGraphics.returnTone(realised.lastOrNull())
     val measurer = rememberTextMeasurer()
-    Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Returns", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            ReturnRange.entries.forEach { r ->
-                val on = r == range
-                val fill by androidx.compose.animation.animateColorAsState(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent, label = "range")
-                Box(Modifier.clip(MarksyShape.Chip).background(fill).clickable { range = r }.padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)) {
-                    Text(r.label, color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
-                }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+    SectionLabel("Returns") {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
+            ReturnRange.entries.forEach { r -> Pill(r.label, selected = r == range, compact = true) { range = r } }
         }
-        Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+    }
+    MarksyCard {
+        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
             if (points.isEmpty()) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
             else Canvas(Modifier.fillMaxSize()) {
                 val (lo, hi) = ScorecardGraphics.bounds(realised, promised)
@@ -307,7 +264,7 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
                 drawCircle(tint, 4.dp.toPx(), r.last())
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp, 3.dp).background(tint))
                 Spacer(Modifier.width(MarksySpace.Inner))
@@ -324,15 +281,16 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
     }
+    }
 }
 
 private val HorizonLabels = mapOf("INTRADAY" to "Intra", "UP_TO_1_WEEK" to "≤1W", "UP_TO_1_MONTH" to "≤1M", "LONGER_THAN_1_MONTH" to ">1M")
 
 @Composable
 private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
-    Column(modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+    MarksyCard(modifier) {
         CardTitle("By horizon")
-        Row(Modifier.fillMaxWidth().height(96.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+        Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             buckets.forEach { b ->
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
@@ -349,31 +307,19 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
 @Composable
 private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
     val (share, tint) = ScorecardGraphics.gauge(realizationPct)
-    Column(modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Delivered vs promised", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Start))
+    MarksyCard(modifier) {
+        CardTitle("Delivered vs promised")
         Spacer(Modifier.weight(1f))
-        Canvas(Modifier.size(120.dp, 66.dp)) {
-            val w = 12.dp.toPx()
+        Canvas(Modifier.size(100.dp, 56.dp).align(Alignment.CenterHorizontally)) {
+            val w = 10.dp.toPx()
             val d = size.width - w
             val topLeft = Offset(w / 2, w / 2)
             drawArc(MarksyTheme.SurfaceRaised, 180f, 180f, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
             if (share > 0f) drawArc(tint, 180f, 180f * share, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
         }
         Text(
-            realizationPct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Heading)
-    }
-}
-
-@Composable
-private fun RecentCalls(recent: List<LedgerTipDto>, onOpen: (String) -> Unit) {
-    var all by remember(recent) { mutableStateOf(false) }
-    Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Section)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CardTitle("Recent calls")
-            Spacer(Modifier.weight(1f))
-            if (recent.size > RECENT_PREVIEW) MarksyButton(if (all) "Show less" else "Show all recent", { all = !all }, style = MarksyButtonStyle.Text)
-        }
-        (if (all) recent else recent.take(RECENT_PREVIEW)).forEach { t -> CallRow(t) { onOpen(t.tipId) } }
+            realizationPct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Heading,
+            modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 
@@ -386,9 +332,10 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
         t.outcome == "FAILURE" -> MarksyTheme.Negative
         else -> MarksyTheme.TextMuted
     }
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+    MarksyRowCard(onClick = onClick) {
+      Column(Modifier.padding(end = OneHandRowEndClearance), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
+            Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(dot))
             Text(t.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
             t.direction?.let { side ->
                 val buy = side == "BUY"
@@ -410,41 +357,24 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
             drawCircle(MarksyTheme.Surface, 10.dp.toPx(), Offset(x, mid))
             drawCircle(MarksyTheme.TextPrimary, 7.dp.toPx(), Offset(x, mid))
         }
-    }
-}
-
-@Composable
-private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
-    val r = s.avgActualReturn
-    val (fg, bg, edge) = when {
-        r == null || r == 0.0 -> Triple(MarksyTheme.TextSecondary, MarksyTheme.SurfaceRaised, MarksyTheme.BorderGlow)
-        r > 0 -> Triple(MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, MarksyTheme.BorderGlow)
-        else -> Triple(MarksyTheme.Negative, MarksyTheme.BadgeUrgentBg, MarksyTheme.Negative.copy(alpha = .3f))
-    }
-    Row(
-        Modifier.clip(MarksyShape.Card).background(bg).border(MarksySpace.Border, edge, MarksyShape.Card).clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Inner),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
-    ) {
-        Text(s.symbol, color = fg, style = MarksyType.Small, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text(
-            "${s.calls}", color = fg, style = MarksyType.Caption, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clip(MarksyShape.Chip).background(fg.copy(alpha = .16f)).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Border)
-        )
+      }
     }
 }
 
 @Composable
 private fun CallerRow(c: CallerScorecardDto, onClick: () -> Unit) {
     val h = c.scorecard
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance),
-        horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically
-    ) {
-        TrustRing(h.trustScore, 36.dp, 4.dp, MarksyType.Small, caption = false)
+    MarksyRowCard(onClick = onClick) {
+      Row(
+        Modifier.padding(end = OneHandRowEndClearance),
+        horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically
+      ) {
+        TrustRing(h.trustScore, 40.dp, 5.dp, MarksyType.Small, caption = false)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             Text(c.name, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             OutcomeBar(h.successful, h.failed, h.expired, h.open, height = 4.dp)
         }
         ReturnBadge(h.avgActualReturn, style = MarksyType.Meta)
+      }
     }
 }

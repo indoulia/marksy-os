@@ -51,7 +51,7 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
             .verticalScroll(rememberScrollState())
             .padding(MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         Text(
             "Live NIFTY and BANK NIFTY prices on Home come straight from Upstox using your own read-only Analytics Token " +

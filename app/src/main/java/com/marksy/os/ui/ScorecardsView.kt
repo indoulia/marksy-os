@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -78,12 +77,7 @@ internal fun ScorecardsView(
         return
     }
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
-    ) {
+    MarksyList(state = listState, bottom = bottomPadding) {
         item(key = "segments") {
             Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
@@ -127,14 +121,16 @@ internal fun ScorecardsView(
 @Composable
 private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier = Modifier) {
     val c = body.counts
-    Column(modifier.scoreCard(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
-        TrustRing(body.trust.trustScore, 84.dp, 8.dp, MarksyType.Display)
-        Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1)
-        OutcomeBar(c.successful, c.failed, c.expired, c.open)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, modifier = Modifier.weight(1f))
-            ReturnBadge(body.performance.avgActualReturn, style = MarksyType.Small)
+    MarksyCard(modifier) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+            TrustRing(body.trust.trustScore, 56.dp, 6.dp, MarksyType.Lead, caption = false)
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1)
+                ReturnBadge(body.performance.avgActualReturn, style = MarksyType.Small)
+            }
         }
+        OutcomeBar(c.successful, c.failed, c.expired, c.open)
+        Text("${c.completed}/${c.total} completed", color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1)
     }
 }
 
@@ -142,27 +138,28 @@ private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier
 private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow: (Boolean) -> Unit, onClick: () -> Unit) {
     val c = e.body.counts
     val ret = e.body.performance.avgActualReturn
-    Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick)
-            .padding(start = MarksySpace.CardPadding, top = MarksySpace.CardPadding, bottom = MarksySpace.CardPadding, end = MarksySpace.CardPadding + OneHandRowEndClearance),
-        horizontalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding), verticalAlignment = Alignment.CenterVertically
-    ) {
-        TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, MarksyType.Lead, caption = false)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                Text(e.name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                TagChip(ScorecardSources.chip(e))
+    MarksyRowCard(onClick = onClick) {
+        Row(
+            Modifier.padding(end = OneHandRowEndClearance),
+            horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically
+        ) {
+            TrustRing(e.body.trust.trustScore, 40.dp, 5.dp, MarksyType.Small, caption = false)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                    Text(e.name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    TagChip(ScorecardSources.chip(e))
+                }
+                OutcomeBar(c.successful, c.failed, c.expired, c.open)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
+                    FollowPill(following, onToggleFollow)
+                }
             }
-            OutcomeBar(c.successful, c.failed, c.expired, c.open)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
-                FollowPill(following, onToggleFollow, compact = true)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                val spark = remember(c) { ScorecardGraphics.sparkline(c.successful, c.failed, c.expired) }
+                Sparkline(spark, ScorecardGraphics.returnTone(ret), Modifier.size(64.dp, 22.dp))
+                ReturnBadge(ret)
             }
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            val spark = remember(c) { ScorecardGraphics.sparkline(c.successful, c.failed, c.expired) }
-            Sparkline(spark, ScorecardGraphics.returnTone(ret), Modifier.size(64.dp, 22.dp))
-            ReturnBadge(ret)
         }
     }
 }

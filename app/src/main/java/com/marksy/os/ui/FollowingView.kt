@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -76,11 +75,7 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
     var open by remember { mutableStateOf<String?>(null) }
     open?.let { id -> TipDetailDialog(repository, id, onOpenStock = { open = null; onOpenStock(it) }) { open = null } }
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
-    ) {
+    MarksyList(bottom = bottomPadding) {
         (alerts as? MarketDataState.Loaded)?.value?.let { list ->
             items(list, key = { "alert-${it.id}" }) { a ->
                 TipAlertRow(a, unread = a.unread && a.id !in read) {
@@ -118,10 +113,8 @@ private fun TipAlertRow(alert: TipAlertDto, unread: Boolean, onClick: () -> Unit
 
 @Composable
 private fun FollowRow(item: FollowDto, following: Boolean, onToggle: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    MarksyRowCard {
+      Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(
                 item.name + (item.channelName?.takeIf { it != item.name }?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary,
@@ -134,5 +127,6 @@ private fun FollowRow(item: FollowDto, following: Boolean, onToggle: (Boolean) -
         }
         Spacer(Modifier.width(MarksySpace.Gap))
         FollowPill(following, onToggle)
+      }
     }
 }

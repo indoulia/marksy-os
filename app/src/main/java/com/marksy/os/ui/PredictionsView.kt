@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -73,11 +72,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     val paged = if (showEnded) open else closed
     val endedHint = "Calls withdrawn, invalidated or left without market data before closing appear here."
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = bottomPadding)
-    ) {
+    MarksyList(bottom = bottomPadding) {
         item(key = "record") { TrackRecordStrip(summary) }
         item(key = "segments") {
             Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
@@ -203,10 +198,8 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
         "STOP" in o || "FAIL" in o -> MarksyTheme.Negative
         else -> MarksyTheme.TextSecondary
     }
-    Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    MarksyRowCard(onClick = onClick) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(c.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
@@ -219,6 +212,7 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
             )
         }
         LedgerCalls.closedReturn(c)?.let { Text(returnPct(it), color = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative, style = MarksyType.Subhead, fontWeight = FontWeight.Bold) }
+      }
     }
 }
 

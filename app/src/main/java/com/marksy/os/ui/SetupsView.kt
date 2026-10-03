@@ -1,7 +1,6 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,11 +30,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
     val quotes = rememberUpstoxQuotes(remember(live) { live.map { it.symbol }.distinct() })
     val scan by MarketIntelligenceRepository.latestScan.collectAsState()
 
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
-    ) {
+    MarksyList(bottom = bottomPadding) {
         when (val m = marksy) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading Marksy setups...") }
             is MarketDataState.Error -> item { EmptyState("Marksy setups unavailable", m.message) }
