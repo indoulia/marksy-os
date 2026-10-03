@@ -115,6 +115,9 @@ object NotificationClassifier {
 
     // Market-news apps: not brokers, but their alerts belong with the market, not in OTHER.
     private val marketPackages = setOf("com.divum.moneycontrol")
+
+    /** Broker and market-news apps known by package identity; read-only for capture, no rule depends on this accessor. */
+    val marketSourcePackages: Set<String> get() = tradingPackages + marketPackages
     private const val EMAIL_PRIORITY_CEILING = 50
     private val BROKER_UTILITY = setOf(Category.DELIVERY, Category.BANKING, Category.PAYMENTS, Category.BILLS)
     private val paymentAppTransferTerms = listOf("received ₹", "received rs", "sent ₹", "paid ₹", "paid to", "requested", "refund", "cashback received")
