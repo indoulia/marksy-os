@@ -123,20 +123,21 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
 
     val live = when (val s = state) { is MarketDataState.Loaded -> s.value; is MarketDataState.Stale -> s.value; else -> emptyList() }
-    // Watched issues and search hits outside the loaded pages, fetched by id or name.
+    // Watched issues outside the loaded pages, fetched by id.
     var extra by remember(refresh.key) { mutableStateOf<List<IpoListItemDto>>(emptyList()) }
     LaunchedEffect(watched, state, refresh.key) {
         val have = (live + listed.items + extra).mapTo(HashSet()) { it.id }
         val missing = watched.orEmpty().filter { it !in have }.take(MAX_IDS)
         if (missing.isNotEmpty()) (repository.iposPage(ids = missing, limit = MAX_IDS) as? MarketDataState.Loaded)?.let { r -> extra = (extra + r.value.items).distinctBy { it.id } }
     }
-    LaunchedEffect(query, refresh.key) {
-        val q = query.trim()
-        if (q.length < 2) return@LaunchedEffect
-        delay(300)
-        (repository.iposPage(query = q, limit = SEARCH_PAGE) as? MarketDataState.Loaded)?.let { r -> extra = (extra + r.value.items).distinctBy { it.id } }
+    // Every search asks the server, which also matches names a later source corrected; hits page in like Listed.
+    val search = remember(query.trim(), refresh.key) {
+        query.trim().takeIf { it.isNotEmpty() }?.let { q -> Paged { c -> repository.iposPage(query = q, limit = SEARCH_PAGE, cursor = c).map { it.items to it.nextCursor } } }
     }
-    val items = remember(live, listed.items, extra) { (live + listed.items + extra).distinctBy { it.id } }
+    LaunchedEffect(search) { if (search != null) { delay(300); search.more() } }
+    // Open is the home, not a chosen filter, so a search from it looks at every stage.
+    val shownStage = if (search != null && stage == StageFilter.OPEN) StageFilter.ALL else stage
+    val items = remember(live, listed.items, extra, search?.items) { (live + listed.items + extra + search?.items.orEmpty()).distinctBy { it.id } }
     val listedDone = !listed.hasMore && !listed.failed
     val listedTotal = counts?.get(IpoLifecycle.LISTED_STAGE)?.takeIf { board == Board.ALL && !listedDone }
     // Allotment days and listing results live on the detail; fetched only for the few cards that show them.
@@ -152,7 +153,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
     val holidays by produceState(emptyMap<java.time.LocalDate, String>()) { value = com.marksy.os.upstox.UpstoxHolidays.load(context, java.time.LocalDate.now(IpoLifecycle.IST)) }
     val opened = openedId?.let { id -> items.firstOrNull { it.id == id } }
-    val note = opened?.let { IpoLifecycle.detailNote(it, now) } ?: IpoLifecycle.homeNote(items, stage, board, query, now, details)
+    val note = opened?.let { IpoLifecycle.detailNote(it, now) } ?: IpoLifecycle.homeNote(items, shownStage, board, query, now, details)
     LaunchedEffect(note) { onTitleNote(note) }
     DisposableEffect(Unit) { onDispose { onTitleNote(null) } }
 
@@ -176,14 +177,27 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                         is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
                         is MarketDataState.Error -> item { EmptyState("IPO data unavailable", s.message) }
                         is MarketDataState.Empty -> item { EmptyState("No IPOs", "No issues are open, upcoming or recently listed.") }
-                        is MarketDataState.Loaded, is MarketDataState.Stale -> {
+                        is MarketDataState.Loaded, is MarketDataState.Stale -> if (search != null) {
+                            val failure = search.state as? MarketDataState.Error
+                            when {
+                                search.items.isEmpty() && search.hasMore -> item(key = "searching") { MarksyLoader("Searching...") }
+                                search.items.isEmpty() && failure != null -> item(key = "search-error") { EmptyState("Search unavailable", failure.message) }
+                                else -> {
+                                    ipoLanes(
+                                        search.items, shownStage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys, details,
+                                        listedTotal = null, pending = false, onOpen = { openedId = it.id }, onRemind = setReminder
+                                    )
+                                    pagedFooter(search, "search", "search results", end = null)
+                                }
+                            }
+                        } else {
                             val listedShown = query.isBlank() && (stage == StageFilter.LISTED || (stage == StageFilter.ALL && listedOpen))
                             ipoLanes(
                                 items, stage, board, query, watched.orEmpty(), now, listedOpen, { listedOpen = !listedOpen }, reminderKeys, details,
                                 listedTotal = listedTotal, pending = stage == StageFilter.LISTED && listed.items.isEmpty() && listed.hasMore,
                                 onOpen = { openedId = it.id }, onRemind = setReminder
                             )
-                            if (listedShown) listedFooter(listed, IpoLifecycle.stageCount(items, StageFilter.LISTED, board, emptySet(), now, null, listedDone = true))
+                            if (listedShown) pagedFooter(listed, "listed", "listed IPOs", "That's all ${IpoLifecycle.stageCount(items, StageFilter.LISTED, board, emptySet(), now, null, listedDone = true)} listed")
                         }
                     }
                 }
@@ -215,7 +229,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
 }
 
 private const val LISTED_PAGE = 20
-private const val SEARCH_PAGE = 50
+private const val SEARCH_PAGE = 20
 private const val MAX_IDS = 100
 
 /** Every pre-listing issue, skipping empty stages; none live is still a list, since Listed pages in separately. */
@@ -226,19 +240,18 @@ private suspend fun liveIpos(repository: MarketIntelligenceRepository, counts: M
         .let { if (it is MarketDataState.Empty) MarketDataState.Loaded(emptyList()) else it }
 }
 
-private fun LazyListScope.listedFooter(listed: Paged<IpoListItemDto>, shown: Int?) {
+private fun LazyListScope.pagedFooter(paged: Paged<IpoListItemDto>, key: String, what: String, end: String?) {
     val note = when {
-        listed.hasMore -> null
-        listed.failed -> "Couldn't load more listed IPOs · pull to refresh"
-        listed.items.isNotEmpty() -> "That's all ${shown ?: listed.items.size} listed"
-        else -> null
+        paged.hasMore || paged.items.isEmpty() -> null
+        paged.failed -> "Couldn't load more $what · pull to refresh"
+        else -> end
     }
-    if (listed.hasMore) item(key = "more-listed-${listed.items.size}") {
-        LaunchedEffect(Unit) { listed.more() }
+    if (paged.hasMore) item(key = "more-$key-${paged.items.size}") {
+        LaunchedEffect(Unit) { paged.more() }
         MarksyLoader("Loading more...")
-    } else if (note != null) item(key = "listed-end") {
+    } else if (note != null) item(key = "$key-end") {
         Text(note, color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
-    } else (listed.state as? MarketDataState.Error)?.let { e -> item(key = "listed-error") { EmptyState("Listed IPOs unavailable", e.message) } }
+    } else (paged.state as? MarketDataState.Error)?.let { e -> item(key = "$key-error") { EmptyState("${what.replaceFirstChar(Char::titlecase)} unavailable", e.message) } }
 }
 
 private fun LazyListScope.ipoLanes(
@@ -247,7 +260,8 @@ private fun LazyListScope.ipoLanes(
     listedTotal: Int?, pending: Boolean,
     onOpen: (IpoListItemDto) -> Unit, onRemind: (IpoListItemDto, IpoLifecycle.ReminderEvent, Boolean) -> Unit
 ) {
-    val lanes = IpoLifecycle.lanes(items, stage, board, query, watched, now)
+    // With a query the items are the server's hits, so no second name filter here.
+    val lanes = IpoLifecycle.lanes(items, stage, board, "", watched, now)
     if (lanes.isEmpty()) {
         if (pending) return
         item {
