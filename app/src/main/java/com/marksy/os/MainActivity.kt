@@ -881,6 +881,17 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        pendingCaptureReview?.let { id ->
+            androidx.compose.runtime.CompositionLocalProvider(com.marksy.os.ui.LocalMarksySnackbar provides snackbar) {
+                com.marksy.os.ui.CaptureReviewHost(id) { pendingCaptureReview = null }
+            }
+        }
+        LaunchedEffect(captureNotice) {
+            val code = captureNotice ?: return@LaunchedEffect
+            captureNotice = null
+            scope.launch { snackbar.showSnackbar(com.marksy.os.capture.CaptureMessages.failure(code), duration = SnackbarDuration.Short) }
+        }
+
         if (addingPlan || editingPlan != null) {
             val editing = editingPlan
             val close = { addingPlan = false; editingPlan = null }
