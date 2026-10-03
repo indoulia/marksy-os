@@ -10,20 +10,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.intelligence.RuleEngine
 import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.launch
@@ -53,79 +48,62 @@ fun RulesScreen(padding: PaddingValues) {
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Column {
-                Text("Create custom rules to filter, group and route notifications. Let Marksy work for you.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                Text("Create custom rules to filter, group and route notifications. Let Marksy work for you.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
             }
         }
 
         // Custom Rule Builder Card
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Custom Rule Builder", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(10.dp))
+            MarksyCard(border = MarksyTheme.PrimaryEmerald) {
+                Text("Custom Rule Builder", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
 
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(MarksyShape.Chip)
+                            .background(MarksyTheme.SurfaceRaised)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MarksyTheme.SurfaceRaised)
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("Notification contains BUY", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("THEN", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MarksyTheme.SurfaceRaised)
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    Button(
-                        onClick = { editingRule = null; showEditor = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald),
-                        shape = RoundedCornerShape(25.dp)
-                    ) {
-                        Text("+ Add Custom Rule", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                     }
                 }
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("THEN", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(MarksyShape.Chip)
+                            .background(MarksyTheme.SurfaceRaised)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                MarksyButton("+ Add Custom Rule", onClick = { editingRule = null; showEditor = true }, modifier = Modifier.fillMaxWidth())
             }
         }
 
-        item {
-            Text("Active Automations", color = MarksyTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
+        item { SectionLabel("Active Automations") }
 
         items(rules, key = { it.id }) { rule ->
             RuleToggleCard(
@@ -162,13 +140,13 @@ fun RulesScreen(padding: PaddingValues) {
             title = { Text("Delete rule?", color = MarksyTheme.TextPrimary) },
             text = { Text("\"${rule.name}\" will stop applying to newly captured events.", color = MarksyTheme.TextSecondary) },
             confirmButton = {
-                TextButton(onClick = {
+                MarksyButton("Delete", onClick = {
                     rules.removeAll { it.id == rule.id }
                     persist()
                     deleteRule = null
-                }) { Text("Delete", color = MarksyTheme.RedUrgent) }
+                }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
             },
-            dismissButton = { TextButton(onClick = { deleteRule = null }) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
+            dismissButton = { MarksyButton("Cancel", onClick = { deleteRule = null }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) }
         )
     }
 }
@@ -181,39 +159,31 @@ private fun RuleToggleCard(
     onDelete: () -> Unit,
     onTest: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(rule.name, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
-                }
-                Switch(
-                    checked = rule.enabled,
-                    onCheckedChange = onEnabledChanged,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = MarksyTheme.PrimaryEmerald,
-                        uncheckedThumbColor = MarksyTheme.TextMuted,
-                        uncheckedTrackColor = MarksyTheme.SurfaceRaised
-                    )
+    MarksyCard {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(rule.name, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = 2.dp))
+            }
+            Switch(
+                checked = rule.enabled,
+                onCheckedChange = onEnabledChanged,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MarksyTheme.OnAccent,
+                    checkedTrackColor = MarksyTheme.PrimaryEmerald,
+                    uncheckedThumbColor = MarksyTheme.TextMuted,
+                    uncheckedTrackColor = MarksyTheme.SurfaceRaised
                 )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onTest) { Text("Test on history", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp) }
-                TextButton(onClick = onEdit) { Text("Edit", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp) }
-                TextButton(onClick = onDelete) { Text("Delete", color = MarksyTheme.RedUrgent, fontSize = 11.sp) }
-            }
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            MarksyButton("Test on history", onClick = onTest, style = MarksyButtonStyle.Text)
+            MarksyButton("Edit", onClick = onEdit, style = MarksyButtonStyle.Text)
+            MarksyButton("Delete", onClick = onDelete, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
         }
     }
 }
@@ -261,19 +231,21 @@ private fun RuleEditorDialog(
                     placeholder = "e.g. BUY, OTP",
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(value = category, onValueChange = { category = it.take(20) }, label = { Text("Category (e.g. PAYMENTS)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = source, onValueChange = { source = it.take(120) }, label = { Text("App package (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                CompactTextField(value = category, onValueChange = { category = it.take(20) }, label = "Category (e.g. PAYMENTS)", modifier = Modifier.fillMaxWidth())
+                CompactTextField(value = source, onValueChange = { source = it.take(120) }, label = "App package (optional)", modifier = Modifier.fillMaxWidth())
                 ConditionTreeEditor(tree, onChange = { tree = it })
-                OutlinedTextField(value = priority, onValueChange = { priority = it.take(4) }, label = { Text("Rule priority (higher wins conflicts)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                CompactTextField(value = priority, onValueChange = { priority = it.take(4) }, label = "Rule priority (higher wins conflicts)", modifier = Modifier.fillMaxWidth())
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RuleEngine.Action.entries.forEach { a ->
-                        FilterChip(selected = action == a, onClick = { action = a }, label = { Text(a.name.lowercase().replace('_', ' '), fontSize = 11.sp) })
+                        Pill(a.name.lowercase().replace('_', ' '), selected = action == a) { action = a }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            MarksyButton(
+                "Save",
+                style = MarksyButtonStyle.Text,
                 enabled = valid,
                 onClick = {
                     onSave(
@@ -288,9 +260,9 @@ private fun RuleEditorDialog(
                         )
                     )
                 }
-            ) { Text("Save", color = MarksyTheme.PrimaryEmerald) }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
+        dismissButton = { MarksyButton("Cancel", onClick = onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) }
     )
 }
 
@@ -307,25 +279,27 @@ private fun RuleTestDialog(rule: RuleEngine.Rule, runner: RuleRunner, onDismiss:
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val r = result
-                if (r == null) Text("Checking the last 7 days...", color = MarksyTheme.TextMuted)
+                if (r == null) Text("Checking the last 7 days…", color = MarksyTheme.TextMuted)
                 else {
                     Text("Would match ${r.second.size} of ${r.first} notifications from the last 7 days.", color = MarksyTheme.TextSecondary)
                     r.second.take(6).forEach { hit ->
                         val effect = hit.stateAction?.name?.lowercase()?.replace('_', ' ') ?: "priority ${hit.priorityBefore} → ${hit.priorityAfter}"
-                        Text("• ${hit.title.take(60)} — $effect", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                        Text("• ${hit.title.take(60)} — $effect", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                     }
                 }
-                Text("Audit: $executions recorded execution${if (executions == 1) "" else "s"}", color = MarksyTheme.TextMuted, fontSize = 11.sp)
-                applied?.let { Text("Applied to $it past notification${if (it == 1) "" else "s"}.", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp) }
+                Text("Audit: $executions recorded execution${if (executions == 1) "" else "s"}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+                applied?.let { Text("Applied to $it past notification${if (it == 1) "" else "s"}.", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small) }
             }
         },
         confirmButton = {
-            TextButton(
+            MarksyButton(
+                "Apply to these",
+                style = MarksyButtonStyle.Text,
                 enabled = (result?.second?.isNotEmpty() == true) && rule.enabled,
                 onClick = { scope.launch { applied = runCatching { runner.applyToHistory(rule) }.getOrNull(); refresh++ } }
-            ) { Text("Apply to these", color = MarksyTheme.PrimaryEmerald) }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close", color = MarksyTheme.TextSecondary) } }
+        dismissButton = { MarksyButton("Close", onClick = onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) }
     )
 }
 

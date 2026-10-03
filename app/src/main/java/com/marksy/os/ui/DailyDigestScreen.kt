@@ -1,14 +1,13 @@
 package com.marksy.os.ui
 
+import com.marksy.os.MarksyFormat
 import android.content.Intent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -24,13 +23,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.SmartInboxModel
 import kotlinx.coroutines.launch
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun DailyDigestScreen(
@@ -51,25 +47,25 @@ fun DailyDigestScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Text(
-                "Today • " + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())),
+                "Today · " + MarksyFormat.day(java.time.LocalDate.now()),
                 color = MarksyTheme.TextSecondary,
-                fontSize = 13.sp
+                style = MarksyType.Body
             )
         }
 
         if (digest.totalNotifications == 0) {
-            item { EmptyState("Nothing captured today.", "Your digest builds up as notifications arrive.") }
+            item { EmptyState("Nothing captured today", "Your digest builds up as notifications arrive.") }
             return@LazyColumn
         }
 
         item {
             DigestCard(borderColor = MarksyTheme.PrimaryEmerald) {
-                Text(digest.title, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(digest.title, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
 
                 DigestItemRow(
@@ -113,29 +109,23 @@ fun DailyDigestScreen(
 
                 Spacer(Modifier.height(10.dp))
 
-                Button(
+                MarksyButton(
+                    "Share Digest",
                     onClick = {
                         val send = Intent(Intent.ACTION_SEND)
                             .setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, digest.shareText())
                         context.startActivity(Intent.createChooser(send, "Share digest"))
                     },
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald),
-                    shape = RoundedCornerShape(25.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Share Digest", color = Color.Black, fontWeight = FontWeight.Bold)
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
         if (digest.attentionEvents.isNotEmpty()) {
             item {
                 DigestCard {
-                    Text("Needs attention", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Needs attention", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
                     digest.attentionEvents.take(MAX_ATTENTION_ROWS).forEach { event ->
                         AttentionRow(event) { onEventSelected(event) }
@@ -147,12 +137,12 @@ fun DailyDigestScreen(
         if (digest.topSources.isNotEmpty()) {
             item {
                 DigestCard {
-                    Text("Top sources", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Top sources", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
                     digest.topSources.forEach { (name, count) ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(name, color = MarksyTheme.TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Text("$count", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("$count", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -166,15 +156,7 @@ private const val MAX_ATTENTION_ROWS = 5
 
 @Composable
 private fun DigestCard(borderColor: Color = MarksyTheme.BorderGlow, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-    ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), content = content)
-    }
+    Column(Modifier.fillMaxWidth().marksyCard(borderColor).padding(horizontal = 14.dp, vertical = 12.dp), content = content)
 }
 
 @Composable
@@ -188,7 +170,7 @@ private fun DigestItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(MarksyShape.Chip)
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -203,7 +185,7 @@ private fun DigestItemRow(
             Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(13.dp))
         }
         Spacer(Modifier.width(10.dp))
-        Text(text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
     }
 }
@@ -213,17 +195,17 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(MarksyShape.Chip)
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(event.title.ifBlank { "Notification event" }, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(event.title.ifBlank { "Notification event" }, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 event.sourceName.ifBlank { "System" } + " · " + compactTime(event.postedAt).orEmpty(),
                 color = MarksyTheme.TextMuted,
-                fontSize = 11.sp
+                style = MarksyType.Meta
             )
         }
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
@@ -231,7 +213,7 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
 }
 
 private fun categoryStyle(category: String): Triple<ImageVector, Color, Color> = when (category) {
-    "EMAIL" -> Triple(Icons.Default.Email, Color(0xFF82B1FF), Color(0xFF0F1B2E))
+    "EMAIL" -> Triple(Icons.Default.Email, MarksyTheme.EmailBlue, MarksyTheme.BadgeEmailBg)
     "DELIVERY" -> Triple(Icons.Default.LocalShipping, MarksyTheme.OrangeDelivery, MarksyTheme.BadgeDeliveryBg)
     "BANKING", "PAYMENTS", "BILLS" -> Triple(Icons.Default.AccountBalance, MarksyTheme.BlueFinance, MarksyTheme.BadgeFinanceBg)
     "MESSAGES" -> Triple(Icons.Default.Chat, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
