@@ -35,12 +35,17 @@ object OriginalAppLauncher {
     fun actionsFor(sourcePackage: String, sourceKey: String): List<Action> =
         synchronized(entries) { entries[key(sourcePackage, sourceKey)]?.actions.orEmpty() }
 
+    enum class Opened { CONTENT_INTENT, LAUNCHER, UNAVAILABLE }
+
     /** Opens the exact screen the notification pointed to, else the app's launcher screen. */
-    fun open(context: Context, sourcePackage: String, sourceKey: String): Boolean {
+    fun open(context: Context, sourcePackage: String, sourceKey: String): Boolean = openDetailed(context, sourcePackage, sourceKey) != Opened.UNAVAILABLE
+
+    /** As [open], saying which way the source opened (a missing deep link falls back to the launcher). */
+    fun openDetailed(context: Context, sourcePackage: String, sourceKey: String): Opened {
         val contentIntent = synchronized(entries) { entries[key(sourcePackage, sourceKey)]?.contentIntent }
-        if (contentIntent != null && send(context, contentIntent)) return true
-        val launch = context.packageManager.getLaunchIntentForPackage(sourcePackage) ?: return false
-        return runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        if (contentIntent != null && send(context, contentIntent)) return Opened.CONTENT_INTENT
+        val launch = context.packageManager.getLaunchIntentForPackage(sourcePackage) ?: return Opened.UNAVAILABLE
+        return if (runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) Opened.LAUNCHER else Opened.UNAVAILABLE
     }
 
     fun send(context: Context, intent: PendingIntent): Boolean = runCatching {

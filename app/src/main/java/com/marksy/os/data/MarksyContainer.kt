@@ -72,6 +72,13 @@ object MarksyContainer {
     fun imageIntake(context: Context): com.marksy.os.capture.ImageIntake =
         com.marksy.os.capture.ImageIntake(captureGateway(context), textRecognizer, log = { android.util.Log.i("MarksyCapture", it) })
 
+    fun workflowSourceOpener(context: Context): com.marksy.os.capture.WorkflowSourceOpener {
+        val app = context.applicationContext
+        return com.marksy.os.capture.WorkflowSourceOpener(captureGateway(app), database(app).captureDao()) { pkg, key ->
+            com.marksy.os.notification.OriginalAppLauncher.openDetailed(app, pkg, key)
+        }
+    }
+
     fun plan(context: Context): com.marksy.os.plan.PlanRepository =
         com.marksy.os.plan.PlanRepository(database(context).planItemDao(), com.marksy.os.notification.PlanAlarmScheduler(context))
 

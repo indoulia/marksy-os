@@ -22,6 +22,7 @@ import com.marksy.os.capture.CaptureFailure
 import com.marksy.os.capture.CaptureMethod
 import com.marksy.os.capture.WorkflowState
 import com.marksy.os.data.MarksyContainer
+import com.marksy.os.notification.OriginalAppLauncher.Opened
 import kotlinx.coroutines.launch
 
 enum class ScreenCaptureStart {
@@ -34,7 +35,7 @@ enum class ScreenCaptureStart {
     UNSUPPORTED
 }
 
-/** Starts "Capture tip" for a workflow: the system consent screen, then the capture service. */
+/** Starts "Capture tip" for a workflow: the system consent screen, then the capture service, then the source app. */
 class ScreenCaptureLauncher internal constructor(private val context: Context, private val consent: ActivityResultLauncher<Intent>) {
     suspend fun start(workflowId: Long): ScreenCaptureStart = ScreenCaptureConsent.request(context, workflowId, consent::launch)
 }
@@ -104,6 +105,11 @@ object ScreenCaptureConsent {
         } catch (e: Exception) {
             Log.i("MarksyCapture", "capture session workflow=$workflowId service-refused (${e.javaClass.simpleName})")
             controller.finish(workflowId, gateway.submitFailure(CaptureMethod.MEDIA_PROJECTION, workflowId, CaptureFailure.CAPTURE_FAILED))
+            return
+        }
+        // The user's own "Capture tip" tap started this, so the source opens as for "View tip"; then they tap "Capture now".
+        if (MarksyContainer.workflowSourceOpener(context).openForCapture(workflowId) == Opened.UNAVAILABLE) {
+            ScreenCaptureService.stop(context, CaptureFailure.SOURCE_UNAVAILABLE)
         }
     }
 }
