@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -35,12 +34,12 @@ internal fun TipDetailDialog(repository: MarketIntelligenceRepository, tipId: St
                     ?: Text("This tip is not in the ledger yet.", color = MarksyTheme.TextSecondary)
                 is MarketDataState.Error -> Text(d.message, color = MarksyTheme.TextSecondary)
                 MarketDataState.Unavailable -> Text("Sign in to your Marksy account in More.", color = MarksyTheme.TextSecondary)
-                else -> MarksyLoader("Loading tip...")
+                else -> MarksyLoader("Loading tip…")
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.SemiBold) } },
+        confirmButton = { MarksyButton("Done", onDismiss, style = MarksyButtonStyle.Text) },
         dismissButton = if (tip != null && onOpenStock != null) {
-            { TextButton(onClick = { onOpenStock(tip.symbol) }) { Text("Stock page", color = MarksyTheme.TextSecondary) } }
+            { MarksyButton("Stock page", { onOpenStock(tip.symbol) }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) }
         } else null
     )
 }
@@ -48,14 +47,14 @@ internal fun TipDetailDialog(repository: MarketIntelligenceRepository, tipId: St
 @Composable
 private fun TipDetailBody(t: LedgerTipDto, progress: List<ProgressPointDto>) {
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(LedgerCalls.state(t), color = toneColor(LedgerCalls.tone(t)), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text(listOfNotNull(t.channel?.name, t.caller?.name).joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-        Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextPrimary, fontSize = 12.sp)
-        Text(LedgerCalls.termsText(t), color = MarksyTheme.TextMuted, fontSize = 11.sp)
-        LedgerCalls.returnsText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
-        if (progress.isNotEmpty()) Text("Session by session", color = MarksyTheme.TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(LedgerCalls.state(t), color = toneColor(LedgerCalls.tone(t)), style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        Text(listOfNotNull(t.channel?.name, t.caller?.name).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextPrimary, style = MarksyType.Small)
+        Text(LedgerCalls.termsText(t), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        LedgerCalls.returnsText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), style = MarksyType.Small, fontWeight = FontWeight.SemiBold) }
+        if (progress.isNotEmpty()) Text("Session by session", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = 6.dp))
         progress.forEach { p ->
-            Text(LedgerCalls.progressLine(p), color = if (p.dataBasis == "PROVISIONAL") MarksyTheme.YellowImportant else MarksyTheme.TextSecondary, fontSize = 11.sp)
+            Text(LedgerCalls.progressLine(p), color = if (p.dataBasis == "PROVISIONAL") MarksyTheme.Warning else MarksyTheme.TextSecondary, style = MarksyType.Meta)
         }
     }
 }

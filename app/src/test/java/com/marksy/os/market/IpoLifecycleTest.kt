@@ -142,7 +142,7 @@ class IpoLifecycleTest {
         val cats = IpoLifecycle.lotCategories(14_756.0, isSme = false)
         assertEquals("About 1 in 2", IpoLifecycle.lotQuote(cats, cats[0], 1, 34, 434.0, 1.3, null, "Retail").chance)
         val nearZero = IpoGmpDto("AVAILABLE", listOf(IpoGmpReading("a", -1.0, -0.3, null), IpoGmpReading("b", 48.0, 11.0, null)))
-        assertEquals("GMP +0–11% · 2 sources · unofficial", IpoLifecycle.gmpSummary(nearZero, 434.0, now)!!.text)
+        assertEquals("GMP 0–11% · 2 sources · unofficial", IpoLifecycle.gmpSummary(nearZero, 434.0, now)!!.text)
     }
 
     @Test fun aFailedStageKeepsItsLastRowsAndMarksTheListStale() {

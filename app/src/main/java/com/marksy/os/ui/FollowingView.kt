@@ -1,7 +1,6 @@
 package com.marksy.os.ui
 
 import android.Manifest
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,18 +41,19 @@ internal fun FollowPill(following: Boolean?, onToggle: (Boolean) -> Unit, compac
     Pill(if (following) "Following" else "Follow", selected = following, compact = compact) { onToggle(!following) }
 }
 
-/** Saves a follow on the server: the shared set changes at once, settles on the reply, and a refusal toasts. */
+/** Saves a follow on the server: the shared set changes at once, settles on the reply, and a refusal posts a notice. */
 @Composable
 internal fun rememberFollowToggle(repository: MarketIntelligenceRepository): (FollowKey, String, Boolean) -> Unit {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val notice = rememberNotice()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    return remember(repository, scope, context, permission) {
+    return remember(repository, scope, context, permission, notice) {
         { key, name, follow ->
             scope.launch {
                 val result = repository.setFollowing(key, follow)
                 if (result !is MarketDataState.Loaded) {
-                    Toast.makeText(context, Follows.failureText(result, follow, name), Toast.LENGTH_SHORT).show()
+                    notice(Follows.failureText(result, follow, name))
                 } else if (follow) {
                     TipAlertWorker.schedule(context)
                     // I5: asked once, on the first follow, so a followed source's calls can reach the shade.
@@ -77,8 +77,8 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
     open?.let { id -> TipDetailDialog(repository, id, onOpenStock = { open = null; onOpenStock(it) }) { open = null } }
 
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
         contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
     ) {
         (alerts as? MarketDataState.Loaded)?.value?.let { list ->
@@ -93,7 +93,7 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
             }
         }
         when (val f = follows) {
-            is MarketDataState.Loading -> item { MarksyLoader("Loading who you follow...") }
+            is MarketDataState.Loading -> item { MarksyLoader("Loading who you follow…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Your follows are unavailable", f.message) }
             is MarketDataState.Empty -> item { EmptyState(MyTipsStatus.FOLLOWING.empty, "Follow a channel, caller or engine from Scorecards or a stock's calls to hear about its calls.") }
@@ -107,33 +107,29 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
 
 @Composable
 private fun TipAlertRow(alert: TipAlertDto, unread: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface)
-            .border(1.dp, if (unread) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp)
+        Modifier.fillMaxWidth().marksyCard(if (unread) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow)
+            .clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp)
     ) {
-        Text(alert.message, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        compactTime(alert.triggeredAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+        Text(alert.message, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        compactTime(alert.triggeredAt)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
     }
 }
 
 @Composable
 private fun FollowRow(item: FollowDto, following: Boolean, onToggle: (Boolean) -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+        Modifier.fillMaxWidth().marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(
                 item.name + (item.channelName?.takeIf { it != item.name }?.let { " · $it" } ?: ""), color = MarksyTheme.TextPrimary,
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text(
                 listOfNotNull(if (item.engine) "Marksy engine" else item.channelType?.let(LedgerCalls::channelType), LedgerCalls.recordText(item.headline)).joinToString(" · "),
-                color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(8.dp))

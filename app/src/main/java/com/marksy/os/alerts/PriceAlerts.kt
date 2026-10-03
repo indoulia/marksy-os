@@ -14,6 +14,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.marksy.os.MainActivity
+import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.UpstoxApiClient
 import com.marksy.os.upstox.UpstoxFeed
 import com.marksy.os.upstox.UpstoxInstruments
@@ -104,11 +105,10 @@ object PriceAlertNotifier {
             Intent(context, MainActivity::class.java).putExtra(EXTRA_OPEN_SYMBOL, alert.symbol).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        fun rupees(v: Double) = "₹" + String.format(Locale.getDefault(), "%,.2f", v)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("${alert.symbol} ${if (alert.above) "rose above" else "fell below"} ${rupees(alert.price)}")
-            .setContentText("Now ${rupees(price)} · Marksy price alert")
+            .setContentTitle("${alert.symbol} ${if (alert.above) "rose above" else "fell below"} ${MarksyFormat.rupees(alert.price)}")
+            .setContentText("Now ${MarksyFormat.rupees(price)} · Marksy price alert")
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

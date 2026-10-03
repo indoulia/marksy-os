@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
@@ -116,7 +115,7 @@ private fun SwipeTray(
 
     Box(modifier.fillMaxWidth()) {
         if (offset.value != 0f) {
-            val tray = Modifier.matchParentSize().clip(RoundedCornerShape(16.dp)).background(MarksyTheme.SurfaceRaised)
+            val tray = Modifier.matchParentSize().clip(MarksyShape.Panel).background(MarksyTheme.SurfaceRaised)
             if (stacked) Box(tray) {
                 Column(
                     Modifier.align(if (offset.value > 0) Alignment.CenterStart else Alignment.CenterEnd).width(ActionWidth).fillMaxHeight(),

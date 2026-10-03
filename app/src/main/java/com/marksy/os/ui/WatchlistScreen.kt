@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmarks
@@ -37,7 +36,6 @@ import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,7 +52,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.WatchAdd
@@ -201,7 +198,7 @@ fun WatchlistScreen(
             onFilterSelected = onSectionSelected,
             searchQuery = query,
             onSearchChange = onQueryChange,
-            searchPlaceholder = "Search a stock to add...",
+            searchPlaceholder = "Search a stock to add…",
             searchSymbols = true
         )
     }
@@ -256,17 +253,17 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
         title = { Text("Add to ${list.name}  ${inList.size}/${WatchlistRepository.MAX_STOCKS}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                MarksySearchField(query, { query = it; note = null }, "Search NSE symbol or name...", Modifier.fillMaxWidth(), symbols = true, lifted = false)
-                note?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                MarksySearchField(query, { query = it; note = null }, "Search NSE symbol or name…", Modifier.fillMaxWidth(), symbols = true, lifted = false)
+                note?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 val found = matches
                 when {
                     found == null -> MarksyLoader("Searching…")
-                    q.length >= 2 && found.isEmpty() -> Text("No NSE symbol matches \"$q\"", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+                    q.length >= 2 && found.isEmpty() -> Text("No NSE symbol matches \"$q\"", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 }
                 found.orEmpty().forEach { symbol ->
                     val has = symbol in inList
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !has && pending == null) {
+                        Modifier.fillMaxWidth().clip(MarksyShape.Chip).clickable(enabled = !has && pending == null) {
                             pending = symbol
                             scope.launch {
                                 // Company name for the row's subtitle; skipped if the lookup is slow.
@@ -281,16 +278,16 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
                         }.padding(horizontal = 4.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Text(
                             when { has -> "✓"; pending == symbol -> "Adding…"; else -> "Add" },
-                            color = if (has) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                            color = if (has) MarksyTheme.TextMuted else MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+        confirmButton = { MarksyButton("Done", onClick = onDismiss, style = MarksyButtonStyle.Text) }
     )
 }
 
@@ -310,31 +307,31 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
         title = "Delete ${target.name}?",
         confirmLabel = "Delete",
         confirmEnabled = true,
-        confirmColor = MarksyTheme.RedUrgent,
+        confirmColor = MarksyTheme.Negative,
         onConfirm = { deleting = null; scope.launch { repository.deleteList(target.id) } },
         onDismiss = { deleting = null }
     ) {
         val n = counts[target.id] ?: 0
-        Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+        Text(if (n == 0) "The list is empty." else "Its $n stocks go with it; other lists keep theirs.", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
     } else MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Watchlists") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (lists.isEmpty()) Text("No watchlists yet.", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+                if (lists.isEmpty()) Text("No watchlists yet", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
                 rankedWatchlists(lists, items).forEach { w ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(w.name, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
-                            Text("${counts[w.id] ?: 0}/${WatchlistRepository.MAX_STOCKS} stocks", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
+                            Text(w.name, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+                            Text("${counts[w.id] ?: 0}/${WatchlistRepository.MAX_STOCKS} stocks", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                         }
-                        TextButton(onClick = { deleting = w }) { Text("Delete", color = MarksyTheme.RedUrgent) }
+                        MarksyButton("Delete", onClick = { deleting = w }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
                     }
                 }
             }
         },
-        dismissButton = { TextButton(onClick = { creating = true }) { Text("New watchlist", color = MarksyTheme.PrimaryEmerald) } },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold) } }
+        dismissButton = { MarksyButton("New watchlist", onClick = { creating = true }, style = MarksyButtonStyle.Text) },
+        confirmButton = { MarksyButton("Done", onClick = onDismiss, style = MarksyButtonStyle.Text) }
     )
 }
 
@@ -351,7 +348,7 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
             // Same swipe tray as Home: actions show first and only run when tapped.
             SwipeActionsRow(
                 listOf(
-                    SwipeTrayAction(Icons.Default.Delete, "Remove ${row.symbol}", MarksyTheme.RedUrgent) { onRemove(row.symbol) },
+                    SwipeTrayAction(Icons.Default.Delete, "Remove ${row.symbol}", MarksyTheme.Negative) { onRemove(row.symbol) },
                     SwipeTrayAction(Icons.Default.SwapHoriz, "Move ${row.symbol} to another list", MarksyTheme.PrimaryEmerald) { onMove(row.symbol) }
                 )
             ) { WatchRow(row, quotes[row.symbol]) { onOpen(row.symbol) } }
@@ -363,34 +360,33 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
 
 @Composable
 private fun AddStocksButton(count: Int, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = MarksyShape.Card
     Row(
-        Modifier.fillMaxWidth().clip(shape).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = 12.dp),
+        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
         Text(
-            "  Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+            "  Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold
         )
     }
 }
 
 @Composable
 private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
     Row(
-        Modifier.fillMaxWidth().background(MarksyTheme.Surface, shape).border(1.dp, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(row.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            row.name?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Text(row.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+            row.name?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         if (quote != null) Column(horizontalAlignment = Alignment.End) {
-            Text("₹${money(quote.lastPrice)}", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(com.marksy.os.MarksyFormat.rupees(quote.lastPrice), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
             quote.changePct?.let { pct ->
-                Text(String.format(java.util.Locale.US, "%+.2f%%", pct), color = if (pct < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(com.marksy.os.MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -440,12 +436,8 @@ private fun WatchDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } },
-        confirmButton = {
-            TextButton(enabled = confirmEnabled, onClick = onConfirm) {
-                Text(confirmLabel, color = if (confirmEnabled) confirmColor else MarksyTheme.TextMuted, fontWeight = FontWeight.Bold)
-            }
-        }
+        dismissButton = { MarksyButton("Cancel", onClick = onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) },
+        confirmButton = { MarksyButton(confirmLabel, onClick = onConfirm, style = MarksyButtonStyle.Text, color = confirmColor, enabled = confirmEnabled) }
     )
 }
 
@@ -456,14 +448,14 @@ internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = tr
     val fill by androidx.compose.animation.animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
     Text(
         text,
-        color = when { selected -> Color.Black; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
-        fontSize = if (compact) 10.sp else 12.sp,
+        color = when { selected -> MarksyTheme.OnAccent; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
+        style = if (compact) MarksyType.Caption else MarksyType.Small,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         maxLines = 1,
         // A compact pill keeps its look but reserves a 48dp touch target around it.
         modifier = (if (compact) Modifier.minimumInteractiveComponentSize() else Modifier).clip(shape)
             .background(fill)
-            .border(1.dp, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
+            .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = if (compact) 3.dp else 6.dp)
     )
@@ -511,7 +503,7 @@ private fun AddToWatchlistDialog(
         val t = traits
         Text(
             if (t == null) "Finding the right list…" else listOfNotNull(t.name, t.sector).joinToString(" · ").ifEmpty { "Pick a list" },
-            color = MarksyTheme.TextSecondary, fontSize = 12.sp
+            color = MarksyTheme.TextSecondary, style = MarksyType.Small
         )
         if (lists.isNotEmpty()) PillRow {
             lists.forEach { l ->
@@ -527,7 +519,7 @@ private fun AddToWatchlistDialog(
             label = if (lists.isEmpty()) "New list" else "Or a new list",
             placeholder = t?.sector?.let { "e.g. $it" } ?: "e.g. Defence"
         )
-        error?.let { Text(it, color = MarksyTheme.RedUrgent, fontSize = 12.sp) }
+        error?.let { Text(it, color = MarksyTheme.Negative, style = MarksyType.Small) }
     }
 }
 
@@ -542,11 +534,11 @@ private fun ListNameField(name: String, onNameChange: (String) -> Unit, existing
     val pills = remember(existing, preferred) { WatchlistNames.proposals(existing, preferred) }
     CompactTextField(name, onNameChange, Modifier.fillMaxWidth(), label = label, placeholder = placeholder)
     if (suggestions.isNotEmpty()) {
-        val shape = RoundedCornerShape(12.dp)
-        Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.SurfaceRaised).border(1.dp, MarksyTheme.BorderGlow, shape)) {
+        val shape = MarksyShape.Field
+        Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape)) {
             suggestions.forEach { s ->
                 Text(
-                    s, color = MarksyTheme.TextPrimary, fontSize = 13.sp,
+                    s, color = MarksyTheme.TextPrimary, style = MarksyType.Body,
                     modifier = Modifier.fillMaxWidth().clickable { onNameChange(s) }.padding(horizontal = 12.dp, vertical = 9.dp)
                 )
             }
@@ -568,6 +560,6 @@ private fun NewWatchlistDialog(existing: List<String>, onDismiss: () -> Unit, on
         onDismiss = onDismiss
     ) {
         ListNameField(name, { name = it; taken = false }, existing, emptyList(), label = null, placeholder = "e.g. Defence, SmallCap")
-        if (taken) Text("A list with that name already exists", color = MarksyTheme.RedUrgent, fontSize = 12.sp)
+        if (taken) Text("A list with that name already exists", color = MarksyTheme.Negative, style = MarksyType.Small)
     }
 }

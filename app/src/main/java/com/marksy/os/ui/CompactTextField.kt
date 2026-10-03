@@ -27,11 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** Single-line field sized to its content; M3 OutlinedTextField can't go below 56dp without clipping its text. */
 @Composable
@@ -55,7 +53,7 @@ fun CompactTextField(
     val shape = RoundedCornerShape(cornerRadius)
     Column(modifier) {
         if (label != null) {
-            Text(label, color = MarksyTheme.TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))
+            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))
         }
         BasicTextField(
             value = value,
@@ -66,7 +64,7 @@ fun CompactTextField(
             keyboardActions = keyboardActions,
             interactionSource = interaction,
             visualTransformation = visualTransformation,
-            textStyle = TextStyle(color = MarksyTheme.TextPrimary, fontSize = 13.sp),
+            textStyle = MarksyType.Body.copy(color = MarksyTheme.TextPrimary),
             cursorBrush = SolidColor(MarksyTheme.PrimaryEmerald),
             decorationBox = { inner ->
                 Row(
@@ -75,7 +73,7 @@ fun CompactTextField(
                         .height(height)
                         .clip(shape)
                         .background(MarksyTheme.Surface)
-                        .border(1.dp, if (focused) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
+                        .border(MarksySpace.Border, if (focused) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
                         .padding(start = 12.dp, end = if (trailing != null) 4.dp else 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -85,7 +83,7 @@ fun CompactTextField(
                     }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (value.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(placeholder, color = MarksyTheme.TextMuted, fontSize = 13.sp, maxLines = 1)
+                            Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Body, maxLines = 1)
                         }
                         inner()
                     }

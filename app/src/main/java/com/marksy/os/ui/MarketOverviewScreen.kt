@@ -15,8 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketMoverDto
 import com.marksy.os.market.MarketSummaryDto
@@ -52,12 +52,12 @@ fun MarketOverviewScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         when (state) {
-            is MarketDataState.Loading -> item { MarksyLoader("Checking market...") }
+            is MarketDataState.Loading -> item { MarksyLoader("Checking market…") }
             is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Add a Market API key in More → Configure Gateway.") }
             is MarketDataState.Error -> item { EmptyState("Market data unavailable", state.message) }
             is MarketDataState.Empty -> item { EmptyState("No market data", "Nothing to show right now.") }
@@ -99,10 +99,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.overviewContent(
             )
         }
     }
-    item { Text(freshnessLabel, color = MarksyTheme.TextMuted, fontSize = 11.sp) }
+    item { Text(freshnessLabel, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
 }
 
-private fun formatIndexValue(value: Double): String = String.format(Locale.getDefault(), "%,.2f", value)
+private fun formatIndexValue(value: Double): String = MarksyFormat.number(value)
 
 /** Formats a raw `marketStatus`/`marketSession` value from the API (e.g. `MARKET_HOURS`) for display. */
 internal fun formatMarketStatus(status: String): String = when (status.uppercase(Locale.ROOT)) {

@@ -2,14 +2,11 @@ package com.marksy.os.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.ChartOverlays
 import com.marksy.os.upstox.ChartRange
@@ -77,16 +74,16 @@ fun chartOverlays(candles: List<Candle>, chosen: Set<Indicator>, range: ChartRan
 fun ChartSettingsDialog(prefs: ChartPrefs, range: ChartRange, minutes: Int?, onMinutesSelected: (Int?) -> Unit, onDismiss: () -> Unit) {
     MarksyDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chart", color = MarksyTheme.TextPrimary) },
+        title = { Text("Chart", color = MarksyTheme.TextPrimary, style = MarksyType.Lead) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Style", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("Style", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("Line", selected = !prefs.candles) { prefs.candles = false }
                     Pill("Candles", selected = prefs.candles) { prefs.candles = true }
                     Pill("Volume", selected = prefs.volume) { prefs.volume = !prefs.volume }
                 }
-                Text("Indicators", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("Indicators", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Indicator.entries.forEach { i ->
                         val usable = !i.intradayOnly || range.intervals.isNotEmpty()
@@ -94,13 +91,13 @@ fun ChartSettingsDialog(prefs: ChartPrefs, range: ChartRange, minutes: Int?, onM
                     }
                 }
                 if (range.intervals.isNotEmpty()) {
-                    Text("Candle interval · ${range.label}", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                    Text("Candle interval · ${range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         range.intervals.forEach { m -> Pill(if (m >= 60) "${m / 60}h" else "${m}m", selected = m == minutes) { onMinutesSelected(m) } }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.SemiBold) } }
+        confirmButton = { MarksyButton("Done", onDismiss, style = MarksyButtonStyle.Text) }
     )
 }

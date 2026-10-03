@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,12 +48,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** Bottom padding lists need so their last item clears the floating one-hand buttons. */
 val OneHandListBottomPadding = 120.dp
@@ -81,7 +78,7 @@ fun BoxScope.OneHandControls(
     onFilterSelected: (String) -> Unit,
     searchQuery: String? = null,
     onSearchChange: ((String) -> Unit)? = null,
-    searchPlaceholder: String = "Search...",
+    searchPlaceholder: String = "Search…",
     // Ticker entry: capitals, no autocorrect.
     searchSymbols: Boolean = false,
     // Keyboard search key; the field closes after it.
@@ -156,12 +153,12 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 @Composable
 private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
+        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(action.label, color = MarksyTheme.PrimaryEmerald, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
     }
 }
 
@@ -169,10 +166,10 @@ private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
 private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, extras: (@Composable () -> Unit)? = null, onPick: (String) -> Unit) {
     Column(
         Modifier
-            .shadow(10.dp, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
+            .shadow(10.dp, MarksyShape.Panel)
+            .clip(MarksyShape.Panel)
             .background(MarksyTheme.SurfaceRaised)
-            .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
+            .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
             .verticalScroll(rememberScrollState())
             .padding(6.dp),
         horizontalAlignment = align,
@@ -182,11 +179,11 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
             val on = key == selected
             Text(
                 label,
-                color = if (on) Color.Black else MarksyTheme.TextPrimary,
-                fontSize = 14.sp,
+                color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextPrimary,
+                style = MarksyType.Subhead,
                 fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(MarksyShape.Pill)
                     .background(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent)
                     .clickable { onPick(key) }
                     .padding(horizontal = 18.dp, vertical = 10.dp)
@@ -211,7 +208,7 @@ internal fun MarksySearchField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = TextStyle(color = MarksyTheme.TextPrimary, fontSize = 15.sp),
+        textStyle = MarksyType.Lead.copy(color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Normal),
         cursorBrush = SolidColor(MarksyTheme.PrimaryEmerald),
         keyboardOptions = if (symbols) KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Search)
             else KeyboardOptions(imeAction = ImeAction.Search),
@@ -230,7 +227,7 @@ internal fun MarksySearchField(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, fontSize = 15.sp)
+                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Lead, fontWeight = FontWeight.Normal)
                     inner()
                 }
                 if (value.isNotEmpty()) {
@@ -267,7 +264,7 @@ fun BoxScope.OneHandToggleButtons(options: List<Triple<String, ImageVector, Stri
                     .clickable(onClickLabel = label) { onSelected(key) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = label, tint = if (on) Color.Black else MarksyTheme.PrimaryEmerald, modifier = Modifier.size(FloatingIconSize))
+                Icon(icon, contentDescription = label, tint = if (on) MarksyTheme.OnAccent else MarksyTheme.PrimaryEmerald, modifier = Modifier.size(FloatingIconSize))
             }
         }
     }
@@ -286,7 +283,7 @@ private fun FloatingRoundButton(icon: ImageVector, label: String, active: Boolea
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = label, tint = Color.Black, modifier = Modifier.size(FloatingIconSize))
+            Icon(icon, contentDescription = label, tint = MarksyTheme.OnAccent, modifier = Modifier.size(FloatingIconSize))
         }
         if (active) {
             Box(

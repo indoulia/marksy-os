@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import com.marksy.os.upstox.UpstoxOAuth
@@ -85,13 +83,13 @@ class UpstoxSignInActivity : ComponentActivity() {
                         MarksyLoader("Finishing the Upstox sign-in…")
                     }
                     problem?.let { message ->
-                        val shape = RoundedCornerShape(16.dp)
+                        val shape = MarksyShape.Panel
                         Column(
                             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp)
-                                .background(MarksyTheme.Surface, shape).border(1.dp, MarksyTheme.YellowImportant, shape).padding(14.dp),
+                                .background(MarksyTheme.Surface, shape).border(MarksySpace.Border, MarksyTheme.Warning, shape).padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(message, color = MarksyTheme.TextPrimary, fontSize = 13.sp)
+                            Text(message, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Pill("Try again") { retry() }
                                 Pill("Close") { finish() }
