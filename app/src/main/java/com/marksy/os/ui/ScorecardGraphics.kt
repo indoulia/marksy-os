@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -249,7 +248,7 @@ internal fun ReturnBadge(fraction: Double?, style: TextStyle = MarksyType.Body, 
         else -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
     }
     Text(
-        LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+        LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold,
         maxLines = 1, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Hair)
     )
 }

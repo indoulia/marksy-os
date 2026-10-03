@@ -31,7 +31,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -197,8 +196,8 @@ private fun KpiTiles(d: ScorecardDetailDto) {
         Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
             Column(Modifier.weight(1f).fillMaxHeight().scoreCard(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${c.completed}", color = MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                    Text("/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Small, fontFamily = FontFamily.Monospace)
+                    Text("${c.completed}", color = MarksyTheme.TextPrimary, style = MarksyType.Heading, modifier = Modifier.weight(1f))
+                    Text("/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 }
                 val done = ScorecardGraphics.shares(listOf(c.completed, (c.total - c.completed).coerceAtLeast(0))).first()
                 Box(Modifier.fillMaxWidth().height(8.dp).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
@@ -218,7 +217,7 @@ private fun KpiTile(value: String, label: String, modifier: Modifier, valueColor
     Row(modifier.scoreCard(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
         graphic()
         Column {
-            Text(value, color = valueColor ?: MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace, maxLines = 1)
+            Text(value, color = valueColor ?: MarksyTheme.TextPrimary, style = MarksyType.Heading, maxLines = 1)
             Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
         }
     }
@@ -262,7 +261,7 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(color))
                     Spacer(Modifier.width(MarksySpace.Gap))
                     Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Body, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text("$n", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
+                    Text("$n", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -322,7 +321,7 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
                 Text("Avg promised${promised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
             Spacer(Modifier.weight(1f))
-            if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, style = MarksyType.Meta, fontFamily = FontFamily.Monospace)
+            if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
     }
 }
@@ -361,7 +360,7 @@ private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
             if (share > 0f) drawArc(tint, 180f, 180f * share, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
         }
         Text(
-            realizationPct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace)
+            realizationPct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Heading)
     }
 }
 
@@ -428,7 +427,7 @@ private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
     ) {
         Text(s.symbol, color = fg, style = MarksyType.Small, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(
-            "${s.calls}", color = fg, style = MarksyType.Caption, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            "${s.calls}", color = fg, style = MarksyType.Caption, fontWeight = FontWeight.Bold,
             modifier = Modifier.clip(MarksyShape.Chip).background(fg.copy(alpha = .16f)).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Border)
         )
     }
