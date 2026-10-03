@@ -52,6 +52,18 @@ class IpoLifecycleTest {
         assertEquals("IPOs · 2 open · 1 closing today", IpoLifecycle.homeNote(book, IpoLifecycle.StageFilter.ALL, IpoLifecycle.Board.ALL, "", now))
         assertEquals("IPOs · SME · Opens soon", IpoLifecycle.homeNote(book, IpoLifecycle.StageFilter.UPCOMING, IpoLifecycle.Board.SME, "", now))
         assertEquals("IPOs · 2 opening soon", IpoLifecycle.homeNote(book.filter { it.stage == "UPCOMING" }, IpoLifecycle.StageFilter.ALL, IpoLifecycle.Board.ALL, "", now))
+        // Open is the home view, so it summarises rather than naming itself.
+        assertEquals("IPOs · 2 open · 1 closing today", IpoLifecycle.homeNote(book, IpoLifecycle.StageFilter.OPEN, IpoLifecycle.Board.ALL, "", now))
+    }
+
+    @Test fun listedCountsComeFromTheServerUntilEveryPageIsIn() {
+        fun n(f: IpoLifecycle.StageFilter, board: IpoLifecycle.Board = IpoLifecycle.Board.ALL, done: Boolean = false) =
+            IpoLifecycle.stageCount(book, f, board, emptySet(), now, listedTotal = 413, listedDone = done)
+        assertEquals(413, n(IpoLifecycle.StageFilter.LISTED))
+        assertEquals(5 + 413, n(IpoLifecycle.StageFilter.ALL))
+        assertEquals(2, n(IpoLifecycle.StageFilter.OPEN))
+        assertNull("the server count is board-blind", n(IpoLifecycle.StageFilter.LISTED, IpoLifecycle.Board.SME))
+        assertEquals(1, n(IpoLifecycle.StageFilter.LISTED, done = true))
     }
 
     @Test fun cardFactsFollowTheStage() {

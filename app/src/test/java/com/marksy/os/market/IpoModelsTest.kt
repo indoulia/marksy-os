@@ -8,6 +8,14 @@ import org.junit.Test
 
 class IpoModelsTest {
     @Test
+    fun ipoPageCarriesTheCursorToTheNextPage() {
+        val page = IpoPageDto.parse(JSONObject("""{"data":[{"id":"a","companyName":"A"}],"meta":{"pageSize":20,"nextCursor":"eyJ2Ijo"}}"""))
+        assertEquals(listOf("a"), page.items.map { it.id })
+        assertEquals("eyJ2Ijo", page.nextCursor)
+        assertNull(IpoPageDto.parse(JSONObject("""{"data":[],"meta":{"pageSize":20,"nextCursor":null}}""")).nextCursor)
+    }
+
+    @Test
     fun parsesIpoListItemWithHeterogeneousValueEnvelope() {
         val json = JSONObject(
             """

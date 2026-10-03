@@ -18,7 +18,9 @@ import kotlin.math.roundToLong
 object IpoLifecycle {
     val IST: ZoneId = ZoneId.of("Asia/Kolkata")
     /** Stages Home fetches; HANDED_OVER and WITHDRAWN are history. */
-    val LIVE_STAGES = listOf("OPEN", "CLOSING_SOON", "CLOSED", "ALLOTMENT", "UPCOMING", "RECENTLY_LISTED")
+    const val LISTED_STAGE = "RECENTLY_LISTED"
+    /** Fetched whole; Listed (hundreds) pages in separately. */
+    val PRE_LISTING_STAGES = listOf("OPEN", "CLOSING_SOON", "CLOSED", "ALLOTMENT", "UPCOMING")
     private val CUTOFF = LocalTime.of(17, 0)
     private val DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
     private val DM = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
@@ -79,8 +81,16 @@ object IpoLifecycle {
         }
     }
 
+    /** Pill count; until Listed's last page is in, the server's (board-blind) stage count stands in for it. */
+    fun stageCount(items: List<IpoListItemDto>, f: StageFilter, board: Board, watched: Set<String>, now: ZonedDateTime, listedTotal: Int?, listedDone: Boolean): Int? {
+        fun n(s: StageFilter) = lanes(items, s, board, "", watched, now).sumOf { it.second.size }
+        if (listedDone || (f != StageFilter.LISTED && f != StageFilter.ALL)) return n(f)
+        val total = listedTotal?.takeIf { board == Board.ALL } ?: return null
+        return n(f) - n(StageFilter.LISTED) + total
+    }
+
     fun homeNote(items: List<IpoListItemDto>, stage: StageFilter, board: Board, query: String, now: ZonedDateTime, details: Map<String, IpoDetailDto> = emptyMap()): String {
-        if (stage != StageFilter.ALL || board != Board.ALL || query.isNotBlank())
+        if (stage !in setOf(StageFilter.ALL, StageFilter.OPEN) || board != Board.ALL || query.isNotBlank())
             return listOfNotNull("IPOs", board.takeIf { it != Board.ALL }?.label, stage.takeIf { it != StageFilter.ALL }?.label, query.trim().takeIf(String::isNotEmpty)?.let { "“$it”" }).joinToString(" · ")
         val lanes = items.distinctBy { it.id }.mapNotNull { laneOf(it, now) }
         val open = lanes.count { it == Lane.TODAY || it == Lane.OPEN }

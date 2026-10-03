@@ -40,6 +40,9 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun ipos(stage: String? = null, query: String? = null): MarketDataState<List<IpoListItemDto>> =
         fetch(emptyCheck = { it.isEmpty() }) { it.ipos(stage, query) }
 
+    suspend fun iposPage(stage: String? = null, query: String? = null, ids: List<String>? = null, limit: Int, cursor: String? = null): MarketDataState<IpoPageDto> =
+        fetch(emptyCheck = { it.items.isEmpty() }) { it.iposPage(stage, query, ids, limit, cursor) }
+
     suspend fun ipoStageCounts(): MarketDataState<IpoStageCountsDto> = fetch { it.ipoStageCounts() }
 
     suspend fun ipoDetail(id: String): MarketDataState<IpoDetailDto> = fetch { it.ipoDetail(id) }

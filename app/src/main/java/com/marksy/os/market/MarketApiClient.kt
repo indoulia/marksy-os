@@ -20,6 +20,8 @@ interface MarketApiClient {
     suspend fun activePredictions(cursor: String? = null): ActivePredictionPageDto
     suspend fun activePrediction(id: Int): ActivePredictionDto
     suspend fun ipos(stage: String? = null, query: String? = null): List<IpoListItemDto>
+    suspend fun iposPage(stage: String? = null, query: String? = null, ids: List<String>? = null, limit: Int, cursor: String? = null): IpoPageDto =
+        IpoPageDto(ipos(stage, query).filter { ids == null || it.id in ids }, null)
     suspend fun ipoAttention(limit: Int = 4): List<IpoAttentionItemDto>
     suspend fun ipoStageCounts(): IpoStageCountsDto
     suspend fun ipoDetail(id: String): IpoDetailDto
@@ -105,6 +107,16 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
         val items = execute("$base/ipos$suffix", IPO_MAX_RESPONSE_CHARS).getJSONArray("data")
         com.marksy.os.ai.DiagLog.i("MarksyMarket", "ipos stage=$stage items=${items.length()}")
         return IpoListItemDto.parseList(items)
+    }
+
+    override suspend fun iposPage(stage: String?, query: String?, ids: List<String>?, limit: Int, cursor: String?): IpoPageDto {
+        val params = listOfNotNull(
+            "limit=$limit", stage?.let { "stage=${encode(it)}" }, query?.let { "q=${encode(it)}" },
+            ids?.let { "ids=${encode(it.joinToString(","))}" }, cursor?.let { "cursor=${encode(it)}" }
+        )
+        return IpoPageDto.parse(execute("$base/ipos?" + params.joinToString("&"), IPO_MAX_RESPONSE_CHARS)).also {
+            com.marksy.os.ai.DiagLog.i("MarksyMarket", "ipos page stage=$stage items=${it.items.size} more=${it.nextCursor != null}")
+        }
     }
 
     override suspend fun ipoAttention(limit: Int): List<IpoAttentionItemDto> =
