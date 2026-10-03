@@ -18,11 +18,10 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.ChartRange
 import java.time.Instant
@@ -48,7 +47,7 @@ internal object ChartAxis {
         return generateSequence(ceil(lo / step) * step) { it + step }.takeWhile { it <= hi + step * 1e-9 }.map { Math.round(it / step) * step }.toList()
     }
 
-    fun price(v: Double, step: Double): String = if (step >= 1) count(Math.round(v)) else String.format(Locale.US, "%.2f", v)
+    fun price(v: Double, step: Double): String = MarksyFormat.number(v, if (step >= 1) 0 else 2)
 
     fun timeTicks(size: Int, count: Int = 4): List<Int> = if (size < 2) listOf(0) else (0 until count).map { it * (size - 1) / (count - 1) }.distinct()
 
@@ -89,11 +88,11 @@ internal fun PriceChart(
     val maxVolume = remember(candles) { candles.maxOfOrNull { it.volume }?.takeIf { it > 0 } ?: 1L }
     val ticks = remember(bounds) { ChartAxis.priceTicks(bounds.first, bounds.second) }
     val step = if (ticks.size > 1) ticks[1] - ticks[0] else 1.0
-    val labelStyle = TextStyle(color = MarksyTheme.TextMuted, fontSize = 9.sp)
+    val labelStyle = MarksyType.Caption.copy(color = MarksyTheme.TextMuted)
     val gutter = 40.dp
     val axis = 16.dp
-    val up = MarksyTheme.PrimaryEmerald
-    val down = MarksyTheme.RedUrgent
+    val up = MarksyTheme.Positive
+    val down = MarksyTheme.Negative
     Canvas(
         Modifier.fillMaxSize().pointerInput(candles) {
             val width = size.width - gutter.toPx()
@@ -132,7 +131,7 @@ internal fun PriceChart(
         fun y(v: Double) = (h * (1 - (v - lo) / (hi - lo))).toFloat()
         ticks.forEach { t ->
             val ty = y(t)
-            drawLine(Color(0x14FFFFFF), Offset(0f, ty), Offset(w, ty), 1f)
+            drawLine(MarksyTheme.Divider, Offset(0f, ty), Offset(w, ty), 1f)
             val label = measurer.measure(ChartAxis.price(t, step), labelStyle)
             drawText(label, topLeft = Offset(size.width - label.size.width, (ty - label.size.height / 2f).coerceIn(0f, h - label.size.height)))
         }
@@ -146,7 +145,7 @@ internal fun PriceChart(
         }
         levels.forEach { (name, v) ->
             if (v < lo || v > hi) return@forEach
-            val tint = when (name) { "Target" -> MarksyTheme.PrimaryEmerald; "Stop" -> MarksyTheme.RedUrgent; else -> MarksyTheme.TextSecondary }
+            val tint = when (name) { "Target" -> MarksyTheme.Positive; "Stop" -> MarksyTheme.Negative; else -> MarksyTheme.TextSecondary }
             drawLine(tint.copy(alpha = .8f), Offset(0f, y(v)), Offset(w, y(v)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
             val label = measurer.measure("$name ${ChartAxis.price(v, step)}", labelStyle.copy(color = tint))
             drawText(label, topLeft = Offset(4.dp.toPx(), (y(v) - label.size.height - 1.dp.toPx()).coerceIn(0f, h - label.size.height)))
@@ -189,7 +188,7 @@ internal fun PriceChart(
         if (point != null) {
             drawLine(MarksyTheme.TextSecondary, Offset(x(point), 0f), Offset(x(point), plot), 1.dp.toPx())
             drawCircle(color, 5.dp.toPx(), Offset(x(point), y(closes[point])))
-            drawCircle(Color.White, 5.dp.toPx(), Offset(x(point), y(closes[point])), style = Stroke(1.5.dp.toPx()))
+            drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(x(point), y(closes[point])), style = Stroke(1.5.dp.toPx()))
         } else if (!candleMode) {
             drawCircle(color, 3.dp.toPx(), Offset(x(closes.lastIndex), y(closes.last())))
         }
