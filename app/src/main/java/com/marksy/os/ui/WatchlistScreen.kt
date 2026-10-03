@@ -21,12 +21,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -338,11 +339,7 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
 @Composable
 private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit, onAdd: () -> Unit) {
     val quotes = rememberUpstoxQuotes(remember(rows) { rows.map { it.symbol } })
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding())
-    ) {
+    MarksyList(bottom = padding.calculateBottomPadding()) {
         if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Add up to ${WatchlistRepository.MAX_STOCKS} stocks below.") }
         items(rows, key = { "w-${it.watchlistId}-${it.symbol}" }) { row ->
             // Same swipe tray as Home: actions show first and only run when tapped.
@@ -360,33 +357,28 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
 
 @Composable
 private fun AddStocksButton(count: Int, onClick: () -> Unit) {
-    val shape = MarksyShape.Card
-    Row(
-        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = MarksySpace.CardPadding),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-        Text(
-            "  Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold
-        )
+    MarksyRowCard(onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
+            Spacer(Modifier.width(MarksySpace.Inner))
+            Text("Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
 @Composable
 private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.Section, vertical = MarksySpace.ListGap),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(row.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-            row.name?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        }
-        if (quote != null) Column(horizontalAlignment = Alignment.End) {
-            Text(com.marksy.os.MarksyFormat.rupees(quote.lastPrice), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
-            quote.changePct?.let { pct ->
-                Text(com.marksy.os.MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
+    MarksyRowCard(onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(row.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                row.name?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+            if (quote != null) Column(horizontalAlignment = Alignment.End) {
+                Text(com.marksy.os.MarksyFormat.rupees(quote.lastPrice), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+                quote.changePct?.let { pct ->
+                    Text(com.marksy.os.MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }

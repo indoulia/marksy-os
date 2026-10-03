@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,8 +42,8 @@ import com.marksy.os.gateway.TradingDeliveryScheduler
 import androidx.activity.compose.BackHandler
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.NotificationTrend
-import com.marksy.os.ui.SecondZonePickerDialog
-import com.marksy.os.ui.WorldClock
+import com.marksy.os.clock.ClockZones
+import com.marksy.os.ui.MarksyList
 import com.marksy.os.ui.WorldClockSettings
 import com.marksy.os.weather.Weather
 import com.marksy.os.weather.WeatherRepository
@@ -908,21 +907,14 @@ class MainActivity : ComponentActivity() {
     var clearing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val signedInUserId = remember { com.marksy.os.gateway.AuthSessionStore(AppContext.get()).signedInUserId() }
-    LazyColumn(
-        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
-        contentPadding = PaddingValues(MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(padding)) {
         item {
             Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         }
         item {
             // Profile Banner Card
-            Box(Modifier.fillMaxWidth().marksyCard(MarksyTheme.PrimaryEmerald).clickable(onClick = openGatewaySettings)) {
-                Row(
-                    modifier = Modifier.padding(MarksySpace.Wide),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            MarksyCard(border = MarksyTheme.PrimaryEmerald, onClick = openGatewaySettings) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(42.dp)
@@ -985,9 +977,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         item {
-            val zone by WorldClockSettings.secondZone
-            SettingsCard("World clock", WorldClock.abbreviation(java.time.ZonedDateTime.now(zone)), "Home shows IST and ${WorldClock.cityName(zone)}. Tap the clocks to convert meeting times.") {
-                MarksyButton("Change Second Clock", onClick = { showZonePicker = true })
+            val (first, second) = WorldClockSettings.zones.value
+            val now = java.time.ZonedDateTime.now()
+            SettingsCard("World clock", "${ClockZones.abbreviation(now.withZoneSameInstant(first))} / ${ClockZones.abbreviation(now.withZoneSameInstant(second))}", "Home shows ${ClockZones.cityName(first)} and ${ClockZones.cityName(second)}. Open the clocks to change either zone or convert a time.") {
+                MarksyButton("Open World Clock", onClick = { showZonePicker = true })
             }
         }
         item { SettingsCard("Insights", "LOCAL", "Review notification patterns and attention levels.") { MarksyButton("Open Insights", onClick = openInsights) } }
@@ -996,7 +989,7 @@ class MainActivity : ComponentActivity() {
         item { SettingsCard("Watchlists", "${watchlists.size} LISTS", "Delete a watchlist and the stocks in it.") { MarksyButton("Manage Watchlists", onClick = { managingWatchlists = true }) } }
         item { SettingsCard("Local data", "7d / 30d", "Notifications expire after 7 days; trading events retained 30 days.") { MarksyButton(if (clearing) "Clearing…" else "Clear All Data", onClick = { showClear = true }, enabled = !clearing, color = MarksyTheme.Negative) } }
     }
-    if (showZonePicker) SecondZonePickerDialog { showZonePicker = false }
+    if (showZonePicker) com.marksy.os.ui.TimeZoneConverterDialog { showZonePicker = false }
     if (managingWatchlists) com.marksy.os.ui.ManageWatchlistsDialog(watchlist, watchlists, watchItems) { managingWatchlists = false }
     if (showClear) com.marksy.os.ui.MarksyDialog(onDismissRequest = { if (!clearing) showClear = false }, title = { Text("Clear local data?", color = MarksyTheme.TextPrimary) }, text = { Text("This removes captured notifications and trading intelligence stored on this device.", color = MarksyTheme.TextSecondary) }, confirmButton = { MarksyButton("Clear", onClick = { clearing = true; scope.launch { try { clearAll() } finally { clearing = false; showClear = false } } }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative, enabled = !clearing) }, dismissButton = { MarksyButton("Cancel", onClick = { showClear = false }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary, enabled = !clearing) })
 }
@@ -1013,9 +1006,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable internal fun EmptyState(title: String, message: String) {
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.Gutter), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-        Spacer(Modifier.height(MarksySpace.Inner))
-        Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+    MarksyCard {
+        Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }

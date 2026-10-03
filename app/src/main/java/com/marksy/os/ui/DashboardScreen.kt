@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -108,160 +107,117 @@ fun DashboardScreen(
         return RowNote(listOfNotNull(level, reason).joinToString(" · "), tint)
     }
 
-    LazyColumn(
-        modifier = modifier.background(MarksyTheme.Background),
-        contentPadding = PaddingValues(bottom = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Section)
-    ) {
+    MarksyList(modifier.background(MarksyTheme.Background), bottom = MarksySpace.Gutter) {
         item {
-            Column(Modifier.padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.CardPadding)) {
-                // Header Branding
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(MarksySize.Avatar).clip(MarksyShape.Chip)) {
-                            // The launcher foreground pads its mark for the adaptive mask; scaling crops to the mark.
-                            androidx.compose.foundation.Image(
-                                androidx.compose.ui.res.painterResource(com.marksy.os.R.mipmap.ic_launcher_foreground), contentDescription = "Marksy",
-                                modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.6f, scaleY = 1.6f)
-                            )
-                        }
-                        Spacer(Modifier.width(MarksySpace.ListGap))
-                        Text(
-                            "MARKSY",
-                            color = MarksyTheme.TextPrimary,
-                            style = MarksyType.Wordmark
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(MarksySize.Avatar).clip(MarksyShape.Chip)) {
+                        // The launcher foreground pads its mark for the adaptive mask; scaling crops to the mark.
+                        androidx.compose.foundation.Image(
+                            androidx.compose.ui.res.painterResource(com.marksy.os.R.mipmap.ic_launcher_foreground), contentDescription = "Marksy",
+                            modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = 1.6f, scaleY = 1.6f)
                         )
-                        Spacer(Modifier.width(MarksySpace.Inner))
-                        Text(
-                            "OS",
-                            color = MarksyTheme.PrimaryEmerald,
-                            style = MarksyType.Wordmark
-                        )
-                        Spacer(Modifier.width(MarksySpace.Gap))
-                        MarksyBadge("V2", MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
-                        HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy", onClick = onOpenAsk)
-                        HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan", onClick = onOpenPlan)
-                        HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onOpenProfile)
-                    }
+                    Spacer(Modifier.width(MarksySpace.ListGap))
+                    Text("MARKSY", color = MarksyTheme.TextPrimary, style = MarksyType.Wordmark)
+                    Spacer(Modifier.width(MarksySpace.Inner))
+                    Text("OS", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Wordmark)
+                    Spacer(Modifier.width(MarksySpace.Gap))
+                    MarksyBadge("V2", MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
                 }
-
-                Spacer(Modifier.height(MarksySpace.Section))
-
-                // Time Filter Pills
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-                    listOf("Today", "This Week", "All Time").forEach { filter ->
-                        val isSelected = filter == selectedTimeFilter
-                        Pill(filter, selected = isSelected) { selectedTimeFilter = filter }
-                    }
-                    Spacer(Modifier.weight(1f))
-                    WeatherBadge(weather, weatherAvailable, onRequestWeather)
+                Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
+                    HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy", onClick = onOpenAsk)
+                    HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan", onClick = onOpenPlan)
+                    HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onOpenProfile)
                 }
-
-                Spacer(Modifier.height(MarksySpace.CardPadding))
-
-                // Notification Counter Card
-                Box(Modifier.fillMaxWidth().marksyCard()) {
-                    Column(Modifier.padding(horizontal = MarksySpace.Section, vertical = MarksySpace.Gap)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.Bottom) {
-                                    Text(
-                                        "${when (selectedTimeFilter) { "Today" -> trend.today; "This Week" -> trend.lastSevenDays.sum(); else -> trend.total }}",
-                                        color = MarksyTheme.TextPrimary,
-                                        style = MarksyType.Display
-                                    )
-                                    Spacer(Modifier.width(MarksySpace.Gap))
-                                    Text(
-                                        "Notifications",
-                                        color = MarksyTheme.TextSecondary,
-                                        style = MarksyType.Body,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(bottom = MarksySpace.Tight)
-                                    )
-                                }
-                                val change = trend.changeVsYesterdayPercent
-                                val today = selectedTimeFilter == "Today"
-                                Text(
-                                    when {
-                                        selectedTimeFilter == "This Week" -> "Last 7 days"
-                                        !today -> "All retained history"
-                                        // Just after midnight the same-time window is empty; show yesterday's full count instead.
-                                        change == null && trend.yesterdayTotal > 0 -> "${trend.yesterdayTotal} yesterday"
-                                        change == null -> "No data from yesterday yet"
-                                        change > 0 -> "↗ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
-                                        change < 0 -> "↘ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
-                                        else -> "Same as yesterday"
-                                    },
-                                    // Fewer notifications than yesterday reads as good news.
-                                    color = when {
-                                        !today || change == null || change == 0 -> MarksyTheme.TextMuted
-                                        change < 0 -> MarksyTheme.Positive
-                                        else -> MarksyTheme.Warning
-                                    },
-                                    style = MarksyType.Meta,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
-                            WorldClockPair()
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(MarksySpace.Gap))
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                    QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
-                    QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
-                    QuickAccessButton("Insights", Icons.Default.Insights, onOpenInsights, Modifier.weight(1f))
-                }
-
-                Spacer(Modifier.height(MarksySpace.Gap))
-
-                // Category Quick Cards Grid
-                val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
-                Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                        CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksySource.TRADING, { onCategorySelected("Trading") }, Modifier.weight(1f))
-                        CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksySource.IMPORTANT, { onCategorySelected("Important") }, Modifier.weight(1f))
-                        CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksySource.WHATSAPP, { onCategorySelected("Messages") }, Modifier.weight(1f))
-                        CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, MarksySource.WORK, { onCategorySelected("Teams") }, Modifier.weight(1f))
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                        CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, MarksySource.EMAIL, { onCategorySelected("Emails") }, Modifier.weight(1f))
-                        CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksySource.BANK, { onCategorySelected("Banking") }, Modifier.weight(1f))
-                        CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksySource.TRADING, { onCategorySelected("Payments") }, Modifier.weight(1f))
-                        CategoryGridCard("Delivery", stats?.delivery?.count ?: 0, Icons.Default.LocalShipping, MarksySource.DELIVERY, { onCategorySelected("Delivery") }, Modifier.weight(1f))
-                    }
-                }
-
-                Spacer(Modifier.height(MarksySpace.Section))
-
-                // Market Pulse Card
-                MarketPulseCard(market, todayDigest, onOpenTrading, liveIndices)
-
-                Spacer(Modifier.height(MarksySpace.Section))
-                PlanUpcomingCard(planItems, onOpenPlan, onAddReminder)
-
-                Spacer(Modifier.height(MarksySpace.Section))
-
-                // AI Summary Card
-                val liveNifty = (liveIndices as? UpstoxLiveState.Live)?.quotes?.get(UpstoxIndices.NIFTY_50)?.changePct?.let { "NIFTY 50" to it }
-                todayDigest?.let { AiSummaryBanner(HomeSummary.text(it, (market as? MarketState.Loaded)?.snapshot, liveNifty)) }
             }
         }
 
-        item { SectionTitle("AI Attention Required") }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+                listOf("Today", "This Week", "All Time").forEach { filter ->
+                    Pill(filter, selected = filter == selectedTimeFilter) { selectedTimeFilter = filter }
+                }
+                Spacer(Modifier.weight(1f))
+                WeatherBadge(weather, weatherAvailable, onRequestWeather)
+            }
+        }
+
+        item {
+            MarksyCard {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                "${when (selectedTimeFilter) { "Today" -> trend.today; "This Week" -> trend.lastSevenDays.sum(); else -> trend.total }}",
+                                color = MarksyTheme.TextPrimary,
+                                style = MarksyType.Display
+                            )
+                            Spacer(Modifier.width(MarksySpace.Gap))
+                            Text("Notifications", color = MarksyTheme.TextSecondary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
+                        }
+                        val change = trend.changeVsYesterdayPercent
+                        val today = selectedTimeFilter == "Today"
+                        Text(
+                            when {
+                                selectedTimeFilter == "This Week" -> "Last 7 days"
+                                !today -> "All retained history"
+                                // Just after midnight the same-time window is empty; show yesterday's full count instead.
+                                change == null && trend.yesterdayTotal > 0 -> "${trend.yesterdayTotal} yesterday"
+                                change == null -> "No data from yesterday yet"
+                                change > 0 -> "↗ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
+                                change < 0 -> "↘ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
+                                else -> "Same as yesterday"
+                            },
+                            // Fewer notifications than yesterday reads as good news.
+                            color = when {
+                                !today || change == null || change == 0 -> MarksyTheme.TextMuted
+                                change < 0 -> MarksyTheme.Positive
+                                else -> MarksyTheme.Warning
+                            },
+                            style = MarksyType.Meta,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    WorldClockPair()
+                }
+            }
+        }
+
+        item {
+            MarksyStatRow {
+                QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
+                QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
+                QuickAccessButton("Insights", Icons.Default.Insights, onOpenInsights, Modifier.weight(1f))
+            }
+        }
+
+        val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
+        item {
+            MarksyStatRow {
+                CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksySource.TRADING, { onCategorySelected("Trading") }, Modifier.weight(1f))
+                CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksySource.IMPORTANT, { onCategorySelected("Important") }, Modifier.weight(1f))
+                CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksySource.WHATSAPP, { onCategorySelected("Messages") }, Modifier.weight(1f))
+                CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, MarksySource.WORK, { onCategorySelected("Teams") }, Modifier.weight(1f))
+            }
+        }
+        item {
+            MarksyStatRow {
+                CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, MarksySource.EMAIL, { onCategorySelected("Emails") }, Modifier.weight(1f))
+                CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksySource.BANK, { onCategorySelected("Banking") }, Modifier.weight(1f))
+                CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksySource.TRADING, { onCategorySelected("Payments") }, Modifier.weight(1f))
+                CategoryGridCard("Delivery", stats?.delivery?.count ?: 0, Icons.Default.LocalShipping, MarksySource.DELIVERY, { onCategorySelected("Delivery") }, Modifier.weight(1f))
+            }
+        }
+
+        item { MarketPulseCard(market, todayDigest, onOpenTrading, liveIndices) }
+        item { PlanUpcomingCard(planItems, onOpenPlan, onAddReminder) }
+        todayDigest?.let { digest ->
+            val liveNifty = (liveIndices as? UpstoxLiveState.Live)?.quotes?.get(UpstoxIndices.NIFTY_50)?.changePct?.let { "NIFTY 50" to it }
+            item { AiSummaryBanner(HomeSummary.text(digest, (market as? MarketState.Loaded)?.snapshot, liveNifty)) }
+        }
+
+        item { SectionLabel("AI Attention Required") }
 
         if (attention.isEmpty()) {
             item {
@@ -273,17 +229,22 @@ fun DashboardScreen(
         } else {
             // Keys are namespaced per section: the same event can be in both Attention and Latest Activity.
             items(attention, key = { "attention-${it.key}" }) { stack ->
-                Box(Modifier.padding(horizontal = MarksySpace.Gutter)) {
-                    SourceStackCard(
-                        stack, expanded = "a-${stack.key}" in expanded, swipe = swipe, group = group,
-                        onToggle = { toggle("a-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) },
-                        note = ::attentionNote
-                    )
-                }
+                SourceStackCard(
+                    stack, expanded = "a-${stack.key}" in expanded, swipe = swipe, group = group,
+                    onToggle = { toggle("a-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) },
+                    note = ::attentionNote
+                )
             }
         }
 
-        item { SectionTitle("Latest Activity", link = "Timeline", onLink = onOpenTimeline) }
+        item {
+            SectionLabel("Latest Activity", trailing = {
+                Text(
+                    "Timeline ›", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onOpenTimeline)
+                )
+            })
+        }
         if (latest.isEmpty()) {
             item {
                 EmptyDashboardCard(
@@ -293,12 +254,10 @@ fun DashboardScreen(
             }
         } else {
             items(latest, key = { "latest-${it.key}" }) { stack ->
-                Box(Modifier.padding(horizontal = MarksySpace.Gutter)) {
-                    SourceStackCard(
-                        stack, expanded = "l-${stack.key}" in expanded, swipe = swipe, group = group,
-                        onToggle = { toggle("l-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) }
-                    )
-                }
+                SourceStackCard(
+                    stack, expanded = "l-${stack.key}" in expanded, swipe = swipe, group = group,
+                    onToggle = { toggle("l-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) }
+                )
             }
         }
     }
@@ -306,27 +265,13 @@ fun DashboardScreen(
 
 @Composable
 private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .marksyCard()
-            .then(if (available) Modifier else Modifier.clickable(onClick = onRequest))
-            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Inner),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn,
-            contentDescription = weather?.condition?.name ?: "Enable weather",
-            tint = weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
-            modifier = Modifier.size(MarksySize.Icon)
-        )
-        Spacer(Modifier.width(MarksySpace.Inner))
-        Text(
-            weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
-            color = MarksyTheme.TextPrimary,
-            style = MarksyType.Small,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    MarksyBadge(
+        weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
+        weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
+        MarksyTheme.SurfaceRaised,
+        modifier = if (available) Modifier else Modifier.clickable(onClick = onRequest),
+        icon = weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn
+    )
 }
 
 private fun weatherIcon(condition: Weather.Condition): ImageVector = when (condition) {
@@ -354,24 +299,9 @@ private fun CategoryGridCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
-    Box(
-        modifier
-            .marksyCard()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Tight),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(23.dp)
-                    .clip(CircleShape)
-                    .background(source.background),
-                contentAlignment = Alignment.Center
-            ) {
+    MarksyCard(modifier, onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(MarksySize.Icon).clip(CircleShape).background(source.background), contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = title, tint = source.accent, modifier = Modifier.size(MarksySize.IconSmall))
             }
             Spacer(Modifier.width(MarksySpace.Inner))
@@ -382,17 +312,8 @@ private fun CategoryGridCard(
 
 @Composable
 private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
-    Box(
-        modifier
-            .marksyCard()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Inner),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    MarksyCard(modifier, onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
             Spacer(Modifier.width(MarksySpace.Inner))
             Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1)
@@ -417,8 +338,7 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
         snapshot != null -> "Marksy market snapshot" + (snapshot.asOf?.let { " · as of $it" } ?: "")
         else -> null
     }
-    Box(Modifier.fillMaxWidth().marksyCard().clickable(onClick = onOpenTrading)) {
-        Column(Modifier.padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.CardPadding)) {
+    MarksyCard(onClick = onOpenTrading) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -448,17 +368,15 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
             }
             // Source/freshness is one tap away instead of a permanent line.
             if (showSource && sourceLine != null) {
-                Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
+                Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             }
-
-            Spacer(Modifier.height(MarksySpace.ListGap))
 
             when {
                 liveQuotes != null -> {
                     IndexGrid(liveQuotes.map { (name, q) -> Triple(name, q.lastPrice, q.changePct) })
                     val nifty = rememberUpstoxQuotes(Nifty50.SYMBOLS)
                     val breadth = remember(nifty) { com.marksy.os.market.MarketBreadth.of(nifty.values.map { it.changePct }) }
-                    if (breadth.total >= 12) BreadthBar(breadth, "NIFTY 50 breadth", Modifier.padding(top = MarksySpace.ListGap))
+                    if (breadth.total >= 12) BreadthBar(breadth, "NIFTY 50 breadth")
                 }
                 snapshot != null && snapshot.indices.isNotEmpty() -> IndexGrid(snapshot.indices.take(6).map { Triple(it.name, it.value, it.changePct) })
                 market is MarketState.Loading -> MarksyInlineLoader("Loading market data…")
@@ -473,8 +391,6 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                     style = MarksyType.Small
                 )
             }
-
-        }
     }
 }
 
@@ -484,7 +400,7 @@ private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
     Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
         items.chunked(2).forEach { row ->
             // A clear gutter between the left column's % and the right column's name.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 row.forEach { (name, value, change) ->
                     // Name left; price and change in fixed right-aligned columns so they line up row to row.
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -542,44 +458,17 @@ private fun formatChange(pct: Double): String = MarksyFormat.percent(pct)
 
 @Composable
 private fun AiSummaryBanner(summary: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MarksyShape.Panel)
-            .background(Brush.linearGradient(listOf(MarksyTheme.BadgeTradingBg, MarksyTheme.Surface)))
-            .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
-            .padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.CardPadding)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(26.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
-                }
-                Spacer(Modifier.width(MarksySpace.ListGap))
-                Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+    MarksyCard(border = MarksyTheme.PrimaryEmerald) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(MarksySize.Icon).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
             }
-            Spacer(Modifier.height(MarksySpace.Inner))
-            Text(summary, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
+            Spacer(Modifier.width(MarksySpace.Gap))
+            Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
         }
+        Text(summary, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
     }
 }
 
 @Composable
-private fun SectionTitle(title: String, link: String? = null, onLink: () -> Unit = {}) = Row(
-    Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Tight),
-    verticalAlignment = Alignment.CenterVertically
-) {
-    SectionLabel(title, modifier = Modifier.weight(1f))
-    link?.let {
-        Text(
-            "$it ›", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onLink).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Tight)
-        )
-    }
-}
-
-@Composable
-private fun EmptyDashboardCard(title: String, description: String) = Box(Modifier.padding(horizontal = MarksySpace.Gutter)) { EmptyState(title, description) }
+private fun EmptyDashboardCard(title: String, description: String) = EmptyState(title, description)
