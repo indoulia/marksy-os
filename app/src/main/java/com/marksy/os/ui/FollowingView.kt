@@ -107,9 +107,9 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
 
 @Composable
 private fun TipAlertRow(alert: TipAlertDto, unread: Boolean, onClick: () -> Unit) {
-    MarksyCard(
+    MarksyRowCard(
         border = if (unread) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-        padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick
+        onClick = onClick
     ) {
         Text(alert.message, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
         compactTime(alert.triggeredAt)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }

@@ -86,7 +86,7 @@ fun CapturedScreen(
         if (lanes.rejected.isNotEmpty()) {
             item { FoldRow("Rejected orders · ${lanes.rejected.size}", "Your broker turned these down", rejectedOpen) { rejectedOpen = !rejectedOpen } }
             if (rejectedOpen) items(lanes.rejected, key = { "r${it.event.id}" }) { r ->
-                MarksyCard(onClick = { selected = r }, spacing = 0.dp) { TipRow(r, now, firstRow = true) }
+                MarksyRowCard(onClick = { selected = r }) { TipRow(r, now, firstRow = true) }
             }
         }
     }
@@ -114,7 +114,7 @@ private fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Un
 private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit) {
     val r = need.row
     val failed = need.kind == NeedKind.RETRY
-    MarksyCard(border = if (failed) MarksyTheme.RedUrgent.copy(alpha = 0.45f) else MarksyTheme.YellowImportant.copy(alpha = 0.4f), onClick = onOpen, spacing = 0.dp) {
+    MarksyCard(border = if (failed) MarksyTheme.RedUrgent.copy(alpha = 0.45f) else MarksyTheme.YellowImportant.copy(alpha = 0.4f), onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (failed) MarksyBadge("Not sent", MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg) else MarksyBadge("Waiting ${need.waitingMinutes} min", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
             Spacer(Modifier.width(MarksySpace.Gap))

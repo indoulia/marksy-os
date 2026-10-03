@@ -64,7 +64,7 @@ internal fun MyTipsView(repository: MarketIntelligenceRepository, status: MyTips
 @Composable
 private fun MyTipRow(item: MyTipDto, livePrice: Double?, onClick: () -> Unit) {
     val t = item.tip
-    MarksyCard(padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick) {
+    MarksyRowCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(t.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
             t.direction?.let { d ->

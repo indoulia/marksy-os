@@ -323,7 +323,7 @@ private fun PortfolioHero(
     allocationBy: AllocationBy,
     onAllocationBy: (AllocationBy) -> Unit
 ) {
-    MarksyCard(spacing = MarksySpace.ListGap) {
+    MarksyCard {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -647,7 +647,7 @@ private fun HoldingDetail(r: HoldingRow, period: PortfolioPeriod, onOpen: () -> 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit) {
-    MarksyCard(spacing = MarksySpace.ListGap) {
+    MarksyCard {
         Box(Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
             Icon(Icons.Default.PieChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconLarge))
         }
@@ -668,7 +668,7 @@ private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit
 
 @Composable
 private fun LoadFailedCard(message: String, onRetry: () -> Unit) {
-    MarksyCard(spacing = MarksySpace.Gap) {
+    MarksyCard {
         MarksyBadge("Couldn't load your holdings", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, icon = Icons.Default.Schedule)
         Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         Text("You're still signed in to Upstox; nothing is wrong with your keys.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -713,7 +713,7 @@ private fun MoreRow(label: String, who: String, onClick: () -> Unit) {
 
 @Composable
 private fun MutualFundsPlaceholder() {
-    MarksyCard(padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp) {
+    MarksyRowCard {
         Text("Mutual funds · coming soon", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
         Text("Marksy has no NAV source yet, so funds you hold don't show here.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }

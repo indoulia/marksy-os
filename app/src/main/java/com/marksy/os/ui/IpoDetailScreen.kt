@@ -348,7 +348,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
         }
     }
     val color = laneColor(lane)
-    MarksyCard(border = color.copy(alpha = 0.6f), padding = PaddingValues(MarksySpace.Section), spacing = MarksySpace.Gap) {
+    MarksyCard(border = color.copy(alpha = 0.6f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IpoAvatar(ipo.companyName, size = 24)
             Spacer(Modifier.width(MarksySpace.Gap))

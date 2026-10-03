@@ -118,7 +118,7 @@ internal inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<
 private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
     val s = summary ?: return
     if (s.closedCount == 0) return
-    MarksyCard(padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap), spacing = 0.dp) {
+    MarksyRowCard {
         Text("Track record · ${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat("Target", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
@@ -141,9 +141,8 @@ private fun Stat(label: String, value: String?, tint: Color) {
 internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: String? = null, onClick: () -> Unit) {
     val price = livePrice ?: p.price
     val buy = p.targetPrice >= p.entryPrice
-    MarksyCard(
-        Modifier.animateContentSize(), border = if (p.isActionableNow) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-        padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick
+    MarksyRowCard(
+        Modifier.animateContentSize(), border = if (p.isActionableNow) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, onClick = onClick
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(p.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)

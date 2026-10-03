@@ -10,6 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -55,22 +61,87 @@ import kotlinx.coroutines.launch
 fun Modifier.marksyCard(border: Color = MarksyTheme.BorderGlow, fill: Color = MarksyTheme.Surface): Modifier =
     clip(MarksyShape.Card).background(fill).border(MarksySpace.Border, border, MarksyShape.Card)
 
+/** A content card. Every card has the same padding and line gap; screens never pass their own. */
 @Composable
 fun MarksyCard(
     modifier: Modifier = Modifier,
     border: Color = MarksyTheme.BorderGlow,
     fill: Color = MarksyTheme.Surface,
-    padding: PaddingValues = PaddingValues(MarksySpace.CardPadding),
-    spacing: Dp = MarksySpace.Inner,
     onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier.fillMaxWidth().marksyCard(border, fill).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(padding),
-        verticalArrangement = Arrangement.spacedBy(spacing),
+        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel).padding(MarksySpace.CardPadding),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner),
         content = content
     )
 }
+
+/** One list row drawn as a card (a tip, a holding, a call): tighter top and bottom than a content card. */
+@Composable
+fun MarksyRowCard(
+    modifier: Modifier = Modifier,
+    border: Color = MarksyTheme.BorderGlow,
+    fill: Color = MarksyTheme.Surface,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel)
+            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
+        content = content
+    )
+}
+
+/** Several rows in one card (settings, health checks), separated by MarksyDivider; rows carry no padding of their own. */
+@Composable
+fun MarksyGroupCard(modifier: Modifier = Modifier, border: Color = MarksyTheme.BorderGlow, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier.fillMaxWidth().marksyCard(border).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Tight),
+        content = content
+    )
+}
+
+/** A small figure with its label (hit rate, average return, P&L); sits in a row of equal stats. */
+@Composable
+fun MarksyStat(label: String, value: String, modifier: Modifier = Modifier, valueColor: Color = MarksyTheme.TextPrimary, note: String? = null) {
+    Column(
+        modifier.marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
+    ) {
+        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1)
+        Text(value, color = valueColor, style = MarksyType.Lead, maxLines = 1)
+        note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1) }
+    }
+}
+
+/** Equal-width stats side by side. */
+@Composable
+fun MarksyStatRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), content = content)
+}
+
+/** A page's scrolling list: page margin, list gap and top inset are fixed; [bottom] clears the floating buttons. */
+@Composable
+fun MarksyList(
+    modifier: Modifier = Modifier,
+    state: LazyListState = rememberLazyListState(),
+    bottom: Dp = OneHandListBottomPadding,
+    content: LazyListScope.() -> Unit
+) {
+    LazyColumn(
+        modifier.fillMaxSize(),
+        state = state,
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.ListGap, bottom = bottom),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
+        content = content
+    )
+}
+
+private fun Modifier.tappable(onClick: (() -> Unit)?, label: String?): Modifier =
+    if (onClick != null) clickable(onClickLabel = label, onClick = onClick) else this
 
 /** Section or lane heading: optional dot, caps label, optional count, a rule to the edge, and an optional trailing value. */
 @Composable

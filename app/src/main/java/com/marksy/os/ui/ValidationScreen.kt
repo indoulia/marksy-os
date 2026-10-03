@@ -57,7 +57,7 @@ fun ValidationScreen(repo: ValidationRepository, padding: PaddingValues) {
         }
         item {
             val t = r.totals
-            MarksyCard(spacing = MarksySpace.Hair) {
+            MarksyCard {
                 fun line(label: String, value: String) = label to value
                 listOf(
                     line("Captured", MarksyFormat.number(t.captured.toDouble(), 0)),
