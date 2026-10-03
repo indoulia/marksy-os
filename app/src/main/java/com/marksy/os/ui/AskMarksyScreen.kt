@@ -158,8 +158,8 @@ fun AskMarksyScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = MarksySpace.Gutter, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Gap),
+            verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
         ) {
             item { Greeting(compact = conversation.isNotEmpty()) }
 
@@ -168,7 +168,7 @@ fun AskMarksyScreen(
                     MarksyCard(onClick = { ask(prompt) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(prompt, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
                         }
                     }
                 }
@@ -179,8 +179,8 @@ fun AskMarksyScreen(
 
         if (conversation.isNotEmpty()) {
             Row(
-                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = MarksySpace.Gutter, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Inner),
+                horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
             ) {
                 promptOptions.forEach { prompt ->
                     Pill(prompt) { ask(prompt) }
@@ -192,7 +192,7 @@ fun AskMarksyScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MarksyTheme.Surface)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             CompactTextField(
@@ -203,8 +203,8 @@ fun AskMarksyScreen(
                 shape = MarksyShape.Dialog,
                 trailing = if (input.isNotBlank()) {
                     {
-                        IconButton(onClick = { ask(input) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+                        IconButton(onClick = { ask(input) }, modifier = Modifier.size(MarksySize.Button)) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
                         }
                     }
                 } else null
@@ -213,7 +213,7 @@ fun AskMarksyScreen(
             val micScale = if (voice.listening) 1f + voice.level * 0.25f else 1f
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(MarksySize.Touch)
                     .scale(micScale)
                     .clip(CircleShape)
                     .background(
@@ -227,7 +227,7 @@ fun AskMarksyScreen(
                     if (voice.listening) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (voice.listening) "Stop listening" else "Speak a question",
                     tint = MarksyTheme.OnAccent,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(MarksySize.IconLarge)
                 )
             }
         }
@@ -283,7 +283,7 @@ private val answerShape = MarksyShape.Panel.copy(bottomStart = CornerSize(4.dp))
 private fun ExchangeView(
     exchange: AskExchange, onEventSelected: (NotificationEventEntity) -> Unit, onFollowUp: (String) -> Unit = {}, onAction: (AskMarksy.Action) -> Unit = {}
 ) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text(
             exchange.question,
             color = MarksyTheme.OnAccent,
@@ -294,7 +294,7 @@ private fun ExchangeView(
                 .widthIn(max = 280.dp)
                 .clip(questionShape)
                 .background(MarksyTheme.PrimaryEmerald)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
         )
         Column(
             Modifier
@@ -309,11 +309,11 @@ private fun ExchangeView(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(top = 6.dp)
+                        .padding(top = MarksySpace.Inner)
                         .clip(MarksyShape.Chip)
                         .background(MarksyTheme.SurfaceRaised)
                         .clickable { onEventSelected(event) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Inner),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -327,12 +327,12 @@ private fun ExchangeView(
                             style = MarksyType.Caption
                         )
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
                 }
             }
             exchange.grounded?.let { g ->
                 g.action?.let { a ->
-                    Box(Modifier.padding(top = 6.dp)) { Pill("${a.label} →") { onAction(a) } }
+                    Pill("${a.label} →", modifier = Modifier.padding(top = MarksySpace.Inner)) { onAction(a) }
                 }
                 val n = g.derivedFromEventIds.size
                 val basis = if (g.needsClarification) "Pick one to search" else
@@ -340,9 +340,9 @@ private fun ExchangeView(
                 // Help, navigation and manual reminders aren't derived from notifications, so no basis line.
                 if (n > 0 || g.noResult || g.needsClarification) Text(
                     basis + if (g.interpretedBy != AskMarksy.DeterministicInterpreter.name) " · question understood by on-device AI" else "",
-                    color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 6.dp)
+                    color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Inner)
                 )
-                if (g.followUps.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (g.followUps.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     g.followUps.forEach { f ->
                         Pill(f) { onFollowUp(f) }
                     }

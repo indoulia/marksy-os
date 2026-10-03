@@ -25,7 +25,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -105,16 +115,16 @@ fun EventDetailDialog(
     val details = buildList {
         add("Category" to event.category.lowercase().replaceFirstChar { it.uppercase() })
         add("Priority" to event.priority.toString())
-        add("Classifier" to "${(event.confidence * 100).toInt()}%")
+        add("Classifier" to MarksyFormat.percent(event.confidence * 100.0, 0, signed = false))
         if (event.isTrading) {
             add("Delivery" to event.deliveryState.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
-            event.insightConfidence?.let { add("Marksy conf." to "${(it * 100).toInt()}%") }
+            event.insightConfidence?.let { add("Marksy conf." to MarksyFormat.percent(it * 100.0, 0, signed = false)) }
         }
     }
     MarksyDialog(onDismissRequest = onDismiss, confirmButton = {}, text = {
         Column {
             Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f).padding(top = 4.dp)) {
+                Column(Modifier.weight(1f).padding(top = MarksySpace.Tight)) {
                     Text(
                         event.title.ifBlank { "Notification event" },
                         color = MarksyTheme.TextPrimary,
@@ -131,25 +141,25 @@ fun EventDetailDialog(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(MarksySize.Avatar)
                         .clip(CircleShape)
                         .background(MarksyTheme.SurfaceRaised)
                         .border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon))
                 }
             }
             SectionDivider()
             // Only the body scrolls; title above and details/actions below stay in view.
-            Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).padding(end = 10.dp).verticalScroll(scrollState)) {
+            Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).padding(end = MarksySpace.ListGap).verticalScroll(scrollState)) {
                 Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = MarksyTheme.TextSecondary, style = MarksyType.Body)
                 if (actions.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Spacer(Modifier.height(MarksySpace.Gap))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                         actions.forEach { action ->
                             MarksyButton(
                                 action.title,
@@ -165,42 +175,44 @@ fun EventDetailDialog(
                 }
             }
             SectionDivider()
-            Column(Modifier.padding(end = 6.dp)) {
+            Column(Modifier.padding(end = MarksySpace.Inner)) {
                 details.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                         row.forEach { (label, value) -> DetailCell(label, value, Modifier.weight(1f)) }
                         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
                 if (event.isTrading) {
                     // Rows stored before the tips client stopped writing JSON nulls as "null".
-                    event.insightSummary?.removeSuffix(" | null")?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
-                    event.insightAction?.takeIf { it.isNotBlank() && it != "null" }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = 6.dp), singleLine = false) }
+                    event.insightSummary?.removeSuffix(" | null")?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), singleLine = false) }
+                    event.insightAction?.takeIf { it.isNotBlank() && it != "null" }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), singleLine = false) }
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
-                    Pill(
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
+                    ChipButton(
                         if (event.kept) "Kept" else "Keep",
+                        if (event.kept) Icons.Default.Star else Icons.Default.StarBorder,
                         selected = event.kept,
                         onClick = onToggleKeep
                     )
-                    Pill(
+                    ChipButton(
                         event.remindAt?.let { "Remind " + formatTimestamp(it) } ?: "Remind me",
+                        Icons.Default.Alarm,
                         selected = event.remindAt != null,
                         onClick = { showReminderOptions = !showReminderOptions }
                     )
-                    Pill("Mark unread", selected = false) { onMarkUnread(); onDismiss() }
-                    stocks.forEach { symbol -> Pill(symbol, selected = false) { onOpenStock?.invoke(symbol) } }
+                    ChipButton("Mark unread", Icons.Default.MarkEmailUnread) { onMarkUnread(); onDismiss() }
+                    stocks.forEach { symbol -> ChipButton(symbol, Icons.Default.ShowChart) { onOpenStock?.invoke(symbol) } }
                 }
                 if (showReminderOptions) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
                         ReminderTimes.options().forEach { option ->
-                            Pill(option.label, selected = false) {
+                            ChipButton(option.label, Icons.Default.Schedule) {
                                 onSetReminder(option.atMillis)
                                 showReminderOptions = false
                             }
                         }
                         if (event.remindAt != null) {
-                            Pill("Cancel reminder", selected = false) {
+                            ChipButton("Cancel reminder", Icons.Default.AlarmOff) {
                                 onSetReminder(null)
                                 showReminderOptions = false
                             }
@@ -220,10 +232,10 @@ fun EventDetailDialog(
             if (related.isNotEmpty()) {
                 // EPIC-015 context graph: entities this event is linked to, with a correction.
                 Text("Related", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
                     related.forEach { r ->
                         val label = r.displayName + if (r.sourceCount > 1) " · ${r.sourceCount} apps" else ""
-                        Pill(label, selected = false) { onUnlinkEntity(r.id) }
+                        ChipButton(label, Icons.Default.Close) { onUnlinkEntity(r.id) }
                     }
                 }
             }
@@ -231,27 +243,28 @@ fun EventDetailDialog(
             val extra = engineActions.filter { it.enabled && it.type !in COVERED_BY_DIALOG }
             if (extra.isNotEmpty()) {
                 actionMessage?.let { Text(it, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta) }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
                     extra.forEach { a ->
                         if (a.type == ActionEngine.Type.REPORT) {
-                            Pill(a.type.label, selected = reporting) { reporting = !reporting }
+                            ChipButton(a.type.label, Icons.Default.Schedule, selected = reporting) { reporting = !reporting }
                         } else {
-                            Pill(a.type.label, selected = false) { onAction(a.type, null, null) }
+                            ChipButton(a.type.label, Icons.Default.OpenInNew) { onAction(a.type, null, null) }
                         }
                     }
                 }
-                if (reporting) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                if (reporting) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
                     ActionRepository.CATEGORIES.filter { it != event.category && it != "TRADING" }.forEach { c ->
-                        Pill(c.lowercase(), selected = false) { reporting = false; onAction(ActionEngine.Type.REPORT, null, c) }
+                        ChipButton(c.lowercase(), Icons.Default.Schedule) { reporting = false; onAction(ActionEngine.Type.REPORT, null, c) }
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth().padding(end = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(MarksySpace.Gap))
+            Row(Modifier.fillMaxWidth().padding(end = MarksySpace.Inner), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 MarksyButton(
                     if (event.archived) "Restore" else "Archive",
                     onClick = if (event.archived) onUnarchive else onArchive,
                     style = MarksyButtonStyle.Outlined,
+                    icon = if (event.archived) Icons.Default.Unarchive else Icons.Default.Archive,
                     modifier = Modifier.weight(1f)
                 )
                 MarksyButton(
@@ -260,12 +273,18 @@ fun EventDetailDialog(
                         if (OriginalAppLauncher.open(context, event.sourcePackage, event.sourceKey)) onDismiss()
                         else notice("${event.sourceName} can't be opened")
                     },
+                    icon = Icons.Default.OpenInNew,
                     modifier = Modifier.weight(1.4f)
                 )
             }
         }
     })
 }
+
+/** An action chip: icon plus label on the Marksy button; the chosen one fills. */
+@Composable
+private fun ChipButton(text: String, icon: ImageVector, selected: Boolean = false, onClick: () -> Unit) =
+    MarksyButton(text, onClick, style = if (selected) MarksyButtonStyle.Filled else MarksyButtonStyle.Outlined, color = if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.TextPrimary, icon = icon)
 
 private val UrlPattern = Regex("""(https?://|www\.)[^\s<>"]+""", RegexOption.IGNORE_CASE)
 
@@ -284,7 +303,7 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
 
 @Composable
 private fun SectionDivider() {
-    MarksyDivider(Modifier.padding(end = 6.dp, top = 8.dp, bottom = 8.dp))
+    MarksyDivider(Modifier.padding(end = MarksySpace.Inner, top = MarksySpace.Gap, bottom = MarksySpace.Gap))
 }
 
 @Composable
@@ -293,7 +312,7 @@ private fun DetailCell(label: String, value: String, modifier: Modifier = Modifi
         modifier
             .clip(MarksyShape.Chip)
             .background(MarksyTheme.SurfaceRaised)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)
     ) {
         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
         Text(

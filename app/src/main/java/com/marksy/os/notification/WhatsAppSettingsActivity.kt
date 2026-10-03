@@ -118,7 +118,7 @@ private fun WhatsAppSettingsScreen(
                 modifier = Modifier.weight(1f),
                 placeholder = "Sender name, e.g. Trading Desk"
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(MarksySpace.Gap))
             MarksyButton(
                 "Add",
                 enabled = sender.trim().isNotBlank() && watchedSenders.size < 25,
@@ -132,7 +132,7 @@ private fun WhatsAppSettingsScreen(
         if (watchedSenders.isEmpty()) {
             InlineEmpty("No senders are watched. The connector will capture nothing from WhatsApp until you add one.")
         } else {
-            LazyColumn(contentPadding = PaddingValues(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(contentPadding = PaddingValues(vertical = MarksySpace.Tight), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 items(watchedSenders, key = { it }) { watched ->
                     MarksyCard {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -144,7 +144,7 @@ private fun WhatsAppSettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(MarksySpace.Tight))
         Text(
             "Privacy rule: empty allow-list = zero WhatsApp capture. Matching is local and case-insensitive.",
             color = MarksyTheme.TextSecondary,

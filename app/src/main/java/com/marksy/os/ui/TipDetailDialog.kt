@@ -46,13 +46,13 @@ internal fun TipDetailDialog(repository: MarketIntelligenceRepository, tipId: St
 
 @Composable
 private fun TipDetailBody(t: LedgerTipDto, progress: List<ProgressPointDto>) {
-    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
         Text(LedgerCalls.state(t), color = toneColor(LedgerCalls.tone(t)), style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
         Text(listOfNotNull(t.channel?.name, t.caller?.name).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextPrimary, style = MarksyType.Small)
         Text(LedgerCalls.termsText(t), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         LedgerCalls.returnsText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), style = MarksyType.Small, fontWeight = FontWeight.SemiBold) }
-        if (progress.isNotEmpty()) Text("Session by session", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = 6.dp))
+        if (progress.isNotEmpty()) Text("Session by session", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Inner))
         progress.forEach { p ->
             Text(LedgerCalls.progressLine(p), color = if (p.dataBasis == "PROVISIONAL") MarksyTheme.Warning else MarksyTheme.TextSecondary, style = MarksyType.Meta)
         }

@@ -51,7 +51,7 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
             .verticalScroll(rememberScrollState())
             .padding(MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
     ) {
         Text(
             "Live NIFTY and BANK NIFTY prices on Home come straight from Upstox using your own read-only Analytics Token " +
@@ -71,7 +71,7 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
             height = 48.dp,
             trailing = { MarksyButton(if (reveal) "Hide" else "Show", { reveal = !reveal }, style = MarksyButtonStyle.Text) }
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             MarksyButton(
                 if (busy) "Checking…" else "Save & test",
                 enabled = input.isNotBlank() && !busy,
@@ -117,7 +117,7 @@ private fun HoldingsSignInSection() {
     var keysOpen by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
 
-    MarksyDivider(Modifier.padding(vertical = 6.dp))
+    MarksyDivider(Modifier.padding(vertical = MarksySpace.Inner))
     Text(
         "Market › Portfolio reads your holdings with a daily Upstox sign-in through your own Upstox app (OAuth). " +
             "The app keys and the day's token are stored encrypted on this phone and only sent to api.upstox.com. Read-only: no orders.",
@@ -131,7 +131,7 @@ private fun HoldingsSignInSection() {
         },
         color = if (signedIn) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, style = MarksyType.Body, fontWeight = FontWeight.SemiBold
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
         MarksyButton(if (hasKeys) "Change app keys" else "Set up", { keysOpen = true }, style = MarksyButtonStyle.Outlined)
         if (hasData) MarksyButton("Disconnect", { confirm = true }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
     }
@@ -157,7 +157,7 @@ internal fun UpstoxAppKeysDialog(store: UpstoxOAuthStore, onDismiss: () -> Unit,
         onDismissRequest = onDismiss,
         title = { Text("Connect your Upstox app") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Text("In Upstox Developer Apps, create an app with this redirect URL, then paste its API key and secret. They're stored encrypted on this phone and only sent to api.upstox.com.")
                 CompactTextField(redirect, { redirect = it.trim() }, Modifier.fillMaxWidth(), label = "Redirect URL")
                 CompactTextField(key, { key = it.trim() }, Modifier.fillMaxWidth(), label = "API key")

@@ -8,7 +8,6 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
@@ -23,23 +22,20 @@ object IpoLifecycle {
     /** Fetched whole; Listed (hundreds) pages in separately. */
     val PRE_LISTING_STAGES = listOf("OPEN", "CLOSING_SOON", "CLOSED", "ALLOTMENT", "UPCOMING")
     private val CUTOFF = LocalTime.of(17, 0)
-    private val DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
-    private val DM = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-    private val HM = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
 
     enum class Lane(val label: String) { TODAY("Closes today"), OPEN("Open"), ALLOTMENT("Allotment"), UPCOMING("Opens soon"), LISTED("Listed") }
     enum class StageFilter(val label: String) { ALL("All stages"), OPEN("Open"), ALLOTMENT("Allotment"), UPCOMING("Opens soon"), LISTED("Listed"), WATCHING("Watching") }
     enum class Board(val label: String) { ALL("All boards"), MAIN("Mainboard"), SME("SME") }
 
-    fun day(d: LocalDate): String = d.format(DAY)
-    fun dm(d: LocalDate): String = d.format(DM)
+    fun day(d: LocalDate): String = MarksyFormat.weekdayDay(d)
+    fun dm(d: LocalDate): String = MarksyFormat.day(d)
     fun timeOf(iso: String?): ZonedDateTime? = iso?.let { runCatching { OffsetDateTime.parse(it).atZoneSameInstant(IST) }.getOrNull() }
     fun dateOf(iso: String?): LocalDate? = timeOf(iso)?.toLocalDate() ?: iso?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
 
     /** "10:15" today, "29 Sep" before. */
     fun asOfLabel(iso: String?, now: ZonedDateTime): String? {
         val t = timeOf(iso) ?: return dateOf(iso)?.let(::dm)
-        return if (t.toLocalDate() == now.toLocalDate()) t.format(HM) else dm(t.toLocalDate())
+        return if (t.toLocalDate() == now.toLocalDate()) MarksyFormat.time(t) else dm(t.toLocalDate())
     }
 
     fun laneOf(ipo: IpoListItemDto, now: ZonedDateTime): Lane? = when (ipo.stage?.uppercase(Locale.ROOT)) {
@@ -126,7 +122,7 @@ object IpoLifecycle {
         return "$days day${if (days > 1) "s" else ""}"
     }
 
-    fun times(x: Double): String = (if (x >= 100) "%.0f" else if (x >= 10) "%.1f" else "%.2f").format(Locale.ENGLISH, x) + "x"
+    fun times(x: Double): String = MarksyFormat.number(x, if (x >= 100) 0 else if (x >= 10) 1 else 2) + "x"
     fun inr(n: Double): String = MarksyFormat.rupees(n.roundToLong().toDouble(), 0)
     fun pct(p: Double, decimals: Int = 1): String = MarksyFormat.percent(p, decimals)
     fun rupees(p: Double): String = MarksyFormat.signedRupees(p, if (p == Math.rint(p)) 0 else 2)

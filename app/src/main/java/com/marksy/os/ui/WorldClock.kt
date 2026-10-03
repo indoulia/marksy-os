@@ -46,12 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.marksy.os.AppContext
+import com.marksy.os.MarksyFormat
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
@@ -91,7 +91,7 @@ object WorldClock {
     /** DST-aware short name (EDT in summer, EST in winter). */
     // Android's zone data renders Asia/Kolkata as "GMT+05:30", so name the home zone explicitly.
     fun abbreviation(time: ZonedDateTime): String =
-        if (time.zone == HOME_ZONE) "IST" else time.format(DateTimeFormatter.ofPattern("zzz", Locale.US))
+        if (time.zone == HOME_ZONE) "IST" else java.util.TimeZone.getTimeZone(time.zone).getDisplayName(time.zone.rules.isDaylightSavings(time.toInstant()), java.util.TimeZone.SHORT, Locale.US)
 
     fun parseZone(id: String?): ZoneId = runCatching { ZoneId.of(id) }.getOrNull() ?: DEFAULT_SECOND_ZONE
 
@@ -112,9 +112,6 @@ object WorldClockSettings {
     }
 }
 
-private val clockFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-private val dateFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.US)
-
 /** Two compact live clocks (IST + chosen zone); tap opens the converter. */
 @Composable
 fun WorldClockPair(modifier: Modifier = Modifier) {
@@ -127,7 +124,7 @@ fun WorldClockPair(modifier: Modifier = Modifier) {
         }
     }
     Column(
-        modifier.clip(MarksyShape.Chip).clickable { showConverter = true }.padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier.clip(MarksyShape.Chip).clickable { showConverter = true }.padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Hair),
         horizontalAlignment = Alignment.End
     ) {
         listOf(WorldClock.HOME_ZONE, second).forEach { zone ->
@@ -135,7 +132,7 @@ fun WorldClockPair(modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(WorldClock.abbreviation(time), color = MarksyTheme.TextMuted, style = MarksyType.Caption, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(6.dp))
-                Text(time.format(clockFormat), color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                Text(MarksyFormat.time12(time), color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -171,8 +168,8 @@ fun TimeZoneConverterDialog(secondZone: ZoneId, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Wheel((1..12).map { it.toString() }, hour12 - 1) { hour12 = it + 1 }
-                        Text(":", color = MarksyTheme.TextPrimary, style = MarksyType.Display, modifier = Modifier.padding(horizontal = 4.dp))
-                        Wheel((0 until 60 step MINUTE_STEP).map { "%02d".format(it) }, minute / MINUTE_STEP) { minute = it * MINUTE_STEP }
+                        Text(":", color = MarksyTheme.TextPrimary, style = MarksyType.Display, modifier = Modifier.padding(horizontal = MarksySpace.Tight))
+                        Wheel((0 until 60 step MINUTE_STEP).map { it.toString().padStart(2, '0') }, minute / MINUTE_STEP) { minute = it * MINUTE_STEP }
                         Spacer(Modifier.width(8.dp))
                         Wheel(listOf("AM", "PM"), if (pm) 1 else 0) { pm = it == 1 }
                     }
@@ -181,15 +178,15 @@ fun TimeZoneConverterDialog(secondZone: ZoneId, onDismiss: () -> Unit) {
                     }
                     Box(
                         Modifier.fillMaxWidth().clip(MarksyShape.Card).background(MarksyTheme.Surface)
-                            .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Card).padding(14.dp),
+                            .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Card).padding(MarksySpace.Section),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             ZoneLabel(to, toZone)
-                            Text(to.format(clockFormat), color = MarksyTheme.PrimaryEmerald, style = MarksyType.Display)
+                            Text(MarksyFormat.time12(to), color = MarksyTheme.PrimaryEmerald, style = MarksyType.Display)
                             val shift = WorldClock.dayShift(from, to)
                             Text(
-                                to.format(dateFormat) + (shift?.let { "  ($it)" } ?: ""),
+                                MarksyFormat.weekdayDay(to) + (shift?.let { "  ($it)" } ?: ""),
                                 color = if (shift != null) MarksyTheme.Warning else MarksyTheme.TextSecondary,
                                 style = MarksyType.Small
                             )
@@ -259,14 +256,14 @@ fun SecondZonePickerDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Second clock", color = MarksyTheme.TextPrimary) },
         text = {
-            LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
                 items(WorldClock.CHOICES, key = { it.first.id }) { (zone, name) ->
                     val selected = zone == current
                     Row(
                         Modifier.fillMaxWidth().clip(MarksyShape.Chip)
                             .background(if (selected) MarksyTheme.PrimaryEmerald else Color.Transparent)
                             .clickable { WorldClockSettings.setSecondZone(zone); onDismiss() }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(name, color = if (selected) MarksyTheme.OnAccent else MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Normal, modifier = Modifier.weight(1f))

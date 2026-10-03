@@ -1,6 +1,5 @@
 package com.marksy.os.ui
 
-import java.time.format.TextStyle
 import androidx.compose.material3.IconButton
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
@@ -42,7 +41,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
-import java.util.Locale
 
 @Composable
 fun CalendarScreen(
@@ -69,7 +67,7 @@ fun CalendarScreen(
     }.sortedByDescending { it.postedAt } else emptyList()
 
     Column(
-        Modifier.padding(padding).padding(horizontal = MarksySpace.Gutter, vertical = 4.dp)
+        Modifier.padding(padding).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Tight)
             .verticalScroll(rememberScrollState())
     ) {
         Column(Modifier.fillMaxWidth().marksyCard().pointerInput(Unit) {
@@ -80,14 +78,14 @@ fun CalendarScreen(
                 onDragEnd = { if (dragged <= -swipePx) shiftMonth(1) else if (dragged >= swipePx) shiftMonth(-1) }
             ) { _, delta -> dragged += delta }
         }) {
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Column(Modifier.padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     IconButton(onClick = { shiftMonth(-1) }) { Text("‹", style = MarksyType.Title, color = MarksyTheme.PrimaryEmerald) }
-                    Text("${month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${month.year}", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+                    Text(MarksyFormat.monthYear(month), color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
                     IconButton(onClick = { shiftMonth(1) }) { Text("›", style = MarksyType.Title, color = MarksyTheme.PrimaryEmerald) }
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = 2.dp)) }
+                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = MarksySpace.Hair)) }
                 }
                 val cellCount = ((firstDay + month.lengthOfMonth() + 6) / 7) * 7
                 (0 until cellCount).chunked(7).forEach { week ->
@@ -100,7 +98,7 @@ fun CalendarScreen(
                                 val isSelected = selectedDay == day
                                 Box(Modifier.weight(1f).height(38.dp).clickable { selectedDay = day }, contentAlignment = Alignment.Center) {
                                     Box(
-                                        Modifier.size(32.dp).clip(CircleShape)
+                                        Modifier.size(MarksySize.Avatar).clip(CircleShape)
                                             .background(if (isSelected) MarksyTheme.PrimaryEmerald else heatColor(count, maxCount))
                                             .border(if (isToday && !isSelected) 1.5.dp else 0.dp, if (isToday) MarksyTheme.PrimaryEmerald else Color.Transparent, CircleShape),
                                         contentAlignment = Alignment.Center
@@ -112,27 +110,27 @@ fun CalendarScreen(
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp, end = 4.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Hair, bottom = MarksySpace.Inner, end = MarksySpace.Tight), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     Text("Quiet", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
-                    listOf(1, 2, 3, 4).forEach { Box(Modifier.padding(horizontal = 2.dp).size(10.dp).clip(CircleShape).background(heatColor(it, 4))) }
+                    listOf(1, 2, 3, 4).forEach { Box(Modifier.padding(horizontal = MarksySpace.Hair).size(MarksySize.Dot).clip(CircleShape).background(heatColor(it, 4))) }
                     Text("Busy", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(MarksySpace.CardPadding))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (selectedDay > 0) MarksyFormat.day(month.atDay(selectedDay.coerceAtMost(month.lengthOfMonth()))) else "Select a day", color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
+            Text(if (selectedDay > 0) MarksyFormat.weekdayDay(month.atDay(selectedDay.coerceAtMost(month.lengthOfMonth()))) else "Select a day", color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
             if (selectedDay > 0) {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(MarksySpace.ListGap))
                 Text(
                     "${selectedEvents.size} ${if (selectedEvents.size == 1) "message" else "messages"}",
                     color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)
-                        .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Chip).padding(horizontal = 10.dp, vertical = 4.dp)
+                        .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Chip).padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Tight)
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(MarksySpace.Gap))
         if (selectedDay <= 0) {
             InlineEmpty("Tap any marked day to inspect its notifications.")
         } else if (selectedEvents.isEmpty()) {
@@ -142,7 +140,7 @@ fun CalendarScreen(
                 MarksyCard(onClick = { onEventSelected(event) }, border = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
                     Text(event.sourceName, color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold, style = MarksyType.Small)
                     Text(event.title.ifBlank { "Notification" }, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, maxLines = 2)
-                    if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, modifier = Modifier.padding(top = 3.dp))
+                    if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, modifier = Modifier.padding(top = MarksySpace.Tight))
                 }
             }
         }

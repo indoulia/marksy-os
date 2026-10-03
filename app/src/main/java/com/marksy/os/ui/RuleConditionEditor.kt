@@ -38,14 +38,14 @@ private fun tag(kind: String, path: List<Int>) = "rule-$kind-${path.joinToString
 private fun ConditionGroup(node: Condition, path: List<Int>, root: Condition, issues: Map<List<Int>, String>, onChange: (Condition) -> Unit) {
     val any = Tree.isAny(node)
     val nested = path.isNotEmpty()
-    val frame = if (nested) Modifier.border(1.dp, MarksyTheme.BorderGlow, MarksyShape.Chip).padding(8.dp) else Modifier
-    Column(Modifier.fillMaxWidth().then(frame), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    val frame = if (nested) Modifier.border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Chip).padding(MarksySpace.Gap) else Modifier
+    Column(Modifier.fillMaxWidth().then(frame), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Text(if (nested) "GROUP" else "WHEN", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Label)
-            Box(Modifier.testTag(tag("and", path))) { Pill("all (and)", selected = !any) { onChange(Tree.setGroupOperator(root, path, any = false)) } }
-            Box(Modifier.testTag(tag("or", path))) { Pill("any (or)", selected = any) { onChange(Tree.setGroupOperator(root, path, any = true)) } }
+            Pill("all (and)", selected = !any, modifier = Modifier.testTag(tag("and", path))) { onChange(Tree.setGroupOperator(root, path, any = false)) }
+            Pill("any (or)", selected = any, modifier = Modifier.testTag(tag("or", path))) { onChange(Tree.setGroupOperator(root, path, any = true)) }
             if (nested) {
-                Box(Modifier.testTag(tag("not", path))) { Pill("not", selected = Tree.isNegated(node)) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) } }
+                Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
                 MarksyButton("Remove group", onClick = { onChange(Tree.remove(root, path)) }, modifier = Modifier.testTag(tag("remove", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
             }
         }
@@ -56,7 +56,7 @@ private fun ConditionGroup(node: Condition, path: List<Int>, root: Condition, is
             if (Tree.isGroup(child)) ConditionGroup(child, childPath, root, issues, onChange)
             else ConditionLeafRow(child, childPath, root, issues[childPath], onChange)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
             MarksyButton("+ Condition", onClick = { onChange(Tree.addCondition(root, path)) }, modifier = Modifier.testTag(tag("add-condition", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.PrimaryEmerald)
             if (path.size < Tree.MAX_EDITOR_GROUP_DEPTH) {
                 // A new sub-group defaults to the opposite operator, which is the usual reason to nest.
@@ -71,9 +71,9 @@ private fun ConditionGroup(node: Condition, path: List<Int>, root: Condition, is
 private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, issue: String?, onChange: (Condition) -> Unit) {
     val leaf = Tree.inner(node) as? Condition.Leaf ?: return
     var fieldMenu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.SurfaceRaised, MarksyShape.Chip).padding(6.dp)) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.testTag(tag("not", path))) { Pill("not", selected = Tree.isNegated(node)) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) } }
+    Column(Modifier.fillMaxWidth().border(MarksySpace.Border, MarksyTheme.SurfaceRaised, MarksyShape.Chip).padding(MarksySpace.Inner)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+            Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
             Box {
                 MarksyButton("${Tree.fieldLabel(leaf.field)} ▾", onClick = { fieldMenu = true }, modifier = Modifier.testTag(tag("field", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.TextPrimary)
                 DropdownMenu(expanded = fieldMenu, onDismissRequest = { fieldMenu = false }) {
@@ -83,7 +83,7 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
                 }
             }
             Tree.comparators(leaf.field).forEach { c ->
-                Box(Modifier.testTag(tag("cmp-${c.name}", path))) { Pill(Tree.cmpLabel(c), selected = leaf.cmp == c) { onChange(Tree.setLeaf(root, path, leaf.copy(cmp = c))) } }
+                Pill(Tree.cmpLabel(c), selected = leaf.cmp == c, modifier = Modifier.testTag(tag("cmp-${c.name}", path))) { onChange(Tree.setLeaf(root, path, leaf.copy(cmp = c))) }
             }
             MarksyButton("✕", onClick = { onChange(Tree.remove(root, path)) }, modifier = Modifier.testTag(tag("remove", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
         }
@@ -94,6 +94,6 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
             modifier = Modifier.fillMaxWidth(),
             fieldModifier = Modifier.testTag(tag("value", path))
         )
-        issue?.let { Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta, modifier = Modifier.padding(top = 2.dp)) }
+        issue?.let { Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Hair)) }
     }
 }

@@ -46,7 +46,7 @@ import com.marksy.os.intelligence.SmartInboxModel.InboxThread
 private const val NEEDS_VISIBLE = 3
 private const val STACK_VISIBLE = 3
 // Group rows start at the card's own inset: no rail, no wide indent.
-private val ROW_INDENT = 14.dp
+private val ROW_INDENT = MarksySpace.Section
 private const val NEEDS_KEY = "needs"
 private const val EARLIER_PREFIX = "e:"
 private const val HOUR_MS = 60 * 60 * 1000L
@@ -286,24 +286,24 @@ private fun NeedCard(
             .fillMaxWidth()
             .marksyCard(lerp(MarksyTheme.BorderGlow, tint, 0.38f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .padding(horizontal = MarksySpace.Section, vertical = MarksySpace.CardPadding),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.clip(CircleShape).background(tintBg).padding(start = 7.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+                Modifier.clip(CircleShape).background(tintBg).padding(start = MarksySpace.Gap, end = MarksySpace.ListGap, top = MarksySpace.Tight, bottom = MarksySpace.Tight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(urgencyIcon(need.reason.urgency), contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
-                Spacer(Modifier.width(5.dp))
+                Icon(urgencyIcon(need.reason.urgency), contentDescription = null, tint = tint, modifier = Modifier.size(MarksySize.IconSmall))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 Text(need.reason.chip, color = tint, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
             Text(compactTime(event.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SourceIcon(resolveSourceStyle(event), 18.dp, 11.dp)
-            Spacer(Modifier.width(7.dp))
+            SourceIcon(resolveSourceStyle(event), MarksySize.Icon, MarksySize.IconSmall)
+            Spacer(Modifier.width(MarksySpace.Gap))
             Text(
                 if (SmartInboxModel.isSms(event)) "SMS" else event.sourceName.ifBlank { "System" },
                 color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -319,9 +319,9 @@ private fun NeedCard(
             Text(body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         FlowRow(
-            Modifier.padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            Modifier.padding(top = MarksySpace.Tight),
+            horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
+            verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
         ) {
             Pill("Done", onClick = onDone)
             Pill("Snooze 1h", onClick = onSnooze)
@@ -361,40 +361,40 @@ internal fun SourceStackCard(
     Box(Modifier.fillMaxWidth()) {
         // A second card edge peeking out underneath says "there is more in here".
         if (peek) Box(
-            Modifier.matchParentSize().padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            Modifier.matchParentSize().padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Inner)
                 .marksyCard()
         )
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = if (peek) 6.dp else 0.dp)
+                .then(if (peek) Modifier.padding(bottom = MarksySpace.Inner) else Modifier)
                 .marksyCard()
                 .animateContentSize()
         ) {
-            Row(headerDrag.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                SourceIcon(resolveSourceStyle(stack.threads.first().latest), 28.dp, 15.dp)
-                Spacer(Modifier.width(10.dp))
+            Row(headerDrag.fillMaxWidth().padding(start = MarksySpace.CardPadding, end = MarksySpace.Tight, top = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+                SourceIcon(resolveSourceStyle(stack.threads.first().latest), MarksySize.Avatar, MarksySize.IconSmall)
+                Spacer(Modifier.width(MarksySpace.ListGap))
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         stack.label, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                     )
                     if (stack.isSms) {
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(MarksySpace.Inner))
                         Text("SMS", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                     }
                 }
                 if (stack.unread > 0) {
                     Text("${stack.unread} new", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(MarksySpace.Gap))
                 }
                 Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 if (stack.unread > 0) {
-                    IconButton(onClick = { group.markRead(stack) }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.DoneAll, contentDescription = "Mark all from ${stack.label} read", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = { group.markRead(stack) }, modifier = Modifier.size(MarksySize.Touch)) {
+                        Icon(Icons.Default.DoneAll, contentDescription = "Mark all from ${stack.label} read", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
                     }
                 } else {
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(MarksySpace.CardPadding))
                 }
             }
             (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEachIndexed { index, thread ->
@@ -433,7 +433,7 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
             .fillMaxWidth()
             .background(MarksyTheme.Surface)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
-            .padding(start = ROW_INDENT, end = 14.dp, top = 7.dp, bottom = 9.dp)
+            .padding(start = ROW_INDENT, end = MarksySpace.Section, top = MarksySpace.Gap, bottom = MarksySpace.ListGap)
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -454,28 +454,28 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     if (unread) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (thread.critical) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald))
+                        Spacer(Modifier.width(MarksySpace.Inner))
+                        Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(if (thread.critical) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald))
                     }
                 }
                 if (thread.count > 1) {
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(MarksySpace.Inner))
                     Box(
-                        Modifier.heightIn(min = 18.dp).widthIn(min = 18.dp).clip(CircleShape)
-                            .background(MarksyTheme.BadgeTradingBg).padding(horizontal = 5.dp),
+                        Modifier.heightIn(min = MarksySize.Icon).widthIn(min = MarksySize.Icon).clip(CircleShape)
+                            .background(MarksyTheme.BadgeTradingBg).padding(horizontal = MarksySpace.Inner),
                         contentAlignment = Alignment.Center
                     ) { Text("${thread.count}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Caption, fontWeight = FontWeight.Bold) }
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(MarksySpace.Gap))
                 Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
             if (text.detail.isNotBlank()) {
                 Text(
                     text.detail, color = MarksyTheme.TextSecondary, style = MarksyType.Small,
-                    maxLines = if (first) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
+                    maxLines = if (first) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Hair)
                 )
             }
-            note?.let { Text(it.text, color = it.tint, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
+            note?.let { Text(it.text, color = it.tint, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Hair)) }
         }
     }
 }
@@ -487,14 +487,14 @@ private fun MoreRow(open: Boolean, hidden: Int, names: List<String>, suffix: Str
     else Modifier.fillMaxWidth()
     Row(
         base.clickable(onClickLabel = if (open) "Show less" else "Show $hidden more", onClick = onClick)
-            .padding(start = if (standalone) 14.dp else 50.dp, end = 14.dp, top = 9.dp, bottom = 10.dp),
+            .padding(start = if (standalone) MarksySpace.Section else ROW_INDENT + MarksySpace.Gutter * 2, end = MarksySpace.Section, top = MarksySpace.ListGap, bottom = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp).rotate(rotation))
-        Spacer(Modifier.width(6.dp))
+        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon).rotate(rotation))
+        Spacer(Modifier.width(MarksySpace.Inner))
         Text(if (open) "Show less" else "$hidden more$suffix", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold)
         if (!open) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(MarksySpace.Gap))
             Text(names.joinToString(", "), color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
     }
@@ -507,7 +507,7 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = 6.dp)
+            .padding(top = MarksySpace.Inner)
             .clip(MarksyShape.Panel)
             .drawBehind {
                 drawRoundRect(
@@ -517,11 +517,11 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
                 )
             }
             .clickable(onClickLabel = if (open) "Fold earlier" else "Show earlier", onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = MarksySpace.Section, vertical = MarksySpace.CardPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.History, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(12.dp))
+        Icon(Icons.Default.History, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
+        Spacer(Modifier.width(MarksySpace.CardPadding))
         Column(Modifier.weight(1f)) {
             Text(
                 buildAnnotatedString {
@@ -532,7 +532,7 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
             )
             Text("Seen, or older than a day", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
-        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp).rotate(rotation))
+        Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon).rotate(rotation))
     }
 }
 
@@ -550,7 +550,7 @@ private fun EarlierList(
     Column(
         Modifier.fillMaxWidth().marksyCard(MarksyTheme.BorderGlow.copy(alpha = 0.6f))
             .animateContentSize()
-            .padding(vertical = 4.dp)
+            .padding(vertical = MarksySpace.Tight)
     ) {
         stacks.forEach { stack ->
             val key = EARLIER_PREFIX + stack.key
@@ -560,20 +560,20 @@ private fun EarlierList(
             // A one-row group is too short for a column of icons, so its tray lies flat.
             androidx.compose.runtime.key(stack.key) { SwipeableGroup(stack, group, stacked = shown.size > 1) { headerDrag -> Column(Modifier.background(MarksyTheme.Surface)) {
             Row(
-                headerDrag.fillMaxWidth().clickable(enabled = stack.threads.size > STACK_VISIBLE) { onToggle(key) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                headerDrag.fillMaxWidth().clickable(enabled = stack.threads.size > STACK_VISIBLE) { onToggle(key) }.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.alpha(0.8f)) { SourceIcon(style, 24.dp, 13.dp) }
-                Spacer(Modifier.width(10.dp))
+                Box(Modifier.alpha(0.8f)) { SourceIcon(style, MarksySize.IconLarge, MarksySize.IconSmall) }
+                Spacer(Modifier.width(MarksySpace.ListGap))
                 Text(
                     "${stack.label} · ${stack.threads.size}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(MarksySpace.Gap))
                 Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 if (stack.threads.size > STACK_VISIBLE) Icon(
                     Icons.Default.ExpandMore, contentDescription = if (open) "Fold ${stack.label}" else "Show all ${stack.threads.size} from ${stack.label}",
-                    tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f)
+                    tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f)
                 )
             }
             shown.forEach { thread ->
@@ -581,20 +581,20 @@ private fun EarlierList(
                 Row(
                     Modifier.fillMaxWidth()
                         .combinedClickable(onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) }, onLongClickLabel = "Thread actions")
-                        .padding(start = ROW_INDENT, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                        .padding(start = ROW_INDENT, end = MarksySpace.CardPadding, top = MarksySpace.Inner, bottom = MarksySpace.Inner),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         if (t.bodyLed || t.detail.isBlank()) t.headline else "${t.headline} · ${t.detail}",
                         color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(MarksySpace.Gap))
                     Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 }
             }
             } } }
         }
-        Row(Modifier.padding(start = 12.dp, top = 6.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(start = MarksySpace.CardPadding, top = MarksySpace.Inner, bottom = MarksySpace.Tight)) {
             Pill("Clear all ${stacks.sumOf { it.threads.size }}", onClick = onClearAll)
         }
     }
@@ -602,11 +602,11 @@ private fun EarlierList(
 
 @Composable
 private fun InboxFooter(snoozed: Int, onOpenHistory: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Gap), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         if (snoozed > 0) Text("$snoozed snoozed  ·  ", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         Text(
             "History", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, textDecoration = TextDecoration.Underline,
-            modifier = Modifier.clickable(onClickLabel = "Open history", onClick = onOpenHistory).padding(4.dp)
+            modifier = Modifier.clickable(onClickLabel = "Open history", onClick = onOpenHistory).padding(MarksySpace.Tight)
         )
     }
 }
@@ -623,10 +623,10 @@ private fun ThreadActionsDialog(
         onDismissRequest = onDismiss,
         title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, maxLines = 2) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                 Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold)
                 thread.why.take(8).forEach { Text("• $it", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(MarksySpace.Gap))
                 if (thread.unread) MarksyButton("Mark read", onClick = { run { actions.markSeen(ids) } }, style = MarksyButtonStyle.Text)
                 if (thread.bucket == SmartInboxModel.Bucket.RESOLVED) {
                     MarksyButton("Reopen", onClick = { run { actions.reopen(ids) } }, style = MarksyButtonStyle.Text)

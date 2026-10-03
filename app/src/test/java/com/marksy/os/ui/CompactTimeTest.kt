@@ -14,8 +14,8 @@ class CompactTimeTest {
     @Test fun labelCarriesTheDayOnceItIsNotToday() {
         assertEquals("12:31", label(now.withHour(12).withMinute(31)))
         assertEquals("Yesterday 18:05", label(now.minusDays(1).withHour(18).withMinute(5)))
-        assertEquals("Sat 08:29", label(now.minusDays(2).withHour(8).withMinute(29)))
-        assertEquals("16 Sep 08:29", label(now.minusDays(12).withHour(8).withMinute(29)))
+        assertEquals("Sat, 26 Sep, 08:29", label(now.minusDays(2).withHour(8).withMinute(29)))
+        assertEquals("16 Sep, 08:29", label(now.minusDays(12).withHour(8).withMinute(29)))
         assertEquals("16 Sep 2025", label(now.minusYears(1).minusDays(12)))
     }
 }
