@@ -50,13 +50,13 @@ internal fun CallsBox(
         FollowState(followed?.takeIf { onToggleFollow != null }?.contains(key)) { onToggleFollow?.invoke(key, name, it) }
     val leading = remember(calls) { LedgerCalls.leadingMarksyCall(calls) != null }
     MarksyRowCard(border = if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow) {
-        Text("MARKSY", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Label)
+        MarksyCardHeader("Marksy")
         calls.engines.forEach { e ->
             CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip, follow(FollowKey.caller(e.callerId), e.name))
         }
         AnalysisSection(analysis)
         if (calls.channels.isNotEmpty()) {
-            Text("EXTERNAL", color = MarksyTheme.TextSecondary, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.Gap))
+            Text("External", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.padding(top = MarksySpace.Gap))
         }
         calls.channels.forEach { c ->
             CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip, follow(FollowKey.channel(c.channelId), c.name))

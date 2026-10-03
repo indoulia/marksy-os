@@ -111,8 +111,8 @@ internal fun ScorecardDetailContent(
                     item(key = "symbols-head") { SectionLabel("Most called") }
                     item(key = "symbols") {
                         MarksyCard {
-                            LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-                                items(d.topSymbols, key = { it.symbol }) { s -> Pill("${s.symbol} · ${s.calls}", compact = true) { onOpenStock(s.symbol) } }
+                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
+                                d.topSymbols.forEach { s -> Pill("${s.symbol} · ${s.calls}", compact = true) { onOpenStock(s.symbol) } }
                             }
                         }
                     }
@@ -128,9 +128,6 @@ internal fun ScorecardDetailContent(
         }
     }
 }
-
-@Composable
-private fun CardTitle(text: String) = Text(text.uppercase(), color = MarksyTheme.TextSecondary, style = MarksyType.Label)
 
 @Composable
 private fun Hero(d: ScorecardDetailDto, name: String, following: Boolean, onToggleFollow: (Boolean) -> Unit) {
@@ -181,11 +178,15 @@ private fun KpiTiles(d: ScorecardDetailDto) {
     val p = d.card.body.performance
     val c = d.card.body.counts
     val ret = p.avgActualReturn
+    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
     MarksyStatRow(Modifier.height(IntrinsicSize.Min)) {
         MarksyStat("Hit rate", p.hitRatePct?.let { MarksyFormat.percent(it, 1, signed = false) } ?: "—", Modifier.weight(1f).fillMaxHeight(), ScorecardGraphics.tone(p.hitRatePct).takeIf { p.hitRatePct != null } ?: MarksyTheme.TextPrimary)
         MarksyStat("Avg return", LedgerCalls.returnText(ret) ?: "—", Modifier.weight(1f).fillMaxHeight(), ScorecardGraphics.returnTone(ret).takeIf { ret != null } ?: MarksyTheme.TextPrimary)
+    }
+    MarksyStatRow(Modifier.height(IntrinsicSize.Min)) {
         MarksyStat("Completed", "${c.completed}/${c.total}", Modifier.weight(1f).fillMaxHeight())
         MarksyStat("To outcome", p.avgDaysToCompletion?.let { MarksyFormat.number(it, 1) + "d" } ?: "—", Modifier.weight(1f).fillMaxHeight())
+    }
     }
 }
 
@@ -289,15 +290,16 @@ private val HorizonLabels = mapOf("INTRADAY" to "Intra", "UP_TO_1_WEEK" to "≤1
 @Composable
 private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
     MarksyCard(modifier) {
-        CardTitle("By horizon")
-        Row(Modifier.fillMaxWidth().height(72.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-            buckets.forEach { b ->
-                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
-                        val share = ((b.hitRatePct ?: 0.0) / 100).coerceIn(.04, 1.0).toFloat()
-                        Box(Modifier.widthIn(max = 22.dp).fillMaxWidth().fillMaxHeight(share).clip(MarksyShape.Chip).background(ScorecardGraphics.tone(b.hitRatePct)))
-                    }
+        MarksyCardHeader("By horizon")
+        buckets.forEach { b ->
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(HorizonLabels[b.horizon] ?: b.horizon, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
+                    Text(b.hitRatePct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1)
+                }
+                Box(Modifier.fillMaxWidth().height(MarksySize.Dot).clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)) {
+                    val share = ((b.hitRatePct ?: 0.0) / 100).coerceIn(.04, 1.0).toFloat()
+                    Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(MarksyShape.Chip).background(ScorecardGraphics.tone(b.hitRatePct)))
                 }
             }
         }
@@ -308,7 +310,7 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
 private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
     val (share, tint) = ScorecardGraphics.gauge(realizationPct)
     MarksyCard(modifier) {
-        CardTitle("Delivered vs promised")
+        MarksyCardHeader("Delivered vs promised")
         Spacer(Modifier.weight(1f))
         Canvas(Modifier.size(100.dp, 56.dp).align(Alignment.CenterHorizontally)) {
             val w = 10.dp.toPx()
