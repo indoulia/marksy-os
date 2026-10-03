@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -138,11 +137,7 @@ fun MarketScreen(
                 }
             }
             MarketTab.IPOS -> IpoScreen(repository = repository, padding = inner, onSectionSelected = { onTabSelected(it); onSymbolSelected(null) }, onTitleNote = onIpoNote)
-            MarketTab.UPDATES -> LazyColumn(
-                Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-                verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-                contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = OneHandListBottomPadding)
-            ) {
+            MarketTab.UPDATES -> MarksyList {
                 if (marketEvents.isEmpty()) item { EmptyState("No market updates yet.", "Holdings alerts, research views, IPO notices and market moves from your broker and market apps appear here.") }
                 items(marketEvents, key = { "mkt-${it.id}" }) { event ->
                     SwipeActionsRow(onArchive = { onArchiveEvent(event) }, onHide = { onHideEvent(event) }) { MarketUpdateCard(event) { onEventSelected(event) } }
@@ -194,24 +189,17 @@ internal fun StockSuggestions(
     val matches by produceState<List<String>?>(null, query) {
         value = runCatching { com.marksy.os.upstox.UpstoxInstruments.suggest(context, query) }.getOrDefault(emptyList())
     }
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = padding.calculateBottomPadding())
-    ) {
+    MarksyList(bottom = padding.calculateBottomPadding()) {
         val list = matches
         when {
             list == null -> item { MarksyLoader("Searching…") }
             list.isEmpty() -> item { EmptyState("No NSE symbol matches \"$query\"", emptyHint) }
             else -> items(list, key = { "sym-$it" }) { symbol ->
-                Row(Modifier.fillMaxWidth().clickable { onSymbolSelected(symbol) }, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Text(
-                        symbol,
-                        color = MarksyTheme.TextPrimary,
-                        style = MarksyType.Subhead,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f).padding(vertical = MarksySpace.CardPadding)
-                    )
-                    WatchlistButton(symbol)
+                MarksyRowCard(onClick = { onSymbolSelected(symbol) }) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        WatchlistButton(symbol)
+                    }
                 }
             }
         }

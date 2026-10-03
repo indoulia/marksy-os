@@ -12,7 +12,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -155,12 +154,7 @@ fun AskMarksyScreen(
             .consumeWindowInsets(padding)
             .imePadding()
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Gap),
-            verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
-        ) {
+        MarksyList(Modifier.weight(1f), state = listState, bottom = MarksySpace.ListGap) {
             item { Greeting(compact = conversation.isNotEmpty()) }
 
             if (conversation.isEmpty()) {
