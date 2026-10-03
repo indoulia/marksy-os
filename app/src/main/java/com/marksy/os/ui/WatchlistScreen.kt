@@ -256,7 +256,7 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
         title = { Text("Add to ${list.name}  ${inList.size}/${WatchlistRepository.MAX_STOCKS}") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CompactTextField(query, { query = it; note = null }, Modifier.fillMaxWidth(), placeholder = "NSE symbol or name, e.g. HAL")
+                MarksySearchField(query, { query = it; note = null }, "Search NSE symbol or name...", Modifier.fillMaxWidth(), symbols = true, lifted = false)
                 note?.let { Text(it, color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
                 val found = matches
                 when {

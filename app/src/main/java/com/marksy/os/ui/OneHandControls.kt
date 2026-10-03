@@ -122,7 +122,7 @@ fun BoxScope.OneHandControls(
         if (onSearchChange != null) {
             Row(verticalAlignment = Alignment.Bottom) {
                 if (searchOpen) {
-                    SearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } }, Modifier.weight(1f))
+                    MarksySearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, Modifier.weight(1f), searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } })
                     Spacer(Modifier.width(10.dp))
                 }
                 FloatingRoundButton(if (searchOpen) Icons.Default.Close else Icons.Default.Search, if (searchOpen) "Close search" else "Search", searchActive && !searchOpen) {
@@ -199,8 +199,12 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
 /** A page action on the floating stack (e.g. Add), so pages need no in-content button rows. */
 data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val active: Boolean = false, val onClick: () -> Unit)
 
+/** The app's one search field; [lifted] adds the floating buttons' shadow, off inside a popup. */
 @Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, symbols: Boolean, onSubmit: (() -> Unit)?, modifier: Modifier) {
+internal fun MarksySearchField(
+    value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier,
+    symbols: Boolean = false, onSubmit: (() -> Unit)? = null, lifted: Boolean = true
+) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     BasicTextField(
@@ -218,7 +222,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, placehol
             Row(
                 Modifier
                     .height(FloatingButtonSize)
-                    .shadow(6.dp, CircleShape)
+                    .shadow(if (lifted) 6.dp else 0.dp, CircleShape)
                     .clip(CircleShape)
                     .background(MarksyTheme.SurfaceRaised)
                     .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)

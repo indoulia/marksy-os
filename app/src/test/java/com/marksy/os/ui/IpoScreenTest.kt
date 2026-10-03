@@ -76,7 +76,8 @@ class IpoScreenTest {
         )
 
         compose.setContent { IpoScreen(repository = repository, padding = PaddingValues()) }
-        compose.waitForIdle()
+        // The stages load off the main thread, so idle can come before the list does.
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("No IPOs open right now").fetchSemanticsNodes().isNotEmpty() }
 
         compose.onNodeWithText("No IPOs open right now").assertExists()
         compose.onNodeWithText("Nilgiri Foods").assertDoesNotExist()
