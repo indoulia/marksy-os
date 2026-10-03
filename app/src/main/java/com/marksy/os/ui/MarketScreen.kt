@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -73,7 +74,7 @@ fun MarketScreen(
     val portfolioHoldings by PortfolioChrome.hasHoldings.collectAsState()
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
-    Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) {
+    Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding()).consumeWindowInsets(padding)) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         when (tab) {
             MarketTab.WATCHLIST -> Unit

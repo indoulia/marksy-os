@@ -276,7 +276,7 @@ private fun LazyListScope.ipoLanes(
     lanes.forEach { (lane, xs) ->
         val folded = lane == Lane.LISTED && stage == StageFilter.ALL && query.isBlank()
         if (folded) item(key = "fold-listed") { ListedFold(listedTotal ?: xs.size, IpoLifecycle.listedSummary(xs, details), listedOpen, onToggleListed) }
-        else item(key = "lane-${lane.name}") { LaneLabel(lane.label, xs.size, laneColor(lane)) }
+        else item(key = "lane-${lane.name}") { LaneLabel(lane.label, if (lane == Lane.LISTED) listedTotal ?: xs.size else xs.size, laneColor(lane)) }
         if (!folded || listedOpen) items(xs, key = { it.id }) { ipo ->
             // The 3 pm nudge sits on the card only while it is still ahead.
             val close = if (lane == Lane.TODAY) IpoLifecycle.reminderEvents(mapOf("close" to now.toLocalDate()), now).firstOrNull() else null
