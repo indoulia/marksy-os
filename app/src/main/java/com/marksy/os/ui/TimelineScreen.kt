@@ -32,12 +32,12 @@ fun TimelineScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Text(
-                "Today · " + MarksyFormat.day(LocalDate.now()),
+                "Today · " + MarksyFormat.weekdayDay(LocalDate.now()),
                 color = MarksyTheme.TextSecondary,
                 style = MarksyType.Body
             )
@@ -84,19 +84,19 @@ private fun TimelineNodeRow(
                 style = MarksyType.Meta,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(MarksySpace.Tight))
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(MarksySize.IconLarge)
                     .clip(CircleShape)
                     .background(tile.background),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(14.dp))
+                Icon(icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(MarksySize.IconSmall))
             }
         }
 
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(MarksySpace.ListGap))
 
         Column(Modifier.weight(1f).marksyCard()) {
             Row(

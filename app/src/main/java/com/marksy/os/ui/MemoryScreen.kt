@@ -31,7 +31,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
+        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
@@ -95,11 +95,11 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
 @Composable
 private fun MemoryRow(e: MemoryEntryEntity, onForget: () -> Unit, onRename: () -> Unit) {
     val cadence = runCatching { org.json.JSONObject(e.detailJson).optInt("cadenceDays", 0) }.getOrDefault(0)
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+    MarksyCard(spacing = 0.dp) {
         Text(e.label, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
         Text(
             buildString {
-                append("${(e.confidence * 100).toInt()}% · seen ${e.observations}x · last ${day(e.lastObservedAt)}")
+                append("${MarksyFormat.percent(e.confidence * 100.0, 0, signed = false)} · seen ${e.observations}x · last ${day(e.lastObservedAt)}")
                 if (cadence > 0) append(" · every ~$cadence days")
                 if (e.origin == PersonalMemory.ORIGIN_USER) append(" · set by you")
                 e.expiresAt?.let { append(" · forgets after ${day(it)}") }

@@ -1,5 +1,6 @@
 package com.marksy.os.intelligence
 
+import com.marksy.os.MarksyFormat
 import com.marksy.os.data.local.ConnectorEventEntity
 
 /**
@@ -129,7 +130,7 @@ object MarksyHealth {
         val avgDelay = if (i.captured7d > 0) i.deliveryDelayMsSum7d / i.captured7d else null
         val metrics = listOf(
             Metric("Captured today", i.capturedToday.toString()),
-            Metric("Captured / day (7d avg)", "%.1f".format(i.captured7d / 7.0)),
+            Metric("Captured / day (7d avg)", MarksyFormat.number(i.captured7d / 7.0, 1)),
             Metric("Processing latency", avgProcessing?.let { "$it ms" } ?: "n/a"),
             Metric("Capture delay", avgDelay?.let { "$it ms" } ?: "n/a"),
             Metric("Late captures (7d)", i.lateCaptures7d.toString()),

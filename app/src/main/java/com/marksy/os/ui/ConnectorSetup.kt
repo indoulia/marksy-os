@@ -66,13 +66,13 @@ internal fun ConnectorSetupCard() {
         }
     }
 
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+    MarksyCard(spacing = 0.dp) {
         Text("Direct sources", color = MarksyTheme.TextPrimary, style = MarksyType.Body)
         connectors.forEach { c ->
             val id = c.descriptor.id
             val status = remember(tick) { syncer.status(id) }
             val state = remember(tick) { runCatching { c.state() }.getOrDefault(ConnectorState.NOT_AVAILABLE) }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(c.descriptor.label, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                     val detail = when (connectorDisplay(state, status)) {
@@ -99,6 +99,6 @@ internal fun ConnectorSetupCard() {
                 )
             }
         }
-        Text("SMS · via notifications only. Android restricts direct SMS access (READ_SMS) to default SMS apps.", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 6.dp))
+        Text("SMS · via notifications only. Android restricts direct SMS access (READ_SMS) to default SMS apps.", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Inner))
     }
 }

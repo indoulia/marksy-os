@@ -48,7 +48,7 @@ fun RulesScreen(padding: PaddingValues) {
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
@@ -61,7 +61,7 @@ fun RulesScreen(padding: PaddingValues) {
         item {
             MarksyCard(border = MarksyTheme.PrimaryEmerald) {
                 Text("Custom Rule Builder", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(MarksySpace.ListGap))
 
                 Row(
                     Modifier.fillMaxWidth(),
@@ -73,13 +73,13 @@ fun RulesScreen(padding: PaddingValues) {
                             .weight(1f)
                             .clip(MarksyShape.Chip)
                             .background(MarksyTheme.SurfaceRaised)
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
                     ) {
                         Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(MarksySpace.Gap))
 
                 Row(
                     Modifier.fillMaxWidth(),
@@ -91,13 +91,13 @@ fun RulesScreen(padding: PaddingValues) {
                             .weight(1f)
                             .clip(MarksyShape.Chip)
                             .background(MarksyTheme.SurfaceRaised)
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
                     ) {
                         Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(MarksySpace.Section))
 
                 MarksyButton("+ Add Custom Rule", onClick = { editingRule = null; showEditor = true }, modifier = Modifier.fillMaxWidth())
             }
@@ -167,7 +167,7 @@ private fun RuleToggleCard(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(rule.name, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = 2.dp))
+                Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Hair))
             }
             Switch(
                 checked = rule.enabled,
@@ -216,7 +216,7 @@ private fun RuleEditorDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
             ) {
                 CompactTextField(
                     value = name,
@@ -235,7 +235,7 @@ private fun RuleEditorDialog(
                 CompactTextField(value = source, onValueChange = { source = it.take(120) }, label = "App package (optional)", modifier = Modifier.fillMaxWidth())
                 ConditionTreeEditor(tree, onChange = { tree = it })
                 CompactTextField(value = priority, onValueChange = { priority = it.take(4) }, label = "Rule priority (higher wins conflicts)", modifier = Modifier.fillMaxWidth())
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     RuleEngine.Action.entries.forEach { a ->
                         Pill(a.name.lowercase().replace('_', ' '), selected = action == a) { action = a }
                     }
@@ -277,7 +277,7 @@ private fun RuleTestDialog(rule: RuleEngine.Rule, runner: RuleRunner, onDismiss:
         onDismissRequest = onDismiss,
         title = { Text("Test \"${rule.name}\" (v${rule.version})", color = MarksyTheme.TextPrimary) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 val r = result
                 if (r == null) Text("Checking the last 7 days…", color = MarksyTheme.TextMuted)
                 else {
