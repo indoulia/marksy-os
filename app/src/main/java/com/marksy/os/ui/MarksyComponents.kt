@@ -159,6 +159,19 @@ private fun Modifier.tappable(onClick: (() -> Unit)?, label: String?, onLongClic
     else -> this
 }
 
+/** The one card title: optional icon, Subhead title, optional trailing value or action at the end. */
+@Composable
+fun MarksyCardHeader(
+    title: String, modifier: Modifier = Modifier, icon: ImageVector? = null, iconTint: Color = MarksyTheme.PrimaryEmerald,
+    titleColor: Color = MarksyTheme.TextPrimary, trailing: (@Composable () -> Unit)? = null
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+        icon?.let { Icon(it, contentDescription = null, tint = iconTint, modifier = Modifier.size(MarksySize.Icon)) }
+        Text(title, color = titleColor, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        trailing?.invoke()
+    }
+}
+
 /** Section or lane heading: optional dot, caps label, optional count, a rule to the edge, and an optional trailing value. */
 @Composable
 fun SectionLabel(
