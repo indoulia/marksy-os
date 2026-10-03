@@ -100,7 +100,6 @@ import com.marksy.os.ui.toTradingInsight
 import com.marksy.os.ui.MarketScreen
 import com.marksy.os.ui.MarketTab
 import com.marksy.os.ui.TradingFilters
-import com.marksy.os.ui.CompactTextField
 import com.marksy.os.ui.LoginScreen
 
 class MainActivity : ComponentActivity() {
@@ -275,7 +274,6 @@ class MainActivity : ComponentActivity() {
         var showPlan by rememberSaveable { mutableStateOf(false) }
         var watchView by rememberSaveable { mutableStateOf("") }
         var watchQuery by rememberSaveable { mutableStateOf("") }
-        var headerSearchOpen by rememberSaveable { mutableStateOf(false) }
         var addingPlan by remember { mutableStateOf(false) }
         var editingPlan by remember { mutableStateOf<com.marksy.os.data.local.PlanItemEntity?>(null) }
         val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -396,19 +394,18 @@ class MainActivity : ComponentActivity() {
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
             else -> null
         }
-        // Pages whose search sits behind a header icon; the field covers the header while open.
+        // Leaving a searchable page drops its half-typed query.
         val searchPage = when {
             hostOpen -> null
             onWatchlist -> 2
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> 4
             else -> null
         }
-        fun closeHeaderSearch() {
-            headerSearchOpen = false
+        fun resetSearch() {
             watchQuery = ""
             stockQuery = marketSymbol.orEmpty()
         }
-        LaunchedEffect(searchPage) { closeHeaderSearch() }
+        LaunchedEffect(searchPage) { resetSearch() }
         // origin: a tab index, "ask" or "briefing".
         fun openStockFrom(symbol: String, origin: String) {
             stockReturn = origin; stockReturnMarketTab = marketTabName; stockTrail = emptyList()
@@ -479,7 +476,7 @@ class MainActivity : ComponentActivity() {
             items = watchItems,
             currentListId = if (onWatchlist && !hostOpen) com.marksy.os.ui.watchlistCurrentId(watchView, watchlists, watchItems) else null,
             onAdded = { listId, message ->
-                if (onWatchlist && !hostOpen) { watchView = listId.toString(); closeHeaderSearch() }
+                if (onWatchlist && !hostOpen) { watchView = listId.toString(); resetSearch() }
                 else scope.launch { snackbar.showSnackbar(message, duration = SnackbarDuration.Short) }
             }
         ) {
@@ -507,36 +504,6 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (headerSearchOpen && searchPage != null) {
-                            val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-                            val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-                            LaunchedEffect(Unit) { focus.requestFocus() }
-                            val watch = searchPage == 2
-                            fun openStock() { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; stockQuery = it; keyboard?.hide(); headerSearchOpen = false } }
-                            CompactTextField(
-                                value = if (watch) watchQuery else stockQuery,
-                                // Rewriting the text (e.g. uppercase) mid-composition makes the IME drop letters; the keyboard capitalises instead.
-                                onValueChange = { if (watch) watchQuery = it else stockQuery = it },
-                                modifier = Modifier.weight(1f),
-                                fieldModifier = Modifier.focusRequester(focus),
-                                placeholder = if (watch) "Search a stock to add" else "Search symbol",
-                                leadingIcon = Icons.Default.Search,
-                                // Same 36dp height as the round header icons it replaces.
-                                height = 36.dp,
-                                cornerRadius = 18.dp,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
-                                    autoCorrectEnabled = false,
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                                ),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (watch) keyboard?.hide() else openStock() }),
-                                trailing = {
-                                    IconButton(onClick = { keyboard?.hide(); closeHeaderSearch() }, modifier = Modifier.size(32.dp)) {
-                                        Icon(Icons.Default.Close, contentDescription = "Close search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                            )
-                        } else {
                         // Market pages carry a small LIVE mark on the title, only while NSE is in session.
                         val titleLive = (selectedTab == 2 || selectedTab == 3) && !hostOpen && feedStatus is UpstoxFeed.Status.Live && marketOpen && feedQuotes.isNotEmpty()
                         // Bottom-bar pages drop their name (the selected tab already shows it); the note takes its slot.
@@ -574,11 +541,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (searchPage != null) HeaderIconBadge(icon = Icons.Default.Search, contentDescription = "Search") { headerSearchOpen = true }
                             HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); showAsk = true }
                             HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan") { closeSubScreens(); showPlan = true }
                             HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile & settings") { closeSubScreens(); selectedTab = tabs.size }
-                        }
                         }
                     }
                     }
@@ -767,6 +732,7 @@ class MainActivity : ComponentActivity() {
                     view = watchView,
                     onViewSelected = { watchView = it },
                     query = watchQuery,
+                    onQueryChange = { watchQuery = it },
                     onOpenStock = { openStockFrom(it, "2") },
                     onSectionSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null }
                 )
@@ -795,10 +761,12 @@ class MainActivity : ComponentActivity() {
                     onSymbolSelected = {
                         val from = marketSymbol
                         if (it != null && from != null && it != from) stockTrail = stockTrail + from
-                        marketSymbol = it; stockQuery = it ?: ""; if (it != null) headerSearchOpen = false
+                        marketSymbol = it; stockQuery = it ?: ""
                     },
                     onSymbolBack = ::stockBack,
                     stockQuery = stockQuery,
+                    onStockQueryChange = { stockQuery = it },
+                    onStockSubmit = { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { marketSymbol = it; stockQuery = it } },
                     marketEvents = remember(inboxEvents, marketHidden) { inboxEvents.filter { it.category == "MARKET" && it.id !in marketHidden } },
                     stockEvents = remember(inboxEvents) { inboxEvents.filter { it.category == "MARKET" || it.category == "TRADING" } },
                     onEventSelected = openEvent,

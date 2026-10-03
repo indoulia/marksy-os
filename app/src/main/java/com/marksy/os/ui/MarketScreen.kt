@@ -50,6 +50,8 @@ fun MarketScreen(
     onSymbolSelected: (String?) -> Unit,
     onSymbolBack: () -> Unit = { onSymbolSelected(null) },
     stockQuery: String = "",
+    onStockQueryChange: (String) -> Unit = {},
+    onStockSubmit: () -> Unit = {},
     marketEvents: List<NotificationEventEntity> = emptyList(),
     stockEvents: List<NotificationEventEntity> = emptyList(),
     onEventSelected: (NotificationEventEntity) -> Unit = {},
@@ -154,15 +156,25 @@ fun MarketScreen(
         }
         // Search and sort only once there are holdings to search.
         val portfolioTools = tab == MarketTab.PORTFOLIO && portfolioHoldings
+        val stockSearch = tab == MarketTab.STOCKS
+        val onSearch: ((String) -> Unit)? = when {
+            portfolioTools -> { q -> portfolioQuery = q }
+            stockSearch -> onStockQueryChange
+            else -> null
+        }
         // The IPO page draws its own stack (filters, search, reminders, watch).
         if (tab != MarketTab.IPOS) OneHandControls(
             filters = MarketSections,
             selectedFilter = tab.name,
             filterIsView = false,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
-            searchQuery = portfolioQuery.takeIf { portfolioTools },
-            onSearchChange = if (portfolioTools) { q -> portfolioQuery = q } else null,
-            searchPlaceholder = "Search holdings...",
+            // The open stock's own symbol is not a search, so the field starts empty on its page.
+            searchQuery = when { portfolioTools -> portfolioQuery; stockSearch -> stockQuery.takeUnless { it.equals(selectedSymbol, ignoreCase = true) }.orEmpty(); else -> null },
+            onSearchChange = onSearch,
+            searchPlaceholder = if (stockSearch) "Search symbols..." else "Search holdings...",
+            searchSymbols = stockSearch,
+            onSearchSubmit = onStockSubmit.takeIf { stockSearch },
+            searchResetKey = selectedSymbol,
             actions = listOfNotNull(
                 FloatingAction(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Sort, "Sort and show") { portfolioSort = true }.takeIf { portfolioTools },
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }

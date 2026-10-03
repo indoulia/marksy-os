@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -69,8 +70,8 @@ val OneHandRowEndClearance = 34.dp
 private val FloatingIconSize = 22.dp
 
 /**
- * Thumb-reachable search/filter, bottom-right: filter above search. Search opens a multi-line field along the
- * bottom (above the keyboard); filter opens a list just above the buttons. Place inside a full-screen Box after
+ * Thumb-reachable search/filter, bottom-right: filter above search. Search opens the app's one search field along
+ * the bottom (above the keyboard); filter opens a list just above the buttons. Place inside a full-screen Box after
  * the content; that Box should consumeWindowInsets(its padding) so the field sits flush on the keyboard.
  */
 @Composable
@@ -81,13 +82,19 @@ fun BoxScope.OneHandControls(
     searchQuery: String? = null,
     onSearchChange: ((String) -> Unit)? = null,
     searchPlaceholder: String = "Search...",
+    // Ticker entry: capitals, no autocorrect.
+    searchSymbols: Boolean = false,
+    // Keyboard search key; the field closes after it.
+    onSearchSubmit: (() -> Unit)? = null,
+    // The field closes when this changes (e.g. a stock was picked).
+    searchResetKey: Any? = null,
     actions: List<FloatingAction> = emptyList(),
     // False when the view list is a switcher, not a filter: the button's dot then marks only [extrasActive].
     filterIsView: Boolean = true,
     extrasActive: Boolean = false,
     filterExtras: (@Composable () -> Unit)? = null
 ) {
-    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable(searchResetKey) { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
     val filterActive = filters.isNotEmpty() && (if (filterIsView) selectedFilter != filters.first().first else extrasActive)
     val searchActive = !searchQuery.isNullOrEmpty()
@@ -115,7 +122,7 @@ fun BoxScope.OneHandControls(
         if (onSearchChange != null) {
             Row(verticalAlignment = Alignment.Bottom) {
                 if (searchOpen) {
-                    SearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, Modifier.weight(1f))
+                    SearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } }, Modifier.weight(1f))
                     Spacer(Modifier.width(10.dp))
                 }
                 FloatingRoundButton(if (searchOpen) Icons.Default.Close else Icons.Default.Search, if (searchOpen) "Close search" else "Search", searchActive && !searchOpen) {
@@ -193,31 +200,32 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
 data class FloatingAction(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String, val active: Boolean = false, val onClick: () -> Unit)
 
 @Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier) {
+private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, symbols: Boolean, onSubmit: (() -> Unit)?, modifier: Modifier) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    val shape = RoundedCornerShape(24.dp)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        maxLines = 4,
+        singleLine = true,
         textStyle = TextStyle(color = MarksyTheme.TextPrimary, fontSize = 15.sp),
         cursorBrush = SolidColor(MarksyTheme.PrimaryEmerald),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+        keyboardOptions = if (symbols) KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Search)
+            else KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); onSubmit?.invoke() }),
         modifier = modifier.focusRequester(focus),
         decorationBox = { inner ->
+            // Same height and lift as the round buttons beside it.
             Row(
                 Modifier
-                    .heightIn(min = 52.dp)
-                    .shadow(10.dp, shape)
-                    .clip(shape)
+                    .height(FloatingButtonSize)
+                    .shadow(6.dp, CircleShape)
+                    .clip(CircleShape)
                     .background(MarksyTheme.SurfaceRaised)
-                    .border(1.5.dp, MarksyTheme.PrimaryEmerald, shape)
-                    .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                    .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                    .padding(start = 16.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                Box(Modifier.weight(1f)) {
                     if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, fontSize = 15.sp)
                     inner()
                 }

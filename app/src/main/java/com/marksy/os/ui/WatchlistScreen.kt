@@ -155,6 +155,7 @@ fun WatchlistScreen(
     view: String,
     onViewSelected: (String) -> Unit,
     query: String,
+    onQueryChange: (String) -> Unit = {},
     onOpenStock: (String) -> Unit,
     onSectionSelected: (String) -> Unit
 ) {
@@ -197,7 +198,11 @@ fun WatchlistScreen(
             filters = MarketSections,
             selectedFilter = MarketTab.WATCHLIST.name,
             filterIsView = false,
-            onFilterSelected = onSectionSelected
+            onFilterSelected = onSectionSelected,
+            searchQuery = query,
+            onSearchChange = onQueryChange,
+            searchPlaceholder = "Search a stock to add...",
+            searchSymbols = true
         )
     }
 
