@@ -165,16 +165,16 @@ private fun ChartCard(
         // After hours the intraday feed can be empty and history may lag a session; say which day the chart is.
         val session = candles?.lastOrNull()?.time?.let { day(it) }
         val stale = range == ChartRange.D1 && session != null && live.quote?.lastTradeTime?.let { day(it) } != session
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        run {
             val headline = when {
                 pick != null -> "${MarksyFormat.rupees(pick.close)}  " + (pct?.let { MarksyFormat.percent(it) } ?: "")
                 pct != null -> "${MarksyFormat.percent(pct)} ${when (range) { ChartRange.D1 -> "today"; ChartRange.MAX -> "all time"; else -> "in ${range.label}" }}"
                 else -> ""
             }
-            Text(headline, color = tint, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-            ChartIconButton(if (prefs.candles) Icons.Default.CandlestickChart else Icons.Default.ShowChart, if (prefs.candles) "Show line" else "Show candles") { prefs.candles = !prefs.candles }
-            Spacer(Modifier.width(MarksySpace.Inner))
-            ChartIconButton(Icons.Default.Tune, "Indicators and interval", active = prefs.overlays.isNotEmpty()) { tuning = true }
+            MarksyCardHeader(headline, titleColor = tint, trailing = {
+                ChartIconButton(if (prefs.candles) Icons.Default.CandlestickChart else Icons.Default.ShowChart, if (prefs.candles) "Show line" else "Show candles") { prefs.candles = !prefs.candles }
+                ChartIconButton(Icons.Default.Tune, "Indicators and interval", active = prefs.overlays.isNotEmpty()) { tuning = true }
+            })
         }
         val detail = when {
             pick != null && prefs.candles -> "${ChartAxis.readout(range, pick.time)} · O ${money(pick.open)} H ${money(pick.high)} L ${money(pick.low)} C ${money(pick.close)} · Vol ${compact(pick.volume)}"
@@ -307,7 +307,7 @@ private fun RangeBar(label: String, low: Double, high: Double, price: Double) {
 @Composable
 private fun DepthCard(q: UpstoxQuote) {
     MarksyCard {
-        Text("Market depth", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        MarksyCardHeader("Market depth")
         val deepest = (q.bids + q.asks).take(10).maxOfOrNull { it.quantity }?.takeIf { it > 0 } ?: 1L
         Row(Modifier.fillMaxWidth()) {
             DepthSide("Buy", q.bids, MarksyTheme.Positive, sell = false, deepest, Modifier.weight(1f))

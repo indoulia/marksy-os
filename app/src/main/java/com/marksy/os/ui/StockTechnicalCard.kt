@@ -37,10 +37,9 @@ internal fun TechnicalCard(daily: List<Candle>, lastPrice: Double?) {
     val rating = remember(daily) { Technicals.rate(daily) } ?: return
     val history = remember(daily) { Technicals.history(daily, 6, IST) }
     MarksyCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Technical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        MarksyCardHeader("Technical rating", trailing = {
             Text("as of ${ChartAxis.readout(com.marksy.os.upstox.ChartRange.Y1, rating.asOf)} close", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
-        }
+        })
         Box(
             Modifier.fillMaxWidth().clip(MarksyShape.Panel).background(rating.trend.color().copy(alpha = .18f)).padding(vertical = MarksySpace.Gap),
             contentAlignment = Alignment.Center
@@ -63,7 +62,7 @@ private fun SignalGroup(title: String, readings: List<Reading>, movingAverages: 
     Column(Modifier.fillMaxWidth()) {
         MarksyDivider()
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
             Column(Modifier.width(130.dp)) {
                 Row(Modifier.fillMaxWidth()) {
                     Text("$bull", color = MarksyTheme.Positive, style = MarksyType.Small, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -106,7 +105,7 @@ private fun HistoryGroup(history: List<Pair<Candle, Trend>>) {
     Column(Modifier.fillMaxWidth()) {
         MarksyDivider()
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-            Text("Historical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text("Historical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
             Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
         }
         if (open) Column(Modifier.padding(bottom = MarksySpace.Gap)) {
@@ -127,7 +126,7 @@ private fun PivotBlock(daily: List<Candle>, lastPrice: Double?) {
     val p = remember(daily, method) { Technicals.pivots(daily, LocalDate.now(IST), IST, method) } ?: return
     Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Pivot levels", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text("Pivot levels", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
             MarksySegmented(PivotMethod.entries.map { it.name }, method.name, { method = PivotMethod.valueOf(it) }, Modifier.width(190.dp), label = { it.lowercase().replaceFirstChar { c -> c.uppercase() } })
         }
         Text("From the ${ChartAxis.readout(com.marksy.os.upstox.ChartRange.Y1, p.from)} session", color = MarksyTheme.TextMuted, style = MarksyType.Caption)

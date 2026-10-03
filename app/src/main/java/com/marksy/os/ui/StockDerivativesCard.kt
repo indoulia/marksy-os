@@ -34,11 +34,9 @@ internal fun DerivativesCard(instrumentKey: String) {
     val chain by produceState<Result<UpstoxDerivatives.Chain>?>(null, instrumentKey, expiry) { value = null; value = runCatching { client.optionChain(instrumentKey, expiry) } }
 
     MarksyCard(Modifier.animateContentSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Options", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-            Row(Modifier.weight(1f).padding(start = MarksySpace.Gap).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                list.take(4).forEach { e -> Pill(day(e), selected = e == expiry) { expiry = e } }
-            }
+        MarksyCardHeader("Options")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+            list.take(4).forEach { e -> Pill(day(e), selected = e == expiry) { expiry = e } }
         }
         when (val c = chain) {
             null -> MarksyInlineLoader("Loading option chain…")

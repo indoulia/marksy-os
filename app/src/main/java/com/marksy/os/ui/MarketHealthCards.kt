@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 @Composable
 private fun HealthCard(title: String, tone: Color, source: String, content: @Composable ColumnScope.() -> Unit) {
     MarksyCard {
-        Text(title, color = tone, style = MarksyType.Body)
+        MarksyCardHeader(title, titleColor = tone)
         content()
         Text(source, color = MarksyTheme.TextMuted.copy(alpha = .7f), style = MarksyType.Caption)
     }
