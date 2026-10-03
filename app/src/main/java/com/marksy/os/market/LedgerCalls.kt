@@ -1,5 +1,6 @@
 package com.marksy.os.market
 
+import com.marksy.os.MarksyFormat
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -65,7 +66,7 @@ object LedgerCalls {
         else -> if (isActive(t)) Tone.NEUTRAL else Tone.MUTED
     }
 
-    fun returnText(fraction: Double?): String? = fraction?.let { String.format(Locale.US, "%+.2f%%", it * 100) }
+    fun returnText(fraction: Double?): String? = fraction?.let { MarksyFormat.percent(it * 100) }
 
     /** The latest return while open, flagged when provisional; the actual return once closed. */
     fun progressText(t: LedgerTipDto): String? {
@@ -135,7 +136,7 @@ object LedgerCalls {
     fun recordText(h: ScorecardHeadlineDto): String = listOfNotNull(
         h.trustScore?.let { "Trust $it" } ?: "Not enough history",
         "${h.total} call${if (h.total == 1) "" else "s"}",
-        h.hitRatePct?.let { String.format(Locale.US, "%.0f%% hit", it) },
+        h.hitRatePct?.let { MarksyFormat.percent(it, 0, signed = false) + " hit" },
         h.invalidated.takeIf { it > 0 }?.let { "$it invalidated" }
     ).joinToString(" · ")
 
@@ -169,7 +170,7 @@ object LedgerCalls {
     private fun time(iso: String): String =
         runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(IST).format(TIME) }.getOrDefault(iso.take(16).replace('T', ' '))
 
-    private fun rupees(v: Double) = "₹" + String.format(Locale.US, "%,.2f", v)
+    private fun rupees(v: Double) = MarksyFormat.rupees(v)
 
     private fun words(s: String) = s.lowercase(Locale.ROOT).replace('_', ' ')
 }

@@ -15,7 +15,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
@@ -81,9 +80,9 @@ internal fun ScorecardsView(
     }
 
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         state = listState,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
         contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
     ) {
         item(key = "segments") {
@@ -111,7 +110,7 @@ internal fun ScorecardsView(
             item(key = "legend") { OutcomeLegend() }
         }
         when (val r = ranked) {
-            is MarketDataState.Loading -> item { MarksyLoader("Loading scorecards...") }
+            is MarketDataState.Loading -> item { MarksyLoader("Loading scorecards…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Scorecards unavailable", r.message) }
             is MarketDataState.Empty -> item { EmptyState("No ${query.entity.label.lowercase()} with calls in this period", "Widen the period or clear the horizon.") }
@@ -130,12 +129,12 @@ internal fun ScorecardsView(
 private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier = Modifier) {
     val c = body.counts
     Column(modifier.scoreCard(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        TrustRing(body.trust.trustScore, 84.dp, 8.dp, 26.sp)
-        Text(name, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        TrustRing(body.trust.trustScore, 84.dp, 8.dp, MarksyType.Display)
+        Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1)
         OutcomeBar(c.successful, c.failed, c.expired, c.open)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1, modifier = Modifier.weight(1f))
-            ReturnBadge(body.performance.avgActualReturn, fontSize = 12.sp)
+            Text("${c.completed}/${c.total}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontFamily = FontFamily.Monospace, maxLines = 1, modifier = Modifier.weight(1f))
+            ReturnBadge(body.performance.avgActualReturn, style = MarksyType.Small)
         }
     }
 }
@@ -145,19 +144,19 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
     val c = e.body.counts
     val ret = e.body.performance.avgActualReturn
     Row(
-        Modifier.fillMaxWidth().clip(ScoreCardShape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, ScoreCardShape)
-            .clickable(onClick = onClick).padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 12.dp + OneHandRowEndClearance),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick)
+            .padding(start = MarksySpace.CardPadding, top = MarksySpace.CardPadding, bottom = MarksySpace.CardPadding, end = MarksySpace.CardPadding + OneHandRowEndClearance),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically
     ) {
-        TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, 16.sp, caption = false)
+        TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, MarksyType.Lead, caption = false)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(e.name, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(e.name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 TagChip(ScorecardSources.chip(e))
             }
             OutcomeBar(c.successful, c.failed, c.expired, c.open)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                Text("${c.completed}/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
                 FollowPill(following, onToggleFollow, compact = true)
             }
         }
@@ -181,11 +180,11 @@ internal fun ScorecardFilterDialog(initial: ScorecardQuery, onApply: (ScorecardQ
         title = { Text("Scorecards", color = MarksyTheme.TextPrimary) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Show", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ScorecardEntity.entries.forEach { e -> Pill(e.label, selected = q.entity == e) { q = q.copy(entity = e) } }
                 }
-                Text("Period (IST)", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("PERIOD (IST)", color = MarksyTheme.TextMuted, style = MarksyType.Label)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ScorecardPeriod.entries.forEach { p -> Pill(p.label, selected = q.period == p) { q = q.copy(period = p) } }
                 }
@@ -193,7 +192,7 @@ internal fun ScorecardFilterDialog(initial: ScorecardQuery, onApply: (ScorecardQ
                     Pill("From ${q.startDate?.let(ScorecardText::date) ?: "…"}", selected = q.startDate != null) { pickingStart = true }
                     Pill("To ${q.endDate?.let(ScorecardText::date) ?: "…"}", selected = q.endDate != null) { pickingStart = false }
                 }
-                Text("Horizon", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text("HORIZON", color = MarksyTheme.TextMuted, style = MarksyType.Label)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("All", selected = q.horizon == null) { q = q.copy(horizon = null) }
                     HorizonBucket.entries.forEach { h -> Pill(h.label, selected = q.horizon == h) { q = q.copy(horizon = h) } }
@@ -201,11 +200,9 @@ internal fun ScorecardFilterDialog(initial: ScorecardQuery, onApply: (ScorecardQ
             }
         },
         confirmButton = {
-            TextButton(onClick = { onApply(q) }, enabled = applicable) {
-                Text("Apply", color = if (applicable) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, fontWeight = FontWeight.SemiBold)
-            }
+            MarksyButton("Apply", { onApply(q) }, style = MarksyButtonStyle.Text, enabled = applicable)
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = MarksyTheme.TextSecondary) } }
+        dismissButton = { MarksyButton("Cancel", onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) }
     )
     pickingStart?.let { start ->
         val state = rememberDatePickerState(
@@ -214,15 +211,15 @@ internal fun ScorecardFilterDialog(initial: ScorecardQuery, onApply: (ScorecardQ
         DatePickerDialog(
             onDismissRequest = { pickingStart = null },
             confirmButton = {
-                TextButton(onClick = {
+                MarksyButton("OK", {
                     state.selectedDateMillis?.let { ms ->
                         val day = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
                         q = if (start) q.copy(startDate = day) else q.copy(endDate = day)
                     }
                     pickingStart = null
-                }) { Text("OK") }
+                }, style = MarksyButtonStyle.Text)
             },
-            dismissButton = { TextButton(onClick = { pickingStart = null }) { Text("Cancel") } }
+            dismissButton = { MarksyButton("Cancel", { pickingStart = null }, style = MarksyButtonStyle.Text) }
         ) { DatePicker(state) }
     }
 }

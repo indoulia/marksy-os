@@ -20,12 +20,11 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.SeriesPointDto
@@ -44,8 +43,8 @@ object ScorecardGraphics {
     fun tone(score: Double?): Color = when {
         score == null -> MarksyTheme.TextMuted
         score >= 60 -> MarksyTheme.PrimaryEmerald
-        score >= 30 -> MarksyTheme.YellowImportant
-        else -> MarksyTheme.RedUrgent
+        score >= 30 -> MarksyTheme.Warning
+        else -> MarksyTheme.Negative
     }
 
     /** The hero bar as 0-1 shares: the Wilson hit-rate interval, and the observed hit rate that always falls inside it. */
@@ -60,7 +59,7 @@ object ScorecardGraphics {
     fun returnTone(fraction: Double?): Color = when {
         fraction == null -> MarksyTheme.TextMuted
         fraction >= 0 -> MarksyTheme.PrimaryEmerald
-        else -> MarksyTheme.RedUrgent
+        else -> MarksyTheme.Negative
     }
 
     /** Each count's share of the whole; all zero when nothing is counted. */
@@ -128,7 +127,7 @@ object ScorecardGraphics {
     /** The delivered-vs-promised arc: its share of the half turn and colour; a shortfall below zero draws red by its size. */
     fun gauge(realizationPct: Double?): Pair<Float, Color> = when {
         realizationPct == null -> 0f to MarksyTheme.TextMuted
-        realizationPct < 0 -> (-realizationPct / 100).coerceIn(0.0, 1.0).toFloat() to MarksyTheme.RedUrgent
+        realizationPct < 0 -> (-realizationPct / 100).coerceIn(0.0, 1.0).toFloat() to MarksyTheme.Negative
         else -> (realizationPct / 100).coerceIn(0.0, 1.0).toFloat() to tone(realizationPct)
     }
 
@@ -154,10 +153,8 @@ object ScorecardGraphics {
     }
 }
 
-internal val ScoreCardShape = RoundedCornerShape(14.dp)
-
-/** The stock page's card: surface, glow border, 12dp in. */
-internal fun Modifier.scoreCard(): Modifier = fillMaxWidth().clip(ScoreCardShape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, ScoreCardShape).padding(12.dp)
+/** The stock page's card: the shared card surface, full width, padded. */
+internal fun Modifier.scoreCard(): Modifier = fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)
 
 /** A 0–1 ring; [dashed] draws the grey outline used while a value is unknown. */
 @Composable
@@ -179,12 +176,12 @@ internal fun ValueRing(fraction: Float, color: Color, size: Dp, stroke: Dp, dash
 }
 
 @Composable
-internal fun TrustRing(trust: Int?, size: Dp, stroke: Dp, numberSize: TextUnit, caption: Boolean = true) {
+internal fun TrustRing(trust: Int?, size: Dp, stroke: Dp, numberStyle: TextStyle, caption: Boolean = true) {
     val score = trust?.toDouble()
     ValueRing(ScorecardGraphics.ringFraction(score), ScorecardGraphics.tone(score), size, stroke, dashed = trust == null) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(trust?.toString() ?: "—", color = if (trust == null) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, fontSize = numberSize, fontWeight = FontWeight.Black, lineHeight = numberSize)
-            if (caption) Text("TRUST", color = MarksyTheme.TextSecondary, fontSize = 9.sp, letterSpacing = 1.sp, lineHeight = 10.sp)
+            Text(trust?.toString() ?: "—", color = if (trust == null) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, style = numberStyle, fontWeight = FontWeight.Bold)
+            if (caption) Text("TRUST", color = MarksyTheme.TextSecondary, style = MarksyType.Caption)
         }
     }
 }
@@ -193,7 +190,7 @@ internal fun TrustRing(trust: Int?, size: Dp, stroke: Dp, numberSize: TextUnit, 
 @Composable
 internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier: Modifier = Modifier, height: Dp = 6.dp) {
     val shares = ScorecardGraphics.shares(listOf(hits, stops, expired, open))
-    val colors = listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.RedUrgent, MarksyTheme.TextMuted, MarksyTheme.SecondaryCyan)
+    val colors = listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.Negative, MarksyTheme.TextMuted, MarksyTheme.SecondaryCyan)
     Canvas(modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(height / 2)).background(MarksyTheme.SurfaceRaised)) {
         var x = 0f
         shares.forEachIndexed { i, s ->
@@ -212,7 +209,7 @@ internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier
 @Composable
 internal fun OutcomeLegend() {
     Row(Modifier.padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf("Hit" to MarksyTheme.PrimaryEmerald, "Stop" to MarksyTheme.RedUrgent, "Expired" to MarksyTheme.TextMuted, "Open" to null).forEach { (label, color) ->
+        listOf("Hit" to MarksyTheme.PrimaryEmerald, "Stop" to MarksyTheme.Negative, "Expired" to MarksyTheme.TextMuted, "Open" to null).forEach { (label, color) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(8.dp).clip(CircleShape).then(
@@ -220,7 +217,7 @@ internal fun OutcomeLegend() {
                     )
                 )
                 Spacer(Modifier.width(5.dp))
-                Text(label, color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
         }
     }
@@ -244,20 +241,18 @@ internal fun Sparkline(values: List<Double>, color: Color, modifier: Modifier = 
 
 /** A signed return in a tinted capsule; [waiting] marks a call still open with no return yet. */
 @Composable
-internal fun ReturnBadge(fraction: Double?, fontSize: TextUnit = 13.sp, waiting: Boolean = false) {
+internal fun ReturnBadge(fraction: Double?, style: TextStyle = MarksyType.Body, waiting: Boolean = false) {
     val (fg, bg) = when {
         fraction == null && waiting -> MarksyTheme.SecondaryCyan to MarksyTheme.SecondaryCyan.copy(alpha = .12f)
         fraction == null -> MarksyTheme.TextMuted to MarksyTheme.SurfaceRaised
         fraction >= 0 -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
-        else -> MarksyTheme.RedUrgent to MarksyTheme.BadgeUrgentBg
+        else -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
     }
     Text(
-        LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, fontSize = fontSize, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
-        maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)
+        LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+        maxLines = 1, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)
     )
 }
 
 @Composable
-internal fun TagChip(text: String, fg: Color = MarksyTheme.TextSecondary, bg: Color = MarksyTheme.SurfaceRaised) {
-    Text(text, color = fg, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 7.dp, vertical = 2.dp))
-}
+internal fun TagChip(text: String, fg: Color = MarksyTheme.TextSecondary, bg: Color = MarksyTheme.SurfaceRaised) = MarksyBadge(text, fg, bg)
