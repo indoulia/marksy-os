@@ -12,6 +12,9 @@ import androidx.room.Update
 import com.marksy.os.data.RetentionPolicy
 import kotlinx.coroutines.flow.Flow
 
+/** Candidates in one [state] (Health). */
+data class CaptureStateCount(val state: String, val n: Int)
+
 /** One capture attempt (EPIC-036). Never holds an image or text: only a hash reference and fixed codes. */
 @Entity(tableName = "capture_evidence", indices = [Index(value = ["contentHash"]), Index(value = ["capturedAt"])])
 data class CaptureEvidenceEntity(
@@ -119,6 +122,9 @@ interface CaptureDao {
 
     @Query("SELECT c.id FROM tip_candidates c JOIN capture_evidence e ON e.id = c.evidenceId WHERE e.contentHash = :hash AND e.capturedAt >= :since ORDER BY c.id DESC LIMIT 1")
     suspend fun candidateIdByHash(hash: String, since: Long): Long?
+
+    @Query("SELECT state, COUNT(*) AS n FROM tip_candidates GROUP BY state")
+    fun observeCandidateCounts(): Flow<List<CaptureStateCount>>
 
     @Query("SELECT * FROM tip_candidates WHERE state IN ('EXTRACTED', 'REVIEW_REQUIRED') ORDER BY capturedAt DESC")
     fun observeToReview(): Flow<List<TipCandidateEntity>>
