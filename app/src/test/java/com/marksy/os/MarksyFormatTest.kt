@@ -30,5 +30,9 @@ class MarksyFormatTest {
         assertEquals("3 Oct", MarksyFormat.day(LocalDate.of(2026, 10, 3)))
         assertEquals("3 Oct, 09:05", MarksyFormat.dayTime(at))
         assertEquals("09:05", MarksyFormat.time(at))
+        assertEquals("Sat, 3 Oct", MarksyFormat.weekdayDay(LocalDate.of(2026, 10, 3)))
+        assertEquals("3 Oct 2026", MarksyFormat.fullDay(LocalDate.of(2026, 10, 3)))
+        assertEquals("October 2026", MarksyFormat.monthYear(LocalDate.of(2026, 10, 3)))
+        assertEquals("9:05 AM", MarksyFormat.time12(at))
     }
 }

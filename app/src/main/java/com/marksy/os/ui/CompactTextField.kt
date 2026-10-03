@@ -42,7 +42,7 @@ fun CompactTextField(
     leadingIcon: ImageVector? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     height: Dp = 40.dp,
-    cornerRadius: Dp = 12.dp,
+    shape: androidx.compose.ui.graphics.Shape = MarksyShape.Field,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     trailing: (@Composable () -> Unit)? = null,
@@ -50,7 +50,6 @@ fun CompactTextField(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(cornerRadius)
     Column(modifier) {
         if (label != null) {
             Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))

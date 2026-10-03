@@ -200,7 +200,7 @@ fun AskMarksyScreen(
                 onValueChange = { input = it.take(200) },
                 modifier = Modifier.weight(1f),
                 placeholder = if (voice.listening) "Listening…" else "Ask about your notifications…",
-                cornerRadius = 20.dp,
+                shape = MarksyShape.Dialog,
                 trailing = if (input.isNotBlank()) {
                     {
                         IconButton(onClick = { ask(input) }, modifier = Modifier.size(32.dp)) {

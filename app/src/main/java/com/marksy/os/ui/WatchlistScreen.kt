@@ -441,26 +441,6 @@ private fun WatchDialog(
     )
 }
 
-/** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */
-@Composable
-internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, compact: Boolean = false, onClick: () -> Unit) {
-    val shape = MarksyShape.Pill
-    val fill by androidx.compose.animation.animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
-    Text(
-        text,
-        color = when { selected -> MarksyTheme.OnAccent; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
-        style = if (compact) MarksyType.Caption else MarksyType.Small,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        maxLines = 1,
-        // A compact pill keeps its look but reserves a 48dp touch target around it.
-        modifier = (if (compact) Modifier.minimumInteractiveComponentSize() else Modifier).clip(shape)
-            .background(fill)
-            .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = if (compact) 3.dp else 6.dp)
-    )
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PillRow(content: @Composable () -> Unit) {
