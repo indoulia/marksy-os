@@ -329,6 +329,7 @@ Acceptance: metrics are automatically collected; available by day and by source;
 - Marksy interpretation never overwrites or masquerades as provider facts.
 - News links resolve to the original/source destination when available.
 - No fabricated fundamentals, news, corporate events or sentiment are shown.
+- EPIC-036 to EPIC-040 Play-safe capture: implemented on branch `feat/play-safe-capture`, not merged. Device-verified (OnePlus 12R, Android 16, Phases A and B build): migration 8 to 9 on real data, share target, real ML Kit OCR on shared screenshots (EXTRACTED, REVIEW_REQUIRED, not-a-tip, duplicate, one-time-code drop), log leak check, permission diff. Unit-tested only: gateway, delivery policy, retention, frame inspector, session controller, UI wiring. Not yet on device: Photo Picker, MediaProjection, FLAG_SECURE, review dialog. See `docs/CAPTURE-ARCHITECTURE.md`.
 
 ## EPIC-034 — Market Intelligence Experience & Realtime Hardening
 
@@ -400,6 +401,68 @@ Acceptance: metrics are automatically collected; available by day and by source;
 - Nothing fetched is stored on the device for now.
 - Every section names its source and its period. Missing data is hidden, never estimated.
 - Derived scores are labelled as Marksy calculations, never as provider facts.
+
+## EPIC-036 — Capture Gateway & Source Policy
+
+**Goal:** One boundary for every capture method, with sources allow-listed by Android package identity. Nothing leaves the phone from the gateway.
+
+### Scope
+1. `CaptureGateway`, capture models, lifecycle and workflow states; Room tables `capture_evidence`, `tip_candidates`, `capture_workflows` (migration 8 to 9).
+2. `CaptureSourceRegistry` and `TipExtractor` (never invents a field).
+3. `CandidateDeliveryPolicy` and run: only reviewed, verified-source candidates send, as a canonical line, through the existing `POST /tips/ingest-text` path.
+4. Retention: accepted capture rows 30 days, others 7; unreviewed candidates expire after 3 days.
+
+### Acceptance criteria
+- No image or frame is stored; evidence is a SHA-256 hash.
+- A one-time code anywhere in recognized text drops the capture.
+- Backend contract unchanged.
+
+## EPIC-037 — Screenshot, Share & OCR
+
+**Goal:** Read a tip from a screenshot the user shares or picks, on the device.
+
+### Scope
+1. Share target (`ACTION_SEND image/*`) and Photo Picker; no storage or media permission.
+2. Bundled ML Kit Latin text recognition, long edge capped at 2048 px; bitmap released after use.
+3. Review dialog, "To review" lane and "Add screenshot" action on the Captured screen.
+
+### Acceptance criteria
+- Share provenance is trusted only from `getLaunchedFromPackage` on API 34+; picked images stay on the phone.
+
+## EPIC-038 — MediaProjection Capture
+
+**Goal:** A user-authorized, single-frame screen capture when a notification is only a teaser.
+
+### Scope
+1. Consent every time (app-window choice on API 34+); `mediaProjection` foreground service; one frame, then release and stop; 3 minute timeout.
+2. Protected-screen detection ("This app blocks screen capture"); no bypass, no silent retry.
+3. In-app session indicator with Stop.
+
+### Acceptance criteria
+- No continuous or invisible recording; consent is never cached.
+
+## EPIC-039 — Notification-to-Screen Workflow
+
+**Goal:** Turn a teaser or redacted notification into a captured tip with the user's own taps.
+
+### Scope
+1. `TeaserDetector` and `NotificationCapturePlanner`; workflow states with a 12 hour TTL.
+2. "View tip" and "Capture tip" in the event dialog and Captured screen.
+3. No automated interaction with other apps.
+
+## EPIC-040 — Privacy, Permissions & Validation
+
+**Goal:** Prove the capture paths stay inside their privacy boundaries and document Play considerations.
+
+### Scope
+1. Logs carry ids, enum names and fixed codes only; privacy-boundary tests.
+2. Health capture card.
+3. `docs/CAPTURE-ARCHITECTURE.md`: permission and retention matrices, Play considerations, audit of the existing WhatsApp AccessibilityService (retain, disable for the Play build or remove: open decision), device-test results.
+
+### Open
+- Optional server `captureMethod`/`sourceVerified` field (marksy-api contract change, not done).
+- Accessibility service decision (user).
+- Notes: the plan called these EPIC-010 to EPIC-014; those numbers were taken.
 
 ## Market Experience Implementation Order
 
