@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSymbol by mutableStateOf<String?>(null)
     /** Set by the Ask tile, launcher shortcuts and the Pulse action: which surface to open. */
     private var pendingOpen by mutableStateOf<String?>(null)
-    /** Set by a shared screenshot or a finished screen capture: the tip candidate whose review opens. */
+    /** Set by a shared or picked screenshot or a finished screen capture: the tip candidate whose review opens. */
     private var pendingCaptureReview by mutableStateOf<Long?>(null)
     /** A fixed capture code to explain (e.g. `protected-screen`, `not-a-tip`); never captured text. */
     private var captureNotice by mutableStateOf<String?>(null)
@@ -146,6 +146,14 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) readCaptureExtras(intent)
         else pendingCaptureReview = savedInstanceState.getLong(EXTRA_REVIEW_CANDIDATE, -1L).takeIf { it > 0 }
         if (savedInstanceState == null) takeSharedImage(intent, identityApplies = true)
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                com.marksy.os.capture.CaptureRouting.pending.collect { outcome ->
+                    com.marksy.os.capture.CaptureRouting.reviewCandidate(outcome)?.let { pendingCaptureReview = it }
+                    com.marksy.os.capture.CaptureRouting.notice(outcome)?.let { captureNotice = it }
+                }
+            }
+        }
         lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
@@ -197,11 +205,7 @@ class MainActivity : ComponentActivity() {
         val hint = if (identityApplies && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             com.marksy.os.capture.ShareIntake.sourceHint(launchedFromPackage, packageName)
         } else null
-        lifecycleScope.launch {
-            val outcome = MarksyContainer.imageIntake(applicationContext).intake(contentResolver, uri, com.marksy.os.capture.CaptureMethod.USER_SHARED_IMAGE, hint)
-            com.marksy.os.capture.CaptureRouting.reviewCandidate(outcome)?.let { pendingCaptureReview = it }
-            com.marksy.os.capture.CaptureRouting.notice(outcome)?.let { captureNotice = it }
-        }
+        com.marksy.os.capture.CaptureRouting.intake(applicationContext, uri, com.marksy.os.capture.CaptureMethod.USER_SHARED_IMAGE, hint)
     }
 
     override fun onResume() {

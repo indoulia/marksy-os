@@ -9,7 +9,14 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import com.marksy.os.MainActivity
+import com.marksy.os.data.MarksyContainer
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -90,6 +97,19 @@ object ShareIntake {
 
 /** Where a capture outcome leads in [MainActivity]: a candidate review or a fixed notice code. */
 object CaptureRouting {
+    // Process-lifetime, so a rotation or tab switch never cancels OCR of an image the user handed over.
+    private val intakes = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val outcomes = Channel<CaptureOutcome>(Channel.UNLIMITED)
+
+    /** Shared and picked image outcomes not yet shown; buffered until a (possibly recreated) MainActivity collects them. */
+    val pending: Flow<CaptureOutcome> = outcomes.receiveAsFlow()
+
+    /** Reads the granted image at once, while its URI grant holds, and delivers the outcome to [pending]. */
+    fun intake(context: Context, uri: Uri, method: CaptureMethod, sourceHint: String? = null) {
+        val app = context.applicationContext
+        intakes.launch { outcomes.send(MarksyContainer.imageIntake(app).intake(app.contentResolver, uri, method, sourceHint)) }
+    }
+
     fun reviewCandidate(outcome: CaptureOutcome?): Long? = when (outcome) {
         is CaptureOutcome.Candidate -> outcome.id
         is CaptureOutcome.Duplicate -> outcome.existingCandidateId

@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marksy.os.capture.CaptureMessages
 import com.marksy.os.capture.CaptureMethod
-import com.marksy.os.capture.CaptureRouting
 import com.marksy.os.capture.CaptureState
 import com.marksy.os.capture.WorkflowState
 import com.marksy.os.capture.fields
@@ -75,7 +74,7 @@ class CaptureInbox(
     val isEmpty: Boolean get() = count == 0
 }
 
-/** Live inbox: the candidate and workflow flows, the Photo Picker, and the review dialog it opens. */
+/** Live inbox: the candidate and workflow flows, the Photo Picker, and the review dialog a row opens. */
 @Composable
 fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     val context = LocalContext.current.applicationContext
@@ -83,12 +82,8 @@ fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     val registry = remember { MarksyContainer.captureSources(context) }
     val candidates by dao.observeToReview().collectAsStateWithLifecycle(emptyList())
     val workflows by dao.observeOpenWorkflows().collectAsStateWithLifecycle(emptyList())
-    val notice = rememberNotice()
     var reviewing by rememberSaveable { mutableStateOf<Long?>(null) }
-    val pick = rememberScreenshotPicker { outcome ->
-        CaptureRouting.reviewCandidate(outcome)?.let { reviewing = it }
-        CaptureRouting.notice(outcome)?.let { notice(CaptureMessages.failure(it)) }
-    }
+    val pick = rememberScreenshotPicker()
     reviewing?.let { CaptureReviewHost(it) { reviewing = null } }
     return CaptureInbox(
         candidates, workflows.filter { it.state in TEASER_STATES }, { registry.resolve(it)?.displayName ?: "an app" },
