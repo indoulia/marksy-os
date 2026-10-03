@@ -36,7 +36,7 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         item { Text(r.summary, color = color(r.level), style = MarksyType.Lead, fontWeight = FontWeight.Bold) }
         if (r.diagnostics.isNotEmpty()) {
             items(r.diagnostics) { d ->
-                MarksyCard(border = color(d.level), spacing = 0.dp) {
+                MarksyCard(border = color(d.level)) {
                     Text(d.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
                     d.action?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
                 }
@@ -45,7 +45,7 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         item { SectionLabel("Connectors") }
         item { ConnectorSetupCard() }
         items(r.connectors) { c ->
-            MarksyCard(spacing = 0.dp) {
+            MarksyGroupCard {
                 Text("${c.label} · ${c.status}", color = color(c.level), style = MarksyType.Body)
                 Text(
                     "Uptime 24h: ${c.uptimePercent?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "no lifecycle data yet"} · captured today: ${c.capturedToday}",
@@ -91,7 +91,7 @@ private fun FeedStatsCard() {
         else -> MarksyTheme.YellowImportant
     }
     fun ago(t: Long) = if (t <= 0) "never" else ((now - t) / 1000).let { if (it < 90) "${it}s ago" else "${it / 60}m ago" }
-    MarksyCard(spacing = 0.dp) {
+    MarksyGroupCard {
         Text("Upstox feed · ${freshness.name.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }}", color = tone, style = MarksyType.Body)
         Text(
             "Last tick ${ago(lastTick)} · ${stats.subscribed} instruments · ${stats.ticks} updates · connects ${stats.connects}, drops ${stats.drops}" +

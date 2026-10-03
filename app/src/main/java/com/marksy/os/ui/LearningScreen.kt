@@ -65,7 +65,7 @@ fun LearningScreen(
             item { InlineEmpty("Nothing learned yet") }
         }
         items(subjects, key = { "${it.subject.type}|${it.subject.key}" }) { p ->
-            MarksyCard(spacing = 0.dp) {
+            MarksyGroupCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                     val sign = if (p.adjustment > 0) "+" else ""
@@ -116,7 +116,7 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
             busy = false
         }
     }
-    MarksyCard(spacing = 0.dp) {
+    MarksyGroupCard {
         Text("On-device AI", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
         if (status.isEmpty()) {
             Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)

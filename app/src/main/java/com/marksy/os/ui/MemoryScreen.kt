@@ -95,7 +95,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
 @Composable
 private fun MemoryRow(e: MemoryEntryEntity, onForget: () -> Unit, onRename: () -> Unit) {
     val cadence = runCatching { org.json.JSONObject(e.detailJson).optInt("cadenceDays", 0) }.getOrDefault(0)
-    MarksyCard(spacing = 0.dp) {
+    MarksyGroupCard {
         Text(e.label, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
         Text(
             buildString {

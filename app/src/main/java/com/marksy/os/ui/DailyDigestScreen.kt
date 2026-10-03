@@ -157,7 +157,7 @@ private const val MAX_ATTENTION_ROWS = 5
 
 @Composable
 private fun DigestCard(borderColor: Color = MarksyTheme.BorderGlow, content: @Composable ColumnScope.() -> Unit) {
-    MarksyCard(border = borderColor, padding = PaddingValues(horizontal = MarksySpace.Section, vertical = MarksySpace.CardPadding), spacing = 0.dp, content = content)
+    MarksyCard(border = borderColor, content = content)
 }
 
 @Composable

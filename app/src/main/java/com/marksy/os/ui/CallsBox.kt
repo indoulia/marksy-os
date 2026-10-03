@@ -49,7 +49,7 @@ internal fun CallsBox(
     fun follow(key: FollowKey, name: String) =
         FollowState(followed?.takeIf { onToggleFollow != null }?.contains(key)) { onToggleFollow?.invoke(key, name, it) }
     val leading = remember(calls) { LedgerCalls.leadingMarksyCall(calls) != null }
-    MarksyCard(border = if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, spacing = 0.dp) {
+    MarksyRowCard(border = if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow) {
         Text("MARKSY", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Label)
         calls.engines.forEach { e ->
             CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip, follow(FollowKey.caller(e.callerId), e.name))
