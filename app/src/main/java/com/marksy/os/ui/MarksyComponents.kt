@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -111,9 +112,9 @@ fun MarksyStat(label: String, value: String, modifier: Modifier = Modifier, valu
         modifier.marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
     ) {
-        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1)
-        Text(value, color = valueColor, style = MarksyType.Lead, maxLines = 1)
-        note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1) }
+        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, color = valueColor, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
 }
 
