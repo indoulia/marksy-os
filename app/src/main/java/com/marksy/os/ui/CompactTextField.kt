@@ -52,7 +52,7 @@ fun CompactTextField(
     val focused by interaction.collectIsFocusedAsState()
     Column(modifier) {
         if (label != null) {
-            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))
+            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(start = MarksySpace.Tight, bottom = MarksySpace.Tight))
         }
         BasicTextField(
             value = value,
@@ -73,11 +73,11 @@ fun CompactTextField(
                         .clip(shape)
                         .background(MarksyTheme.Surface)
                         .border(MarksySpace.Border, if (focused) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
-                        .padding(start = 12.dp, end = if (trailing != null) 4.dp else 12.dp),
+                        .padding(start = MarksySpace.CardPadding, end = if (trailing != null) MarksySpace.Tight else MarksySpace.CardPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (leadingIcon != null) {
-                        Icon(leadingIcon, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                        Icon(leadingIcon, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
                         Spacer(Modifier.width(8.dp))
                     }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {

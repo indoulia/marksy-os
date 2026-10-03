@@ -507,7 +507,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .collapsingHeader(headerState)
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Inner),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -538,7 +538,7 @@ class MainActivity : ComponentActivity() {
                                 MarksyBadge("LIVE", MarksyTheme.OnAccent, MarksyTheme.PrimaryEmerald)
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
                             HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy") { closeSubScreens(); showAsk = true }
                             HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan") { closeSubScreens(); showPlan = true }
                             HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile & settings") { closeSubScreens(); selectedTab = tabs.size }
@@ -589,7 +589,7 @@ class MainActivity : ComponentActivity() {
         ) { scaffoldPadding ->
             // Every page below the shared top bar starts the same distance from it.
             val padding = if (onHome) scaffoldPadding
-            else PaddingValues(top = scaffoldPadding.calculateTopPadding() + 10.dp, bottom = scaffoldPadding.calculateBottomPadding())
+            else PaddingValues(top = scaffoldPadding.calculateTopPadding() + MarksySpace.ListGap, bottom = scaffoldPadding.calculateBottomPadding())
             when {
                 showValidation -> Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) {
                     ValidationScreen(validationRepository, padding)
@@ -876,7 +876,7 @@ class MainActivity : ComponentActivity() {
 @Composable private fun TimelineHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { TimelineScreen(events, PaddingValues(), onEventSelected) } }
 @Composable private fun CalendarHost(events: List<NotificationEventEntity>, padding: PaddingValues, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())) { CalendarScreen(events = events, padding = PaddingValues(), onEventSelected = onEventSelected) } }
 @Composable private fun InsightsHost(events: List<NotificationEventEntity>, padding: PaddingValues, market: MarketState, onCategorySelected: (String) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { InsightsScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), market = market, onCategorySelected = onCategorySelected) } }
-@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { val links = rememberCollapsingHeaderState(); Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding()).nestedScroll(links.connection)) { Row(Modifier.collapsingHeader(links).padding(horizontal = 10.dp, vertical = 6.dp)) { MarksyButton("What Marksy learned", onClick = onOpenLearning, style = MarksyButtonStyle.Text); MarksyButton("What Marksy remembers", onClick = onOpenMemory, style = MarksyButtonStyle.Text) }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
+@Composable private fun RulesHost(padding: PaddingValues, onOpenLearning: () -> Unit, onOpenMemory: () -> Unit) { val links = rememberCollapsingHeaderState(); Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding()).nestedScroll(links.connection)) { Row(Modifier.collapsingHeader(links).padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Inner)) { MarksyButton("What Marksy learned", onClick = onOpenLearning, style = MarksyButtonStyle.Text); MarksyButton("What Marksy remembers", onClick = onOpenMemory, style = MarksyButtonStyle.Text) }; RulesScreen(PaddingValues(bottom = padding.calculateBottomPadding())) } }
 @Composable private fun DigestHost(events: List<NotificationEventEntity>, padding: PaddingValues, onOpenInbox: (String) -> Unit, onOpenTrading: () -> Unit, onEventSelected: (NotificationEventEntity) -> Unit) { Column(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding())) { DailyDigestScreen(events = events, padding = PaddingValues(bottom = padding.calculateBottomPadding()), onOpenInbox = onOpenInbox, onOpenTrading = onOpenTrading, onEventSelected = onEventSelected) } }
 
 @Composable private fun MoreScreen(
@@ -911,7 +911,7 @@ class MainActivity : ComponentActivity() {
     LazyColumn(
         Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding),
         contentPadding = PaddingValues(MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
     ) {
         item {
             Text("Rules, daily digest, insights and local data controls.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
@@ -920,7 +920,7 @@ class MainActivity : ComponentActivity() {
             // Profile Banner Card
             Box(Modifier.fillMaxWidth().marksyCard(MarksyTheme.PrimaryEmerald).clickable(onClick = openGatewaySettings)) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(MarksySpace.Wide),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -1013,7 +1013,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable internal fun EmptyState(title: String, message: String) {
-    Column(Modifier.fillMaxWidth().marksyCard().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.Gutter), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
         Spacer(Modifier.height(MarksySpace.Inner))
         Text(message, color = MarksyTheme.TextSecondary, style = MarksyType.Small)

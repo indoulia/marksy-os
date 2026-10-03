@@ -98,7 +98,7 @@ fun WatchlistButton(symbol: String, modifier: Modifier = Modifier) {
         if (watched) Icons.Filled.BookmarkAdded else Icons.Outlined.BookmarkAdd,
         contentDescription = if (watched) "$s is in a watchlist" else "Add $s to a watchlist",
         tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-        modifier = modifier.size(30.dp).clip(CircleShape).clickable { adder.open(s) }.padding(5.dp)
+        modifier = modifier.size(30.dp).clip(CircleShape).clickable { adder.open(s) }.padding(MarksySpace.Inner)
     )
 }
 
@@ -169,7 +169,7 @@ fun WatchlistScreen(
         val q = query.trim()
         when {
             q.length >= 2 -> StockSuggestions(q, inner, onSymbolSelected = { adder?.open(it) }, emptyHint = "Try the company's NSE symbol, e.g. HAL.")
-            list == null -> Box(Modifier.padding(18.dp)) {
+            list == null -> Box(Modifier.padding(MarksySpace.Gutter)) {
                 EmptyState("No watchlists yet", "Tap the bottom-left button to create one, e.g. Defence or SmallCap, then tap search above to add stocks.")
             }
             else -> WatchlistRows(
@@ -252,7 +252,7 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
         onDismissRequest = onDismiss,
         title = { Text("Add to ${list.name}  ${inList.size}/${WatchlistRepository.MAX_STOCKS}") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                 MarksySearchField(query, { query = it; note = null }, "Search NSE symbol or name…", Modifier.fillMaxWidth(), symbols = true, lifted = false)
                 note?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 val found = matches
@@ -275,7 +275,7 @@ private fun QuickAddStockDialog(repository: WatchlistRepository, list: Watchlist
                                 }
                                 pending = null
                             }
-                        }.padding(horizontal = 4.dp, vertical = 10.dp),
+                        }.padding(horizontal = MarksySpace.Tight, vertical = MarksySpace.ListGap),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
@@ -317,7 +317,7 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
         onDismissRequest = onDismiss,
         title = { Text("Watchlists") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                 if (lists.isEmpty()) Text("No watchlists yet", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
                 rankedWatchlists(lists, items).forEach { w ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -339,8 +339,8 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
 private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit, onAdd: () -> Unit) {
     val quotes = rememberUpstoxQuotes(remember(rows) { rows.map { it.symbol } })
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding())
     ) {
         if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Add up to ${WatchlistRepository.MAX_STOCKS} stocks below.") }
@@ -362,11 +362,11 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
 private fun AddStocksButton(count: Int, onClick: () -> Unit) {
     val shape = MarksyShape.Card
     Row(
-        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = 12.dp),
+        Modifier.fillMaxWidth().clip(shape).border(MarksySpace.Border, MarksyTheme.BorderGlow, shape).clickable(onClick = onClick).padding(vertical = MarksySpace.CardPadding),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.Add, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
         Text(
             "  Add stocks  $count/${WatchlistRepository.MAX_STOCKS}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold
         )
@@ -376,7 +376,7 @@ private fun AddStocksButton(count: Int, onClick: () -> Unit) {
 @Composable
 private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.Section, vertical = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -435,7 +435,7 @@ private fun WatchDialog(
     MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), content = content) },
         dismissButton = { MarksyButton("Cancel", onClick = onDismiss, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) },
         confirmButton = { MarksyButton(confirmLabel, onClick = onConfirm, style = MarksyButtonStyle.Text, color = confirmColor, enabled = confirmEnabled) }
     )
@@ -444,7 +444,7 @@ private fun WatchDialog(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PillRow(content: @Composable () -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) { content() }
 }
 
 /** [onAdd] returns an error to show, or null once added. */
@@ -519,7 +519,7 @@ private fun ListNameField(name: String, onNameChange: (String) -> Unit, existing
             suggestions.forEach { s ->
                 Text(
                     s, color = MarksyTheme.TextPrimary, style = MarksyType.Body,
-                    modifier = Modifier.fillMaxWidth().clickable { onNameChange(s) }.padding(horizontal = 12.dp, vertical = 9.dp)
+                    modifier = Modifier.fillMaxWidth().clickable { onNameChange(s) }.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap)
                 )
             }
         }

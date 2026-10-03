@@ -19,7 +19,7 @@ class PlanTextTest {
         assertEquals("3 Jan 2027", PlanText.dueLabel(at(2027, 1, 3), now, zone))
         assertEquals("Overdue · yesterday", PlanText.dueLabel(at(2026, 9, 24), now, zone))
         assertEquals("Overdue · 31 days", PlanText.dueLabel(at(2026, 8, 25), now, zone))
-        assertEquals("Today · 6:30 PM", PlanText.dueLabel(at(2026, 9, 25, 18, 30), now, zone))
+        assertEquals("Today · 18:30", PlanText.dueLabel(at(2026, 9, 25, 18, 30), now, zone))
         assertNull(PlanText.dueLabel(null, now, zone))
     }
 

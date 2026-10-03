@@ -85,12 +85,12 @@ class UpstoxSignInActivity : ComponentActivity() {
                     problem?.let { message ->
                         val shape = MarksyShape.Panel
                         Column(
-                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp)
-                                .background(MarksyTheme.Surface, shape).border(MarksySpace.Border, MarksyTheme.Warning, shape).padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(MarksySpace.Wide)
+                                .background(MarksyTheme.Surface, shape).border(MarksySpace.Border, MarksyTheme.Warning, shape).padding(MarksySpace.Section),
+                            verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
                         ) {
                             Text(message, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                                 Pill("Try again") { retry() }
                                 Pill("Close") { finish() }
                             }
