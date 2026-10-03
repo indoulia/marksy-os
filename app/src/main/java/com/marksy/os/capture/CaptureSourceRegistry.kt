@@ -17,7 +17,9 @@ class CaptureSourceRegistry(
     /** `CaptureStore.capturePackages()`: null until the server capture list was fetched once. */
     private val capturePackages: () -> Set<String>?,
     private val displayName: (String) -> String,
-    private val marketPackages: Set<String> = NotificationClassifier.marketSourcePackages
+    private val marketPackages: Set<String> = NotificationClassifier.marketSourcePackages,
+    /** Only the review picker asks; delivery resolves a package whether or not it is installed. */
+    private val isInstalled: (String) -> Boolean = { true }
 ) {
     fun captureListKnown(): Boolean = capturePackages() != null
 
@@ -32,8 +34,8 @@ class CaptureSourceRegistry(
         return CaptureSource(pkg, displayName(pkg), medium, offersScreenCapture = true, deliverable = listed)
     }
 
-    /** App sources a user may pick for an unverified capture. */
+    /** Installed app sources a user may pick for an unverified capture, one per label. */
     fun allowListed(): List<CaptureSource> =
-        (capturePackages().orEmpty() + marketPackages).mapNotNull(::resolve).filter { it.medium == CaptureMedium.APP_NOTIFICATION }
-            .distinctBy { it.packageName }.sortedBy { it.displayName.lowercase(Locale.ROOT) }
+        (capturePackages().orEmpty() + marketPackages).mapNotNull(::resolve).filter { it.medium == CaptureMedium.APP_NOTIFICATION && isInstalled(it.packageName) }
+            .distinctBy { it.packageName }.distinctBy { it.displayName.lowercase(Locale.ROOT) }.sortedBy { it.displayName.lowercase(Locale.ROOT) }
 }

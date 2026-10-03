@@ -43,6 +43,19 @@ class CaptureSourceRegistryTest {
         assertTrue(registry.allowListed().none { it.medium != CaptureMedium.APP_NOTIFICATION })
     }
 
+    // The review picker lists installed apps once per label; an uninstalled package would show its package-name fallback.
+    @Test
+    fun pickerListsInstalledAppsOncePerLabel() {
+        val labels = mapOf("com.research.app" to "Research", "com.zerodha.kite3" to "Kite", "com.zerodha.kite.lite" to "kite", "com.broker.pro" to "pro")
+        val picker = CaptureSourceRegistry(
+            capturePackages = { setOf("com.research.app", "com.zerodha.kite3") }, displayName = { labels.getValue(it) },
+            marketPackages = setOf("com.zerodha.kite.lite", "com.broker.pro"), isInstalled = { it != "com.broker.pro" }
+        )
+        assertEquals(listOf("com.zerodha.kite3", "com.research.app"), picker.allowListed().map { it.packageName })
+        // Delivery resolves an allow-listed package whether or not it is installed.
+        assertTrue(picker.resolve("com.broker.pro")!!.offersScreenCapture)
+    }
+
     @Test
     fun captureListNotYetFetched() {
         captureList = null

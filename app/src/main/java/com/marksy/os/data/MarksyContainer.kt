@@ -55,7 +55,10 @@ object MarksyContainer {
     fun captureSources(context: Context): com.marksy.os.capture.CaptureSourceRegistry {
         val app = context.applicationContext
         val store = com.marksy.os.gateway.CaptureStore(app)
-        return com.marksy.os.capture.CaptureSourceRegistry(store::capturePackages, { com.marksy.os.notification.SourceRegistry.displayName(app, it) })
+        return com.marksy.os.capture.CaptureSourceRegistry(
+            store::capturePackages, { com.marksy.os.notification.SourceRegistry.displayName(app, it) },
+            isInstalled = { runCatching { app.packageManager.getApplicationInfo(it, 0) }.isSuccess }
+        )
     }
 
     fun captureGateway(context: Context): com.marksy.os.capture.CaptureGateway {
