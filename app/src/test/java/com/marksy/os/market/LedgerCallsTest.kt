@@ -16,7 +16,7 @@ class LedgerCallsTest {
 
         assertEquals("Exited · Failed", LedgerCalls.state(withdrawn))
         assertEquals(LedgerCalls.Tone.NEGATIVE, LedgerCalls.tone(withdrawn))
-        assertEquals("-3.00%", LedgerCalls.progressText(withdrawn))
+        assertEquals("−3.00%", LedgerCalls.progressText(withdrawn))
         assertEquals("Invalidated · never entered", LedgerCalls.state(neverEntered))
         assertEquals(LedgerCalls.Tone.MUTED, LedgerCalls.tone(neverEntered))
     }
@@ -25,7 +25,7 @@ class LedgerCallsTest {
     fun aProvisionalReturnIsLabelledAndAFinalOneIsNot() {
         assertEquals("+2.00% so far · provisional", LedgerCalls.progressText(tip(progress = point(0.02, "PROVISIONAL"))))
         assertEquals("+2.00% so far", LedgerCalls.progressText(tip(progress = point(0.02, "FINAL"))))
-        assertEquals("22 Sep · S2 · +2.00% · best +2.00% · worst +0.00% · provisional", LedgerCalls.progressLine(point(0.02, "PROVISIONAL")))
+        assertEquals("22 Sep · S2 · +2.00% · best +2.00% · worst 0.00% · provisional", LedgerCalls.progressLine(point(0.02, "PROVISIONAL")))
         assertNull(LedgerCalls.progressText(tip(entryStatus = "WAITING", progress = point(null, "FINAL"))))
     }
 
@@ -64,7 +64,7 @@ class LedgerCallsTest {
         ))
 
         assertFalse(LedgerCalls.isLive(withdrawn))
-        assertEquals("Exited · Failed · -3.00%", LedgerCalls.endedLine(withdrawn))
+        assertEquals("Exited · Failed · −3.00%", LedgerCalls.endedLine(withdrawn))
         assertNull(LedgerCalls.lifecycleWord(withdrawn))
         assertEquals("Withdrawn · result pending", LedgerCalls.endedLine(pending))
         assertTrue(LedgerCalls.isLive(prediction("ACTIONABLE_NOW", ledgerJson("ACTIVE"))))

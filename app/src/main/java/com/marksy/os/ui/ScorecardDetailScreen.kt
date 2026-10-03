@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.CallerScorecardDto
 import com.marksy.os.market.FollowKey
 import com.marksy.os.market.Follows
@@ -58,7 +58,6 @@ import com.marksy.os.market.SeriesPointDto
 import com.marksy.os.market.TopSymbolDto
 import com.marksy.os.market.TrustBandDto
 import java.time.LocalDate
-import java.util.Locale
 
 private const val RECENT_PREVIEW = 5
 
@@ -86,9 +85,9 @@ internal fun ScorecardDetailContent(
     var openTip by remember(source) { mutableStateOf<String?>(null) }
     openTip?.let { id -> tipDialog(id) { openTip = null } }
     LazyColumn(
-        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         when (state) {
             is MarketDataState.Loaded -> {
@@ -126,23 +125,23 @@ internal fun ScorecardDetailContent(
             }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Scorecard unavailable", state.message) }
-            else -> item { MarksyLoader("Loading ${source.name}...") }
+            else -> item { MarksyLoader("Loading ${source.name}…") }
         }
     }
 }
 
 @Composable
-private fun CardTitle(text: String) = Text(text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+private fun CardTitle(text: String) = Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
 
 @Composable
 private fun Hero(d: ScorecardDetailDto, name: String, following: Boolean, onToggleFollow: (Boolean) -> Unit) {
     val since = d.card.filter.startDate?.let { runCatching { "since ${ScorecardText.date(LocalDate.parse(it))}" }.getOrNull() }
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        TrustRing(d.card.body.trust.trustScore, 120.dp, 12.dp, 40.sp)
+        TrustRing(d.card.body.trust.trustScore, 120.dp, 12.dp, MarksyType.Display)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Column {
-                Text(name, color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 26.sp)
-                Text(listOfNotNull(ScorecardSources.kind(d), since).joinToString(" · "), color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Display, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(ScorecardSources.kind(d), since).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             HitRateBandBar(d.trustBand, d.card.body.performance.hitRatePct, d.card.body.trust)
             FollowPill(following, onToggleFollow)
@@ -170,10 +169,10 @@ private fun HitRateBandBar(band: TrustBandDto?, hitRatePct: Double?, trust: Scor
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (band != null) {
-                Text("0", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                Text(ScorecardGraphics.hitRateRangeText(band), color = MarksyTheme.TextMuted, fontSize = 10.sp)
-                Text("100", color = MarksyTheme.TextMuted, fontSize = 10.sp)
-            } else Text("${trust.completed}/${trust.minimumCompleted} completed for a hit-rate range", color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1)
+                Text("0", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                Text(ScorecardGraphics.hitRateRangeText(band), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                Text("100", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            } else Text("${trust.completed}/${trust.minimumCompleted} completed for a hit-rate range", color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
         }
     }
 }
@@ -184,7 +183,7 @@ private fun KpiTiles(d: ScorecardDetailDto) {
     val c = d.card.body.counts
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            KpiTile(p.hitRatePct?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—", "Hit rate", Modifier.weight(1f).fillMaxHeight()) {
+            KpiTile(p.hitRatePct?.let { MarksyFormat.percent(it, 1, signed = false) } ?: "—", "Hit rate", Modifier.weight(1f).fillMaxHeight()) {
                 ValueRing(ScorecardGraphics.ringFraction(p.hitRatePct), ScorecardGraphics.tone(p.hitRatePct), 48.dp, 6.dp, dashed = p.hitRatePct == null)
             }
             val ret = p.avgActualReturn
@@ -198,17 +197,17 @@ private fun KpiTiles(d: ScorecardDetailDto) {
         Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight().scoreCard(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${c.completed}", color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                    Text("/${c.total}", color = MarksyTheme.TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text("${c.completed}", color = MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                    Text("/${c.total}", color = MarksyTheme.TextMuted, style = MarksyType.Small, fontFamily = FontFamily.Monospace)
                 }
                 val done = ScorecardGraphics.shares(listOf(c.completed, (c.total - c.completed).coerceAtLeast(0))).first()
-                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(MarksyTheme.SurfaceRaised)) {
+                Box(Modifier.fillMaxWidth().height(8.dp).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
                     if (done > 0f) Box(Modifier.fillMaxWidth(done).fillMaxHeight().background(MarksyTheme.SecondaryCyan))
                 }
-                Text("Completed", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("Completed", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
-            KpiTile(p.avgDaysToCompletion?.let { String.format(Locale.US, "%.1fd", it) } ?: "—", "To outcome", Modifier.weight(1f).fillMaxHeight()) {
-                IconDisc(Icons.Default.Schedule, MarksyTheme.BlueFinance, MarksyTheme.BadgeFinanceBg)
+            KpiTile(p.avgDaysToCompletion?.let { MarksyFormat.number(it, 1) + "d" } ?: "—", "To outcome", Modifier.weight(1f).fillMaxHeight()) {
+                IconDisc(Icons.Default.Schedule, MarksyTheme.Info, MarksyTheme.BadgeFinanceBg)
             }
         }
     }
@@ -219,8 +218,8 @@ private fun KpiTile(value: String, label: String, modifier: Modifier, valueColor
     Row(modifier.scoreCard(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         graphic()
         Column {
-            Text(value, color = valueColor ?: MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, maxLines = 1)
-            Text(label, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1)
+            Text(value, color = valueColor ?: MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace, maxLines = 1)
+            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
         }
     }
 }
@@ -236,7 +235,7 @@ private fun IconDisc(icon: ImageVector, tint: Color, fill: Color) {
 private fun OutcomeDonut(d: ScorecardDetailDto) {
     val c = d.card.body.counts
     val parts = listOf(
-        Triple("Target hit", c.successful, MarksyTheme.PrimaryEmerald), Triple("Stop hit", c.failed, MarksyTheme.RedUrgent),
+        Triple("Target hit", c.successful, MarksyTheme.PrimaryEmerald), Triple("Stop hit", c.failed, MarksyTheme.Negative),
         Triple("Expired", c.expired, MarksyTheme.TextMuted), Triple("Open", c.open, MarksyTheme.SecondaryCyan),
         Triple("Invalidated", c.invalidated, MarksyTheme.TextMuted.copy(alpha = .4f))
     )
@@ -253,8 +252,8 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${c.total}", color = MarksyTheme.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black, lineHeight = 26.sp)
-                Text("CALLS", color = MarksyTheme.TextSecondary, fontSize = 9.sp, letterSpacing = 1.sp)
+                Text("${c.total}", color = MarksyTheme.TextPrimary, style = MarksyType.Display)
+                Text("CALLS", color = MarksyTheme.TextSecondary, style = MarksyType.Caption)
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -262,8 +261,8 @@ private fun OutcomeDonut(d: ScorecardDetailDto) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(color))
                     Spacer(Modifier.width(8.dp))
-                    Text(label, color = MarksyTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text("$n", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
+                    Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Body, modifier = Modifier.weight(1f), maxLines = 1)
+                    Text("$n", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
                 }
             }
         }
@@ -281,24 +280,24 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
     val measurer = rememberTextMeasurer()
     Column(Modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Returns", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("Returns", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             ReturnRange.entries.forEach { r ->
                 val on = r == range
                 val fill by androidx.compose.animation.animateColorAsState(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent, label = "range")
-                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(fill).clickable { range = r }.padding(horizontal = 7.dp, vertical = 4.dp)) {
-                    Text(r.label, color = if (on) Color.Black else MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+                Box(Modifier.clip(MarksyShape.Chip).background(fill).clickable { range = r }.padding(horizontal = 7.dp, vertical = 4.dp)) {
+                    Text(r.label, color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
                 }
             }
         }
         Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
-            if (points.isEmpty()) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, fontSize = 12.sp)
+            if (points.isEmpty()) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
             else Canvas(Modifier.fillMaxSize()) {
                 val (lo, hi) = ScorecardGraphics.bounds(realised, promised)
                 val pad = 6.dp.toPx()
                 fun at(p: Pair<Float, Float>) = Offset(p.first * size.width, pad + p.second * (size.height - 2 * pad))
                 val zero = at(0f to ScorecardGraphics.chartPoints(listOf(0.0), lo, hi).first().second).y
                 drawLine(MarksyTheme.TextMuted, Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())))
-                drawText(measurer, "0%", Offset(2.dp.toPx(), (zero - 15.dp.toPx()).coerceAtLeast(0f)), TextStyle(color = MarksyTheme.TextMuted, fontSize = 10.sp))
+                drawText(measurer, "0%", Offset(2.dp.toPx(), (zero - 15.dp.toPx()).coerceAtLeast(0f)), MarksyType.Caption.copy(color = MarksyTheme.TextMuted))
                 val r = ScorecardGraphics.chartPoints(realised, lo, hi).map(::at)
                 val pr = ScorecardGraphics.chartPoints(promised, lo, hi).map(::at)
                 fun line(pts: List<Offset>) = Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
@@ -313,17 +312,17 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp, 3.dp).background(tint))
                 Spacer(Modifier.width(6.dp))
-                Text("Avg realised${realised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("Avg realised${realised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Canvas(Modifier.size(14.dp, 3.dp)) {
                     drawLine(MarksyTheme.SecondaryCyan, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Avg promised${promised.lastOrNull()?.let { String.format(Locale.US, " %+.2f%%", it) } ?: ""}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text("Avg promised${promised.lastOrNull()?.let { " " + MarksyFormat.percent(it) } ?: ""}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
             Spacer(Modifier.weight(1f))
-            if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            if (calls > 0) Text("$calls closed", color = MarksyTheme.TextMuted, style = MarksyType.Meta, fontFamily = FontFamily.Monospace)
         }
     }
 }
@@ -339,9 +338,9 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
                         val share = ((b.hitRatePct ?: 0.0) / 100).coerceIn(.04, 1.0).toFloat()
-                        Box(Modifier.widthIn(max = 22.dp).fillMaxWidth().fillMaxHeight(share).clip(RoundedCornerShape(6.dp)).background(ScorecardGraphics.tone(b.hitRatePct)))
+                        Box(Modifier.widthIn(max = 22.dp).fillMaxWidth().fillMaxHeight(share).clip(MarksyShape.Chip).background(ScorecardGraphics.tone(b.hitRatePct)))
                     }
-                    Text(HorizonLabels[b.horizon] ?: b.horizon, color = MarksyTheme.TextMuted, fontSize = 9.sp, maxLines = 1)
+                    Text(HorizonLabels[b.horizon] ?: b.horizon, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
                 }
             }
         }
@@ -352,7 +351,7 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
 private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
     val (share, tint) = ScorecardGraphics.gauge(realizationPct)
     Column(modifier.scoreCard(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Delivered vs promised", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Start))
+        Text("Delivered vs promised", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Start))
         Spacer(Modifier.weight(1f))
         Canvas(Modifier.size(120.dp, 66.dp)) {
             val w = 12.dp.toPx()
@@ -362,7 +361,7 @@ private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
             if (share > 0f) drawArc(tint, 180f, 180f * share, false, topLeft, Size(d, d), style = Stroke(w, cap = StrokeCap.Round))
         }
         Text(
-            realizationPct?.let { String.format(Locale.US, "%.0f%%", it) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.RedUrgent else MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+            realizationPct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = if ((realizationPct ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Heading, fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -373,10 +372,7 @@ private fun RecentCalls(recent: List<LedgerTipDto>, onOpen: (String) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardTitle("Recent calls")
             Spacer(Modifier.weight(1f))
-            if (recent.size > RECENT_PREVIEW) Text(
-                if (all) "Show less" else "Show all recent", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { all = !all }.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
+            if (recent.size > RECENT_PREVIEW) MarksyButton(if (all) "Show less" else "Show all recent", { all = !all }, style = MarksyButtonStyle.Text)
         }
         (if (all) recent else recent.take(RECENT_PREVIEW)).forEach { t -> CallRow(t) { onOpen(t.tipId) } }
     }
@@ -388,26 +384,26 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
     val dot = when {
         active -> MarksyTheme.SecondaryCyan
         t.outcome == "SUCCESS" -> MarksyTheme.PrimaryEmerald
-        t.outcome == "FAILURE" -> MarksyTheme.RedUrgent
+        t.outcome == "FAILURE" -> MarksyTheme.Negative
         else -> MarksyTheme.TextMuted
     }
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
-            Text(t.symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(t.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
             t.direction?.let { side ->
                 val buy = side == "BUY"
-                TagChip(side, if (buy) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, if (buy) MarksyTheme.BadgeTradingBg else MarksyTheme.BadgeUrgentBg)
+                TagChip(side, if (buy) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative, if (buy) MarksyTheme.BadgeTradingBg else MarksyTheme.BadgeUrgentBg)
             }
-            Text("seen ${LedgerCalls.day(t.firstSeenAt)}", color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, modifier = Modifier.weight(1f))
-            ReturnBadge(if (active) t.latestProgress?.returnToDate else t.actualReturn, fontSize = 12.sp, waiting = active)
+            Text("seen ${LedgerCalls.day(t.firstSeenAt)}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, modifier = Modifier.weight(1f))
+            ReturnBadge(if (active) t.latestProgress?.returnToDate else t.actualReturn, style = MarksyType.Small, waiting = active)
         }
         val entry = ScorecardGraphics.entryPosition(t)
         val now = ScorecardGraphics.levelPosition(t)
         if (entry != null && now != null) Canvas(Modifier.fillMaxWidth().height(14.dp)) {
             val mid = size.height / 2
             val h = 6.dp.toPx()
-            val loss = MarksyTheme.RedUrgent.copy(alpha = .35f).compositeOver(MarksyTheme.Surface)
+            val loss = MarksyTheme.Negative.copy(alpha = .35f).compositeOver(MarksyTheme.Surface)
             drawLine(MarksyTheme.PrimaryEmerald.copy(alpha = .35f).compositeOver(MarksyTheme.Surface), Offset(h / 2, mid), Offset(size.width - h / 2, mid), h, StrokeCap.Round)
             drawCircle(loss, h / 2, Offset(h / 2, mid))
             drawLine(loss, Offset(h / 2, mid), Offset((size.width * entry).coerceAtLeast(h / 2), mid), h, StrokeCap.Butt)
@@ -424,17 +420,16 @@ private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
     val (fg, bg, edge) = when {
         r == null || r == 0.0 -> Triple(MarksyTheme.TextSecondary, MarksyTheme.SurfaceRaised, MarksyTheme.BorderGlow)
         r > 0 -> Triple(MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, MarksyTheme.BorderGlow)
-        else -> Triple(MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg, MarksyTheme.RedUrgent.copy(alpha = .3f))
+        else -> Triple(MarksyTheme.Negative, MarksyTheme.BadgeUrgentBg, MarksyTheme.Negative.copy(alpha = .3f))
     }
-    val shape = RoundedCornerShape(14.dp)
     Row(
-        Modifier.clip(shape).background(bg).border(1.dp, edge, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.clip(MarksyShape.Card).background(bg).border(MarksySpace.Border, edge, MarksyShape.Card).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(s.symbol, color = fg, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(s.symbol, color = fg, style = MarksyType.Small, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(
-            "${s.calls}", color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, lineHeight = 10.sp,
-            modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(fg.copy(alpha = .16f)).padding(horizontal = 5.dp, vertical = 1.dp)
+            "${s.calls}", color = fg, style = MarksyType.Caption, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.clip(MarksyShape.Chip).background(fg.copy(alpha = .16f)).padding(horizontal = 5.dp, vertical = 1.dp)
         )
     }
 }
@@ -446,11 +441,11 @@ private fun CallerRow(c: CallerScorecardDto, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(end = OneHandRowEndClearance),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically
     ) {
-        TrustRing(h.trustScore, 36.dp, 4.dp, 12.sp, caption = false)
+        TrustRing(h.trustScore, 36.dp, 4.dp, MarksyType.Small, caption = false)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text(c.name, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(c.name, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             OutcomeBar(h.successful, h.failed, h.expired, h.open, height = 4.dp)
         }
-        ReturnBadge(h.avgActualReturn, fontSize = 11.sp)
+        ReturnBadge(h.avgActualReturn, style = MarksyType.Meta)
     }
 }

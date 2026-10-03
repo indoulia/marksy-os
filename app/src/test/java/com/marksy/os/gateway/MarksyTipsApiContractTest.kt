@@ -87,7 +87,7 @@ class MarksyTipsApiContractTest {
 
         val insight = ledgerInsight(7L, "TIP", "t-1", data)
 
-        assertEquals("Exited · Failed · -3.00%", insight.summary)
+        assertEquals("Exited · Failed · −3.00%", insight.summary)
         assertEquals("TIP", insight.action)
         assertNull(insight.verdict)
         assertFalse(insight.rawResponseJson!!.contains("AGREE"))

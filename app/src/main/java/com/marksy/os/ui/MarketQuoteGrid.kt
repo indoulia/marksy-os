@@ -1,12 +1,8 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,31 +18,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.marksy.os.MarksyFormat
 
 /** One boxed section, two entries per row: name on top, price and day change beneath. */
 @Composable
 internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Double?>>, watchable: Boolean = false, onOpen: ((String) -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-    ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    MarksyCard {
+        Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+            Text(title, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold)
             items.chunked(2).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     row.forEach { (name, price, change) ->
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
+                        Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(name, color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 if (watchable) WatchlistButton(name, Modifier.size(24.dp))
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(price, color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
                                 change?.let { pct ->
                                     Spacer(Modifier.width(6.dp))
-                                    Text(String.format(java.util.Locale.US, "%+.2f%%", pct), color = if (pct < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text(MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
                         }
@@ -68,14 +60,14 @@ internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, mo
     val down by androidx.compose.animation.core.animateFloatAsState(b.declines.toFloat(), label = "dec")
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = "$label: ${b.advances} advancing, ${b.declines} declining, ${b.unchanged} unchanged" }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("▲ ${b.advances}", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("$label${if (b.unchanged > 0) " · ${b.unchanged} unch." else ""}", color = MarksyTheme.TextMuted, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
-            Text("${b.declines} ▼", color = MarksyTheme.RedUrgent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("▲ ${b.advances}", color = MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+            Text("$label${if (b.unchanged > 0) " · ${b.unchanged} unch." else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
+            Text("${b.declines} ▼", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
         }
-        Row(Modifier.fillMaxWidth().padding(top = 3.dp).height(5.dp).clip(RoundedCornerShape(3.dp)), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.PrimaryEmerald))
+        Row(Modifier.fillMaxWidth().padding(top = 3.dp).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.Positive))
             if (flat > 0.01f) Box(Modifier.weight(flat).fillMaxHeight().background(MarksyTheme.TextMuted))
-            if (down > 0.01f) Box(Modifier.weight(down).fillMaxHeight().background(MarksyTheme.RedUrgent))
+            if (down > 0.01f) Box(Modifier.weight(down).fillMaxHeight().background(MarksyTheme.Negative))
         }
     }
 }

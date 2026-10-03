@@ -17,9 +17,7 @@ import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -33,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.IpoDetailDto
 import com.marksy.os.market.IpoDetailFormatter
 import com.marksy.os.market.IpoHistoryEntryDto
@@ -56,6 +55,7 @@ import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToLong
 import kotlin.math.floor
 
 private data class Sec(val key: String, val title: String, val sub: String, val body: @Composable () -> Unit)
@@ -103,15 +103,15 @@ fun IpoDetailScreen(
     val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder, nowPrice, holidays)
 
     LazyColumn(
-        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item(key = "hero") { HeroCard(summary, loaded, lane, dates, now, nowPrice) { allotOpen = true } }
         when (val d = detail) {
-            is MarketDataState.Loading -> item { MarksyLoader("Loading IPO details...") }
+            is MarketDataState.Loading -> item { MarksyLoader("Loading IPO details…") }
             is MarketDataState.Error -> item { EmptyState("Details unavailable", d.message) }
-            is MarketDataState.Unavailable -> item { EmptyState("Market Intelligence is not configured", "Sign in to your Marksy account in More.") }
+            is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             else -> Unit
         }
         (order + listOf("about", "issue", "fin", "risks", "hist", "more")).forEach { key ->
@@ -182,7 +182,7 @@ private fun buildSections(
     )
 
     detail?.overview?.value?.let { it as? String }?.takeIf { it.isNotBlank() }?.let { text ->
-        add(Sec("about", "About the company", ipo.sector ?: "Overview") { Text(text, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp) })
+        add(Sec("about", "About the company", ipo.sector ?: "Overview") { Text(text, color = MarksyTheme.TextSecondary, style = MarksyType.Small) })
     }
 
     val t = ipo.terms
@@ -215,7 +215,7 @@ private fun buildSections(
         val run = detail.riskRun
         add(
             Sec("risks", "Risks", if (!detail.riskEngineRan) "Risk engine has not run" else "${risks.length()} finding${if (risks.length() == 1) "" else "s"}") {
-                run?.let { r -> Text("Risk engine: ${r.status.lowercase().replaceFirstChar { it.titlecase() }}${r.ranAt?.let { " · ${it.take(10)}" }.orEmpty()}", color = MarksyTheme.TextMuted, fontSize = 11.sp) }
+                run?.let { r -> Text("Risk engine: ${r.status.lowercase().replaceFirstChar { it.titlecase() }}${r.ranAt?.let { " · ${it.take(10)}" }.orEmpty()}", color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
                 if (riskRows.isEmpty()) MutedText(if (detail.riskEngineRan) "No risk findings." else "Marksy has not checked this issue for risks yet.")
                 riskRows.forEach { DetailRow(it) }
             }
@@ -253,8 +253,8 @@ private fun contextLabel(context: String) = when (context) {
 
 private fun verdictLabel(verdict: String): Triple<String, Color, Color> = when (verdict) {
     "APPLY" -> Triple("Apply", MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
-    "WATCH" -> Triple("Watch", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
-    "AVOID" -> Triple("Avoid", MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg)
+    "WATCH" -> Triple("Watch", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg)
+    "AVOID" -> Triple("Avoid", MarksyTheme.Negative, MarksyTheme.BadgeUrgentBg)
     else -> Triple("No call yet", MarksyTheme.TextSecondary, MarksyTheme.SurfaceRaised)
 }
 
@@ -326,9 +326,9 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             val exp = o?.expectedReturnPercent
             chip = list?.let { "Listed ${L.day(it)}" } ?: "Listed"
             big = ret?.let { "${L.pct(it)} on listing" } ?: "Listed"
-            ret?.let { bigColor = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent }
+            ret?.let { bigColor = if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative }
             sub = when {
-                exp != null && ret != null -> "Marksy expected ${L.pct(exp)} before listing, off by ${"%.1f".format(Locale.ENGLISH, abs(ret - exp))} points."
+                exp != null && ret != null -> "Marksy expected ${L.pct(exp)} before listing, off by ${MarksyFormat.number(abs(ret - exp), 1)} points."
                 exp != null -> "Marksy expected ${L.pct(exp)} before listing."
                 else -> "Marksy made no call on this issue."
             }
@@ -348,25 +348,24 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
         }
     }
     val color = laneColor(lane)
-    val shape = RoundedCornerShape(16.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, color.copy(alpha = 0.6f), shape).padding(14.dp),
+        Modifier.fillMaxWidth().marksyCard(color.copy(alpha = 0.6f)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IpoAvatar(ipo.companyName, size = 24)
             Spacer(Modifier.width(8.dp))
-            Text(listOfNotNull(ipo.sector, if (ipo.isSme) "SME" else "Mainboard", ipo.terms?.exchanges.display()).joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(ipo.sector, if (ipo.isSme) "SME" else "Mainboard", ipo.terms?.exchanges.display()).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(chip, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(chipBg(lane)).padding(horizontal = 8.dp, vertical = 3.dp))
-        Text(big, color = bigColor, fontSize = 24.sp, fontWeight = FontWeight.Bold, lineHeight = 28.sp)
-        if (sub.isNotBlank()) Text(sub, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+        Text(chip, color = color, style = MarksyType.Meta, fontWeight = FontWeight.Bold, modifier = Modifier.clip(MarksyShape.Chip).background(chipBg(lane)).padding(horizontal = 8.dp, vertical = 3.dp))
+        Text(big, color = bigColor, style = MarksyType.Display)
+        if (sub.isNotBlank()) Text(sub, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             stats.forEach { (label, value, note) ->
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(MarksyTheme.SurfaceRaised).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                    Text(label, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(value, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (note.isNotBlank()) Text(note, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Column(Modifier.weight(1f).clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised).padding(horizontal = 8.dp, vertical = 6.dp)) {
+                    Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(value, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (note.isNotBlank()) Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -379,50 +378,49 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
 private fun GmpBlock(ipo: IpoListItemDto, now: ZonedDateTime) {
     val readings = ipo.gmp?.readings.orEmpty()
     if (readings.isEmpty()) {
-        Text("No grey-market quotes yet", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        Text("No grey-market quotes yet", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         return
     }
     val upper = IpoLifecycle.upper(ipo)
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         readings.sortedByDescending { it.premium }.forEach { r ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(r.source, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(r.source, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOfNotNull(IpoLifecycle.rupees(r.premium), IpoLifecycle.gmpPercent(r, upper)?.let { IpoLifecycle.pct(it) }, IpoLifecycle.asOfLabel(r.observedAt, now) ?: "time not stated").joinToString(" · "),
-                    color = if (r.premium >= 0) MarksyTheme.TextPrimary else MarksyTheme.RedUrgent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    color = if (r.premium >= 0) MarksyTheme.TextPrimary else MarksyTheme.Negative, style = MarksyType.Small, fontWeight = FontWeight.SemiBold
                 )
             }
         }
-        Text("Unofficial grey-market premium${if (ipo.isSme) " · thin SME market" else ""}", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+        Text("Unofficial grey-market premium${if (ipo.isSme) " · thin SME market" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
     }
 }
 
 @Composable
 private fun Section(id: String, s: Sec, initiallyOpen: Boolean) {
     var open by rememberSaveable(id, s.key) { mutableStateOf(initiallyOpen) }
-    val shape = RoundedCornerShape(14.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)) {
+    Column(Modifier.fillMaxWidth().marksyCard()) {
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(s.title, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text(s.sub, color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            Icon(Icons.Default.ExpandMore, if (open) "Fold ${s.title}" else "Show ${s.title}", tint = MarksyTheme.TextSecondary, modifier = Modifier.padding(start = 4.dp).size(18.dp).rotate(if (open) 180f else 0f))
+            Text(s.title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+            Text(s.sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            Icon(Icons.Default.ExpandMore, if (open) "Fold ${s.title}" else "Show ${s.title}", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = 4.dp).size(18.dp).rotate(if (open) 180f else 0f))
         }
         if (open) Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { s.body() }
     }
 }
 
 @Composable
-private fun MutedText(text: String) = Text(text, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+private fun MutedText(text: String) = Text(text, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
 
 @Composable
-private fun Legend(text: String) = Text(text, color = MarksyTheme.TextMuted, fontSize = 10.sp, lineHeight = 14.sp)
+private fun Legend(text: String) = Text(text, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
 
 @Composable
 private fun KvRow(label: String, value: String, valueColor: Color = MarksyTheme.TextPrimary) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Text(label, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.weight(1f))
+        Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
-        Text(value, color = valueColor, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+        Text(value, color = valueColor, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
     }
 }
 
@@ -458,15 +456,15 @@ private fun SubscriptionBody(days: List<IpoLifecycle.SubscriptionDay>, sme: Bool
 private fun SubscriptionBar(name: String, sub: String, value: Double, scale: Double, total: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.width(84.dp)) {
-            Text(name, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = if (total) FontWeight.Bold else FontWeight.Medium)
-            Text(sub, color = MarksyTheme.TextMuted, fontSize = 10.sp, maxLines = 1)
+            Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = if (total) FontWeight.Bold else FontWeight.Medium)
+            Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
         }
-        BoxWithConstraints(Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(MarksyTheme.SurfaceRaised)) {
+        BoxWithConstraints(Modifier.weight(1f).height(10.dp).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
             val fill = (value / scale).coerceIn(0.015, 1.0).toFloat()
-            Box(Modifier.fillMaxWidth(fill).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(if (value < 1) MarksyTheme.YellowImportant else MarksyTheme.PrimaryEmerald))
+            Box(Modifier.fillMaxWidth(fill).fillMaxHeight().clip(MarksyShape.Badge).background(if (value < 1) MarksyTheme.Warning else MarksyTheme.PrimaryEmerald))
             Box(Modifier.offset(x = maxWidth * (1 / scale).toFloat()).width(1.5.dp).fillMaxHeight().background(MarksyTheme.TextPrimary))
         }
-        Text(IpoLifecycle.times(value), color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
+        Text(IpoLifecycle.times(value), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
     }
 }
 
@@ -476,10 +474,10 @@ private fun VerdictBody(d: IpoDetailDto) {
         val (label, fg, bg) = verdictLabel(c.verdict)
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(contextLabel(c.context), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(label, color = fg, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 8.dp, vertical = 3.dp))
+                Text(contextLabel(c.context), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text(label, color = fg, style = MarksyType.Meta, fontWeight = FontWeight.Bold, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = 8.dp, vertical = 3.dp))
             }
-            c.confidence?.let { Text("${if (it >= 0.7) "High" else if (it >= 0.4) "Medium" else "Low"} confidence", color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+            c.confidence?.let { Text("${if (it >= 0.7) "High" else if (it >= 0.4) "Medium" else "Low"} confidence", color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
             c.reason?.let { MutedText(it) }
             if (c.answeredBy != null) Legend("Answered on the stock page once it lists.")
         }
@@ -492,8 +490,8 @@ private fun Stepper(value: String, sub: String, canDown: Boolean, canUp: Boolean
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepButton(Icons.Default.Remove, "One lot less", canDown, onDown)
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(sub, color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            Text(value, color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
+            Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         StepButton(Icons.Default.Add, "One lot more", canUp, onUp)
     }
@@ -501,22 +499,22 @@ private fun Stepper(value: String, sub: String, canDown: Boolean, canUp: Boolean
 
 @Composable
 private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(1.dp, MarksyTheme.BorderGlow, CircleShape)) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)) {
         Icon(icon, label, tint = if (enabled) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted)
     }
 }
 
 @Composable
 private fun Callout(text: String) {
-    val shape = RoundedCornerShape(10.dp)
-    Row(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.BadgeImportantBg).border(1.dp, MarksyTheme.YellowImportant.copy(alpha = 0.5f), shape).padding(10.dp)) {
-        Icon(Icons.Default.Info, null, tint = MarksyTheme.YellowImportant, modifier = Modifier.size(14.dp).padding(top = 1.dp))
+    val shape = MarksyShape.Chip
+    Row(Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.BadgeImportantBg).border(MarksySpace.Border, MarksyTheme.Warning.copy(alpha = 0.5f), shape).padding(10.dp)) {
+        Icon(Icons.Default.Info, null, tint = MarksyTheme.Warning, modifier = Modifier.size(14.dp).padding(top = 1.dp))
         Spacer(Modifier.width(6.dp))
-        Text(text, color = MarksyTheme.TextPrimary, fontSize = 12.sp, lineHeight = 16.sp)
+        Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Small)
     }
 }
 
-private fun signedInr(n: Double) = (if (n >= 0) "+" else "−") + IpoLifecycle.inr(abs(n))
+private fun signedInr(n: Double) = MarksyFormat.signedRupees(n.roundToLong().toDouble(), 0)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -540,17 +538,17 @@ private fun CalculatorBody(
     }
     Stepper(IpoLifecycle.lotsText(n), "${IpoDetailFormatter.number(n * lotSize)} shares", n > cat.minLots, n < cat.maxLots, { lots = n - 1 }, { lots = n + 1 })
     Column {
-        Text(IpoLifecycle.inr(q.amount), color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(IpoLifecycle.inr(q.amount), color = MarksyTheme.TextPrimary, style = MarksyType.Display)
         Legend((if (cat.cutOff) "blocked in your bank at cut-off, ₹${IpoDetailFormatter.number(upper)} a share" else "blocked in your bank at ₹${IpoDetailFormatter.number(upper)} a share; HNI bids cannot use cut-off") +
             (IpoLifecycle.termsNote(ipo)?.let { " · price band or lot $it" } ?: ""))
     }
     KvRow("$catName range", if (cat.minLots == cat.maxLots) IpoLifecycle.lotsText(cat.minLots) else "${cat.minLots}–${cat.maxLots} lots")
     KvRow("Chance of allotment", q.chance)
-    q.gain?.let { KvRow("If allotted ${IpoLifecycle.lotsText(q.gainLots)} and it lists at the lowest grey-market quote${gmp?.asOf?.let { t -> " ($t)" }.orEmpty()}", signedInr(it), if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent) }
+    q.gain?.let { KvRow("If allotted ${IpoLifecycle.lotsText(q.gainLots)} and it lists at the lowest grey-market quote${gmp?.asOf?.let { t -> " ($t)" }.orEmpty()}", signedInr(it), if (it >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative) }
     q.callout?.let { Callout(it) }
     q.next?.let { next ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Above ${IpoLifecycle.lotsText(cat.maxLots)} you bid as ${next.label.substringBefore(" · ")}.", color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text("Above ${IpoLifecycle.lotsText(cat.maxLots)} you bid as ${next.label.substringBefore(" · ")}.", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
             Pill("Switch") { catKey = next.key; lots = next.minLots }
         }
     }
@@ -571,13 +569,13 @@ private fun GainBody(ipo: IpoListItemDto, lotSize: Int, issuePrice: Double, list
     val gain = shares * (listingPrice - issuePrice)
     Stepper(IpoLifecycle.lotsText(n), "${IpoDetailFormatter.number(shares)} shares", n > lo, n < hi, { lots = n - 1 }, { lots = n + 1 })
     Column {
-        Text(IpoLifecycle.inr(shares * issuePrice), color = MarksyTheme.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(IpoLifecycle.inr(shares * issuePrice), color = MarksyTheme.TextPrimary, style = MarksyType.Display)
         Legend("paid at the issue price, ₹${IpoDetailFormatter.number(issuePrice)} a share")
     }
-    KvRow("Sold at listing, ₹${IpoDetailFormatter.number(listingPrice)}", "${signedInr(gain)} · ${IpoLifecycle.pct((listingPrice - issuePrice) / issuePrice * 100)}", if (gain >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent)
+    KvRow("Sold at listing, ₹${IpoDetailFormatter.number(listingPrice)}", "${signedInr(gain)} · ${IpoLifecycle.pct((listingPrice - issuePrice) / issuePrice * 100)}", if (gain >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative)
     nowPrice?.let { p ->
         val held = shares * (p - issuePrice)
-        KvRow("Held, now ₹${IpoDetailFormatter.number(p)}", "${signedInr(held)} · ${IpoLifecycle.pct((p - issuePrice) / issuePrice * 100)}", if (held >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent)
+        KvRow("Held, now ₹${IpoDetailFormatter.number(p)}", "${signedInr(held)} · ${IpoLifecycle.pct((p - issuePrice) / issuePrice * 100)}", if (held >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative)
     }
     Legend("Before brokerage and tax. Shares sold within a year are taxed as short-term capital gain.")
 }
@@ -619,8 +617,8 @@ private fun DatesBody(
             Box(Modifier.size(10.dp).clip(CircleShape).background(when { i == next -> MarksyTheme.PrimaryEmerald; past -> MarksyTheme.TextMuted; else -> MarksyTheme.SurfaceRaised }).border(1.dp, if (i == next) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, CircleShape))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(r.title, color = if (past) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = if (i == next) FontWeight.Bold else FontWeight.Medium)
-                Text(r.detail, color = MarksyTheme.TextMuted, fontSize = 11.sp, lineHeight = 14.sp)
+                Text(r.title, color = if (past) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = if (i == next) FontWeight.Bold else FontWeight.Medium)
+                Text(r.detail, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
             events.firstOrNull { it.key == r.key }?.let { e ->
                 val on = keyOf(e) in reminderKeys
@@ -639,7 +637,7 @@ private fun RemindersDialog(
 ) {
     MarksyDialog(
         onDismissRequest = onClose,
-        confirmButton = { TextButton(onClick = onClose) { Text("Done", color = MarksyTheme.PrimaryEmerald) } },
+        confirmButton = { MarksyButton("Done", onClose, style = MarksyButtonStyle.Text) },
         title = { Text("Remind me") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -649,12 +647,11 @@ private fun RemindersDialog(
                     val on = keyOf(e) in reminderKeys
                     Row(Modifier.fillMaxWidth().clickable { onReminder(e, !on) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(e.title, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(e.whenText, color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                            Text(e.title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
+                            Text(e.whenText, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                         }
                         Switch(
-                            checked = on, onCheckedChange = { onReminder(e, it) },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedThumbColor = MarksyTheme.TextMuted, uncheckedTrackColor = MarksyTheme.SurfaceRaised)
+                            checked = on, onCheckedChange = { onReminder(e, it) }
                         )
                     }
                 }
@@ -673,11 +670,11 @@ private fun AllotmentDialog(
     val out = allot != null && !now.isBefore(allot.atTime(18, 0).atZone(L.IST))
     MarksyDialog(
         onDismissRequest = onClose,
-        confirmButton = { TextButton(onClick = onClose) { Text("Close", color = MarksyTheme.TextSecondary) } },
+        confirmButton = { MarksyButton("Close", onClose, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) },
         dismissButton = allotEvent?.let { e ->
             {
                 val on = keyOf(e) in reminderKeys
-                TextButton(onClick = { onReminder(e, !on) }) { Text(if (on) "Cancel the 6 pm reminder" else "Remind me at 6 pm", color = MarksyTheme.PrimaryEmerald) }
+                MarksyButton(if (on) "Cancel the 6 pm reminder" else "Remind me at 6 pm", { onReminder(e, !on) }, style = MarksyButtonStyle.Text)
             }
         },
         title = { Text(if (out) "Allotment results are out" else "Allotment results come after 6 pm") },
@@ -694,10 +691,10 @@ private fun AllotmentDialog(
 
 @Composable
 private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
-    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(12.dp)).padding(10.dp)) {
+    Column(Modifier.fillMaxWidth().border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Pill).padding(10.dp)) {
         val call = listOfNotNull(entry.decision?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() }, entry.expectedReturnPercent.display()?.let { "expected listing return $it%" })
-        Text(call.joinToString(" · ").ifBlank { "Prediction" }, color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        Text(entry.predictedAt.take(16).replace('T', ' '), color = MarksyTheme.TextMuted, fontSize = 10.sp)
+        Text(call.joinToString(" · ").ifBlank { "Prediction" }, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        Text(entry.predictedAt.take(16).replace('T', ' '), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         // Only the newest snapshot is shown in full; earlier ones are the call and when it was made.
         if (full) entry.raw?.let { raw ->
             IpoDetailFormatter.rows(raw, skip = setOf("predictedAt", "decision", "expectedReturnPercent")).forEach { DetailRow(it) }
@@ -709,21 +706,21 @@ private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
 internal fun DetailRow(row: IpoDetailFormatter.Row) {
     val indent = (row.depth * 12).dp
     if (row.paragraph) {
-        Text("• ${row.label}", color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = indent, top = 2.dp))
+        Text("• ${row.label}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(start = indent, top = 2.dp))
     } else if (row.value == null) {
         Text(row.label, color = if (row.depth == 0) MarksyTheme.TextPrimary else MarksyTheme.TextSecondary,
-            fontSize = if (row.depth == 0) 14.sp else 12.sp, fontWeight = FontWeight.SemiBold,
+            style = if (row.depth == 0) MarksyType.Subhead else MarksyType.Small, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = indent, top = if (row.depth == 0) 6.dp else 2.dp))
     } else if (row.value.length > 60) {
         // Long text (overview, thesis) needs the full width, not the right-hand column.
         Column(Modifier.fillMaxWidth().padding(start = indent)) {
-            Text(row.label, color = MarksyTheme.TextMuted, fontSize = 12.sp)
-            Text(row.value, color = MarksyTheme.TextPrimary, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(row.label, color = MarksyTheme.TextMuted, style = MarksyType.Small)
+            Text(row.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small)
         }
     } else {
         Row(Modifier.fillMaxWidth().padding(start = indent)) {
-            Text(row.label, color = MarksyTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.weight(.45f))
-            Text(row.value, color = MarksyTheme.TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(.55f))
+            Text(row.label, color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(.45f))
+            Text(row.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small, modifier = Modifier.weight(.55f))
         }
     }
 }
