@@ -28,6 +28,9 @@ class RetentionWorker(
                 pruneExpired(now)
             }
             dao.pruneExpired(now)
+            // EPIC-036: expire capture workflows and unreviewed tips first, then prune by the capture windows.
+            runCatching { MarksyContainer.captureGateway(applicationContext).sweep(now) }
+            MarksyDatabase.getInstance(applicationContext).captureDao().pruneExpired(now)
             MarksyDatabase.getInstance(applicationContext).contextGraphDao().pruneOrphanLinks()
             MarksyDatabase.getInstance(applicationContext).ruleExecutionDao().pruneOrphans()
             MarksyDatabase.getInstance(applicationContext).aiInvocationDao().prune(now - 45L * 24 * 60 * 60 * 1000)

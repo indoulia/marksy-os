@@ -9,6 +9,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.marksy.os.data.RetentionPolicy
 import kotlinx.coroutines.flow.Flow
 
 /** One capture attempt (EPIC-036). Never holds an image or text: only a hash reference and fixed codes. */
@@ -175,5 +176,26 @@ interface CaptureDao {
     suspend fun expireUnreviewed(cutoff: Long, now: Long): Int {
         expireUnreviewedEvidence(cutoff, now)
         return expireUnreviewedCandidates(cutoff, now)
+    }
+
+    @Query("DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
+    suspend fun deleteOldCandidates(cutoff: Long, accepted: Boolean): Int
+
+    // Evidence goes with its candidate; evidence without one (failures, not a tip) keeps the short window.
+    @Query("DELETE FROM capture_evidence WHERE capturedAt < :cutoff AND id NOT IN (SELECT evidenceId FROM tip_candidates)")
+    suspend fun deleteOldOrphanEvidence(cutoff: Long): Int
+
+    @Query("DELETE FROM capture_workflows WHERE createdAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
+    suspend fun deleteOldWorkflows(cutoff: Long, accepted: Boolean): Int
+
+    @Transaction
+    suspend fun pruneExpired(nowMillis: Long) {
+        val short = RetentionPolicy.captureCutoff(accepted = false, nowMillis = nowMillis)
+        val long = RetentionPolicy.captureCutoff(accepted = true, nowMillis = nowMillis)
+        deleteOldCandidates(short, accepted = false)
+        deleteOldCandidates(long, accepted = true)
+        deleteOldOrphanEvidence(short)
+        deleteOldWorkflows(short, accepted = false)
+        deleteOldWorkflows(long, accepted = true)
     }
 }

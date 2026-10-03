@@ -72,6 +72,34 @@ class CaptureDaoTest {
     }
 
     @Test
+    fun pruneKeepsAcceptedCapturesThirtyDaysAndEverythingElseSeven() = runBlocking {
+        val day = 24 * 60 * 60 * 1000L
+        val now = t0 + 40 * day
+        suspend fun capture(state: String, age: Long): Pair<Long, Long> {
+            val evidenceId = dao.insertEvidence(evidence(hash = "h$state$age", at = now - age * day))
+            return evidenceId to dao.insertCandidate(candidate(evidenceId, at = now - age * day).copy(state = state))
+        }
+        val accepted = capture("ACCEPTED", 10)
+        val oldAccepted = capture("ACCEPTED", 31)
+        val expired = capture("EXPIRED", 8)
+        val failed = dao.insertEvidence(evidence(hash = null, at = now - 6 * day).copy(state = "FAILED"))
+        val keptWorkflow = dao.insertWorkflow(workflow("a").copy(state = "ACCEPTED", createdAt = now - 10 * day))
+        val oldWorkflow = dao.insertWorkflow(workflow("b").copy(state = "EXPIRED", createdAt = now - 8 * day))
+
+        dao.pruneExpired(now)
+
+        assertEquals(accepted.second, dao.candidate(accepted.second)?.id)
+        assertEquals(accepted.first, dao.evidence(accepted.first)?.id)
+        listOf(oldAccepted, expired).forEach { (evidenceId, candidateId) ->
+            assertNull(dao.candidate(candidateId))
+            assertNull(dao.evidence(evidenceId))
+        }
+        assertEquals(failed, dao.evidence(failed)?.id)
+        assertEquals(keptWorkflow, dao.workflow(keptWorkflow)?.id)
+        assertNull(dao.workflow(oldWorkflow))
+    }
+
+    @Test
     fun migrationFrom8CreatesCaptureTablesThatPassRoomValidation() {
         val context = RuntimeEnvironment.getApplication()
         val name = "capture-migration.db"
