@@ -310,7 +310,7 @@ private fun HorizonBars(buckets: List<HorizonHitDto>, modifier: Modifier) {
 private fun DeliveredGauge(realizationPct: Double?, modifier: Modifier) {
     val (share, tint) = ScorecardGraphics.gauge(realizationPct)
     MarksyCard(modifier) {
-        MarksyCardHeader("Delivered vs promised")
+        MarksyCardHeader("Vs promised")
         Spacer(Modifier.weight(1f))
         Canvas(Modifier.size(100.dp, 56.dp).align(Alignment.CenterHorizontally)) {
             val w = 10.dp.toPx()

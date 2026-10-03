@@ -30,27 +30,35 @@ internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Dou
     MarksyCard {
         run {
             MarksyCardHeader(title)
-            items.chunked(2).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                    row.forEach { (name, price, change) ->
-                        Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                                if (watchable) WatchlistButton(name, Modifier.size(24.dp))
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
-                                change?.let { pct ->
-                                    Spacer(Modifier.width(MarksySpace.Inner))
-                                    Text(MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
+            QuoteGrid(items, watchable, onOpen)
+            footer?.invoke()
+        }
+    }
+}
+
+/** Quotes two to a row, name above price and day change; Overview and Home's Market Pulse share it. */
+@Composable
+internal fun QuoteGrid(items: List<Triple<String, String, Double?>>, watchable: Boolean = false, onOpen: ((String) -> Unit)? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+        items.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+                row.forEach { (name, price, change) ->
+                    Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (watchable) WatchlistButton(name, Modifier.size(24.dp))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
+                            change?.let { pct ->
+                                Spacer(Modifier.width(MarksySpace.Inner))
+                                Text(MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
-            footer?.invoke()
         }
     }
 }

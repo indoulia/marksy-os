@@ -382,25 +382,10 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
     }
 }
 
-/** Two indices per row, each on a single line: name, value, day change. */
+/** Same layout as Market Overview's indices, so the same figures read the same way. */
 @Composable
 private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-        items.chunked(2).forEach { row ->
-            // A clear gutter between the left column's % and the right column's name.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                row.forEach { (name, value, change) ->
-                    // Name left; price and change in fixed right-aligned columns so they line up row to row.
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.padding(horizontal = MarksySpace.Inner))
-                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Caption, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End)
-                    }
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
+    QuoteGrid(items.map { (name, value, change) -> Triple(name, formatIndex(value), change) })
 }
 
 /** The one profile/quick-action icon style used on every screen's header, so it never looks
@@ -442,7 +427,6 @@ internal fun MarketStatusBadge(status: String) {
 // Same two decimals as Market Overview.
 private fun formatIndex(value: Double): String = MarksyFormat.number(value, 2)
 
-private fun formatChange(pct: Double): String = MarksyFormat.percent(pct)
 
 @Composable
 private fun AiSummaryBanner(summary: String) {
