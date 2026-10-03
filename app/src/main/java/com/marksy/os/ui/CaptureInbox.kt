@@ -29,6 +29,8 @@ import com.marksy.os.capture.CaptureState
 import com.marksy.os.capture.WorkflowState
 import com.marksy.os.capture.fields
 import com.marksy.os.capture.CaptureFailure
+import com.marksy.os.capture.projection.CaptureSessionController
+import com.marksy.os.capture.projection.CaptureSessionState
 import com.marksy.os.capture.projection.rememberScreenCaptureLauncher
 import com.marksy.os.capture.rememberScreenshotPicker
 import com.marksy.os.data.MarksyContainer
@@ -82,11 +84,14 @@ fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     val registry = remember { MarksyContainer.captureSources(context) }
     val candidates by dao.observeToReview().collectAsStateWithLifecycle(emptyList())
     val workflows by dao.observeOpenWorkflows().collectAsStateWithLifecycle(emptyList())
+    val session by CaptureSessionController.shared.state.collectAsStateWithLifecycle()
+    // No live session in this process: a mid-capture workflow was orphaned and must stay retryable.
+    val shown = if (session is CaptureSessionState.Idle || session is CaptureSessionState.Finished) TEASER_STATES + ORPHANED_STATES else TEASER_STATES
     var reviewing by rememberSaveable { mutableStateOf<Long?>(null) }
     val pick = rememberScreenshotPicker()
     reviewing?.let { CaptureReviewHost(it) { reviewing = null } }
     return CaptureInbox(
-        candidates, workflows.filter { it.state in TEASER_STATES }, { registry.resolve(it)?.displayName ?: "an app" },
+        candidates, workflows.filter { it.state in shown }, { registry.resolve(it)?.displayName ?: "an app" },
         { registry.resolve(it)?.offersScreenCapture == true }, actions, { reviewing = it }, pick
     )
 }
@@ -96,6 +101,7 @@ private val TEASER_STATES = setOf(
     WorkflowState.NEEDS_SOURCE_VIEW, WorkflowState.USER_OPENED_SOURCE, WorkflowState.CAPTURE_REQUESTED, WorkflowState.CAPTURE_DENIED,
     WorkflowState.CAPTURE_FAILED, WorkflowState.PROTECTED_SCREEN, WorkflowState.SOURCE_UNAVAILABLE
 ).map { it.name }.toSet()
+private val ORPHANED_STATES = setOf(WorkflowState.CAPTURE_AUTHORIZED.name, WorkflowState.EXTRACTION_PENDING.name)
 
 /** The "To review" lane at the top of the Captured list. */
 fun LazyListScope.captureToReview(inbox: CaptureInbox, now: Long, expanded: Boolean, onToggle: () -> Unit) {
