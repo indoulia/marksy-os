@@ -1,10 +1,10 @@
 package com.marksy.os.ui
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,8 +38,7 @@ private fun tag(kind: String, path: List<Int>) = "rule-$kind-${path.joinToString
 private fun ConditionGroup(node: Condition, path: List<Int>, root: Condition, issues: Map<List<Int>, String>, onChange: (Condition) -> Unit) {
     val any = Tree.isAny(node)
     val nested = path.isNotEmpty()
-    val frame = if (nested) Modifier.border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Chip).padding(MarksySpace.Gap) else Modifier
-    Column(Modifier.fillMaxWidth().then(frame), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+    val body: @Composable ColumnScope.() -> Unit = {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Text(if (nested) "GROUP" else "WHEN", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Label)
             Pill("all (and)", selected = !any, modifier = Modifier.testTag(tag("and", path))) { onChange(Tree.setGroupOperator(root, path, any = false)) }
@@ -65,13 +64,14 @@ private fun ConditionGroup(node: Condition, path: List<Int>, root: Condition, is
         }
         issues[path]?.let { Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta) }
     }
+    if (nested) MarksyCard(content = body) else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), content = body)
 }
 
 @Composable
 private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, issue: String?, onChange: (Condition) -> Unit) {
     val leaf = Tree.inner(node) as? Condition.Leaf ?: return
     var fieldMenu by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().border(MarksySpace.Border, MarksyTheme.SurfaceRaised, MarksyShape.Chip).padding(MarksySpace.Inner)) {
+    MarksyCard {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
             Box {

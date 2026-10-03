@@ -7,6 +7,8 @@ import com.marksy.os.ui.MarksySpace
 import com.marksy.os.ui.MarksyButtonStyle
 import com.marksy.os.ui.MarksyButton
 import com.marksy.os.ui.MarksyCard
+import com.marksy.os.ui.MarksyList
+import com.marksy.os.ui.MarksyRowCard
 import com.marksy.os.ui.MarksyType
 import com.marksy.os.ui.MarksyTheme
 import android.content.Intent
@@ -24,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.IconButton
 import com.marksy.os.ui.CompactTextField
@@ -88,10 +89,8 @@ private fun WhatsAppSettingsScreen(
     var sender by remember { mutableStateOf("") }
     val watchedSenders = remember(senders) { senders.toList().sorted() }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList {
+        item {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Text("‹", color = MarksyTheme.TextPrimary, style = MarksyType.Display) }
             Column(Modifier.weight(1f)) {
@@ -99,7 +98,9 @@ private fun WhatsAppSettingsScreen(
                 Text("Sender allow-list", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
             }
         }
+        }
 
+        item {
         MarksyCard {
             Text(if (isEnabled) "Connector enabled" else "Connector needs permission", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead)
             Text(
@@ -109,8 +110,10 @@ private fun WhatsAppSettingsScreen(
             )
             MarksyButton(if (isEnabled) "Manage Accessibility Access" else "Enable Accessibility Access", onClick = onOpenAccessibility)
         }
+        }
 
-        SectionLabel("Watched senders · ${watchedSenders.size}/25")
+        item { SectionLabel("Watched senders · ${watchedSenders.size}/25") }
+        item {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             CompactTextField(
                 value = sender,
@@ -128,27 +131,27 @@ private fun WhatsAppSettingsScreen(
                 }
             )
         }
+        }
 
         if (watchedSenders.isEmpty()) {
-            InlineEmpty("No senders are watched. The connector will capture nothing from WhatsApp until you add one.")
+            item { InlineEmpty("No senders are watched. The connector will capture nothing from WhatsApp until you add one.") }
         } else {
-            LazyColumn(contentPadding = PaddingValues(vertical = MarksySpace.Tight), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                items(watchedSenders, key = { it }) { watched ->
-                    MarksyCard {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(watched, color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.weight(1f))
-                            MarksyButton("Remove", onClick = { onRemoveSender(watched) }, style = MarksyButtonStyle.Text)
-                        }
+            items(watchedSenders, key = { it }) { watched ->
+                MarksyRowCard {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(watched, color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.weight(1f))
+                        MarksyButton("Remove", onClick = { onRemoveSender(watched) }, style = MarksyButtonStyle.Text)
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(MarksySpace.Tight))
+        item {
         Text(
             "Privacy rule: empty allow-list = zero WhatsApp capture. Matching is local and case-insensitive.",
             color = MarksyTheme.TextSecondary,
             style = MarksyType.Small
         )
+        }
     }
 }

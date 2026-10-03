@@ -122,9 +122,9 @@ fun EventDetailDialog(
         }
     }
     MarksyDialog(onDismissRequest = onDismiss, confirmButton = {}, text = {
-        Column {
+        Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Row(verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f).padding(top = MarksySpace.Tight)) {
+                Column(Modifier.weight(1f)) {
                     Text(
                         event.title.ifBlank { "Notification event" },
                         color = MarksyTheme.TextPrimary,
@@ -153,113 +153,128 @@ fun EventDetailDialog(
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon))
                 }
             }
-            SectionDivider()
-            // Only the body scrolls; title above and details/actions below stay in view.
-            Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).padding(end = MarksySpace.ListGap).verticalScroll(scrollState)) {
-                Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = MarksyTheme.TextSecondary, style = MarksyType.Body)
-                if (actions.isNotEmpty()) {
-                    Spacer(Modifier.height(MarksySpace.Gap))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                        actions.forEach { action ->
-                            MarksyButton(
-                                action.title,
-                                style = MarksyButtonStyle.Outlined,
-                                onClick = {
-                                    if (!OriginalAppLauncher.send(context, action.intent)) {
-                                        notice("\"${action.title}\" is no longer available")
+            // Only the middle scrolls; the title above and Archive/Open below stay in view.
+            Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).verticalScroll(scrollState), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
+                MarksyCard {
+                    Text(linkified(event.body.ifBlank { "No notification body was captured." }), color = MarksyTheme.TextSecondary, style = MarksyType.Body)
+                    if (actions.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                            actions.forEach { action ->
+                                MarksyButton(
+                                    action.title,
+                                    style = MarksyButtonStyle.Outlined,
+                                    onClick = {
+                                        if (!OriginalAppLauncher.send(context, action.intent)) {
+                                            notice("\"${action.title}\" is no longer available")
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
-            }
-            SectionDivider()
-            Column(Modifier.padding(end = MarksySpace.Inner)) {
+                SectionLabel("Details")
                 details.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                        row.forEach { (label, value) -> DetailCell(label, value, Modifier.weight(1f)) }
+                    MarksyStatRow {
+                        row.forEach { (label, value) -> MarksyStat(label, value, Modifier.weight(1f)) }
                         repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
                 if (event.isTrading) {
                     // Rows stored before the tips client stopped writing JSON nulls as "null".
-                    event.insightSummary?.removeSuffix(" | null")?.takeIf { it.isNotBlank() }?.let { DetailCell("Marksy", it, Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), singleLine = false) }
-                    event.insightAction?.takeIf { it.isNotBlank() && it != "null" }?.let { DetailCell("Action", it, Modifier.fillMaxWidth().padding(bottom = MarksySpace.Inner), singleLine = false) }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
-                    ChipButton(
-                        if (event.kept) "Kept" else "Keep",
-                        if (event.kept) Icons.Default.Star else Icons.Default.StarBorder,
-                        selected = event.kept,
-                        onClick = onToggleKeep
+                    val insight = listOfNotNull(
+                        event.insightSummary?.removeSuffix(" | null")?.takeIf { it.isNotBlank() }?.let { "Marksy" to it },
+                        event.insightAction?.takeIf { it.isNotBlank() && it != "null" }?.let { "Action" to it }
                     )
-                    ChipButton(
-                        event.remindAt?.let { "Remind " + formatTimestamp(it) } ?: "Remind me",
-                        Icons.Default.Alarm,
-                        selected = event.remindAt != null,
-                        onClick = { showReminderOptions = !showReminderOptions }
-                    )
-                    ChipButton("Mark unread", Icons.Default.MarkEmailUnread) { onMarkUnread(); onDismiss() }
-                    stocks.forEach { symbol -> ChipButton(symbol, Icons.Default.ShowChart) { onOpenStock?.invoke(symbol) } }
-                }
-                if (showReminderOptions) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
-                        ReminderTimes.options().forEach { option ->
-                            ChipButton(option.label, Icons.Default.Schedule) {
-                                onSetReminder(option.atMillis)
-                                showReminderOptions = false
-                            }
-                        }
-                        if (event.remindAt != null) {
-                            ChipButton("Cancel reminder", Icons.Default.AlarmOff) {
-                                onSetReminder(null)
-                                showReminderOptions = false
+                    if (insight.isNotEmpty()) MarksyGroupCard {
+                        insight.forEachIndexed { i, (label, value) ->
+                            if (i > 0) MarksyDivider()
+                            Column(Modifier.padding(vertical = MarksySpace.Gap), verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
+                                Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+                                Text(value, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
                 }
-                Text(
-                    when {
-                        event.kept -> "Kept forever on this device"
-                        event.archived -> "Archived locally on this device"
-                        else -> "Stored locally on this device"
-                    },
-                    color = MarksyTheme.TextMuted,
-                    style = MarksyType.Meta
-                )
-            }
-            if (related.isNotEmpty()) {
-                // EPIC-015 context graph: entities this event is linked to, with a correction.
-                Text("Related", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
-                    related.forEach { r ->
-                        val label = r.displayName + if (r.sourceCount > 1) " · ${r.sourceCount} apps" else ""
-                        ChipButton(label, Icons.Default.Close) { onUnlinkEntity(r.id) }
+                SectionLabel("Actions")
+                MarksyCard {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                        ChipButton(
+                            if (event.kept) "Kept" else "Keep",
+                            if (event.kept) Icons.Default.Star else Icons.Default.StarBorder,
+                            selected = event.kept,
+                            onClick = onToggleKeep
+                        )
+                        ChipButton(
+                            event.remindAt?.let { "Remind " + formatTimestamp(it) } ?: "Remind me",
+                            Icons.Default.Alarm,
+                            selected = event.remindAt != null,
+                            onClick = { showReminderOptions = !showReminderOptions }
+                        )
+                        ChipButton("Mark unread", Icons.Default.MarkEmailUnread) { onMarkUnread(); onDismiss() }
+                        stocks.forEach { symbol -> ChipButton(symbol, Icons.Default.ShowChart) { onOpenStock?.invoke(symbol) } }
                     }
+                    if (showReminderOptions) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                            ReminderTimes.options().forEach { option ->
+                                ChipButton(option.label, Icons.Default.Schedule) {
+                                    onSetReminder(option.atMillis)
+                                    showReminderOptions = false
+                                }
+                            }
+                            if (event.remindAt != null) {
+                                ChipButton("Cancel reminder", Icons.Default.AlarmOff) {
+                                    onSetReminder(null)
+                                    showReminderOptions = false
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        when {
+                            event.kept -> "Kept forever on this device"
+                            event.archived -> "Archived locally on this device"
+                            else -> "Stored locally on this device"
+                        },
+                        color = MarksyTheme.TextMuted,
+                        style = MarksyType.Meta
+                    )
                 }
-            }
-            // EPIC-014 actions not already covered by the Open / Remind / Keep controls above.
-            val extra = engineActions.filter { it.enabled && it.type !in COVERED_BY_DIALOG }
-            if (extra.isNotEmpty()) {
-                actionMessage?.let { Text(it, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta) }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
-                    extra.forEach { a ->
-                        if (a.type == ActionEngine.Type.REPORT) {
-                            ChipButton(a.type.label, Icons.Default.Schedule, selected = reporting) { reporting = !reporting }
-                        } else {
-                            ChipButton(a.type.label, Icons.Default.OpenInNew) { onAction(a.type, null, null) }
+                if (related.isNotEmpty()) {
+                    // EPIC-015 context graph: entities this event is linked to, with a correction.
+                    SectionLabel("Related")
+                    MarksyCard {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                            related.forEach { r ->
+                                val label = r.displayName + if (r.sourceCount > 1) " · ${r.sourceCount} apps" else ""
+                                ChipButton(label, Icons.Default.Close) { onUnlinkEntity(r.id) }
+                            }
                         }
                     }
                 }
-                if (reporting) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner), modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
-                    ActionRepository.CATEGORIES.filter { it != event.category && it != "TRADING" }.forEach { c ->
-                        ChipButton(c.lowercase(), Icons.Default.Schedule) { reporting = false; onAction(ActionEngine.Type.REPORT, null, c) }
+                // EPIC-014 actions not already covered by the Open / Remind / Keep controls above.
+                val extra = engineActions.filter { it.enabled && it.type !in COVERED_BY_DIALOG }
+                if (extra.isNotEmpty()) {
+                    MarksyCard {
+                        actionMessage?.let { Text(it, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta) }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                            extra.forEach { a ->
+                                if (a.type == ActionEngine.Type.REPORT) {
+                                    ChipButton(a.type.label, Icons.Default.Schedule, selected = reporting) { reporting = !reporting }
+                                } else {
+                                    ChipButton(a.type.label, Icons.Default.OpenInNew) { onAction(a.type, null, null) }
+                                }
+                            }
+                        }
+                        if (reporting) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                            ActionRepository.CATEGORIES.filter { it != event.category && it != "TRADING" }.forEach { c ->
+                                ChipButton(c.lowercase(), Icons.Default.Schedule) { reporting = false; onAction(ActionEngine.Type.REPORT, null, c) }
+                            }
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(MarksySpace.Gap))
-            Row(Modifier.fillMaxWidth().padding(end = MarksySpace.Inner), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 MarksyButton(
                     if (event.archived) "Restore" else "Archive",
                     onClick = if (event.archived) onUnarchive else onArchive,
@@ -299,31 +314,6 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
         last = match.range.first + url.length
     }
     append(text.substring(last))
-}
-
-@Composable
-private fun SectionDivider() {
-    MarksyDivider(Modifier.padding(end = MarksySpace.Inner, top = MarksySpace.Gap, bottom = MarksySpace.Gap))
-}
-
-@Composable
-private fun DetailCell(label: String, value: String, modifier: Modifier = Modifier, singleLine: Boolean = true) {
-    Column(
-        modifier
-            .clip(MarksyShape.Chip)
-            .background(MarksyTheme.SurfaceRaised)
-            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)
-    ) {
-        Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
-        Text(
-            value,
-            color = MarksyTheme.TextPrimary,
-            style = MarksyType.Small,
-            fontWeight = FontWeight.Medium,
-            maxLines = if (singleLine) 1 else Int.MAX_VALUE,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
 }
 
 /** Open-in-app and reminders already have dedicated controls in this dialog (keep/remind/open). */

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,11 +61,7 @@ fun CapturedScreen(
     var selected by remember { mutableStateOf<CapturedRow?>(null) }
     val toggle: (String) -> Unit = { key -> expanded = if (key in expanded) expanded - key else expanded + key }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = OneHandListBottomPadding)
-    ) {
+    MarksyList {
         if (lanes.isEmpty) item { EmptyState("Nothing captured yet", "Calls from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
             item { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
@@ -96,14 +91,7 @@ fun CapturedScreen(
 
 @Composable
 private fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
-    val line = MarksyTheme.TextMuted
-    Column(
-        Modifier.fillMaxWidth().clip(MarksyShape.Card).clickable(onClick = onClick)
-            .drawBehind {
-                drawRoundRect(line, size = Size(size.width, size.height), cornerRadius = CornerRadius(14.dp.toPx()), style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
-            }
-            .padding(horizontal = MarksySpace.Section, vertical = MarksySpace.CardPadding)
-    ) {
+    MarksyRowCard(onClick = onClick) {
         Text("${if (open) "▴" else "▾"} $title", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
         Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }
@@ -120,12 +108,12 @@ private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Lo
             Spacer(Modifier.width(MarksySpace.Gap))
             Text("${sourceOf(r)} · ${compactTime(r.event.postedAt, now) ?: ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(r.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.padding(top = MarksySpace.Inner), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(r.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             if (failed) noteLabel(r.event.deliveryNote) ?: "Marksy did not receive this call." else "Android is holding the send back; it goes out when the phone allows.",
-            color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(top = MarksySpace.Hair)
+            color = MarksyTheme.TextSecondary, style = MarksyType.Small
         )
-        FlowRow(Modifier.padding(top = MarksySpace.Gap), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             if (failed) Pill("Retry", selected = true) { onRetry(r.event.id) }
             else {
                 Pill("Send now", selected = true) { onSendNow() }
@@ -139,21 +127,23 @@ private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Lo
 private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boolean, onToggle: (String) -> Unit, onOpen: (CapturedRow) -> Unit) {
     val shown = if (expanded) stack.rows else stack.rows.take(SHOWN_PER_STACK)
     val hidden = stack.rows.size - SHOWN_PER_STACK
-    Column(Modifier.fillMaxWidth().marksyCard().padding(vertical = MarksySpace.Tight)) {
-        Row(Modifier.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+    MarksyGroupCard {
+        Row(Modifier.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Text(stack.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Spacer(Modifier.width(MarksySpace.Gap))
             Text("${stack.rows.size}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         shown.forEachIndexed { i, r ->
-            Column(Modifier.fillMaxWidth().clickable { onOpen(r) }.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)) { TipRow(r, now, firstRow = i == 0) }
+            MarksyDivider()
+            Column(Modifier.fillMaxWidth().clickable { onOpen(r) }.padding(vertical = MarksySpace.Gap)) { TipRow(r, now, firstRow = i == 0) }
         }
         if (hidden > 0) {
             val names = stack.rows.drop(SHOWN_PER_STACK).mapNotNull { it.levels?.symbol }.distinct().take(3).joinToString(", ")
+            MarksyDivider()
             Text(
                 if (expanded) "▴ Show less" else "▾ $hidden more" + if (names.isNotEmpty()) " · $names" else "",
                 color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium,
-                modifier = Modifier.fillMaxWidth().clickable { onToggle(id) }.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
+                modifier = Modifier.fillMaxWidth().clickable { onToggle(id) }.padding(vertical = MarksySpace.Gap)
             )
         }
     }

@@ -1,10 +1,9 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.lazy.items
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -35,12 +34,9 @@ fun LearningScreen(
             .thenByDescending { kotlin.math.abs(it.adjustment) }
             .thenByDescending { it.lastObservedAt })
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
+            MarksyCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Learn from my interactions", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
@@ -56,6 +52,7 @@ fun LearningScreen(
                 MarksyButton("Reset learning", onClick = onResetLearning, style = MarksyButtonStyle.Text)
                 MarksyButton("Clear my corrections", onClick = onClearCorrections, style = MarksyButtonStyle.Text)
             }
+            }
         }
         item {
             // EPIC-019 privacy visibility: exactly which models exist and whether data can leave the device.
@@ -65,7 +62,7 @@ fun LearningScreen(
             item { InlineEmpty("Nothing learned yet") }
         }
         items(subjects, key = { "${it.subject.type}|${it.subject.key}" }) { p ->
-            MarksyGroupCard {
+            MarksyCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                     val sign = if (p.adjustment > 0) "+" else ""
@@ -116,7 +113,7 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
             busy = false
         }
     }
-    MarksyGroupCard {
+    MarksyCard {
         Text("On-device AI", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
         if (status.isEmpty()) {
             Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
