@@ -4,7 +4,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -12,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -39,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.PersonalLearning
@@ -118,18 +115,18 @@ fun SmartInboxScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = MarksySpace.Gutter),
+            verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
             contentPadding = PaddingValues(bottom = OneHandListBottomPadding)
         ) {
             if (lanes.isEmpty) {
                 item(key = "empty") {
-                    EmptyState("Nothing here yet.", "New notifications matching this filter will appear here.")
+                    EmptyState("Nothing here yet", "New notifications matching this filter will appear here.")
                 }
             }
             if (lanes.needsYou.isNotEmpty()) {
                 val needsOpen = NEEDS_KEY in expanded
-                item(key = "lane-needs") { LaneLabel("Needs you", lanes.needsYou.size, MarksyTheme.RedUrgent) }
+                item(key = "lane-needs") { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
                 items(if (needsOpen) lanes.needsYou else lanes.needsYou.take(NEEDS_VISIBLE), key = { "n-" + it.thread.key }) { need ->
                     Swipeable(need.thread, swipe) {
                         NeedCard(
@@ -152,7 +149,7 @@ fun SmartInboxScreen(
                 }
             }
             if (lanes.fresh.isNotEmpty()) {
-                item(key = "lane-new") { LaneLabel("New", lanes.fresh.sumOf { it.threads.size }, MarksyTheme.PrimaryEmerald) }
+                item(key = "lane-new") { SectionLabel("New", lanes.fresh.sumOf { it.threads.size }, MarksyTheme.Positive) }
                 items(lanes.fresh, key = { "s-" + it.key }) { stack ->
                     SourceStackCard(
                         stack,
@@ -190,7 +187,7 @@ fun SmartInboxScreen(
             onFilterSelected = onFilterSelected,
             searchQuery = searchQuery,
             onSearchChange = { searchQuery = it },
-            searchPlaceholder = "Search notifications..."
+            searchPlaceholder = "Search notifications…"
         )
     }
 
@@ -261,19 +258,6 @@ private fun Swipeable(thread: InboxThread, swipe: ThreadSwipe, content: @Composa
     )
 }
 
-@Composable
-private fun LaneLabel(text: String, count: Int, dot: Color) {
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width(8.dp))
-        Text(text.uppercase(), color = MarksyTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        Spacer(Modifier.width(6.dp))
-        Text("$count", color = MarksyTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(8.dp))
-        Box(Modifier.weight(1f).height(1.dp).background(MarksyTheme.BorderGlow))
-    }
-}
-
 private fun urgencyColors(urgency: SmartInboxModel.Urgency): Pair<Color, Color> = when (urgency) {
     SmartInboxModel.Urgency.FAILURE -> MarksyTheme.RedUrgent to MarksyTheme.BadgeUrgentBg
     SmartInboxModel.Urgency.DUE -> MarksyTheme.YellowImportant to MarksyTheme.BadgeImportantBg
@@ -297,45 +281,42 @@ private fun NeedCard(
 ) {
     val event = need.thread.latest
     val (tint, tintBg) = urgencyColors(need.reason.urgency)
-    val shape = RoundedCornerShape(16.dp)
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(MarksyTheme.Surface)
-            .border(1.dp, lerp(MarksyTheme.BorderGlow, tint, 0.38f), shape)
+            .marksyCard(lerp(MarksyTheme.BorderGlow, tint, 0.38f))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.clip(RoundedCornerShape(50)).background(tintBg).padding(start = 7.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+                Modifier.clip(CircleShape).background(tintBg).padding(start = 7.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(urgencyIcon(need.reason.urgency), contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(5.dp))
-                Text(need.reason.chip, color = tint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(need.reason.chip, color = tint, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.weight(1f))
-            Text(compactTime(event.postedAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            Text(compactTime(event.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             SourceIcon(resolveSourceStyle(event), 18.dp, 11.dp)
             Spacer(Modifier.width(7.dp))
             Text(
                 if (SmartInboxModel.isSms(event)) "SMS" else event.sourceName.ifBlank { "System" },
-                color = MarksyTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
         Text(
             event.title.ifBlank { event.sourceName.ifBlank { "Notification event" } },
-            color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold,
             maxLines = 2, overflow = TextOverflow.Ellipsis
         )
         val body = EventText.body(event.title, event.body)
         if (body.isNotBlank()) {
-            Text(body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         FlowRow(
             Modifier.padding(top = 4.dp),
@@ -350,8 +331,8 @@ private fun NeedCard(
 
 @Composable
 private fun SourceIcon(style: SourceStyle, size: Dp, iconSize: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(style.iconBg), contentAlignment = Alignment.Center) {
-        Icon(style.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(iconSize))
+    Box(Modifier.size(size).clip(CircleShape).background(style.source.background), contentAlignment = Alignment.Center) {
+        Icon(style.icon, contentDescription = null, tint = style.source.accent, modifier = Modifier.size(iconSize))
     }
 }
 
@@ -377,20 +358,17 @@ internal fun SourceStackCard(
 ) = SwipeableGroup(stack, group) { headerDrag ->
     val hidden = stack.threads.size - STACK_VISIBLE
     val peek = hidden > 0 && !expanded
-    val shape = RoundedCornerShape(16.dp)
     Box(Modifier.fillMaxWidth()) {
         // A second card edge peeking out underneath says "there is more in here".
         if (peek) Box(
             Modifier.matchParentSize().padding(start = 12.dp, end = 12.dp, top = 6.dp)
-                .clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
+                .marksyCard()
         )
         Column(
             Modifier
                 .fillMaxWidth()
                 .padding(bottom = if (peek) 6.dp else 0.dp)
-                .clip(shape)
-                .background(MarksyTheme.Surface)
-                .border(1.dp, MarksyTheme.BorderGlow, shape)
+                .marksyCard()
                 .animateContentSize()
         ) {
             Row(headerDrag.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -398,19 +376,19 @@ internal fun SourceStackCard(
                 Spacer(Modifier.width(10.dp))
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        stack.label, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        stack.label, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                     )
                     if (stack.isSms) {
                         Spacer(Modifier.width(6.dp))
-                        Text("SMS", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                        Text("SMS", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                     }
                 }
                 if (stack.unread > 0) {
-                    Text("${stack.unread} new", color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("${stack.unread} new", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 if (stack.unread > 0) {
                     IconButton(onClick = { group.markRead(stack) }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Default.DoneAll, contentDescription = "Mark all from ${stack.label} read", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
@@ -420,7 +398,7 @@ internal fun SourceStackCard(
                 }
             }
             (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEachIndexed { index, thread ->
-                if (index > 0) HorizontalDivider(Modifier.padding(start = ROW_INDENT), color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
+                if (index > 0) MarksyDivider(Modifier.padding(start = ROW_INDENT))
                 // Swipe offset lives in the row's composition; keyed so a re-sort never leaves an open tray over another thread.
                 key(thread.key) {
                     Swipeable(thread, swipe) {
@@ -429,7 +407,7 @@ internal fun SourceStackCard(
                 }
             }
             if (hidden > 0) {
-                HorizontalDivider(color = MarksyTheme.BorderGlow.copy(alpha = 0.5f))
+                MarksyDivider()
                 MoreRow(
                     open = expanded,
                     hidden = hidden,
@@ -464,7 +442,7 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
                     Text(
                         text.headline,
                         color = MarksyTheme.TextPrimary,
-                        fontSize = if (text.bodyLed) 13.sp else 13.5.sp,
+                        style = MarksyType.Body,
                         fontWeight = when {
                             text.bodyLed && unread -> FontWeight.Medium
                             text.bodyLed -> FontWeight.Normal
@@ -483,30 +461,29 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
                 if (thread.count > 1) {
                     Spacer(Modifier.width(6.dp))
                     Box(
-                        Modifier.heightIn(min = 18.dp).widthIn(min = 18.dp).clip(RoundedCornerShape(50))
+                        Modifier.heightIn(min = 18.dp).widthIn(min = 18.dp).clip(CircleShape)
                             .background(MarksyTheme.BadgeTradingBg).padding(horizontal = 5.dp),
                         contentAlignment = Alignment.Center
-                    ) { Text("${thread.count}", color = MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    ) { Text("${thread.count}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Caption, fontWeight = FontWeight.Bold) }
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
             if (text.detail.isNotBlank()) {
                 Text(
-                    text.detail, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp,
+                    text.detail, color = MarksyTheme.TextSecondary, style = MarksyType.Small,
                     maxLines = if (first) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            note?.let { Text(it.text, color = it.tint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
+            note?.let { Text(it.text, color = it.tint, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp)) }
         }
     }
 }
 
 @Composable
 private fun MoreRow(open: Boolean, hidden: Int, names: List<String>, suffix: String, standalone: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
     val rotation by animateFloatAsState(if (open) 180f else 0f, label = "more-chevron")
-    val base = if (standalone) Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface).border(1.dp, MarksyTheme.BorderGlow, shape)
+    val base = if (standalone) Modifier.fillMaxWidth().marksyCard()
     else Modifier.fillMaxWidth()
     Row(
         base.clickable(onClickLabel = if (open) "Show less" else "Show $hidden more", onClick = onClick)
@@ -515,10 +492,10 @@ private fun MoreRow(open: Boolean, hidden: Int, names: List<String>, suffix: Str
     ) {
         Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp).rotate(rotation))
         Spacer(Modifier.width(6.dp))
-        Text(if (open) "Show less" else "$hidden more$suffix", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(if (open) "Show less" else "$hidden more$suffix", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold)
         if (!open) {
             Spacer(Modifier.width(8.dp))
-            Text(names.joinToString(", "), color = MarksyTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(names.joinToString(", "), color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -531,7 +508,7 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
         Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MarksyShape.Panel)
             .drawBehind {
                 drawRoundRect(
                     color = MarksyTheme.BorderGlow,
@@ -551,9 +528,9 @@ private fun EarlierFold(stacks: List<SmartInboxModel.SourceStack>, open: Boolean
                     withStyle(SpanStyle(color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Bold)) { append("Earlier") }
                     append(" · $count item${if (count == 1) "" else "s"} from ${stacks.size} source${if (stacks.size == 1) "" else "s"}")
                 },
-                color = MarksyTheme.TextSecondary, fontSize = 13.sp
+                color = MarksyTheme.TextSecondary, style = MarksyType.Body
             )
-            Text("Seen, or older than a day", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+            Text("Seen, or older than a day", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(20.dp).rotate(rotation))
     }
@@ -570,10 +547,8 @@ private fun EarlierList(
     group: GroupSwipe,
     onClearAll: () -> Unit
 ) {
-    val shape = RoundedCornerShape(16.dp)
     Column(
-        Modifier.fillMaxWidth().clip(shape).background(MarksyTheme.Surface)
-            .border(1.dp, MarksyTheme.BorderGlow.copy(alpha = 0.6f), shape)
+        Modifier.fillMaxWidth().marksyCard(MarksyTheme.BorderGlow.copy(alpha = 0.6f))
             .animateContentSize()
             .padding(vertical = 4.dp)
     ) {
@@ -591,11 +566,11 @@ private fun EarlierList(
                 Box(Modifier.alpha(0.8f)) { SourceIcon(style, 24.dp, 13.dp) }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "${stack.label} · ${stack.threads.size}", color = MarksyTheme.TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium,
+                    "${stack.label} · ${stack.threads.size}", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 if (stack.threads.size > STACK_VISIBLE) Icon(
                     Icons.Default.ExpandMore, contentDescription = if (open) "Fold ${stack.label}" else "Show all ${stack.threads.size} from ${stack.label}",
                     tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f)
@@ -611,10 +586,10 @@ private fun EarlierList(
                 ) {
                     Text(
                         if (t.bodyLed || t.detail.isBlank()) t.headline else "${t.headline} · ${t.detail}",
-                        color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                        color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, fontSize = 11.sp)
+                    Text(compactTime(thread.latest.postedAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                 }
             }
             } } }
@@ -628,9 +603,9 @@ private fun EarlierList(
 @Composable
 private fun InboxFooter(snoozed: Int, onOpenHistory: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        if (snoozed > 0) Text("$snoozed snoozed  ·  ", color = MarksyTheme.TextMuted, fontSize = 11.sp)
+        if (snoozed > 0) Text("$snoozed snoozed  ·  ", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         Text(
-            "History", color = MarksyTheme.TextSecondary, fontSize = 11.sp, textDecoration = TextDecoration.Underline,
+            "History", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, textDecoration = TextDecoration.Underline,
             modifier = Modifier.clickable(onClickLabel = "Open history", onClick = onOpenHistory).padding(4.dp)
         )
     }
@@ -646,31 +621,31 @@ private fun ThreadActionsDialog(
     val ids = thread.allIds
     MarksyDialog(
         onDismissRequest = onDismiss,
-        title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, color = MarksyTheme.TextPrimary, maxLines = 2) },
+        title = { Text(thread.latest.title.ifBlank { thread.latest.sourceName }, maxLines = 2) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                thread.why.take(8).forEach { Text("• $it", color = MarksyTheme.TextSecondary, fontSize = 12.sp) }
+                Text("Why am I seeing this?", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold)
+                thread.why.take(8).forEach { Text("• $it", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 Spacer(Modifier.height(8.dp))
-                if (thread.unread) TextButton(onClick = { run { actions.markSeen(ids) } }) { Text("Mark read") }
+                if (thread.unread) MarksyButton("Mark read", onClick = { run { actions.markSeen(ids) } }, style = MarksyButtonStyle.Text)
                 if (thread.bucket == SmartInboxModel.Bucket.RESOLVED) {
-                    TextButton(onClick = { run { actions.reopen(ids) } }) { Text("Reopen") }
+                    MarksyButton("Reopen", onClick = { run { actions.reopen(ids) } }, style = MarksyButtonStyle.Text)
                 } else {
-                    TextButton(onClick = { run { actions.resolve(ids) } }) { Text("Mark resolved") }
+                    MarksyButton("Mark resolved", onClick = { run { actions.resolve(ids) } }, style = MarksyButtonStyle.Text)
                 }
-                TextButton(onClick = { run { actions.snooze(ids, System.currentTimeMillis() + 60 * 60 * 1000L) } }) { Text("Snooze 1 hour") }
-                TextButton(onClick = { run { actions.snooze(ids, nextMorningMillis()) } }) { Text("Snooze until tomorrow 9:00") }
-                TextButton(onClick = { run { actions.archive(ids) } }) { Text("Archive") }
+                MarksyButton("Snooze 1 hour", onClick = { run { actions.snooze(ids, System.currentTimeMillis() + 60 * 60 * 1000L) } }, style = MarksyButtonStyle.Text)
+                MarksyButton("Snooze until tomorrow 9:00", onClick = { run { actions.snooze(ids, nextMorningMillis()) } }, style = MarksyButtonStyle.Text)
+                MarksyButton("Archive", onClick = { run { actions.archive(ids) } }, style = MarksyButtonStyle.Text)
                 // Explicit corrections (EPIC-012) outrank anything learned.
                 PersonalLearning.subjectsOf(thread.latest)
                     .filter { it.type != PersonalLearning.SubjectType.CATEGORY }
                     .forEach { subject ->
-                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }) { Text("Always important: ${subject.label}") }
-                        TextButton(onClick = { run { actions.prefer(subject, PersonalLearning.Preference.LESS_IMPORTANT) } }) { Text("Less from ${subject.label}") }
+                        MarksyButton("Always important: ${subject.label}", onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }, style = MarksyButtonStyle.Text)
+                        MarksyButton("Less from ${subject.label}", onClick = { run { actions.prefer(subject, PersonalLearning.Preference.LESS_IMPORTANT) } }, style = MarksyButtonStyle.Text)
                     }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { MarksyButton("Close", onClick = onDismiss, style = MarksyButtonStyle.Text) }
     )
 }
 
@@ -679,7 +654,7 @@ private fun nextMorningMillis(): Long {
     return java.time.LocalDate.now(zone).plusDays(1).atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
 }
 
-private data class SourceStyle(val icon: ImageVector, val iconBg: Color)
+private data class SourceStyle(val icon: ImageVector, val source: MarksySource)
 
 /** Source identity only; importance is shown by lane and reason chip, never by app. */
 private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
@@ -688,13 +663,13 @@ private fun resolveSourceStyle(event: NotificationEventEntity): SourceStyle {
     val category = event.category.uppercase()
     return when {
         event.isTrading || src.contains("zerodha") || src.contains("groww") || src.contains("upstox") || src.contains("kite") ->
-            SourceStyle(Icons.Default.ShowChart, Color(0xFFC62828))
-        src.contains("whatsapp") -> SourceStyle(Icons.Default.Chat, Color(0xFF2E7D32))
-        src.contains("gmail") || src.contains("mail") || category == "WORK" -> SourceStyle(Icons.Default.Email, Color(0xFF1565C0))
+            SourceStyle(Icons.Default.ShowChart, MarksySource.TRADING)
+        src.contains("whatsapp") -> SourceStyle(Icons.Default.Chat, MarksySource.WHATSAPP)
+        src.contains("gmail") || src.contains("mail") || category == "WORK" -> SourceStyle(Icons.Default.Email, MarksySource.EMAIL)
         src.contains("icici") || src.contains("bank") || src.contains("upi") || category == "PAYMENTS" || category == "BANKING" ->
-            SourceStyle(Icons.Default.AccountBalance, Color(0xFF0288D1))
-        src.contains("swiggy") || src.contains("zomato") || category == "DELIVERY" -> SourceStyle(Icons.Default.LocalShipping, Color(0xFFE65100))
-        category == "OTP" -> SourceStyle(Icons.Default.VpnKey, Color(0xFF0288D1))
-        else -> SourceStyle(Icons.Default.Notifications, Color(0xFF37474F))
+            SourceStyle(Icons.Default.AccountBalance, MarksySource.BANK)
+        src.contains("swiggy") || src.contains("zomato") || category == "DELIVERY" -> SourceStyle(Icons.Default.LocalShipping, MarksySource.DELIVERY)
+        category == "OTP" -> SourceStyle(Icons.Default.VpnKey, MarksySource.BANK)
+        else -> SourceStyle(Icons.Default.Notifications, MarksySource.OTHER)
     }
 }

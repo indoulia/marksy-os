@@ -1,12 +1,11 @@
 package com.marksy.os.ui
 
+import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.InsightsModel
 import com.marksy.os.intelligence.HomePeriod
@@ -48,54 +46,30 @@ fun InsightsScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HomePeriod.entries.forEach { option ->
-                    val isSelected = option == period
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                            .border(1.dp, if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, RoundedCornerShape(20.dp))
-                            .clickable { period = option }
-                            .padding(horizontal = 16.dp, vertical = 7.dp)
-                    ) {
-                        Text(
-                            option.label,
-                            color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
-                    }
+                    Pill(option.label, selected = option == period) { period = option }
                 }
             }
         }
 
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Notification Breakdown", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(12.dp))
-                    if (breakdown.isEmpty()) {
-                        Text("No notifications in this period.", color = MarksyTheme.TextSecondary, fontSize = 12.sp)
-                    } else {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            DonutChart(breakdown.map { it.second to categoryColor(it.first) }, periodEvents.size)
-                            Spacer(Modifier.width(20.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                breakdown.forEach { (category, count) ->
-                                    BreakdownLegendRow(categoryLabel(category), count.toString(), categoryColor(category)) {
-                                        onCategorySelected(categoryLabel(category))
-                                    }
+            MarksyCard {
+                Text("Notification Breakdown", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                if (breakdown.isEmpty()) {
+                    InlineEmpty("No notifications in this period")
+                } else {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        DonutChart(breakdown.map { it.second to categoryColor(it.first) }, periodEvents.size)
+                        Spacer(Modifier.width(20.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            breakdown.forEach { (category, count) ->
+                                BreakdownLegendRow(categoryLabel(category), count.toString(), categoryColor(category)) {
+                                    onCategorySelected(categoryLabel(category))
                                 }
                             }
                         }
@@ -110,7 +84,7 @@ fun InsightsScreen(
             if (tradingCount > 0 || movers.isNotEmpty()) {
                 val parts = mutableListOf<String>()
                 if (tradingCount > 0) parts += "$tradingCount trading notification${if (tradingCount == 1) "" else "s"}."
-                if (movers.isNotEmpty()) parts += "Marksy movers: " + movers.joinToString { "${it.symbol} ${String.format(java.util.Locale.US, "%+.1f%%", it.changePct)}" } + "."
+                if (movers.isNotEmpty()) parts += "Marksy movers: " + movers.joinToString { "${it.symbol} ${MarksyFormat.percent(it.changePct, 1)}" } + "."
                 add(Triple("Market", parts.joinToString(" "), "TRADING"))
             }
             InsightsModel.categoryInsight(periodEvents, "MESSAGES", "message", "messages", now)?.let { add(Triple("Messages", it, "MESSAGES")) }
@@ -120,7 +94,7 @@ fun InsightsScreen(
         }
 
         if (insights.isNotEmpty()) {
-            item { Text("Insights", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+            item { SectionLabel("Insights") }
             items(insights.size) { i ->
                 val (title, description, category) = insights[i]
                 AiInsightCard(title, description, categoryIcon(category), categoryColor(category), MarksyTheme.SurfaceRaised)
@@ -129,15 +103,9 @@ fun InsightsScreen(
 
         if (observations.isNotEmpty()) {
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-                ) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Patterns", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        observations.forEach { Text("• $it", color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp) }
-                    }
+                MarksyCard {
+                    Text("Patterns", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                    observations.forEach { Text("• $it", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
                 }
             }
         }
@@ -162,8 +130,8 @@ private fun DonutChart(slices: List<Pair<Int, Color>>, total: Int) {
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$total", color = MarksyTheme.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Total", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+            Text("$total", color = MarksyTheme.TextPrimary, style = MarksyType.Title)
+            Text("Total", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
     }
 }
@@ -175,12 +143,12 @@ private fun categoryLabel(category: String): String =
 private fun categoryColor(category: String): Color = when (category) {
     "TRADING" -> MarksyTheme.PrimaryEmerald
     "MESSAGES" -> MarksyTheme.SecondaryCyan
-    "EMAIL" -> Color(0xFF82B1FF)
+    "EMAIL" -> MarksyTheme.EmailBlue
     "BANKING", "PAYMENTS", "BILLS" -> MarksyTheme.BlueFinance
     "DELIVERY" -> MarksyTheme.OrangeDelivery
     "WORK" -> MarksyTheme.YellowImportant
-    "PROMOTIONS" -> Color(0xFFCE93D8)
-    "MARKET" -> Color(0xFF4DD0E1)
+    "PROMOTIONS" -> MarksyTheme.PurpleWork
+    "MARKET" -> MarksyTheme.PrimaryDark
     else -> MarksyTheme.TextMuted
 }
 
@@ -195,11 +163,11 @@ private fun categoryIcon(category: String): ImageVector = when (category) {
 
 @Composable
 private fun BreakdownLegendRow(label: String, count: String, color: Color, onClick: () -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(MarksyShape.Chip).clickable(onClick = onClick).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(8.dp))
-        Text(label, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.width(84.dp))
-        Text(count, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.width(84.dp))
+        Text(count, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -211,17 +179,8 @@ private fun AiInsightCard(
     iconColor: Color,
     bgColor: Color
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
+    MarksyCard {
+        Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -233,9 +192,9 @@ private fun AiInsightCard(
             }
             Spacer(Modifier.width(12.dp))
             Column {
-                Text(title, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(3.dp))
-                Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+                Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
             }
         }
     }

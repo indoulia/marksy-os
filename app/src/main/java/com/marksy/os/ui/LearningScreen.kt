@@ -1,11 +1,9 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -15,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ai.ModelInfo
 import com.marksy.os.ai.ModelState
@@ -38,25 +35,25 @@ fun LearningScreen(
             .thenByDescending { it.lastObservedAt })
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = 18.dp),
+        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Learn from my interactions", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Learn from my interactions", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
                     Text(
                         "Opens, resolves, snoozes and ignored notifications adjust ranking by at most ±${PersonalLearning.MAX_LEARNED_ADJUSTMENT}. " +
                             "Your corrections always win. Nothing leaves this device.",
-                        color = MarksyTheme.TextMuted, fontSize = 11.sp
+                        color = MarksyTheme.TextMuted, style = MarksyType.Meta
                     )
                 }
                 Switch(checked = enabled, onCheckedChange = onEnabledChanged)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onResetLearning) { Text("Reset learning") }
-                TextButton(onClick = onClearCorrections) { Text("Clear my corrections") }
+                MarksyButton("Reset learning", onClick = onResetLearning, style = MarksyButtonStyle.Text)
+                MarksyButton("Clear my corrections", onClick = onClearCorrections, style = MarksyButtonStyle.Text)
             }
         }
         item {
@@ -64,29 +61,24 @@ fun LearningScreen(
             AiStatusCard(aiStatus)
         }
         if (subjects.isEmpty()) {
-            item { Text("Nothing learned yet.", color = MarksyTheme.TextMuted, fontSize = 12.sp) }
+            item { InlineEmpty("Nothing learned yet") }
         }
         items(subjects, key = { "${it.subject.type}|${it.subject.key}" }) { p ->
-            Column(
-                Modifier.fillMaxWidth()
-                    .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-                    .background(MarksyTheme.Surface, RoundedCornerShape(14.dp))
-                    .padding(12.dp)
-            ) {
+            Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                     val sign = if (p.adjustment > 0) "+" else ""
-                    Text("$sign${p.adjustment}", color = if (p.adjustment >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.RedUrgent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("$sign${p.adjustment}", color = if (p.adjustment >= 0) MarksyTheme.Positive else MarksyTheme.Negative, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                 }
-                Text(p.reason, color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+                Text(p.reason, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
                 Text(
                     "${p.positive} engaged · ${p.negative} ignored/dismissed · ${p.neutral} snoozed · confidence ${(p.confidence * 100).toInt()}%",
-                    color = MarksyTheme.TextMuted, fontSize = 10.sp
+                    color = MarksyTheme.TextMuted, style = MarksyType.Caption
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { onPreference(p.subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) }) { Text("Important", fontSize = 11.sp) }
-                    TextButton(onClick = { onPreference(p.subject, PersonalLearning.Preference.LESS_IMPORTANT) }) { Text("Less", fontSize = 11.sp) }
-                    if (p.override != null) TextButton(onClick = { onPreference(p.subject, null) }) { Text("Undo correction", fontSize = 11.sp) }
+                    MarksyButton("Important", onClick = { onPreference(p.subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) }, style = MarksyButtonStyle.Text)
+                    MarksyButton("Less", onClick = { onPreference(p.subject, PersonalLearning.Preference.LESS_IMPORTANT) }, style = MarksyButtonStyle.Text)
+                    if (p.override != null) MarksyButton("Undo correction", onClick = { onPreference(p.subject, null) }, style = MarksyButtonStyle.Text)
                 }
             }
         }
@@ -123,29 +115,27 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
             busy = false
         }
     }
-    Column(Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).padding(12.dp)) {
-        Text("On-device AI", color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+        Text("On-device AI", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
         if (status.isEmpty()) {
-            Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+            Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
         }
         status.forEach { (info, state) ->
-            Text("${info.id} · ${if (info.onDevice) "on-device" else "external"} · ${aiStateLabel(state)}", color = MarksyTheme.TextSecondary, fontSize = 11.sp)
+            Text("${info.id} · ${if (info.onDevice) "on-device" else "external"} · ${aiStateLabel(state)}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             diagnostics[info]?.let { d ->
                 val parts = listOfNotNull(
                     d.modelVersion?.let { "model $it" }, d.runtimeVersion,
                     d.initMs?.let { "warm-up $it ms" }, d.lastLatencyMs?.let { "last call $it ms" },
                     "${d.calls} call${if (d.calls == 1) "" else "s"}, ${d.failures} failed", d.lastError?.let { "last error $it" }
                 )
-                Text(parts.joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                Text(parts.joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             }
             val isGemma = info.id == com.marksy.os.ai.MediaPipeGemmaBackend.ID
             if (isGemma && (state == ModelState.NOT_INSTALLED || state == ModelState.FAILED)) {
-                TextButton(enabled = !busy, onClick = { importGemma.launch(arrayOf("*/*")) }) {
-                    Text("Import Gemma model file (Kaggle .tar.gz or .task)", fontSize = 11.sp)
-                }
-                importNote?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
+                MarksyButton("Import Gemma model file (Kaggle .tar.gz or .task)", enabled = !busy, onClick = { importGemma.launch(arrayOf("*/*")) }, style = MarksyButtonStyle.Text)
+                importNote?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
             } else if (state == ModelState.NOT_INSTALLED || state == ModelState.READY || state == ModelState.FAILED) {
-                TextButton(enabled = !busy, onClick = {
+                MarksyButton(if (state == ModelState.NOT_INSTALLED) "Download model (via Android AICore)" else if (state == ModelState.FAILED) "Retry" else "Warm up", enabled = !busy, style = MarksyButtonStyle.Text, onClick = {
                     busy = true
                     scope.launch {
                         service.prepare(info.id)
@@ -153,10 +143,10 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
                         diagnostics = service.diagnostics().toMap()
                         busy = false
                     }
-                }) { Text(if (state == ModelState.NOT_INSTALLED) "Download model (via Android AICore)" else if (state == ModelState.FAILED) "Retry" else "Warm up", fontSize = 11.sp) }
+                })
             }
         }
-        Text("AI only interprets your question; answers always come from your Marksy data. External AI: off. Notification content never leaves this device.", color = MarksyTheme.TextMuted, fontSize = 10.sp)
+        Text("AI only interprets your question; answers always come from your Marksy data. External AI: off. Notification content never leaves this device.", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
     }
 }
 
