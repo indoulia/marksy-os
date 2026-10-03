@@ -6,7 +6,6 @@ import com.marksy.os.data.local.CaptureWorkflowEntity
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.data.local.TipCandidateEntity
-import com.marksy.os.notification.CaptureMedium
 import java.util.Locale
 
 sealed interface CaptureOutcome {
@@ -180,7 +179,7 @@ class CaptureGateway(
                 sourceName = if (candidate.sourceVerified) candidate.sourceName else picked?.displayName
             )
         }
-        val queued = decision == ReviewDecision.SEND && eligible(reviewed)
+        val queued = decision == ReviewDecision.SEND && CandidateDeliveryPolicy.mayQueue(reviewed, registry)
         dao.updateCandidate(reviewed.copy(deliveryState = (if (queued) DeliveryState.PENDING else DeliveryState.NOT_APPLICABLE).name))
         moveEvidence(candidate.evidenceId, from, to)
         candidate.workflowId?.let { moveWorkflow(it, if (to == CaptureState.ACCEPTED) WorkflowState.ACCEPTED else WorkflowState.REJECTED) }
@@ -198,11 +197,6 @@ class CaptureGateway(
         )
         log("capture sweep stale=${result.staleSessions} workflows=${result.expiredWorkflows} candidates=${result.expiredCandidates}")
         return result
-    }
-
-    private fun eligible(candidate: TipCandidateEntity): Boolean {
-        val source = registry.resolve(candidate.sourcePackage) ?: return false
-        return candidate.fields.forwardable && source.medium == CaptureMedium.APP_NOTIFICATION && (source.deliverable || !registry.captureListKnown())
     }
 
     private fun duplicate(candidateId: Long): CaptureOutcome {
