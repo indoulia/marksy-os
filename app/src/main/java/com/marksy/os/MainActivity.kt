@@ -142,7 +142,9 @@ class MainActivity : ComponentActivity() {
         openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
         pendingSymbol = intent?.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)
         pendingOpen = intent?.getStringExtra(EXTRA_OPEN)
-        readCaptureExtras(intent)
+        // A recreated screen keeps its open review but never replays the launch intent's review or notice.
+        if (savedInstanceState == null) readCaptureExtras(intent)
+        else pendingCaptureReview = savedInstanceState.getLong(EXTRA_REVIEW_CANDIDATE, -1L).takeIf { it > 0 }
         if (savedInstanceState == null) takeSharedImage(intent, identityApplies = true)
         lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
@@ -175,6 +177,11 @@ class MainActivity : ComponentActivity() {
         readCaptureExtras(intent)
         // getLaunchedFromPackage names the activity's first launcher, not this intent's sender.
         takeSharedImage(intent, identityApplies = false)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingCaptureReview?.let { outState.putLong(EXTRA_REVIEW_CANDIDATE, it) }
     }
 
     private fun readCaptureExtras(intent: Intent?) {
