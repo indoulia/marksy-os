@@ -34,8 +34,8 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
     Column(
         Modifier.fillMaxSize().background(MarksyTheme.Background)
             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(MarksySpace.Gutter),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
     ) {
         if (signedInUserId != null) {
             Text("Signed in as ${signedInUserId}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)

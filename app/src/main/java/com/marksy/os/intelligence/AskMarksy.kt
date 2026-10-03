@@ -1,5 +1,6 @@
 package com.marksy.os.intelligence
 
+import com.marksy.os.MarksyFormat
 import com.marksy.os.data.local.ContextEntity
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.data.local.PlanItemEntity
@@ -196,8 +197,7 @@ object AskMarksy {
         var to = date(6, fromYear ?: today.year) ?: return null
         if (fromYear == null && g[10].isBlank() && from.isAfter(today)) { from = from.minusYears(1); to = to.minusYears(1) }
         if (to.isBefore(from)) to = to.plusYears(1)
-        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-        return TimeRange(start(from, zone), start(to.plusDays(1), zone), "${from.format(fmt)} – ${to.format(fmt)}")
+        return TimeRange(start(from, zone), start(to.plusDays(1), zone), "${MarksyFormat.day(from)} – ${MarksyFormat.day(to)}")
     }
 
     private fun rangeFor(t: String, now: Long, zone: ZoneId): TimeRange? {

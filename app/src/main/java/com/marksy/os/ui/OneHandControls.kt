@@ -56,7 +56,7 @@ import androidx.compose.ui.unit.dp
 /** Bottom padding lists need so their last item clears the floating one-hand buttons. */
 val OneHandListBottomPadding = 120.dp
 
-private val FloatingButtonSize = 44.dp
+private val FloatingButtonSize = MarksySize.Touch
 
 /** Bottom padding that lets a list's last item scroll clear of a stack of [buttons] floating buttons, plus 16dp. */
 fun oneHandStackBottomPadding(buttons: Int): androidx.compose.ui.unit.Dp =
@@ -104,9 +104,9 @@ fun BoxScope.OneHandControls(
     }
 
     Column(
-        Modifier.align(Alignment.BottomEnd).fillMaxWidth().imePadding().padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.align(Alignment.BottomEnd).fillMaxWidth().imePadding().padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.Section),
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
@@ -142,8 +142,8 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
         Box(Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { open = false })
     }
     Column(
-        Modifier.align(Alignment.BottomStart).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        Modifier.align(Alignment.BottomStart).padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.Section),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         if (open) FloatingMenuPanel(options, selected, Alignment.Start, action?.let { a -> { MenuActionRow(a) { open = false; a.onClick() } } }) { onSelected(it); open = false }
         FloatingRoundButton(if (open) Icons.Default.Close else icon, label, false) { open = !open }
@@ -153,10 +153,10 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 @Composable
 private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
     Row(
-        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp),
+        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
         Spacer(Modifier.width(8.dp))
         Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
     }
@@ -171,9 +171,9 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
             .background(MarksyTheme.SurfaceRaised)
             .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
             .verticalScroll(rememberScrollState())
-            .padding(6.dp),
+            .padding(MarksySpace.Inner),
         horizontalAlignment = align,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
     ) {
         options.forEach { (key, label) ->
             val on = key == selected
@@ -186,7 +186,7 @@ private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: Str
                     .clip(MarksyShape.Pill)
                     .background(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent)
                     .clickable { onPick(key) }
-                    .padding(horizontal = 18.dp, vertical = 10.dp)
+                    .padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap)
             )
         }
         extras?.invoke()
@@ -223,7 +223,7 @@ internal fun MarksySearchField(
                     .clip(CircleShape)
                     .background(MarksyTheme.SurfaceRaised)
                     .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)
-                    .padding(start = 16.dp, end = 4.dp),
+                    .padding(start = MarksySpace.Wide, end = MarksySpace.Tight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
@@ -232,7 +232,7 @@ internal fun MarksySearchField(
                 }
                 if (value.isNotEmpty()) {
                     IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
                     }
                 }
             }
@@ -248,9 +248,9 @@ internal fun MarksySearchField(
 @Composable
 fun BoxScope.OneHandToggleButtons(options: List<Triple<String, ImageVector, String>>, selected: String, onSelected: (String) -> Unit) {
     Column(
-        Modifier.align(Alignment.BottomEnd).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.align(Alignment.BottomEnd).padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.Section),
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         options.forEach { (key, icon, label) ->
             val on = key == selected
