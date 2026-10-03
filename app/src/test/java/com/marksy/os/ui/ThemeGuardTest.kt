@@ -23,6 +23,8 @@ class ThemeGuardTest {
         Rule("date pattern", Regex("""DateTimeFormatter\.ofPattern|SimpleDateFormat\(""")),
         Rule("number format", Regex("""String\.format\(|"%[-+0-9.,]*[df]"""")),
         Rule("spacing literal", Regex("""(?:(?:padding|spacedBy)\([^)]*?|Spacer\(Modifier\.(?:width|height)\()\d+(?:\.\d+)?\.dp""")),
+        Rule("hand-built list", Regex("""(?<![A-Za-z])LazyColumn\(""")),
+        Rule("hand-built card", Regex("""(?<![A-Za-z])marksyCard\(""")),
         Rule("type override", Regex("""FontWeight\.Black|letterSpacing =|lineHeight =|fontFamily =|FontFamily\."""))
     )
 

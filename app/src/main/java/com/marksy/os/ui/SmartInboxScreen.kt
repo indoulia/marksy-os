@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -273,10 +272,7 @@ private fun NeedCard(
 ) {
     val event = need.thread.latest
     val (tint, tintBg) = urgencyColors(need.reason.urgency)
-    MarksyCard(
-        Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions"),
-        border = lerp(MarksyTheme.BorderGlow, tint, 0.38f)
-    ) {
+    MarksyCard(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions", border = lerp(MarksyTheme.BorderGlow, tint, 0.38f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MarksyBadge(need.reason.chip, tint, tintBg, icon = urgencyIcon(need.reason.urgency))
             Spacer(Modifier.weight(1f))
@@ -394,10 +390,8 @@ private fun StackRow(thread: InboxThread, smsStack: Boolean, first: Boolean, not
     val unread = thread.unread
     Box(
         Modifier
-            .fillMaxWidth()
             .background(MarksyTheme.Surface)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
-            .padding(vertical = MarksySpace.Gap)
+            .marksyRow(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions")
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -460,7 +454,7 @@ private fun MoreRow(open: Boolean, hidden: Int, names: List<String>, suffix: Str
         }
     }
     if (standalone) MarksyRowCard(onClick = onClick, onClickLabel = label) { line() }
-    else Box(Modifier.fillMaxWidth().clickable(onClickLabel = label, onClick = onClick).padding(vertical = MarksySpace.Gap)) { line() }
+    else Box(Modifier.marksyRow(onClick = onClick, onClickLabel = label)) { line() }
 }
 
 @Composable
@@ -526,9 +520,7 @@ private fun EarlierList(
             shown.forEach { thread ->
                 val t = rowText(thread.latest, stack.isSms)
                 Row(
-                    Modifier.fillMaxWidth()
-                        .combinedClickable(onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) }, onLongClickLabel = "Thread actions")
-                        .padding(vertical = MarksySpace.Inner),
+                    Modifier.marksyRow(onClick = { onOpen(thread) }, onLongClick = { onLongClick(thread) }, onLongClickLabel = "Thread actions"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(

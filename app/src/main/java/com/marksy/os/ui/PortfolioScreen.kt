@@ -564,8 +564,7 @@ private fun HoldingLine(
     val pnl = r.pnl(metric)
     val pct = r.pct(metric)
     Column(
-        Modifier.fillMaxWidth().clickable(onClickLabel = if (expanded) "Collapse ${h.symbol}" else "Expand ${h.symbol}", onClick = onToggle)
-            .padding(vertical = MarksySpace.Gap)
+        Modifier.marksyRow(onClick = onToggle, onClickLabel = if (expanded) "Collapse ${h.symbol}" else "Expand ${h.symbol}")
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {

@@ -3,7 +3,9 @@ package com.marksy.os.ui
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,10 +72,12 @@ fun MarksyCard(
     fill: Color = MarksyTheme.Surface,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel).padding(MarksySpace.CardPadding),
+        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel, onLongClick, onLongClickLabel).padding(MarksySpace.CardPadding),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner),
         content = content
     )
@@ -87,10 +91,12 @@ fun MarksyRowCard(
     fill: Color = MarksyTheme.Surface,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
-        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel)
+        modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel, onLongClick, onLongClickLabel)
             .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
         content = content
     )
@@ -141,8 +147,17 @@ fun MarksyList(
     )
 }
 
-private fun Modifier.tappable(onClick: (() -> Unit)?, label: String?): Modifier =
-    if (onClick != null) clickable(onClickLabel = label, onClick = onClick) else this
+/** One row inside a MarksyGroupCard: full width, the standard row padding, optional tap and long-press. */
+fun Modifier.marksyRow(
+    onClick: (() -> Unit)? = null, onClickLabel: String? = null, onLongClick: (() -> Unit)? = null, onLongClickLabel: String? = null
+): Modifier = fillMaxWidth().tappable(onClick, onClickLabel, onLongClick, onLongClickLabel).padding(vertical = MarksySpace.Gap)
+
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.tappable(onClick: (() -> Unit)?, label: String?, onLongClick: (() -> Unit)? = null, longLabel: String? = null): Modifier = when {
+    onLongClick != null -> combinedClickable(onClickLabel = label, onLongClickLabel = longLabel, onLongClick = onLongClick, onClick = onClick ?: {})
+    onClick != null -> clickable(onClickLabel = label, onClick = onClick)
+    else -> this
+}
 
 /** Section or lane heading: optional dot, caps label, optional count, a rule to the edge, and an optional trailing value. */
 @Composable
