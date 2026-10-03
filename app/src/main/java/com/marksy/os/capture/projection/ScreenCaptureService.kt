@@ -59,6 +59,7 @@ class ScreenCaptureService : Service() {
     // Frames thread only.
     private var reader: ImageReader? = null
     private var latest: Image? = null
+    private var pendingSize: Pair<Int, Int>? = null
 
     private val timeout = Runnable { end(CaptureFailure.SESSION_TIMEOUT) }
 
@@ -150,6 +151,7 @@ class ScreenCaptureService : Service() {
         display = granted.createVirtualDisplay(
             "MarksyCapture", width, height, densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, first.surface, null, handler
         )
+        handler.post { pendingSize?.let { (w, h) -> pendingSize = null; resize(w, h) } }
         return display != null
     }
 
@@ -159,8 +161,9 @@ class ScreenCaptureService : Service() {
     // Frames thread: a rotation or the chosen app window changed size; the same display is resized, never recreated.
     private fun resize(width: Int, height: Int) {
         val handler = framesHandler ?: return
-        val target = display ?: return
         if (width <= 0 || height <= 0) return
+        // API 34+ may report the chosen window's size before the display exists; it is applied once it does.
+        val target = display ?: return run { pendingSize = width to height }
         latest?.close()
         latest = null
         val fresh = newReader(width, height, handler)
