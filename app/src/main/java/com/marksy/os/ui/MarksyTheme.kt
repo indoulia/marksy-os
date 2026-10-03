@@ -54,14 +54,74 @@ object MarksyTheme {
     val BadgeFinanceBg = Color(0xFF0D1D33)
     val BadgeDeliveryBg = Color(0xFF2E1A00)
     val BadgeWorkBg = Color(0xFF240D33)
+    val EmailBlue = Color(0xFF82B1FF)
+    val BadgeEmailBg = Color(0xFF0F1B2E)
+
+    // Roles: screens name what a colour means, not its hue.
+    val OnAccent = Color.Black
+    val Positive = PrimaryEmerald
+    val Negative = RedUrgent
+    val Warning = YellowImportant
+    val Info = BlueFinance
+    val Divider = BorderGlow
 
     val DialogTitle = TextStyle(color = TextPrimary, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold)
     val DialogBody = TextStyle(color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
 }
 
+/** One colour pair per message source (avatar, tile, chip): the accent drawn on its dark badge background. */
+enum class MarksySource(val accent: Color, val background: Color) {
+    TRADING(MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg),
+    EMAIL(MarksyTheme.EmailBlue, MarksyTheme.BadgeEmailBg),
+    WHATSAPP(MarksyTheme.AccentGreen, MarksyTheme.BadgeTradingBg),
+    BANK(MarksyTheme.BlueFinance, MarksyTheme.BadgeFinanceBg),
+    DELIVERY(MarksyTheme.OrangeDelivery, MarksyTheme.BadgeDeliveryBg),
+    IMPORTANT(MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg),
+    URGENT(MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg),
+    WORK(MarksyTheme.PurpleWork, MarksyTheme.BadgeWorkBg),
+    OTHER(MarksyTheme.TextSecondary, MarksyTheme.SurfaceRaised)
+}
+
+/** The type scale; every Text picks one of these and sets only its colour (and weight, for emphasis). */
+object MarksyType {
+    val Display = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold)
+    val Title = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)
+    val Heading = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    /** Card titles, prices. */
+    val Lead = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    val Subhead = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    val Body = TextStyle(fontSize = 13.sp)
+    val Small = TextStyle(fontSize = 12.sp)
+    val Meta = TextStyle(fontSize = 11.sp)
+    /** Section and lane labels; callers uppercase the text. */
+    val Label = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+    val Caption = TextStyle(fontSize = 10.sp)
+}
+
+object MarksyShape {
+    val Badge = RoundedCornerShape(4.dp)
+    val Chip = RoundedCornerShape(8.dp)
+    val Pill = RoundedCornerShape(12.dp)
+    val Field = RoundedCornerShape(12.dp)
+    val Card = RoundedCornerShape(14.dp)
+    val Panel = RoundedCornerShape(16.dp)
+    val Dialog = RoundedCornerShape(20.dp)
+}
+
+object MarksySpace {
+    /** Page side margin. */
+    val Gutter = 18.dp
+    /** Between cards and rows in a list. */
+    val ListGap = 10.dp
+    val CardPadding = 12.dp
+    /** Between lines inside a card. */
+    val Inner = 6.dp
+    val Border = 1.dp
+}
+
 /** Marksy colours for every Material component (chips, checkboxes, pickers, snackbars) so none fall back to the stock light palette. */
 private val MarksyColorScheme = darkColorScheme(
-    primary = MarksyTheme.PrimaryEmerald, onPrimary = Color.Black,
+    primary = MarksyTheme.PrimaryEmerald, onPrimary = MarksyTheme.OnAccent,
     primaryContainer = MarksyTheme.BadgeTradingBg, onPrimaryContainer = MarksyTheme.PrimaryEmerald, inversePrimary = MarksyTheme.PrimaryEmerald,
     secondary = MarksyTheme.AccentGreen, onSecondary = Color.Black,
     secondaryContainer = MarksyTheme.PrimaryEmerald, onSecondaryContainer = Color.Black,
@@ -95,7 +155,7 @@ fun MarksyDialog(
     text: (@Composable () -> Unit)? = null
 ) {
     BasicAlertDialog(onDismissRequest = onDismissRequest, modifier = modifier) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MarksyTheme.Surface, border = BorderStroke(1.dp, MarksyTheme.BorderGlow)) {
+        Surface(shape = MarksyShape.Dialog, color = MarksyTheme.Surface, border = BorderStroke(MarksySpace.Border, MarksyTheme.BorderGlow)) {
             Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 6.dp)) {
                 title?.let {
                     ProvideTextStyle(MarksyTheme.DialogTitle) { it() }
