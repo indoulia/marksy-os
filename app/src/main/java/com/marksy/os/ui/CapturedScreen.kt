@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -74,12 +79,12 @@ fun CapturedScreen(
         if (lanes.earlier.isNotEmpty()) {
             val count = lanes.earlier.sumOf { it.rows.size }
             item {
-                FoldRow("Earlier · $count ${if (count == 1) "call" else "calls"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"}", "Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
+                FoldRow("Earlier", "$count ${if (count == 1) "call" else "calls"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"} · Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
             }
             if (earlierOpen) items(lanes.earlier, key = { "e${it.key}" }) { StackCard("e${it.key}", it, now, "e${it.key}" in expanded, toggle) { selected = it } }
         }
         if (lanes.rejected.isNotEmpty()) {
-            item { FoldRow("Rejected orders · ${lanes.rejected.size}", "Your broker turned these down", rejectedOpen) { rejectedOpen = !rejectedOpen } }
+            item { FoldRow("Rejected orders", "${lanes.rejected.size} · Your broker turned these down", rejectedOpen) { rejectedOpen = !rejectedOpen } }
             if (rejectedOpen) items(lanes.rejected, key = { "r${it.event.id}" }) { r ->
                 MarksyRowCard(onClick = { selected = r }) { TipRow(r, now, firstRow = true) }
             }
@@ -92,10 +97,14 @@ fun CapturedScreen(
 @Composable
 private fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
     MarksyRowCard(onClick = onClick) {
-        Text("${if (open) "▴" else "▾"} $title", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+        MarksyCardHeader(title, trailing = { ExpandChevron(open) })
         Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
     }
 }
+
+@Composable
+private fun ExpandChevron(open: Boolean) =
+    Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -128,11 +137,10 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
     val shown = if (expanded) stack.rows else stack.rows.take(SHOWN_PER_STACK)
     val hidden = stack.rows.size - SHOWN_PER_STACK
     MarksyGroupCard {
-        Row(Modifier.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-            Text(stack.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Spacer(Modifier.width(MarksySpace.Gap))
-            Text("${stack.rows.size}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-        }
+        MarksyCardHeader(
+            stack.label, Modifier.padding(vertical = MarksySpace.Gap), titleColor = MarksyTheme.PrimaryEmerald,
+            trailing = { Text("${stack.rows.size}", color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
+        )
         shown.forEachIndexed { i, r ->
             MarksyDivider()
             Column(Modifier.marksyRow(onClick = { onOpen(r) })) { TipRow(r, now, firstRow = i == 0) }
@@ -140,11 +148,13 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
         if (hidden > 0) {
             val names = stack.rows.drop(SHOWN_PER_STACK).mapNotNull { it.levels?.symbol }.distinct().take(3).joinToString(", ")
             MarksyDivider()
-            Text(
-                if (expanded) "▴ Show less" else "▾ $hidden more" + if (names.isNotEmpty()) " · $names" else "",
-                color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium,
-                modifier = Modifier.marksyRow(onClick = { onToggle(id) })
-            )
+            Row(Modifier.marksyRow(onClick = { onToggle(id) }), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (expanded) "Show less" else "$hidden more" + if (names.isNotEmpty()) " · $names" else "",
+                    color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
+                )
+                ExpandChevron(expanded)
+            }
         }
     }
 }

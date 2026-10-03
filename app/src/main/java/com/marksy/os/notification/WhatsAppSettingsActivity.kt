@@ -7,6 +7,12 @@ import com.marksy.os.ui.MarksySpace
 import com.marksy.os.ui.MarksyButtonStyle
 import com.marksy.os.ui.MarksyButton
 import com.marksy.os.ui.MarksyCard
+import com.marksy.os.ui.MarksyCardHeader
+import com.marksy.os.ui.MarksySize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
 import com.marksy.os.ui.MarksyList
 import com.marksy.os.ui.MarksyRowCard
 import com.marksy.os.ui.MarksyType
@@ -92,7 +98,7 @@ private fun WhatsAppSettingsScreen(
     MarksyList {
         item {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Text("‹", color = MarksyTheme.TextPrimary, style = MarksyType.Display) }
+            IconButton(onClick = onBack) { Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon)) }
             Column(Modifier.weight(1f)) {
                 Text("WhatsApp Connector", color = MarksyTheme.TextPrimary, style = MarksyType.Display)
                 Text("Sender allow-list", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
@@ -102,7 +108,7 @@ private fun WhatsAppSettingsScreen(
 
         item {
         MarksyCard {
-            Text(if (isEnabled) "Connector enabled" else "Connector needs permission", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead)
+            MarksyCardHeader(if (isEnabled) "Connector enabled" else "Connector needs permission", titleColor = MarksyTheme.PrimaryEmerald)
             Text(
                 "Marksy OS only persists WhatsApp text when a configured sender is matched. It does not inspect WhatsApp's private database.",
                 color = MarksyTheme.TextSecondary,

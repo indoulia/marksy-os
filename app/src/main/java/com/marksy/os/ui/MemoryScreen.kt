@@ -30,16 +30,11 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
     MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
             MarksyCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Personal memory", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Built only from notifications on this device. Turning it off stops learning; use Erase to delete what was learned.",
-                        color = MarksyTheme.TextMuted, style = MarksyType.Meta
-                    )
-                }
-                Switch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) })
-            }
+            MarksyCardHeader("Personal memory", trailing = { Switch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) }) })
+            Text(
+                "Built only from notifications on this device. Turning it off stops learning; use Erase to delete what was learned.",
+                color = MarksyTheme.TextMuted, style = MarksyType.Meta
+            )
             MarksyButton("Erase learned memory", onClick = { confirmErase = true }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
             }
         }

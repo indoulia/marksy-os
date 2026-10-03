@@ -50,7 +50,7 @@ fun RulesScreen(padding: PaddingValues) {
         // Custom Rule Builder Card
         item {
             MarksyCard(border = MarksyTheme.PrimaryEmerald) {
-                Text("Custom Rule Builder", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+                MarksyCardHeader("Custom rule builder")
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
                     Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
@@ -126,7 +126,7 @@ private fun RuleToggleCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(Modifier.weight(1f)) {
-                Text(rule.name, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+                MarksyCardHeader(rule.name)
                 Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Hair))
             }
             Switch(

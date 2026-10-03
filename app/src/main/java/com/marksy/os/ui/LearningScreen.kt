@@ -37,17 +37,12 @@ fun LearningScreen(
     MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
             MarksyCard {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Learn from my interactions", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Opens, resolves, snoozes and ignored notifications adjust ranking by at most ±${PersonalLearning.MAX_LEARNED_ADJUSTMENT}. " +
-                            "Your corrections always win. Nothing leaves this device.",
-                        color = MarksyTheme.TextMuted, style = MarksyType.Meta
-                    )
-                }
-                Switch(checked = enabled, onCheckedChange = onEnabledChanged)
-            }
+            MarksyCardHeader("Learn from my interactions", trailing = { Switch(checked = enabled, onCheckedChange = onEnabledChanged) })
+            Text(
+                "Opens, resolves, snoozes and ignored notifications adjust ranking by at most ±${PersonalLearning.MAX_LEARNED_ADJUSTMENT}. " +
+                    "Your corrections always win. Nothing leaves this device.",
+                color = MarksyTheme.TextMuted, style = MarksyType.Meta
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 MarksyButton("Reset learning", onClick = onResetLearning, style = MarksyButtonStyle.Text)
                 MarksyButton("Clear my corrections", onClick = onClearCorrections, style = MarksyButtonStyle.Text)
@@ -63,11 +58,10 @@ fun LearningScreen(
         }
         items(subjects, key = { "${it.subject.type}|${it.subject.key}" }) { p ->
             MarksyCard {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
-                    val sign = if (p.adjustment > 0) "+" else ""
+                val sign = if (p.adjustment > 0) "+" else ""
+                MarksyCardHeader("${p.subject.label} · ${p.subject.type.name.lowercase()}", trailing = {
                     Text("$sign${p.adjustment}", color = if (p.adjustment >= 0) MarksyTheme.Positive else MarksyTheme.Negative, style = MarksyType.Body, fontWeight = FontWeight.Bold)
-                }
+                })
                 Text(p.reason, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
                 Text(
                     "${p.positive} engaged · ${p.negative} ignored/dismissed · ${p.neutral} snoozed · confidence ${MarksyFormat.percent(p.confidence * 100.0, 0, signed = false)}",
@@ -114,7 +108,7 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
         }
     }
     MarksyCard {
-        Text("On-device AI", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
+        MarksyCardHeader("On-device AI")
         if (status.isEmpty()) {
             Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
         }

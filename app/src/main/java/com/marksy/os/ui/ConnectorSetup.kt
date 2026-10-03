@@ -67,7 +67,7 @@ internal fun ConnectorSetupCard() {
     }
 
     MarksyGroupCard {
-        Text("Direct sources", color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.padding(vertical = MarksySpace.Gap))
+        MarksyCardHeader("Direct sources", Modifier.padding(vertical = MarksySpace.Gap))
         connectors.forEach { c ->
             val id = c.descriptor.id
             val status = remember(tick) { syncer.status(id) }

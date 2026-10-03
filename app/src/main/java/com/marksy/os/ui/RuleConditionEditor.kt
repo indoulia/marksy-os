@@ -1,6 +1,13 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,7 +82,10 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
             Box {
-                MarksyButton("${Tree.fieldLabel(leaf.field)} ▾", onClick = { fieldMenu = true }, modifier = Modifier.testTag(tag("field", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.TextPrimary)
+                Row(Modifier.clickable { fieldMenu = true }.testTag(tag("field", path)).padding(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+                    Text(Tree.fieldLabel(leaf.field), color = MarksyTheme.TextPrimary, style = MarksyType.Body)
+                    Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
+                }
                 DropdownMenu(expanded = fieldMenu, onDismissRequest = { fieldMenu = false }) {
                     Field.entries.forEach { f ->
                         DropdownMenuItem(text = { Text(Tree.fieldLabel(f)) }, onClick = { fieldMenu = false; onChange(Tree.setLeaf(root, path, Tree.withField(leaf, f))) }, modifier = Modifier.testTag(tag("field-${f.name}", path)))
@@ -85,7 +95,7 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
             Tree.comparators(leaf.field).forEach { c ->
                 Pill(Tree.cmpLabel(c), selected = leaf.cmp == c, modifier = Modifier.testTag(tag("cmp-${c.name}", path))) { onChange(Tree.setLeaf(root, path, leaf.copy(cmp = c))) }
             }
-            MarksyButton("✕", onClick = { onChange(Tree.remove(root, path)) }, modifier = Modifier.testTag(tag("remove", path)), style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
+            IconButton(onClick = { onChange(Tree.remove(root, path)) }, modifier = Modifier.testTag(tag("remove", path))) { Icon(Icons.Default.Close, contentDescription = "Remove condition", tint = MarksyTheme.Negative, modifier = Modifier.size(MarksySize.Icon)) }
         }
         CompactTextField(
             value = leaf.value,
