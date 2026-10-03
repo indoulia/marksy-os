@@ -76,7 +76,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = bottomPadding)
     ) {
         item(key = "record") { TrackRecordStrip(summary) }
         item(key = "segments") {
@@ -118,9 +118,9 @@ internal inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<
 private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
     val s = summary ?: return
     if (s.closedCount == 0) return
-    Column(Modifier.fillMaxWidth().marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = 8.dp)) {
+    MarksyCard(padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap), spacing = 0.dp) {
         Text("Track record · ${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat("Target", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
             Stat("Stopped", s.stopLossRate?.let(::share), MarksyTheme.Negative)
             Stat("Expired", s.horizonExpiryRate?.let(::share), MarksyTheme.TextSecondary)
@@ -141,34 +141,34 @@ private fun Stat(label: String, value: String?, tint: Color) {
 internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: String? = null, onClick: () -> Unit) {
     val price = livePrice ?: p.price
     val buy = p.targetPrice >= p.entryPrice
-    Column(
-        Modifier.fillMaxWidth().marksyCard(if (p.isActionableNow) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow)
-            .clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp).animateContentSize()
+    MarksyCard(
+        Modifier.animateContentSize(), border = if (p.isActionableNow) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
+        padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(p.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-            MarksyBadge(if (buy) "BUY" else "SELL", if (buy) MarksyTheme.Positive else MarksyTheme.Negative, MarksyTheme.SurfaceRaised, Modifier.padding(start = 6.dp))
-            Text(p.companyName.orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
+            MarksyBadge(if (buy) "BUY" else "SELL", if (buy) MarksyTheme.Positive else MarksyTheme.Negative, MarksyTheme.SurfaceRaised, Modifier.padding(start = MarksySpace.Inner))
+            Text(p.companyName.orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = MarksySpace.Inner))
             price?.let { Text(callRupees(it), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold) }
         }
-        CallRange(p.stopLoss, p.entryPrice, p.targetPrice, price, Modifier.fillMaxWidth().padding(vertical = 6.dp).height(8.dp))
+        CallRange(p.stopLoss, p.entryPrice, p.targetPrice, price, Modifier.fillMaxWidth().padding(vertical = MarksySpace.Inner).height(8.dp))
         Row {
             Text("SL ${callRupees(p.stopLoss)}", color = MarksyTheme.Negative, style = MarksyType.Caption)
-            Text("Entry ${callRupees(p.entryPrice)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f).padding(horizontal = 6.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text("Entry ${callRupees(p.entryPrice)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f).padding(horizontal = MarksySpace.Inner), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text("Target ${callRupees(p.targetPrice)}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Caption)
         }
         Text(
             listOfNotNull(
                 p.remainingTradingDays?.let { "$it day${if (it == 1) "" else "s"} left" } ?: "${p.horizon}-day call",
                 if (note == null) PicksBasis.day(p.scanSessionDate)?.let { "$it call" } else null,
-                "conf ${(if (p.confidence <= 1) p.confidence * 100 else p.confidence).toInt()}%",
+                "conf ${MarksyFormat.percent(if (p.confidence <= 1) p.confidence * 100 else p.confidence, 0, signed = false)}",
                 LedgerCalls.lifecycleWord(p)?.let(::words),
                 p.lifecycleDetail
             ).joinToString(" · "),
-            color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp)
+            color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight)
         )
         // Own line: which session and when the pick was made must never be ellipsized away.
-        note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp)) }
+        note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Border)) }
     }
 }
 
@@ -186,7 +186,7 @@ private fun CallRange(stop: Double, entry: Double, target: Double, price: Double
         price?.let { now ->
             val p = x(now)
             drawRoundRect(if (p >= e) green else red, topLeft = Offset(minOf(e, p), 0f), size = Size(kotlin.math.abs(p - e).coerceAtLeast(2f), h), cornerRadius = CornerRadius(h / 2))
-            drawCircle(Color.White, radius = h * 0.75f, center = Offset(p, h / 2))
+            drawCircle(MarksyTheme.TextPrimary, radius = h * 0.75f, center = Offset(p, h / 2))
         }
         drawRect(tick, topLeft = Offset(e - 1f, -2f), size = Size(2f, h + 4f))
     }
@@ -205,13 +205,13 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
         else -> MarksyTheme.TextSecondary
     }
     Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(c.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                Text(LedgerCalls.closedLabel(c) ?: c.outcome?.let(::words) ?: "Closed", color = tint, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+                Text(LedgerCalls.closedLabel(c) ?: c.outcome?.let(::words) ?: "Closed", color = tint, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = MarksySpace.Gap))
             }
             Text(
                 listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.take(10), c.excludedReason?.let { "not scored" })
@@ -224,7 +224,7 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
 }
 
 private fun words(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
-private fun share(f: Double) = "${(f * 100).toInt()}%"
+private fun share(f: Double) = MarksyFormat.percent(f * 100, 0, signed = false)
 // Returns arrive as fractions (0.032 = 3.2%).
 private fun returnPct(f: Double) = MarksyFormat.percent(f * 100, 1)
 internal fun callRupees(v: Double) = MarksyFormat.rupees(v)

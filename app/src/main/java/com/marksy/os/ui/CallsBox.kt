@@ -49,16 +49,14 @@ internal fun CallsBox(
     fun follow(key: FollowKey, name: String) =
         FollowState(followed?.takeIf { onToggleFollow != null }?.contains(key)) { onToggleFollow?.invoke(key, name, it) }
     val leading = remember(calls) { LedgerCalls.leadingMarksyCall(calls) != null }
-    Column(
-        Modifier.fillMaxWidth().marksyCard(if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow).padding(MarksySpace.CardPadding)
-    ) {
+    MarksyCard(border = if (leading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, spacing = 0.dp) {
         Text("MARKSY", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Label)
         calls.engines.forEach { e ->
             CallGroup(e.name, null, e.scorecard, e.tips, withCaller = false, livePrice, onOpenTip, follow(FollowKey.caller(e.callerId), e.name))
         }
         AnalysisSection(analysis)
         if (calls.channels.isNotEmpty()) {
-            Text("EXTERNAL", color = MarksyTheme.TextSecondary, style = MarksyType.Label, modifier = Modifier.padding(top = 10.dp))
+            Text("EXTERNAL", color = MarksyTheme.TextSecondary, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.ListGap))
         }
         calls.channels.forEach { c ->
             CallGroup(c.name, LedgerCalls.channelType(c.type), c.scorecard, c.tips, withCaller = true, livePrice, onOpenTip, follow(FollowKey.channel(c.channelId), c.name))
@@ -74,7 +72,7 @@ private fun CallGroup(
     livePrice: Double?, onOpenTip: (String) -> Unit, follow: FollowState
 ) {
     val (open, past) = remember(tips) { tips.partition(LedgerCalls::isActive) }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -91,7 +89,7 @@ private fun CallGroup(
             past.forEach { t ->
                 Text(
                     LedgerCalls.pastLine(t, withCaller), color = toneColor(LedgerCalls.tone(t)), style = MarksyType.Meta, maxLines = 2,
-                    modifier = Modifier.fillMaxWidth().clickable { onOpenTip(t.tipId) }.padding(vertical = 3.dp)
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenTip(t.tipId) }.padding(vertical = MarksySpace.Tight)
                 )
             }
         }
@@ -100,7 +98,7 @@ private fun CallGroup(
 
 @Composable
 private fun OpenCall(t: LedgerTipDto, withCaller: Boolean, livePrice: Double?, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(top = 6.dp)) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(top = MarksySpace.Inner)) {
         Text(LedgerCalls.headline(t, withCaller), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium)
         Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
         val entry = LedgerCalls.entryMid(t)
@@ -114,13 +112,13 @@ private fun OpenCall(t: LedgerTipDto, withCaller: Boolean, livePrice: Double?, o
 internal fun ProgressBar(stop: Double, entry: Double, target: Double, price: Double?) {
     if (target == stop) return
     fun at(v: Double) = ((v - stop) / (target - stop)).coerceIn(0.0, 1.0).toFloat()
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)) {
         Canvas(Modifier.fillMaxWidth().height(16.dp)) {
             val mid = size.height / 2
             drawLine(MarksyTheme.Negative.copy(alpha = .5f), Offset(0f, mid), Offset(size.width * at(entry), mid), 4.dp.toPx(), StrokeCap.Round)
             drawLine(MarksyTheme.PrimaryEmerald.copy(alpha = .5f), Offset(size.width * at(entry), mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
             drawLine(MarksyTheme.TextSecondary, Offset(size.width * at(entry), 0f), Offset(size.width * at(entry), size.height), 1.dp.toPx())
-            price?.let { drawCircle(Color.White, 5.dp.toPx(), Offset(size.width * at(it), mid)) }
+            price?.let { drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(size.width * at(it), mid)) }
         }
         Row(Modifier.fillMaxWidth()) {
             Text("Stop", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f))
@@ -134,15 +132,15 @@ internal fun ProgressBar(stop: Double, entry: Double, target: Double, price: Dou
 internal fun Collapsible(title: String, summary: String?, preview: (@Composable ColumnScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     var open by rememberSaveable(title) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
                 summary?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
             }
-            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
+            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
         }
         preview?.let { Column(content = it) }
-        if (open) Column(Modifier.padding(bottom = 8.dp), content = content)
+        if (open) Column(Modifier.padding(bottom = MarksySpace.Gap), content = content)
     }
 }
 
@@ -153,17 +151,17 @@ private fun AnalysisSection(analysis: JSONObject?, title: String = "Marksy analy
     val a = remember(analysis) { analysis?.let(MarksyAnalysis::from) } ?: return
     if (a.gauges.isEmpty() && a.facts.isEmpty() && a.signals.isEmpty()) return
     Collapsible(title, summary = null, preview = { a.gauges.forEach { Gauge(it) } }) {
-        if (a.facts.isNotEmpty()) FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (a.facts.isNotEmpty()) FlowRow(Modifier.padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             a.facts.forEach { (label, value) -> FactPill(label, value) }
         }
         a.signals.forEach { (label, text) ->
-            Column(Modifier.padding(top = 8.dp)) {
+            Column(Modifier.padding(top = MarksySpace.Gap)) {
                 Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (a.reasons.isNotEmpty()) Text(a.reasons.joinToString(" · "), color = MarksyTheme.Warning, style = MarksyType.Meta, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-        a.basedOn?.let { Text("Based on $it", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 4.dp)) }
+        if (a.reasons.isNotEmpty()) Text(a.reasons.joinToString(" · "), color = MarksyTheme.Warning, style = MarksyType.Meta, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Gap))
+        a.basedOn?.let { Text("Based on $it", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight)) }
     }
 }
 
@@ -175,21 +173,21 @@ private fun Gauge(g: MarksyAnalysis.Gauge) {
         g.fraction >= .4f -> MarksyTheme.Warning
         else -> MarksyTheme.Negative
     }
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
         Text(g.label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.width(78.dp))
         Canvas(Modifier.weight(1f).height(10.dp)) {
             val mid = size.height / 2
-            drawLine(MarksyTheme.BorderGlow, Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.Track, Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
             drawLine(tint, Offset(0f, mid), Offset(size.width * g.fraction.coerceIn(.02f, 1f), mid), 4.dp.toPx(), StrokeCap.Round)
         }
         Text(g.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
     }
-    g.note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(start = 78.dp)) }
+    g.note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(start = MarksySpace.Gutter * 4 + MarksySpace.Inner)) }
 }
 
 @Composable
 private fun FactPill(label: String, value: String) {
-    Row(Modifier.clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
         Text("$label ", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         Text(value, color = if (value.startsWith("+")) MarksyTheme.PrimaryEmerald else if (value.startsWith("-") || value.startsWith(MarksyFormat.MINUS)) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
     }

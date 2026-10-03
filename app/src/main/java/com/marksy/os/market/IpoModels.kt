@@ -1,5 +1,6 @@
 package com.marksy.os.market
 
+import com.marksy.os.MarksyFormat
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -21,7 +22,7 @@ fun IpoValueDto?.display(prefix: String = ""): String? {
     fun n(x: Any?) = (x as? Number)?.let(IpoDetailFormatter::number)
     return when (v) {
         is Number -> prefix + n(v)
-        is String -> runCatching { java.time.LocalDate.parse(v).format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH)) }.getOrDefault(v)
+        is String -> runCatching { MarksyFormat.day(java.time.LocalDate.parse(v)) }.getOrDefault(v)
         is JSONObject -> {
             val bounds = listOf("min" to "max", "low" to "high", "lower" to "upper", "from" to "to").firstOrNull { (a, b) -> v.opt(a) is Number && v.opt(b) is Number }
             bounds?.let { (a, b) -> "$prefix${n(v.opt(a))}–${n(v.opt(b))}" } ?: v.keys().asSequence().mapNotNull { k -> n(v.opt(k)) ?: v.optString(k).takeIf { !v.isNull(k) && it.isNotBlank() } }.joinToString(" / ").ifBlank { null }

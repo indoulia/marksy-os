@@ -168,7 +168,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
+                    contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))),
                     verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
                 ) {
                     when (val s = state) {
@@ -249,7 +249,7 @@ private fun LazyListScope.pagedFooter(paged: Paged<IpoListItemDto>, key: String,
         LaunchedEffect(Unit) { paged.more() }
         MarksyLoader("Loading more…")
     } else if (note != null) item(key = "$key-end") {
-        Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), textAlign = TextAlign.Center)
+        Text(note, color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.fillMaxWidth().padding(vertical = MarksySpace.Gap), textAlign = TextAlign.Center)
     } else (paged.state as? MarketDataState.Error)?.let { e -> item(key = "$key-error") { EmptyState("${what.replaceFirstChar(Char::titlecase)} unavailable", e.message) } }
 }
 
@@ -297,11 +297,11 @@ internal fun laneColor(lane: Lane?): Color = when (lane) {
 @Composable
 private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onToggle).padding(horizontal = MarksySpace.CardPadding, vertical = 10.dp),
+        Modifier.fillMaxWidth().marksyCard().clickable(onClick = onToggle).padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(MarksyTheme.TextMuted))
-        Spacer(Modifier.width(8.dp))
+        Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(MarksyTheme.TextMuted))
+        Spacer(Modifier.width(MarksySpace.Gap))
         Column(Modifier.weight(1f)) {
             Row {
                 Text("LISTED", color = MarksyTheme.TextSecondary, style = MarksyType.Label)
@@ -309,7 +309,7 @@ private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: ()
             }
             summary?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
-        Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
+        Icon(Icons.Default.ExpandMore, if (open) "Hide listed issues" else "Show listed issues", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
     }
 }
 
@@ -320,7 +320,7 @@ internal fun IpoAvatar(name: String, size: Int = 32) {
 }
 
 @Composable
-internal fun SmeTag() = MarksyBadge("SME", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, Modifier.padding(start = 6.dp))
+internal fun SmeTag() = MarksyBadge("SME", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, Modifier.padding(start = MarksySpace.Inner))
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -330,21 +330,21 @@ private fun IpoCard(ipo: IpoListItemDto, lane: Lane, now: ZonedDateTime, detail:
     MarksyCard(border = if (lane == Lane.TODAY) MarksyTheme.Negative else MarksyTheme.BorderGlow, onClick = onClick) {
         facts.chip?.let {
             Text(it, color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold,
-                modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.BadgeUrgentBg).padding(horizontal = 8.dp, vertical = 3.dp))
+                modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.BadgeUrgentBg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IpoAvatar(ipo.companyName)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(MarksySpace.ListGap))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(ipo.companyName, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (ipo.isSme) SmeTag()
-                    if (watched) Icon(Icons.Filled.BookmarkAdded, "Watching", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                    if (watched) Icon(Icons.Filled.BookmarkAdded, "Watching", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.padding(start = MarksySpace.Tight).size(MarksySize.IconSmall))
                 }
                 val board = if (ipo.isSme) ipo.terms?.exchanges.display() else "Mainboard"
                 Text(listOfNotNull(ipo.sector, board).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(MarksySpace.Gap))
             Column(horizontalAlignment = Alignment.End) {
                 val statColor = when { facts.statUp == true -> MarksyTheme.PrimaryEmerald; facts.statUp == false && lane == Lane.LISTED -> MarksyTheme.Negative; else -> MarksyTheme.TextPrimary }
                 Text(facts.stat, color = statColor, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
@@ -363,16 +363,16 @@ private fun IpoFilterSections(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, watched: Set<String>, now: ZonedDateTime,
     listedTotal: Int?, listedDone: Boolean, onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
 ) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("STAGE", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             StageFilter.entries.forEach { f ->
                 val n = IpoLifecycle.stageCount(items, f, board, watched, now, listedTotal, listedDone)
                 Pill(if (n == null) f.label else "${f.label} $n", selected = f == stage) { onStage(f) }
             }
         }
         Text("BOARD", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             Board.entries.forEach { b -> Pill(b.label, selected = b == board) { onBoard(b) } }
         }
     }

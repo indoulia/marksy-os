@@ -4,7 +4,6 @@ import com.marksy.os.MarksyFormat
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Words a ledger tip's server state, outcome and returns (spec §6.6, §7): a withdrawn losing call is a failed exit, not an invalidation. */
@@ -15,8 +14,6 @@ object LedgerCalls {
     enum class Tone { POSITIVE, NEGATIVE, NEUTRAL, MUTED }
 
     private val IST: ZoneId = ZoneId.of("Asia/Kolkata")
-    private val DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-    private val TIME = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.ENGLISH)
     private val STATUS = mapOf(
         "TARGET_HIT" to "Target hit", "STOP_LOSS_HIT" to "Stop-loss hit", "SOURCE_EXIT" to "Exited",
         "HORIZON_EXPIRED" to "Expired", "DIRECTION_HORIZON" to "Horizon reached", "INVALIDATED" to "Invalidated",
@@ -86,7 +83,7 @@ object LedgerCalls {
     }
 
     fun progressLine(p: ProgressPointDto): String = listOfNotNull(
-        runCatching { DAY.format(LocalDate.parse(p.sessionDate)) }.getOrDefault(p.sessionDate),
+        runCatching { MarksyFormat.day(LocalDate.parse(p.sessionDate)) }.getOrDefault(p.sessionDate),
         "S${p.sessionIndex}",
         returnText(p.returnToDate),
         returnText(p.bestReturn)?.let { "best $it" },
@@ -165,10 +162,10 @@ object LedgerCalls {
         t.target?.let { "Target" to it }, entryMid(t)?.let { "Entry" to it }, t.stopLoss?.let { "Stop" to it }
     )
 
-    fun day(iso: String): String = runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(IST).format(DAY) }.getOrDefault(iso.take(10))
+    fun day(iso: String): String = runCatching { MarksyFormat.day(OffsetDateTime.parse(iso).atZoneSameInstant(IST).toLocalDate()) }.getOrDefault(iso.take(10))
 
     private fun time(iso: String): String =
-        runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(IST).format(TIME) }.getOrDefault(iso.take(16).replace('T', ' '))
+        runCatching { MarksyFormat.dayTime(OffsetDateTime.parse(iso).atZoneSameInstant(IST)) }.getOrDefault(iso.take(16).replace('T', ' '))
 
     private fun rupees(v: Double) = MarksyFormat.rupees(v)
 

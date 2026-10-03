@@ -191,7 +191,7 @@ internal fun TrustRing(trust: Int?, size: Dp, stroke: Dp, numberStyle: TextStyle
 internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier: Modifier = Modifier, height: Dp = 6.dp) {
     val shares = ScorecardGraphics.shares(listOf(hits, stops, expired, open))
     val colors = listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.Negative, MarksyTheme.TextMuted, MarksyTheme.SecondaryCyan)
-    Canvas(modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(height / 2)).background(MarksyTheme.SurfaceRaised)) {
+    Canvas(modifier.fillMaxWidth().height(height).clip(CircleShape).background(MarksyTheme.SurfaceRaised)) {
         var x = 0f
         shares.forEachIndexed { i, s ->
             val w = size.width * s
@@ -208,15 +208,15 @@ internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier
 
 @Composable
 internal fun OutcomeLegend() {
-    Row(Modifier.padding(horizontal = 2.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(horizontal = MarksySpace.Hair), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section), verticalAlignment = Alignment.CenterVertically) {
         listOf("Hit" to MarksyTheme.PrimaryEmerald, "Stop" to MarksyTheme.Negative, "Expired" to MarksyTheme.TextMuted, "Open" to null).forEach { (label, color) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(8.dp).clip(CircleShape).then(
+                    Modifier.size(MarksySize.Dot).clip(CircleShape).then(
                         if (color != null) Modifier.background(color) else Modifier.border(1.5.dp, MarksyTheme.SecondaryCyan, CircleShape)
                     )
                 )
-                Spacer(Modifier.width(5.dp))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
             }
         }
@@ -250,7 +250,7 @@ internal fun ReturnBadge(fraction: Double?, style: TextStyle = MarksyType.Body, 
     }
     Text(
         LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
-        maxLines = 1, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)
+        maxLines = 1, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Hair)
     )
 }
 

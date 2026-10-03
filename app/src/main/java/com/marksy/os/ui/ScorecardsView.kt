@@ -83,15 +83,15 @@ internal fun ScorecardsView(
         Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         state = listState,
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
     ) {
         item(key = "segments") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     ScorecardEntity.entries.forEach { e -> Pill(e.label, selected = query.entity == e) { onQueryChange(query.copy(entity = e)) } }
                 }
                 val chips = PeriodChips.toMutableList().apply { if (none { it.first == query.period }) add(1, query.period to query.period.label) }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     chips.forEach { (p, label) ->
                         Pill(label, selected = query.period == p, compact = true) {
                             if (p == ScorecardPeriod.CUSTOM) onEditFilter(query.copy(period = p)) else onQueryChange(query.copy(period = p, startDate = null, endDate = null))
@@ -102,7 +102,7 @@ internal fun ScorecardsView(
         }
         (split as? MarketDataState.Loaded)?.value?.let { s ->
             item(key = "split") {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
                     SummaryCard("Marksy", s.marksy, Modifier.weight(1f))
                     SummaryCard("External", s.external, Modifier.weight(1f))
                 }
@@ -128,7 +128,7 @@ internal fun ScorecardsView(
 @Composable
 private fun SummaryCard(name: String, body: ScorecardBodyDto, modifier: Modifier = Modifier) {
     val c = body.counts
-    Column(modifier.scoreCard(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.scoreCard(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
         TrustRing(body.trust.trustScore, 84.dp, 8.dp, MarksyType.Display)
         Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1)
         OutcomeBar(c.successful, c.failed, c.expired, c.open)
@@ -146,11 +146,11 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
     Row(
         Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick)
             .padding(start = MarksySpace.CardPadding, top = MarksySpace.CardPadding, bottom = MarksySpace.CardPadding, end = MarksySpace.CardPadding + OneHandRowEndClearance),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding), verticalAlignment = Alignment.CenterVertically
     ) {
         TrustRing(e.body.trust.trustScore, 52.dp, 6.dp, MarksyType.Lead, caption = false)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Text(e.name, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 TagChip(ScorecardSources.chip(e))
             }
@@ -160,7 +160,7 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
                 FollowPill(following, onToggleFollow, compact = true)
             }
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             val spark = remember(c) { ScorecardGraphics.sparkline(c.successful, c.failed, c.expired) }
             Sparkline(spark, ScorecardGraphics.returnTone(ret), Modifier.size(64.dp, 22.dp))
             ReturnBadge(ret)
@@ -179,21 +179,21 @@ internal fun ScorecardFilterDialog(initial: ScorecardQuery, onApply: (ScorecardQ
         onDismissRequest = onDismiss,
         title = { Text("Scorecards", color = MarksyTheme.TextPrimary) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     ScorecardEntity.entries.forEach { e -> Pill(e.label, selected = q.entity == e) { q = q.copy(entity = e) } }
                 }
                 Text("PERIOD (IST)", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     ScorecardPeriod.entries.forEach { p -> Pill(p.label, selected = q.period == p) { q = q.copy(period = p) } }
                 }
-                if (q.period == ScorecardPeriod.CUSTOM) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (q.period == ScorecardPeriod.CUSTOM) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Pill("From ${q.startDate?.let(ScorecardText::date) ?: "…"}", selected = q.startDate != null) { pickingStart = true }
                     Pill("To ${q.endDate?.let(ScorecardText::date) ?: "…"}", selected = q.endDate != null) { pickingStart = false }
                 }
                 Text("HORIZON", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Pill("All", selected = q.horizon == null) { q = q.copy(horizon = null) }
                     HorizonBucket.entries.forEach { h -> Pill(h.label, selected = q.horizon == h) { q = q.copy(horizon = h) } }
                 }
