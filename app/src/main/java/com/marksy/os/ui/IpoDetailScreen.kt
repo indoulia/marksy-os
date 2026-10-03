@@ -317,7 +317,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
             stats = listOf(
                 Triple("Subscribed", overall?.let(L::times) ?: "–", "final"),
                 Triple(poolLabel(ipo), retail?.let(L::times) ?: "–", L.retailOdds(ipo)?.replaceFirstChar { it.lowercase() } ?: ""),
-                Triple("Lists", list?.let(L::dm) ?: "–", list?.let { "${it.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}, 10:00" } ?: "")
+                Triple("Lists", list?.let(L::dm) ?: "–", list?.let { "${MarksyFormat.weekday(it)}, 10:00" } ?: "")
             )
         }
         Lane.LISTED -> {
@@ -428,7 +428,7 @@ private fun SubscriptionBody(days: List<IpoLifecycle.SubscriptionDay>, sme: Bool
     val i = pick.coerceIn(0, days.lastIndex)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         days.forEachIndexed { n, d ->
-            val dow = d.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
+            val dow = MarksyFormat.weekday(d.date)
             Pill("Day ${n + 1} · $dow ${d.date.dayOfMonth}${if (n == days.lastIndex && live) " · live" else ""}", selected = n == i) { pick = n }
         }
     }

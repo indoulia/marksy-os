@@ -113,7 +113,7 @@ private fun PlanRow(item: PlanItemEntity, now: Long, onEdit: (PlanItemEntity) ->
     ) {
         Row(Modifier.padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
             KindBadge(item.kind, critical)
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(MarksySpace.ListGap))
             Column(Modifier.weight(1f)) {
                 Text(item.title, color = if (done) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val detail = listOfNotNull(PlanText.amount(item.amountMinor), item.counterparty?.takeIf { it !in item.title }).joinToString(" · ")
@@ -168,7 +168,7 @@ private fun PlanBoard(items: List<PlanItemEntity>, now: Long, onEdit: (PlanItemE
                     .border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Panel).padding(MarksySpace.ListGap)
             ) {
                 Text("${status.label} · ${column.size}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(MarksySpace.Gap))
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = OneHandListBottomPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     if (column.isEmpty()) Text("Nothing here", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                     column.forEach { BoardCard(it, now, onEdit, onStatus) }
@@ -190,7 +190,7 @@ private fun BoardCard(item: PlanItemEntity, now: Long, onEdit: (PlanItemEntity) 
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(kindIcon(item.kind), contentDescription = kindLabel(item.kind), tint = if (critical) MarksyTheme.Negative else MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 Text(item.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             val detail = listOfNotNull(PlanText.dueLabel(item.dueAt, now), PlanText.amount(item.amountMinor)).joinToString(" · ")
@@ -215,7 +215,7 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.EventNote, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(MarksySpace.Gap))
                     Text("Upcoming", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                 }
                 Icon(Icons.Default.Add, contentDescription = "Add reminder", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable(onClick = onAdd))
@@ -227,7 +227,7 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
                 val critical = PlanRules.isCritical(PlanStatus.valueOf(item.status), item.dueAt, now)
                 Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
                     Icon(kindIcon(item.kind), contentDescription = kindLabel(item.kind), tint = if (critical) MarksyTheme.Negative else MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.IconSmall))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(MarksySpace.Gap))
                     Text(item.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     PlanText.amount(item.amountMinor)?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(horizontal = MarksySpace.Inner)) }
                     Text(

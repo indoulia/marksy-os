@@ -78,7 +78,7 @@ fun CompactTextField(
                 ) {
                     if (leadingIcon != null) {
                         Icon(leadingIcon, contentDescription = null, tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(MarksySpace.Gap))
                     }
                     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (value.isEmpty() && placeholder.isNotEmpty()) {

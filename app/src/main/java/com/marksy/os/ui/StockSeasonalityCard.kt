@@ -45,7 +45,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
     var all by rememberSaveable { mutableStateOf(false) }
     val summary = remember(table, month) { Seasonality.summary(table, month) }
     val averages = remember(table) { Seasonality.monthlyAverages(table) }
-    val monthName = Month.of(month).getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val monthName = MarksyFormat.month(Month.of(month), short = false)
     val years = if (all) table.keys.toList() else table.keys.take(RECENT_YEARS)
     Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -85,7 +85,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
                     (1..12).forEach { m ->
                         val on = m == month
                         Box(Modifier.width(CELL).height(24.dp).clip(MarksyShape.Chip).background(if (on) MarksyTheme.SurfaceRaised else Color.Transparent).clickable { month = m }, contentAlignment = Alignment.Center) {
-                            Text(Month.of(m).getDisplayName(TextStyle.SHORT, Locale.getDefault()), color = if (on) MarksyTheme.Positive else MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
+                            Text(MarksyFormat.month(Month.of(m)), color = if (on) MarksyTheme.Positive else MarksyTheme.TextSecondary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

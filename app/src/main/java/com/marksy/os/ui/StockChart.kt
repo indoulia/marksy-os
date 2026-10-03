@@ -57,7 +57,7 @@ internal object ChartAxis {
         when (range) {
             ChartRange.D1 -> MarksyFormat.time(it)
             ChartRange.W1, ChartRange.M1, ChartRange.M3 -> MarksyFormat.day(it.toLocalDate())
-            ChartRange.M6, ChartRange.Y1, ChartRange.MAX -> MarksyFormat.monthYear(it)
+            ChartRange.M6, ChartRange.Y1, ChartRange.MAX -> MarksyFormat.shortMonth(it)
             ChartRange.Y5 -> it.year.toString()
         }
     }

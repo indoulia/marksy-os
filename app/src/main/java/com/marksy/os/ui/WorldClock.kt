@@ -131,7 +131,7 @@ fun WorldClockPair(modifier: Modifier = Modifier) {
             val time = now.withZoneSameInstant(zone)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(WorldClock.abbreviation(time), color = MarksyTheme.TextMuted, style = MarksyType.Caption, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 Text(MarksyFormat.time12(time), color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
             }
         }
@@ -165,12 +165,12 @@ fun TimeZoneConverterDialog(secondZone: ZoneId, onDismiss: () -> Unit) {
                 val to = from.withZoneSameInstant(toZone)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     ZoneLabel(from, fromZone)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(MarksySpace.Inner))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Wheel((1..12).map { it.toString() }, hour12 - 1) { hour12 = it + 1 }
                         Text(":", color = MarksyTheme.TextPrimary, style = MarksyType.Display, modifier = Modifier.padding(horizontal = MarksySpace.Tight))
                         Wheel((0 until 60 step MINUTE_STEP).map { it.toString().padStart(2, '0') }, minute / MINUTE_STEP) { minute = it * MINUTE_STEP }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(MarksySpace.Gap))
                         Wheel(listOf("AM", "PM"), if (pm) 1 else 0) { pm = it == 1 }
                     }
                     IconButton(onClick = { seed = to; fromZone = toZone }) {

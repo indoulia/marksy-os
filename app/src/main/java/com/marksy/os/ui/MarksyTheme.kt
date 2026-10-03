@@ -141,6 +141,8 @@ object MarksySize {
     val Dot = 6.dp
     val Avatar = 32.dp
     val Button = 32.dp
+    /** Round icon buttons in the top bar. */
+    val HeaderButton = 36.dp
     /** Round floating buttons and the search field. */
     val Touch = 44.dp
 }

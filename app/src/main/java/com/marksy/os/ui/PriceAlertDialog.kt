@@ -31,7 +31,7 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
     val context = LocalContext.current.applicationContext
     val all by PriceAlertStore.alerts(context).collectAsStateWithLifecycle()
     val mine = all.orEmpty().filter { it.symbol == symbol }
-    var text by remember { mutableStateOf(lastPrice?.let { MarksyFormat.number(it).replace(",", "") }.orEmpty()) }
+    var text by remember { mutableStateOf(lastPrice?.let { MarksyFormat.plain(it) }.orEmpty()) }
     val target = text.replace(",", "").toDoubleOrNull()?.takeIf { it > 0 }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 

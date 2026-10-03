@@ -209,7 +209,7 @@ fun AskMarksyScreen(
                     }
                 } else null
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(MarksySpace.ListGap))
             val micScale = if (voice.listening) 1f + voice.level * 0.25f else 1f
             Box(
                 modifier = Modifier
@@ -257,7 +257,7 @@ private fun Greeting(compact: Boolean) {
             )
         }
         if (!compact) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(MarksySpace.ListGap))
             Text("Hi! I'm Marksy.", color = MarksyTheme.TextPrimary, style = MarksyType.Title, textAlign = TextAlign.Center)
             Text(
                 "Ask about notifications, emails, reminders or stocks, or name a page to open.",

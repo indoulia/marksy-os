@@ -120,7 +120,7 @@ fun BoxScope.OneHandControls(
             Row(verticalAlignment = Alignment.Bottom) {
                 if (searchOpen) {
                     MarksySearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, Modifier.weight(1f), searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } })
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(MarksySpace.ListGap))
                 }
                 FloatingRoundButton(if (searchOpen) Icons.Default.Close else Icons.Default.Search, if (searchOpen) "Close search" else "Search", searchActive && !searchOpen) {
                     searchOpen = !searchOpen
@@ -157,7 +157,7 @@ private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(MarksySpace.Gap))
         Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
     }
 }
