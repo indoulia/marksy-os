@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ButtonDefaults
@@ -305,8 +304,8 @@ internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = tr
         style = if (compact) MarksyType.Caption else MarksyType.Small,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         maxLines = 1,
-        // A compact pill keeps its look but reserves a 48dp touch target around it.
-        modifier = (if (compact) modifier.minimumInteractiveComponentSize() else modifier).clip(shape)
+        // No reserved 48dp box: wrapped rows of them wasted space, and Compose still widens the hit area at touch time.
+        modifier = modifier.clip(shape)
             .background(fill)
             .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)

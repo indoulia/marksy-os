@@ -13,15 +13,18 @@ interface NotificationEventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(event: NotificationEventEntity): Long
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE title LIKE '%<%' OR title LIKE '%&%' OR body LIKE '%<%' OR body LIKE '%&%'")
     suspend fun findWithPossibleMarkup(): List<NotificationEventEntity>
 
     @Query("UPDATE notification_events SET title = :title, body = :body WHERE id = :eventId")
     suspend fun updateText(eventId: Long, title: String, body: String): Int
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE isTrading = 0")
     suspend fun findNonTrading(): List<NotificationEventEntity>
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE category = :category")
     suspend fun findByCategory(category: String): List<NotificationEventEntity>
 

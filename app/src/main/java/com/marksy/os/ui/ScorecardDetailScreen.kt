@@ -249,7 +249,7 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
         Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
             if (points.isEmpty()) Text("No closed calls in ${if (range == ReturnRange.ALL) "this period" else range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
             else Canvas(Modifier.fillMaxSize()) {
-                val (lo, hi) = ScorecardGraphics.bounds(realised, promised)
+                val (lo, hi) = ScorecardGraphics.returnBounds(realised, promised)
                 val pad = 6.dp.toPx()
                 fun at(p: Pair<Float, Float>) = Offset(p.first * size.width, pad + p.second * (size.height - 2 * pad))
                 val zero = at(0f to ScorecardGraphics.chartPoints(listOf(0.0), lo, hi).first().second).y
@@ -259,6 +259,10 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
                 val pr = ScorecardGraphics.chartPoints(promised, lo, hi).map(::at)
                 fun line(pts: List<Offset>) = Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
                 drawPath(line(pr), MarksyTheme.SecondaryCyan, style = Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))))
+                promised.last().takeIf { it > hi || it < lo }?.let { p ->
+                    val label = measurer.measure("${if (p > hi) "↑" else "↓"} ${MarksyFormat.percent(p)}", MarksyType.Caption.copy(color = MarksyTheme.SecondaryCyan))
+                    drawText(label, topLeft = Offset(size.width - label.size.width - 2.dp.toPx(), if (p > hi) pad + 2.dp.toPx() else size.height - pad - label.size.height - 2.dp.toPx()))
+                }
                 val area = line(r).apply { lineTo(r.last().x, zero); lineTo(r.first().x, zero); close() }
                 drawPath(area, tint.copy(alpha = .15f))
                 drawPath(line(r), tint, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -335,7 +339,7 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
         else -> MarksyTheme.TextMuted
     }
     MarksyRowCard(onClick = onClick) {
-      Column(Modifier.padding(end = OneHandRowEndClearance), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+      Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(dot))
             Text(t.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -367,10 +371,7 @@ private fun CallRow(t: LedgerTipDto, onClick: () -> Unit) {
 private fun CallerRow(c: CallerScorecardDto, onClick: () -> Unit) {
     val h = c.scorecard
     MarksyRowCard(onClick = onClick) {
-      Row(
-        Modifier.padding(end = OneHandRowEndClearance),
-        horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically
-      ) {
+      Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
         TrustRing(h.trustScore, 40.dp, 5.dp, MarksyType.Small, caption = false)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             Text(c.name, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
