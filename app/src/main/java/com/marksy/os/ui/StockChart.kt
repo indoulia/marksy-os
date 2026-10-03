@@ -53,20 +53,24 @@ internal object ChartAxis {
 
     fun index(x: Float, width: Float, size: Int): Int = if (size < 2 || width <= 0) 0 else (x / width * (size - 1)).roundToInt().coerceIn(0, size - 1)
 
-    fun timeLabel(range: ChartRange, time: Long): String = format(time, when (range) {
-        ChartRange.D1 -> "HH:mm"
-        ChartRange.W1, ChartRange.M1, ChartRange.M3 -> "d MMM"
-        ChartRange.M6, ChartRange.Y1, ChartRange.MAX -> "MMM yy"
-        ChartRange.Y5 -> "yyyy"
-    })
+    fun timeLabel(range: ChartRange, time: Long): String = at(time).let {
+        when (range) {
+            ChartRange.D1 -> MarksyFormat.time(it)
+            ChartRange.W1, ChartRange.M1, ChartRange.M3 -> MarksyFormat.day(it.toLocalDate())
+            ChartRange.M6, ChartRange.Y1, ChartRange.MAX -> MarksyFormat.monthYear(it)
+            ChartRange.Y5 -> it.year.toString()
+        }
+    }
 
-    fun readout(range: ChartRange, time: Long): String = format(time, when (range) {
-        ChartRange.D1 -> "d MMM, HH:mm"
-        ChartRange.W1 -> "EEE d MMM, HH:mm"
-        else -> "d MMM yyyy"
-    })
+    fun readout(range: ChartRange, time: Long): String = at(time).let {
+        when (range) {
+            ChartRange.D1 -> MarksyFormat.dayTime(it)
+            ChartRange.W1 -> MarksyFormat.weekdayDay(it) + ", " + MarksyFormat.time(it)
+            else -> MarksyFormat.fullDay(it)
+        }
+    }
 
-    private fun format(time: Long, pattern: String) = DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(Instant.ofEpochMilli(time).atZone(IST))
+    private fun at(time: Long) = Instant.ofEpochMilli(time).atZone(IST)
 }
 
 /** Price as a line or candles with price and time axes, optional volume and indicator overlays; touching reports the nearest candle. */

@@ -27,7 +27,7 @@ internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Dou
         Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {
             Text(title, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.Bold)
             items.chunked(2).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section)) {
                     row.forEach { (name, price, change) ->
                         Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -37,7 +37,7 @@ internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Dou
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
                                 change?.let { pct ->
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(MarksySpace.Inner))
                                     Text(MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
@@ -64,7 +64,7 @@ internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, mo
             Text("$label${if (b.unchanged > 0) " · ${b.unchanged} unch." else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
             Text("${b.declines} ▼", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
         }
-        Row(Modifier.fillMaxWidth().padding(top = 3.dp).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.Positive))
             if (flat > 0.01f) Box(Modifier.weight(flat).fillMaxHeight().background(MarksyTheme.TextMuted))
             if (down > 0.01f) Box(Modifier.weight(down).fillMaxHeight().background(MarksyTheme.Negative))

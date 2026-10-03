@@ -1,6 +1,7 @@
 package com.marksy.os.portfolio
 
 import com.marksy.os.alerts.PriceAlert
+import com.marksy.os.MarksyFormat
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -65,5 +66,5 @@ object PortfolioFlags {
         return (if (open.isAfter(t)) open else open.plusDays(1)).toInstant().toEpochMilli()
     }
 
-    private fun one(v: Double) = String.format(Locale.US, "%.1f", v)
+    private fun one(v: Double) = MarksyFormat.number(v, 1)
 }

@@ -1,6 +1,7 @@
 package com.marksy.os.market
 
 import org.json.JSONObject
+import com.marksy.os.MarksyFormat
 import java.util.Locale
 
 /** Marksy's recommendation reduced to what a reader uses: a few gauges, key facts and short plain lines. */
@@ -34,7 +35,7 @@ object MarksyAnalysis {
             probability?.let { "${percent(it)} probability" }, confidence?.let { "${percent(it)} confidence" }, quality?.let { "$it trust" }
         ).joinToString(" · ").ifBlank { null }
         val facts = listOfNotNull(
-            number(o, "upsidePct")?.let { "Upside" to String.format(Locale.US, "%+.2f%%", it) },
+            number(o, "upsidePct")?.let { "Upside" to MarksyFormat.percent(it) },
             o.text("uncertainty")?.let { "Uncertainty" to words(it) },
             o.text("evidenceStrength")?.let { "Evidence" to words(it) },
             o.text("liquidity")?.let { "Liquidity" to words(it) }
@@ -76,7 +77,7 @@ object MarksyAnalysis {
     }?.takeIf { it.isFinite() }
     private fun JSONObject.text(key: String): String? = if (isNull(key)) null else optString(key).trim().takeIf { it.isNotEmpty() }
     private fun percent(f: Float) = "${Math.round(f * 100)}%"
-    private fun signedPercent(f: Double) = String.format(Locale.US, "%+.2f%%", f * 100)
-    private fun two(v: Double) = String.format(Locale.US, "%.2f", v).trimEnd('0').trimEnd('.')
+    private fun signedPercent(f: Double) = MarksyFormat.percent(f * 100)
+    private fun two(v: Double) = (if (v < 0) MarksyFormat.MINUS else "") + MarksyFormat.number(v).trimEnd('0').trimEnd('.')
     private fun words(s: String) = s.lowercase(Locale.ROOT).replace('_', ' ').replaceFirstChar { it.titlecase(Locale.ROOT) }
 }

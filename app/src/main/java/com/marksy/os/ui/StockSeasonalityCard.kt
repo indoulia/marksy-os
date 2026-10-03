@@ -56,13 +56,13 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
             val fell = s.negative * 2 > s.years
             Text(
                 "${if (fell) s.negative else s.years - s.negative} of ${s.years} years $name has ${if (fell) "fallen" else "risen"} in $monthName.",
-                color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.padding(top = 6.dp)
+                color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.padding(top = MarksySpace.Inner)
             )
             listOf(
                 listOf("Best" to "${signed(s.best.first)} (${s.best.second})", "Worst" to "${signed(s.worst.first)} (${s.worst.second})"),
                 listOf("Avg. gain" to (s.averageGain?.let(::signed) ?: "–"), "Avg. loss" to (s.averageLoss?.let(::signed) ?: "–"), "Average" to signed(s.average))
             ).forEach { row ->
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner)) {
                     row.forEach { (label, v) ->
                         Column(Modifier.weight(1f)) {
                             Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -74,7 +74,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
             }
         }
         val scroll = rememberScrollState()
-        Row(Modifier.padding(top = 10.dp)) {
+        Row(Modifier.padding(top = MarksySpace.ListGap)) {
             Column(Modifier.width(44.dp)) {
                 Cell("Year", header = true)
                 Cell("Avg", header = true)
@@ -95,7 +95,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
         }
         if (table.size > RECENT_YEARS) Text(
             if (all) "Show recent years" else "Show all ${table.size} years", color = MarksyTheme.Positive, style = MarksyType.Small,
-            modifier = Modifier.padding(top = 8.dp).clickable { all = !all }
+            modifier = Modifier.padding(top = MarksySpace.Gap).clickable { all = !all }
         )
     }
 }
@@ -109,7 +109,7 @@ private fun Cell(text: String, header: Boolean = false) {
 
 @Composable
 private fun HeatCell(v: Double?, bold: Boolean = false) {
-    Box(Modifier.width(CELL).height(24.dp).padding(1.dp).background(heat(v)), contentAlignment = Alignment.Center) {
+    Box(Modifier.width(CELL).height(24.dp).padding(MarksySpace.Border).background(heat(v)), contentAlignment = Alignment.Center) {
         if (v != null) Text(MarksyFormat.percent(v, 1, signed = false), color = MarksyTheme.TextPrimary, style = MarksyType.Caption, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center)
     }
 }
