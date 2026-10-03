@@ -76,4 +76,31 @@ class NotificationEventDaoTest {
 
         assertEquals(original, dao.findById(original.id))
     }
+
+    // Launch crash 2026-10-03 ("Couldn't read row 513 from CursorWindow"): rows leaving a list between window fills of one read.
+    @Test
+    fun longListReadsStayWholeWhileRowsChange() = runBlocking {
+        val body = "x".repeat(3000)
+        repeat(1500) { dao.insert(event(now - it).copy(title = "<t", body = body)) }
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val writer = Thread {
+            val sql = db.openHelper.writableDatabase
+            var flip = 0
+            while (!done.get()) {
+                val f = flip++ % 2
+                sql.execSQL("UPDATE notification_events SET archived = $f, isTrading = $f, category = CASE $f WHEN 1 THEN 'GONE' ELSE 'OTHER' END, title = CASE $f WHEN 1 THEN 't' ELSE '<t' END WHERE id % 300 = 0")
+            }
+        }.apply { start() }
+        try {
+            repeat(10) {
+                assertTrue(dao.observeActive().first().size in 1495..1500)
+                assertTrue(dao.findNonTrading().size in 1495..1500)
+                assertTrue(dao.findByCategory("OTHER").size in 1495..1500)
+                assertTrue(dao.findWithPossibleMarkup().size in 1495..1500)
+            }
+        } finally {
+            done.set(true)
+            writer.join()
+        }
+    }
 }
