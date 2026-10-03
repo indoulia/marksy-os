@@ -69,6 +69,9 @@ object MarksyContainer {
     /** One process-wide ML Kit client; the model is loaded once. */
     val textRecognizer: com.marksy.os.capture.TextRecognizer by lazy { com.marksy.os.capture.MlKitTextRecognizer() }
 
+    fun imageIntake(context: Context): com.marksy.os.capture.ImageIntake =
+        com.marksy.os.capture.ImageIntake(captureGateway(context), textRecognizer, log = { android.util.Log.i("MarksyCapture", it) })
+
     fun plan(context: Context): com.marksy.os.plan.PlanRepository =
         com.marksy.os.plan.PlanRepository(database(context).planItemDao(), com.marksy.os.notification.PlanAlarmScheduler(context))
 

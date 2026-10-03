@@ -119,9 +119,15 @@ class MainActivity : ComponentActivity() {
     private var pendingSymbol by mutableStateOf<String?>(null)
     /** Set by the Ask tile, launcher shortcuts and the Pulse action: which surface to open. */
     private var pendingOpen by mutableStateOf<String?>(null)
+    /** Set by a shared screenshot or a finished screen capture: the tip candidate whose review opens. */
+    private var pendingCaptureReview by mutableStateOf<Long?>(null)
+    /** A fixed capture code to explain (e.g. `protected-screen`, `not-a-tip`); never captured text. */
+    private var captureNotice by mutableStateOf<String?>(null)
 
     companion object {
         const val EXTRA_OPEN = "com.marksy.os.OPEN"
+        const val EXTRA_REVIEW_CANDIDATE = "com.marksy.os.REVIEW_CANDIDATE"
+        const val EXTRA_CAPTURE_NOTICE = "com.marksy.os.CAPTURE_NOTICE"
         const val OPEN_ASK = "ask"
         const val OPEN_BRIEFING = "briefing"
         const val OPEN_SETUPS = "setups"
@@ -135,6 +141,8 @@ class MainActivity : ComponentActivity() {
         openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
         pendingSymbol = intent?.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)
         pendingOpen = intent?.getStringExtra(EXTRA_OPEN)
+        readCaptureExtras(intent)
+        if (savedInstanceState == null) takeSharedImage(intent, identityApplies = true)
         lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
@@ -163,6 +171,29 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false)) openPlanRequest = true
         intent.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)?.let { pendingSymbol = it }
         intent.getStringExtra(EXTRA_OPEN)?.let { pendingOpen = it }
+        readCaptureExtras(intent)
+        // getLaunchedFromPackage names the activity's first launcher, not this intent's sender.
+        takeSharedImage(intent, identityApplies = false)
+    }
+
+    private fun readCaptureExtras(intent: Intent?) {
+        intent?.getLongExtra(EXTRA_REVIEW_CANDIDATE, -1L)?.takeIf { it > 0 }?.let { pendingCaptureReview = it }
+        intent?.getStringExtra(EXTRA_CAPTURE_NOTICE)?.let { captureNotice = it }
+    }
+
+    /** Path A (EPIC-037): an image shared to Marksy is recognized in memory and opens its review. */
+    private fun takeSharedImage(intent: Intent?, identityApplies: Boolean) {
+        if (intent == null || !com.marksy.os.capture.ShareIntake.isImageShare(intent.action, intent.type)) return
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val uri = androidx.core.content.IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, android.net.Uri::class.java) ?: return
+        val hint = if (identityApplies && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            com.marksy.os.capture.ShareIntake.sourceHint(launchedFromPackage, packageName)
+        } else null
+        lifecycleScope.launch {
+            val outcome = MarksyContainer.imageIntake(applicationContext).intake(contentResolver, uri, com.marksy.os.capture.CaptureMethod.USER_SHARED_IMAGE, hint)
+            com.marksy.os.capture.CaptureRouting.reviewCandidate(outcome)?.let { pendingCaptureReview = it }
+            com.marksy.os.capture.CaptureRouting.notice(outcome)?.let { captureNotice = it }
+        }
     }
 
     override fun onResume() {
