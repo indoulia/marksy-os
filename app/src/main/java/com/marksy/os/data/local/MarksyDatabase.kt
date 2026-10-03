@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class, WatchlistEntity::class, WatchlistItemEntity::class],
-    version = 8,
+    entities = [NotificationEventEntity::class, LearningSignalEntity::class, LearningOverrideEntity::class, EventActionEntity::class, ContextEntity::class, ContextLink::class, ContextRelation::class, RuleExecutionEntity::class, AiInvocationEntity::class, MemoryEntryEntity::class, ConnectorEventEntity::class, MetricCounterEntity::class, PlanItemEntity::class, WatchlistEntity::class, WatchlistItemEntity::class, CaptureEvidenceEntity::class, TipCandidateEntity::class, CaptureWorkflowEntity::class],
+    version = 9,
     exportSchema = false
 )
 abstract class MarksyDatabase : RoomDatabase() {
@@ -24,6 +24,7 @@ abstract class MarksyDatabase : RoomDatabase() {
     abstract fun metricsDao(): MetricsDao
     abstract fun planItemDao(): PlanItemDao
     abstract fun watchlistDao(): WatchlistDao
+    abstract fun captureDao(): CaptureDao
 
     companion object {
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -161,6 +162,37 @@ abstract class MarksyDatabase : RoomDatabase() {
             }
         }
 
+        // EPIC-036 capture evidence, tip candidates and notification-to-screen workflows.
+        internal val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `capture_evidence` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `method` TEXT NOT NULL, " +
+                        "`sourcePackage` TEXT, `sourceName` TEXT, `sourceVerified` INTEGER NOT NULL, `capturedAt` INTEGER NOT NULL, `evidenceRef` TEXT NOT NULL, " +
+                        "`contentHash` TEXT, `notificationEventId` INTEGER, `workflowId` INTEGER, `state` TEXT NOT NULL, `failureCode` TEXT, `updatedAt` INTEGER NOT NULL)"
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_capture_evidence_contentHash` ON `capture_evidence` (`contentHash`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_capture_evidence_capturedAt` ON `capture_evidence` (`capturedAt`)")
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `tip_candidates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `evidenceId` INTEGER NOT NULL, " +
+                        "`method` TEXT NOT NULL, `sourcePackage` TEXT, `sourceName` TEXT, `sourceVerified` INTEGER NOT NULL, `capturedAt` INTEGER NOT NULL, " +
+                        "`evidenceRef` TEXT NOT NULL, `notificationEventId` INTEGER, `workflowId` INTEGER, `extractedText` TEXT, `confidence` REAL NOT NULL, " +
+                        "`symbol` TEXT, `side` TEXT, `entry` REAL, `target` REAL, `stopLoss` REAL, `horizon` TEXT, `visibleTimestamp` TEXT, " +
+                        "`ambiguities` TEXT NOT NULL, `state` TEXT NOT NULL, `userChoseSend` INTEGER NOT NULL, `reviewedAt` INTEGER, " +
+                        "`deliveryState` TEXT NOT NULL, `deliveryAttempts` INTEGER NOT NULL, `lastDeliveryAttemptAt` INTEGER, `deliveryNote` TEXT, `updatedAt` INTEGER NOT NULL)"
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_tip_candidates_evidenceId` ON `tip_candidates` (`evidenceId`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_tip_candidates_state` ON `tip_candidates` (`state`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_tip_candidates_deliveryState` ON `tip_candidates` (`deliveryState`)")
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `capture_workflows` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourcePackage` TEXT NOT NULL, " +
+                        "`sourceKey` TEXT NOT NULL, `notificationEventId` INTEGER NOT NULL, `reason` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `openedViaDeepLink` INTEGER, `failureCode` TEXT, `candidateId` INTEGER)"
+                )
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_capture_workflows_sourcePackage_sourceKey` ON `capture_workflows` (`sourcePackage`, `sourceKey`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_capture_workflows_state` ON `capture_workflows` (`state`)")
+            }
+        }
+
         @Volatile private var INSTANCE: MarksyDatabase? = null
 
         fun getInstance(context: Context): MarksyDatabase =
@@ -170,7 +202,7 @@ abstract class MarksyDatabase : RoomDatabase() {
                     MarksyDatabase::class.java,
                     "marksy_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build()
                     .also { INSTANCE = it }
             }
