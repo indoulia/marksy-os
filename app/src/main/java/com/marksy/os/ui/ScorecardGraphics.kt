@@ -87,6 +87,14 @@ object ScorecardGraphics {
         return if (hi - lo < 1e-9) (lo - 1) to (hi + 1) else lo to hi
     }
 
+    /** Fitted to realised and zero; promised widens it only within half a span, else pins to the edge above a fifth of headroom. */
+    fun returnBounds(realised: List<Double>, promised: List<Double>): Pair<Double, Double> {
+        val (rlo, rhi) = bounds(realised)
+        val span = rhi - rlo
+        val (lo, hi) = bounds(realised, promised.filter { it in rlo - span / 2..rhi + span / 2 })
+        return (if (promised.any { it < lo }) lo - span / 5 else lo) to (if (promised.any { it > hi }) hi + span / 5 else hi)
+    }
+
     /** A row's trend from its outcome counts: hits step up, stops step down, expiries hold, spread evenly. */
     fun sparkline(hits: Int, stops: Int, expired: Int, points: Int = 16): List<Double> {
         val counts = listOf(maxOf(hits, 0), maxOf(stops, 0), maxOf(expired, 0))

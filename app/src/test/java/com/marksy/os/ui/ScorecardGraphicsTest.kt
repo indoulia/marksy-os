@@ -67,6 +67,16 @@ class ScorecardGraphicsTest {
     }
 
     @Test
+    fun aFarPromisedLineDoesNotStretchTheReturnsScale() {
+        // Realised −2.6..0 against +5 promised: the scale keeps to realised plus a fifth of headroom for the pinned line.
+        val (lo, hi) = ScorecardGraphics.returnBounds(listOf(-2.6, -2.1), listOf(5.0, 5.0))
+        assertEquals(-2.6, lo, 1e-9)
+        assertEquals(.52, hi, 1e-9)
+        // A promised line within half a span still widens the scale so it draws at its true level.
+        assertEquals(-2.0 to 2.0, ScorecardGraphics.returnBounds(listOf(-2.0, 1.0), listOf(2.0)))
+    }
+
+    @Test
     fun theChartPlotsRunningAveragesAndARangeAveragesOnlyItsOwnCloses() {
         val series = listOf(
             SeriesPointDto("2026-06-01T10:00:00Z", -0.01, 0.02, 1, realisedAvg = -0.01, promisedAvg = 0.02),

@@ -139,10 +139,7 @@ private fun SourceRow(e: EntityScorecardDto, following: Boolean, onToggleFollow:
     val c = e.body.counts
     val ret = e.body.performance.avgActualReturn
     MarksyRowCard(onClick = onClick) {
-        Row(
-            Modifier.padding(end = OneHandRowEndClearance),
-            horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             TrustRing(e.body.trust.trustScore, 40.dp, 5.dp, MarksyType.Small, caption = false)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
