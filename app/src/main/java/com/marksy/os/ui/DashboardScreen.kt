@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -28,7 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
+import java.time.Instant
+import java.time.ZoneId
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.DashboardSnapshot
 import com.marksy.os.intelligence.EventIntelligence
@@ -112,7 +114,7 @@ fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+            Column(Modifier.padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.CardPadding)) {
                 // Header Branding
                 Row(
                     Modifier.fillMaxWidth(),
@@ -120,7 +122,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))) {
+                        Box(Modifier.size(32.dp).clip(MarksyShape.Chip)) {
                             // The launcher foreground pads its mark for the adaptive mask; scaling crops to the mark.
                             androidx.compose.foundation.Image(
                                 androidx.compose.ui.res.painterResource(com.marksy.os.R.mipmap.ic_launcher_foreground), contentDescription = "Marksy",
@@ -131,33 +133,16 @@ fun DashboardScreen(
                         Text(
                             "MARKSY",
                             color = MarksyTheme.TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
+                            style = MarksyType.Title
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
                             "OS",
                             color = MarksyTheme.PrimaryEmerald,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
+                            style = MarksyType.Title
                         )
                         Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MarksyTheme.BadgeTradingBg)
-                                .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 7.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                "V2",
-                                color = MarksyTheme.PrimaryEmerald,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        MarksyBadge("V2", MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy", onClick = onOpenAsk)
@@ -172,25 +157,7 @@ fun DashboardScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     listOf("Today", "This Week", "All Time").forEach { filter ->
                         val isSelected = filter == selectedTimeFilter
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.Surface)
-                                .border(
-                                    1.dp,
-                                    if (isSelected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
-                                    RoundedCornerShape(20.dp)
-                                )
-                                .clickable { selectedTimeFilter = filter }
-                                .padding(horizontal = 16.dp, vertical = 7.dp)
-                        ) {
-                            Text(
-                                filter,
-                                color = if (isSelected) Color.Black else MarksyTheme.TextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
+                        Pill(filter, selected = isSelected) { selectedTimeFilter = filter }
                     }
                     Spacer(Modifier.weight(1f))
                     WeatherBadge(weather, weatherAvailable, onRequestWeather)
@@ -199,13 +166,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Notification Counter Card
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-                ) {
+                Box(Modifier.fillMaxWidth().marksyCard()) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                         Row(
                             Modifier.fillMaxWidth(),
@@ -217,14 +178,13 @@ fun DashboardScreen(
                                     Text(
                                         "${when (selectedTimeFilter) { "Today" -> trend.today; "This Week" -> trend.lastSevenDays.sum(); else -> trend.total }}",
                                         color = MarksyTheme.TextPrimary,
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Bold
+                                        style = MarksyType.Display
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         "Notifications",
                                         color = MarksyTheme.TextSecondary,
-                                        fontSize = 13.sp,
+                                        style = MarksyType.Body,
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.padding(bottom = 3.dp)
                                     )
@@ -238,17 +198,17 @@ fun DashboardScreen(
                                         // Just after midnight the same-time window is empty; show yesterday's full count instead.
                                         change == null && trend.yesterdayTotal > 0 -> "${trend.yesterdayTotal} yesterday"
                                         change == null -> "No data from yesterday yet"
-                                        change > 0 -> "↗ +$change% vs yesterday"
-                                        change < 0 -> "↘ $change% vs yesterday"
+                                        change > 0 -> "↗ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
+                                        change < 0 -> "↘ ${MarksyFormat.percent(change.toDouble(), 0)} vs yesterday"
                                         else -> "Same as yesterday"
                                     },
                                     // Fewer notifications than yesterday reads as good news.
                                     color = when {
                                         !today || change == null || change == 0 -> MarksyTheme.TextMuted
-                                        change < 0 -> MarksyTheme.PrimaryEmerald
-                                        else -> MarksyTheme.YellowImportant
+                                        change < 0 -> MarksyTheme.Positive
+                                        else -> MarksyTheme.Warning
                                     },
-                                    fontSize = 11.sp,
+                                    style = MarksyType.Meta,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -272,16 +232,16 @@ fun DashboardScreen(
                 val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, { onCategorySelected("Trading") }, Modifier.weight(1f))
-                        CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg, { onCategorySelected("Important") }, Modifier.weight(1f))
-                        CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksyTheme.SecondaryCyan, MarksyTheme.BadgeFinanceBg, { onCategorySelected("Messages") }, Modifier.weight(1f))
-                        CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, Color(0xFF9EA7FF), Color(0xFF1A1B33), { onCategorySelected("Teams") }, Modifier.weight(1f))
+                        CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksySource.TRADING, { onCategorySelected("Trading") }, Modifier.weight(1f))
+                        CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksySource.IMPORTANT, { onCategorySelected("Important") }, Modifier.weight(1f))
+                        CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksySource.WHATSAPP, { onCategorySelected("Messages") }, Modifier.weight(1f))
+                        CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, MarksySource.WORK, { onCategorySelected("Teams") }, Modifier.weight(1f))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, Color(0xFF82B1FF), Color(0xFF0F1B2E), { onCategorySelected("Emails") }, Modifier.weight(1f))
-                        CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksyTheme.BlueFinance, MarksyTheme.BadgeFinanceBg, { onCategorySelected("Banking") }, Modifier.weight(1f))
-                        CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, { onCategorySelected("Payments") }, Modifier.weight(1f))
-                        CategoryGridCard("Delivery", stats?.delivery?.count ?: 0, Icons.Default.LocalShipping, MarksyTheme.OrangeDelivery, MarksyTheme.BadgeDeliveryBg, { onCategorySelected("Delivery") }, Modifier.weight(1f))
+                        CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, MarksySource.EMAIL, { onCategorySelected("Emails") }, Modifier.weight(1f))
+                        CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksySource.BANK, { onCategorySelected("Banking") }, Modifier.weight(1f))
+                        CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksySource.TRADING, { onCategorySelected("Payments") }, Modifier.weight(1f))
+                        CategoryGridCard("Delivery", stats?.delivery?.count ?: 0, Icons.Default.LocalShipping, MarksySource.DELIVERY, { onCategorySelected("Delivery") }, Modifier.weight(1f))
                     }
                 }
 
@@ -306,14 +266,14 @@ fun DashboardScreen(
         if (attention.isEmpty()) {
             item {
                 EmptyDashboardCard(
-                    "Nothing needs attention yet.",
+                    "Nothing needs attention yet",
                     "Marksy OS will surface high-priority events here."
                 )
             }
         } else {
             // Keys are namespaced per section: the same event can be in both Attention and Latest Activity.
             items(attention, key = { "attention-${it.key}" }) { stack ->
-                Box(Modifier.padding(horizontal = 18.dp)) {
+                Box(Modifier.padding(horizontal = MarksySpace.Gutter)) {
                     SourceStackCard(
                         stack, expanded = "a-${stack.key}" in expanded, swipe = swipe, group = group,
                         onToggle = { toggle("a-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) },
@@ -327,13 +287,13 @@ fun DashboardScreen(
         if (latest.isEmpty()) {
             item {
                 EmptyDashboardCard(
-                    "Everything is quiet.",
+                    "Everything is quiet",
                     "Captured events will appear here when they arrive."
                 )
             }
         } else {
             items(latest, key = { "latest-${it.key}" }) { stack ->
-                Box(Modifier.padding(horizontal = 18.dp)) {
+                Box(Modifier.padding(horizontal = MarksySpace.Gutter)) {
                     SourceStackCard(
                         stack, expanded = "l-${stack.key}" in expanded, swipe = swipe, group = group,
                         onToggle = { toggle("l-${stack.key}") }, onOpen = { onEventSelected(it.latest) }, onLongClick = { onEventSelected(it.latest) }
@@ -348,9 +308,7 @@ fun DashboardScreen(
 private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () -> Unit) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MarksyTheme.Surface)
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(20.dp))
+            .marksyCard()
             .then(if (available) Modifier else Modifier.clickable(onClick = onRequest))
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -365,7 +323,7 @@ private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () ->
         Text(
             weather?.let { "${it.temperatureC}°" } ?: if (available) "--°" else "Tap",
             color = MarksyTheme.TextPrimary,
-            fontSize = 12.sp,
+            style = MarksyType.Small,
             fontWeight = FontWeight.Bold
         )
     }
@@ -382,7 +340,7 @@ private fun weatherIcon(condition: Weather.Condition): ImageVector = when (condi
 }
 
 private fun weatherTint(condition: Weather.Condition): Color = when (condition) {
-    Weather.Condition.CLEAR -> MarksyTheme.YellowImportant
+    Weather.Condition.CLEAR -> MarksyTheme.Warning
     Weather.Condition.RAIN, Weather.Condition.THUNDER -> MarksyTheme.SecondaryCyan
     else -> MarksyTheme.TextSecondary
 }
@@ -392,17 +350,14 @@ private fun CategoryGridCard(
     title: String,
     count: Int,
     icon: ImageVector,
-    iconColor: Color,
-    bgColor: Color,
+    source: MarksySource,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
     Box(
         modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MarksyTheme.Surface)
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+            .marksyCard()
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -414,13 +369,13 @@ private fun CategoryGridCard(
                 modifier = Modifier
                     .size(23.dp)
                     .clip(CircleShape)
-                    .background(bgColor),
+                    .background(source.background),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(15.dp))
+                Icon(icon, contentDescription = title, tint = source.accent, modifier = Modifier.size(15.dp))
             }
             Spacer(Modifier.width(6.dp))
-            Text("$count", color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("$count", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
@@ -430,9 +385,7 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
     // Plain clickable Box: a clickable Card enforces a 48dp minimum height.
     Box(
         modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MarksyTheme.Surface)
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
+            .marksyCard()
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -442,7 +395,7 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
         ) {
             Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
@@ -458,22 +411,14 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
     val closed = (live as? UpstoxLiveState.Live)?.marketOpen == false && liveQuotes != null
     val sourceLine = when {
         streaming || closed -> null
-        liveQuotes != null -> "Upstox reconnecting · last tick ${liveTime.format(java.util.Date((live as UpstoxLiveState.Live).lastTickAt))}"
+        liveQuotes != null -> "Upstox reconnecting · last tick ${MarksyFormat.time(Instant.ofEpochMilli((live as UpstoxLiveState.Live).lastTickAt).atZone(ZoneId.systemDefault()))}"
         live is UpstoxLiveState.Failed && live.tokenRejected -> "Upstox token rejected — update it in More → Upstox. Showing Marksy data."
         live is UpstoxLiveState.Failed -> "Upstox unavailable (${live.message}). Showing Marksy data."
         snapshot != null -> "Marksy market snapshot" + (snapshot.asOf?.let { " · as of $it" } ?: "")
         else -> null
     }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onOpenTrading)
-    ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    Box(Modifier.fillMaxWidth().marksyCard().clickable(onClick = onOpenTrading)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = MarksySpace.CardPadding)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -482,7 +427,7 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Market Pulse", color = MarksyTheme.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Market Pulse", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     when {
@@ -495,7 +440,7 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                         Icon(
                             Icons.Default.Info,
                             contentDescription = "Data source",
-                            tint = if (live is UpstoxLiveState.Failed) MarksyTheme.YellowImportant else MarksyTheme.TextMuted,
+                            tint = if (live is UpstoxLiveState.Failed) MarksyTheme.Warning else MarksyTheme.TextMuted,
                             modifier = Modifier.size(18.dp).clip(CircleShape).clickable { showSource = !showSource }
                         )
                     }
@@ -503,7 +448,7 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
             }
             // Source/freshness is one tap away instead of a permanent line.
             if (showSource && sourceLine != null) {
-                Text(sourceLine, color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 4.dp))
             }
 
             Spacer(Modifier.height(10.dp))
@@ -520,12 +465,12 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                 else -> Text(
                     when (market) {
                         MarketState.Loading -> ""
-                        MarketState.NotConfigured -> "Connect the Marksy gateway in Settings to see live indices."
+                        MarketState.NotConfigured -> "Marksy is not connected. Sign in to your Marksy account in More to see live indices."
                         is MarketState.Unavailable -> "Market data unavailable right now."
                         is MarketState.Loaded -> "No index data in the latest Marksy snapshot."
                     },
                     color = MarksyTheme.TextSecondary,
-                    fontSize = 12.sp
+                    style = MarksyType.Small
                 )
             }
 
@@ -543,9 +488,9 @@ private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
                 row.forEach { (name, value, change) ->
                     // Name left; price and change in fixed right-aligned columns so they line up row to row.
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, color = MarksyTheme.TextSecondary, fontSize = 10.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(46.dp))
-                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(37.dp))
+                        Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(46.dp))
+                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Caption, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(37.dp))
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -563,7 +508,7 @@ fun HeaderIconBadge(icon: ImageVector, contentDescription: String, onClick: () -
             .size(36.dp)
             .clip(CircleShape)
             .background(MarksyTheme.SurfaceRaised)
-            .border(1.dp, MarksyTheme.BorderGlow, CircleShape)
+            .border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -574,37 +519,36 @@ fun HeaderIconBadge(icon: ImageVector, contentDescription: String, onClick: () -
 @Composable
 internal fun MarketStatusBadge(status: String) {
     val open = status.equals("OPEN", ignoreCase = true) || status.equals("LIVE", ignoreCase = true) || status.equals("MARKET_HOURS", ignoreCase = true)
-    val tint = if (open) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+    if (open) { MarksyBadge("LIVE", MarksyTheme.OnAccent, MarksyTheme.PrimaryEmerald); return }
+    val tint = MarksyTheme.TextSecondary
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (open) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
-            .border(1.dp, tint, RoundedCornerShape(12.dp))
+            .clip(MarksyShape.Pill)
+            .background(MarksyTheme.SurfaceRaised)
+            .border(MarksySpace.Border, tint, MarksyShape.Pill)
             .padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
         Spacer(Modifier.width(5.dp))
-        Text(if (open) "LIVE" else formatMarketStatus(status).uppercase(), color = tint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(formatMarketStatus(status).uppercase(), color = tint, style = MarksyType.Caption, fontWeight = FontWeight.Bold)
     }
 }
 
 // Small indices (INDIA VIX ~12) need decimals to be meaningful.
-private fun formatIndex(value: Double): String = String.format(java.util.Locale.getDefault(), if (value < 1000) "%,.2f" else "%,.0f", value)
+private fun formatIndex(value: Double): String = MarksyFormat.number(value, if (value < 1000) 2 else 0)
 
-private val liveTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-
-private fun formatChange(pct: Double): String = String.format(java.util.Locale.US, "%+.2f%%", pct)
+private fun formatChange(pct: Double): String = MarksyFormat.percent(pct)
 
 @Composable
 private fun AiSummaryBanner(summary: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF0F261C), Color(0xFF0C1B13))))
-            .border(1.dp, MarksyTheme.PrimaryEmerald, RoundedCornerShape(16.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .clip(MarksyShape.Panel)
+            .background(Brush.linearGradient(listOf(MarksyTheme.BadgeTradingBg, MarksyTheme.Surface)))
+            .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
+            .padding(horizontal = 16.dp, vertical = MarksySpace.CardPadding)
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -615,39 +559,27 @@ private fun AiSummaryBanner(summary: String) {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(15.dp))
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(6.dp))
-            Text(summary, color = MarksyTheme.TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(summary, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
         }
     }
 }
 
 @Composable
 private fun SectionTitle(title: String, link: String? = null, onLink: () -> Unit = {}) = Row(
-    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+    Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter, vertical = 4.dp),
     verticalAlignment = Alignment.CenterVertically
 ) {
-    Text(title, color = MarksyTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+    SectionLabel(title, modifier = Modifier.weight(1f))
     link?.let {
         Text(
-            "$it ›", color = MarksyTheme.PrimaryEmerald, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onLink).padding(horizontal = 6.dp, vertical = 4.dp)
+            "$it ›", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onLink).padding(horizontal = 6.dp, vertical = 4.dp)
         )
     }
 }
 
 @Composable
-private fun EmptyDashboardCard(title: String, description: String) = Card(
-    colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-    shape = RoundedCornerShape(14.dp),
-    modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 18.dp)
-        .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-) {
-    Column(Modifier.padding(16.dp)) {
-        Text(title, color = MarksyTheme.TextPrimary, fontWeight = FontWeight.SemiBold)
-        Text(description, color = MarksyTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-    }
-}
+private fun EmptyDashboardCard(title: String, description: String) = Box(Modifier.padding(horizontal = MarksySpace.Gutter)) { EmptyState(title, description) }

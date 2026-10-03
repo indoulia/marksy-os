@@ -7,10 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.gateway.AuthRepository
 import kotlinx.coroutines.launch
 
@@ -40,20 +38,20 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (signedInUserId != null) {
-            Text("Signed in as ${signedInUserId}", color = MarksyTheme.PrimaryEmerald, fontSize = 14.sp)
-            OutlinedButton(onClick = {
+            Text("Signed in as ${signedInUserId}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
+            MarksyButton("Sign Out", onClick = {
                 scope.launch {
                     authRepository.logout()
                     signedInUserId = null
                 }
-            }) { Text("Sign Out", color = MarksyTheme.RedUrgent) }
+            }, style = MarksyButtonStyle.Outlined, color = MarksyTheme.Negative)
             return@Column
         }
 
         Text(
             "Sign in with your Marksy account. This replaces any previously configured integration or market keys.",
             color = MarksyTheme.TextSecondary,
-            fontSize = 13.sp
+            style = MarksyType.Body
         )
         // CompactTextField renders `label` as a separate node above the field, outside its
         // own semantics boundary -- unreachable by a single onNodeWithText().performTextInput()
@@ -77,11 +75,12 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = remember, onCheckedChange = { remember = it })
-            Text("Remember me on this device", color = MarksyTheme.TextSecondary, fontSize = 13.sp)
+            Text("Remember me on this device", color = MarksyTheme.TextSecondary, style = MarksyType.Body)
         }
-        Button(
+        MarksyButton(
+            text = if (signingIn) "Signing In…" else "Sign In",
             onClick = {
-                if (signingIn) return@Button
+                if (signingIn) return@MarksyButton
                 signingIn = true
                 errorMessage = null
                 scope.launch {
@@ -98,9 +97,8 @@ fun LoginScreen(authRepository: AuthRepository, padding: PaddingValues, currentU
                     }
                 }
             },
-            enabled = userId.isNotBlank() && (password.isNotBlank() || useSaved) && !signingIn,
-            colors = ButtonDefaults.buttonColors(containerColor = MarksyTheme.PrimaryEmerald)
-        ) { Text(if (signingIn) "Signing In..." else "Sign In", color = androidx.compose.ui.graphics.Color.Black) }
-        errorMessage?.let { Text(it, color = MarksyTheme.RedUrgent, fontSize = 13.sp) }
+            enabled = userId.isNotBlank() && (password.isNotBlank() || useSaved) && !signingIn
+        )
+        errorMessage?.let { Text(it, color = MarksyTheme.Negative, style = MarksyType.Body) }
     }
 }

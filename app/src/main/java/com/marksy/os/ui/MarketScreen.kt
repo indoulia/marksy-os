@@ -3,7 +3,6 @@ package com.marksy.os.ui
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.filled.SwapVert
@@ -28,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.MarketIntelligenceRepository
@@ -171,7 +166,7 @@ fun MarketScreen(
             // The open stock's own symbol is not a search, so the field starts empty on its page.
             searchQuery = when { portfolioTools -> portfolioQuery; stockSearch -> stockQuery.takeUnless { it.equals(selectedSymbol, ignoreCase = true) }.orEmpty(); else -> null },
             onSearchChange = onSearch,
-            searchPlaceholder = if (stockSearch) "Search symbols..." else "Search holdings...",
+            searchPlaceholder = if (stockSearch) "Search symbols…" else "Search holdings…",
             searchSymbols = stockSearch,
             onSearchSubmit = onStockSubmit.takeIf { stockSearch },
             searchResetKey = selectedSymbol,
@@ -200,7 +195,7 @@ internal fun StockSuggestions(
         value = runCatching { com.marksy.os.upstox.UpstoxInstruments.suggest(context, query) }.getOrDefault(emptyList())
     }
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         contentPadding = PaddingValues(top = 8.dp, bottom = padding.calculateBottomPadding())
     ) {
         val list = matches
@@ -212,7 +207,7 @@ internal fun StockSuggestions(
                     Text(
                         symbol,
                         color = MarksyTheme.TextPrimary,
-                        fontSize = 14.sp,
+                        style = MarksyType.Subhead,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f).padding(vertical = 12.dp)
                     )
@@ -225,18 +220,12 @@ internal fun StockSuggestions(
 
 @Composable
 private fun MarketUpdateCard(event: NotificationEventEntity, onClick: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)).clickable(onClick = onClick)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(event.sourceName, color = MarksyTheme.PrimaryEmerald, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                compactTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, fontSize = 10.sp) }
-            }
-            Text(event.title, color = MarksyTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+    MarksyCard(onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(event.sourceName, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+            compactTime(event.postedAt)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
         }
+        Text(event.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }
 }

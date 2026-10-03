@@ -2,7 +2,6 @@ package com.marksy.os.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.widget.Toast
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,7 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
@@ -35,14 +34,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.AskMarksy
 import kotlinx.coroutines.launch
 import com.marksy.os.gateway.MarketState
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.marksy.os.MarksyFormat
+import java.time.Instant
+import java.time.ZoneId
 
 private val promptOptions = listOf(
     "💡 What happened today?",
@@ -129,19 +127,20 @@ fun AskMarksyScreen(
         if (conversation.isNotEmpty()) listState.animateScrollToItem(conversation.size)
     }
 
+    val notice = rememberNotice()
     val voice = rememberVoiceInput(
         onPartial = { input = it },
         onFinal = { ask(it) },
-        onError = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+        onError = { notice(it) }
     )
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) voice.start()
-        else Toast.makeText(context, "Microphone permission is needed for voice questions.", Toast.LENGTH_SHORT).show()
+        else notice("Microphone permission is needed for voice questions.")
     }
     val onMic = {
         when {
             voice.listening -> voice.stop()
-            !voice.available -> Toast.makeText(context, "Voice recognition isn't available on this device.", Toast.LENGTH_SHORT).show()
+            !voice.available -> notice("Voice recognition isn't available on this device.")
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> voice.start()
             else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -159,21 +158,16 @@ fun AskMarksyScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = MarksySpace.Gutter, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item { Greeting(compact = conversation.isNotEmpty()) }
 
             if (conversation.isEmpty()) {
                 itemsIndexed(promptOptions) { _, prompt ->
-                    Card(
-                        onClick = { ask(prompt) },
-                        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth().border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-                    ) {
-                        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(prompt, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    MarksyCard(onClick = { ask(prompt) }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(prompt, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
                         }
                     }
@@ -185,21 +179,11 @@ fun AskMarksyScreen(
 
         if (conversation.isNotEmpty()) {
             Row(
-                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 6.dp),
+                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = MarksySpace.Gutter, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 promptOptions.forEach { prompt ->
-                    Text(
-                        prompt,
-                        color = MarksyTheme.TextSecondary,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MarksyTheme.Surface)
-                            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp))
-                            .clickable { ask(prompt) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
+                    Pill(prompt) { ask(prompt) }
                 }
             }
         }
@@ -233,7 +217,7 @@ fun AskMarksyScreen(
                     .scale(micScale)
                     .clip(CircleShape)
                     .background(
-                        if (voice.listening) Brush.linearGradient(listOf(MarksyTheme.RedUrgent, Color(0xFFFF7043)))
+                        if (voice.listening) Brush.linearGradient(listOf(MarksyTheme.Negative, MarksyTheme.OrangeDelivery))
                         else Brush.linearGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.AccentGreen))
                     )
                     .clickable(onClick = onMic),
@@ -242,7 +226,7 @@ fun AskMarksyScreen(
                 Icon(
                     if (voice.listening) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (voice.listening) "Stop listening" else "Speak a question",
-                    tint = Color.Black,
+                    tint = MarksyTheme.OnAccent,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -264,23 +248,22 @@ private fun Greeting(compact: Boolean) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(orb).scale(orbScale)) {
             Box(
                 Modifier.size(orb).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(Color(0x4000E676), Color(0x1000E5FF), Color.Transparent)))
+                    .background(Brush.radialGradient(listOf(MarksyTheme.PrimaryEmerald.copy(alpha = .25f), MarksyTheme.SecondaryCyan.copy(alpha = .06f), Color.Transparent)))
             )
             Box(
                 Modifier.size(orb * 0.7f).clip(CircleShape)
-                    .background(Brush.radialGradient(listOf(Color(0xFF00FF87), Color(0xFF00E5FF), Color(0xFF07241A), Color.Black)))
+                    .background(Brush.radialGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.SecondaryCyan, MarksyTheme.BadgeTradingBg, MarksyTheme.Background)))
                     .border(2.dp, MarksyTheme.PrimaryEmerald, CircleShape)
             )
         }
         if (!compact) {
             Spacer(Modifier.height(10.dp))
-            Text("Hi! I'm Marksy.", color = MarksyTheme.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Text("Hi! I'm Marksy.", color = MarksyTheme.TextPrimary, style = MarksyType.Title, textAlign = TextAlign.Center)
             Text(
                 "Ask about notifications, emails, reminders or stocks, or name a page to open.",
                 color = MarksyTheme.TextSecondary,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                style = MarksyType.Body,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -289,9 +272,12 @@ private fun Greeting(compact: Boolean) {
 private fun pickNote(action: AskMarksy.Action?, market: MarketState): String {
     if (action?.page != AskMarksy.Page.STOCK) return ""
     val pick = (market as? MarketState.Loaded)?.snapshot?.opportunities?.firstOrNull { it.symbol.equals(action.arg, ignoreCase = true) } ?: return ""
-    return " Marksy pick: target ₹${String.format(Locale.US, "%,.0f", pick.targetPrice)}, stop ₹${String.format(Locale.US, "%,.0f", pick.stopLoss)}" +
-        (pick.upsidePct?.let { ", upside ${String.format(Locale.US, "%.1f%%", it)}" } ?: "") + "."
+    return " Marksy pick: target ${MarksyFormat.rupees(pick.targetPrice, 0)}, stop ${MarksyFormat.rupees(pick.stopLoss, 0)}" +
+        (pick.upsidePct?.let { ", upside ${MarksyFormat.percent(it, 1, signed = false)}" } ?: "") + "."
 }
+
+private val questionShape = MarksyShape.Panel.copy(bottomEnd = CornerSize(4.dp))
+private val answerShape = MarksyShape.Panel.copy(bottomStart = CornerSize(4.dp))
 
 @Composable
 private fun ExchangeView(
@@ -300,45 +286,45 @@ private fun ExchangeView(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             exchange.question,
-            color = Color.Black,
-            fontSize = 13.sp,
+            color = MarksyTheme.OnAccent,
+            style = MarksyType.Body,
             fontWeight = FontWeight.Medium,
             modifier = Modifier
                 .align(Alignment.End)
                 .widthIn(max = 280.dp)
-                .clip(RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp))
+                .clip(questionShape)
                 .background(MarksyTheme.PrimaryEmerald)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         )
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp))
+                .clip(answerShape)
                 .background(MarksyTheme.Surface)
-                .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp))
-                .padding(12.dp)
+                .border(MarksySpace.Border, MarksyTheme.BorderGlow, answerShape)
+                .padding(MarksySpace.CardPadding)
         ) {
-            Text(exchange.answer.text, color = MarksyTheme.TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(exchange.answer.text, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
             exchange.answer.events.forEach { event ->
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(top = 6.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(MarksyShape.Chip)
                         .background(MarksyTheme.SurfaceRaised)
                         .clickable { onEventSelected(event) }
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(event.title.ifBlank { "Notification" }, color = MarksyTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(event.title.ifBlank { "Notification" }, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         event.body.lines().lastOrNull { it.isNotBlank() }?.let {
-                            Text(it.trim(), color = MarksyTheme.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(it.trim(), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         Text(
-                            event.sourceName.ifBlank { "System" } + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(event.postedAt)),
+                            event.sourceName.ifBlank { "System" } + " · " + MarksyFormat.time(Instant.ofEpochMilli(event.postedAt).atZone(ZoneId.systemDefault())),
                             color = MarksyTheme.TextMuted,
-                            fontSize = 10.sp
+                            style = MarksyType.Caption
                         )
                     }
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(16.dp))
@@ -346,11 +332,7 @@ private fun ExchangeView(
             }
             exchange.grounded?.let { g ->
                 g.action?.let { a ->
-                    Text(
-                        "${a.label} →", color = MarksyTheme.PrimaryEmerald, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(14.dp)).background(MarksyTheme.SurfaceRaised)
-                            .clickable { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
+                    Box(Modifier.padding(top = 6.dp)) { Pill("${a.label} →") { onAction(a) } }
                 }
                 val n = g.derivedFromEventIds.size
                 val basis = if (g.needsClarification) "Pick one to search" else
@@ -358,14 +340,11 @@ private fun ExchangeView(
                 // Help, navigation and manual reminders aren't derived from notifications, so no basis line.
                 if (n > 0 || g.noResult || g.needsClarification) Text(
                     basis + if (g.interpretedBy != AskMarksy.DeterministicInterpreter.name) " · question understood by on-device AI" else "",
-                    color = MarksyTheme.TextMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp)
+                    color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 6.dp)
                 )
                 if (g.followUps.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     g.followUps.forEach { f ->
-                        Text(
-                            f, color = MarksyTheme.TextSecondary, fontSize = 11.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(MarksyTheme.SurfaceRaised).clickable { onFollowUp(f) }.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
+                        Pill(f) { onFollowUp(f) }
                     }
                 }
             }
