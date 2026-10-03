@@ -137,7 +137,7 @@ class TradingDeliveryRunTest {
         val captureDao = db.captureDao()
         val id = captureDao.insertCandidate(
             TipCandidateEntity(
-                evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = false,
+                evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = true,
                 capturedAt = 1L, evidenceRef = "sha256:ab", extractedText = "BUY RENUKA @ 23 Target 26 SL 22 from Rahul", confidence = .9,
                 symbol = "RENUKA", side = "BUY", entry = 23.0, target = 26.0, stopLoss = 22.0, horizon = null, visibleTimestamp = null,
                 ambiguities = "", state = "ACCEPTED", userChoseSend = true, deliveryState = DeliveryState.PENDING.name, updatedAt = 1L
