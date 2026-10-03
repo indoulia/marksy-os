@@ -135,7 +135,7 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
         }
         shown.forEachIndexed { i, r ->
             MarksyDivider()
-            Column(Modifier.fillMaxWidth().clickable { onOpen(r) }.padding(vertical = MarksySpace.Gap)) { TipRow(r, now, firstRow = i == 0) }
+            Column(Modifier.marksyRow(onClick = { onOpen(r) })) { TipRow(r, now, firstRow = i == 0) }
         }
         if (hidden > 0) {
             val names = stack.rows.drop(SHOWN_PER_STACK).mapNotNull { it.levels?.symbol }.distinct().take(3).joinToString(", ")
@@ -143,7 +143,7 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
             Text(
                 if (expanded) "▴ Show less" else "▾ $hidden more" + if (names.isNotEmpty()) " · $names" else "",
                 color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Medium,
-                modifier = Modifier.fillMaxWidth().clickable { onToggle(id) }.padding(vertical = MarksySpace.Gap)
+                modifier = Modifier.marksyRow(onClick = { onToggle(id) })
             )
         }
     }
