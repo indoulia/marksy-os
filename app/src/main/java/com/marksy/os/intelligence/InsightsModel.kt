@@ -4,7 +4,7 @@ import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import java.time.ZoneId
 import java.util.Calendar
-import java.util.Locale
+import com.marksy.os.MarksyFormat
 
 /** Deterministic local patterns derived from retained active events; no network or LLM required. */
 object InsightsModel {
@@ -93,7 +93,7 @@ object InsightsModel {
 
     private fun hourOf(timestamp: Long): Int = Calendar.getInstance().apply { timeInMillis = timestamp }.get(Calendar.HOUR_OF_DAY)
 
-    private fun formatHour(hour: Int): String = String.format(Locale.getDefault(), "%02d:00", hour)
+    private fun formatHour(hour: Int): String = MarksyFormat.time(java.time.LocalTime.of(hour, 0))
 
     private fun isQuiet(events: List<NotificationEventEntity>, nowMillis: Long): Boolean =
         events.none { nowMillis - it.postedAt <= 2 * 60 * 60 * 1000L }

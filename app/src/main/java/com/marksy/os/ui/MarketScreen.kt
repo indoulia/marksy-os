@@ -139,9 +139,9 @@ fun MarketScreen(
             }
             MarketTab.IPOS -> IpoScreen(repository = repository, padding = inner, onSectionSelected = { onTabSelected(it); onSymbolSelected(null) }, onTitleNote = onIpoNote)
             MarketTab.UPDATES -> LazyColumn(
-                Modifier.fillMaxSize().padding(horizontal = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(top = 10.dp, bottom = OneHandListBottomPadding)
+                Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
+                verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
+                contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = OneHandListBottomPadding)
             ) {
                 if (marketEvents.isEmpty()) item { EmptyState("No market updates yet.", "Holdings alerts, research views, IPO notices and market moves from your broker and market apps appear here.") }
                 items(marketEvents, key = { "mkt-${it.id}" }) { event ->
@@ -196,7 +196,7 @@ internal fun StockSuggestions(
     }
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(top = 8.dp, bottom = padding.calculateBottomPadding())
+        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = padding.calculateBottomPadding())
     ) {
         val list = matches
         when {
@@ -209,7 +209,7 @@ internal fun StockSuggestions(
                         color = MarksyTheme.TextPrimary,
                         style = MarksyType.Subhead,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f).padding(vertical = 12.dp)
+                        modifier = Modifier.weight(1f).padding(vertical = MarksySpace.CardPadding)
                     )
                     WatchlistButton(symbol)
                 }

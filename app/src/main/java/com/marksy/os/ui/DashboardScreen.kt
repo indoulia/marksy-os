@@ -110,8 +110,8 @@ fun DashboardScreen(
 
     LazyColumn(
         modifier = modifier.background(MarksyTheme.Background),
-        contentPadding = PaddingValues(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(bottom = MarksySpace.Gutter),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Section)
     ) {
         item {
             Column(Modifier.padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.CardPadding)) {
@@ -122,7 +122,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(32.dp).clip(MarksyShape.Chip)) {
+                        Box(Modifier.size(MarksySize.Avatar).clip(MarksyShape.Chip)) {
                             // The launcher foreground pads its mark for the adaptive mask; scaling crops to the mark.
                             androidx.compose.foundation.Image(
                                 androidx.compose.ui.res.painterResource(com.marksy.os.R.mipmap.ic_launcher_foreground), contentDescription = "Marksy",
@@ -133,18 +133,18 @@ fun DashboardScreen(
                         Text(
                             "MARKSY",
                             color = MarksyTheme.TextPrimary,
-                            style = MarksyType.Title
+                            style = MarksyType.Wordmark
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
                             "OS",
                             color = MarksyTheme.PrimaryEmerald,
-                            style = MarksyType.Title
+                            style = MarksyType.Wordmark
                         )
                         Spacer(Modifier.width(8.dp))
                         MarksyBadge("V2", MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.ListGap), verticalAlignment = Alignment.CenterVertically) {
                         HeaderIconBadge(icon = Icons.Default.AutoAwesome, contentDescription = "Ask Marksy", onClick = onOpenAsk)
                         HeaderIconBadge(icon = Icons.Default.EventNote, contentDescription = "Plan", onClick = onOpenPlan)
                         HeaderIconBadge(icon = Icons.Default.Person, contentDescription = "Profile", onClick = onOpenProfile)
@@ -154,7 +154,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(14.dp))
 
                 // Time Filter Pills
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
                     listOf("Today", "This Week", "All Time").forEach { filter ->
                         val isSelected = filter == selectedTimeFilter
                         Pill(filter, selected = isSelected) { selectedTimeFilter = filter }
@@ -167,7 +167,7 @@ fun DashboardScreen(
 
                 // Notification Counter Card
                 Box(Modifier.fillMaxWidth().marksyCard()) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                    Column(Modifier.padding(horizontal = MarksySpace.Section, vertical = MarksySpace.Gap)) {
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -186,7 +186,7 @@ fun DashboardScreen(
                                         color = MarksyTheme.TextSecondary,
                                         style = MarksyType.Body,
                                         fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(bottom = 3.dp)
+                                        modifier = Modifier.padding(bottom = MarksySpace.Tight)
                                     )
                                 }
                                 val change = trend.changeVsYesterdayPercent
@@ -220,7 +220,7 @@ fun DashboardScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     QuickAccessButton("Timeline", Icons.Default.Timeline, onOpenTimeline, Modifier.weight(1f))
                     QuickAccessButton("Calendar", Icons.Default.CalendarMonth, onOpenCalendar, Modifier.weight(1f))
                     QuickAccessButton("Insights", Icons.Default.Insights, onOpenInsights, Modifier.weight(1f))
@@ -230,14 +230,14 @@ fun DashboardScreen(
 
                 // Category Quick Cards Grid
                 val stats = categoryStats[HomePeriod.forLabel(selectedTimeFilter)]
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                         CategoryGridCard("Trading", stats?.trading?.count ?: 0, Icons.Default.ShowChart, MarksySource.TRADING, { onCategorySelected("Trading") }, Modifier.weight(1f))
                         CategoryGridCard("Important", stats?.important?.count ?: 0, Icons.Default.Bolt, MarksySource.IMPORTANT, { onCategorySelected("Important") }, Modifier.weight(1f))
                         CategoryGridCard("Messages", stats?.messages?.count ?: 0, Icons.Default.Chat, MarksySource.WHATSAPP, { onCategorySelected("Messages") }, Modifier.weight(1f))
                         CategoryGridCard("Teams", stats?.teams?.count ?: 0, Icons.Default.Groups, MarksySource.WORK, { onCategorySelected("Teams") }, Modifier.weight(1f))
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                         CategoryGridCard("Emails", stats?.emails?.count ?: 0, Icons.Default.Email, MarksySource.EMAIL, { onCategorySelected("Emails") }, Modifier.weight(1f))
                         CategoryGridCard("Banking", stats?.banking?.count ?: 0, Icons.Default.AccountBalance, MarksySource.BANK, { onCategorySelected("Banking") }, Modifier.weight(1f))
                         CategoryGridCard("Payments", stats?.payments?.count ?: 0, Icons.Default.Payments, MarksySource.TRADING, { onCategorySelected("Payments") }, Modifier.weight(1f))
@@ -310,14 +310,14 @@ private fun WeatherBadge(weather: Weather?, available: Boolean, onRequest: () ->
         modifier = Modifier
             .marksyCard()
             .then(if (available) Modifier else Modifier.clickable(onClick = onRequest))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Inner),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             weather?.let { weatherIcon(it.condition) } ?: if (available) Icons.Default.Cloud else Icons.Default.LocationOn,
             contentDescription = weather?.condition?.name ?: "Enable weather",
             tint = weather?.let { weatherTint(it.condition) } ?: MarksyTheme.TextMuted,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(MarksySize.Icon)
         )
         Spacer(Modifier.width(6.dp))
         Text(
@@ -361,7 +361,7 @@ private fun CategoryGridCard(
             .clickable(onClick = onClick)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Tight),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -372,7 +372,7 @@ private fun CategoryGridCard(
                     .background(source.background),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = title, tint = source.accent, modifier = Modifier.size(15.dp))
+                Icon(icon, contentDescription = title, tint = source.accent, modifier = Modifier.size(MarksySize.IconSmall))
             }
             Spacer(Modifier.width(6.dp))
             Text("$count", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -389,11 +389,11 @@ private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> U
             .clickable(onClick = onClick)
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Inner),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(14.dp))
+            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
             Spacer(Modifier.width(6.dp))
             Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
@@ -418,14 +418,14 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
         else -> null
     }
     Box(Modifier.fillMaxWidth().marksyCard().clickable(onClick = onOpenTrading)) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = MarksySpace.CardPadding)) {
+        Column(Modifier.padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.CardPadding)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
                     Spacer(Modifier.width(8.dp))
                     Text("Market Pulse", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                 }
@@ -441,14 +441,14 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                             Icons.Default.Info,
                             contentDescription = "Data source",
                             tint = if (live is UpstoxLiveState.Failed) MarksyTheme.Warning else MarksyTheme.TextMuted,
-                            modifier = Modifier.size(18.dp).clip(CircleShape).clickable { showSource = !showSource }
+                            modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable { showSource = !showSource }
                         )
                     }
                 }
             }
             // Source/freshness is one tap away instead of a permanent line.
             if (showSource && sourceLine != null) {
-                Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = 4.dp))
+                Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
             }
 
             Spacer(Modifier.height(10.dp))
@@ -458,7 +458,7 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
                     IndexGrid(liveQuotes.map { (name, q) -> Triple(name, q.lastPrice, q.changePct) })
                     val nifty = rememberUpstoxQuotes(Nifty50.SYMBOLS)
                     val breadth = remember(nifty) { com.marksy.os.market.MarketBreadth.of(nifty.values.map { it.changePct }) }
-                    if (breadth.total >= 12) BreadthBar(breadth, "NIFTY 50 breadth", Modifier.padding(top = 10.dp))
+                    if (breadth.total >= 12) BreadthBar(breadth, "NIFTY 50 breadth", Modifier.padding(top = MarksySpace.ListGap))
                 }
                 snapshot != null && snapshot.indices.isNotEmpty() -> IndexGrid(snapshot.indices.take(6).map { Triple(it.name, it.value, it.changePct) })
                 market is MarketState.Loading -> MarksyInlineLoader("Loading market data…")
@@ -481,10 +481,10 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
 /** Two indices per row, each on a single line: name, value, day change. */
 @Composable
 private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
         items.chunked(2).forEach { row ->
             // A clear gutter between the left column's % and the right column's name.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section)) {
                 row.forEach { (name, value, change) ->
                     // Name left; price and change in fixed right-aligned columns so they line up row to row.
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -512,7 +512,7 @@ fun HeaderIconBadge(icon: ImageVector, contentDescription: String, onClick: () -
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = contentDescription, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
     }
 }
 
@@ -526,10 +526,10 @@ internal fun MarketStatusBadge(status: String) {
             .clip(MarksyShape.Pill)
             .background(MarksyTheme.SurfaceRaised)
             .border(MarksySpace.Border, tint, MarksyShape.Pill)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(tint))
+        Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(tint))
         Spacer(Modifier.width(5.dp))
         Text(formatMarketStatus(status).uppercase(), color = tint, style = MarksyType.Caption, fontWeight = FontWeight.Bold)
     }
@@ -548,7 +548,7 @@ private fun AiSummaryBanner(summary: String) {
             .clip(MarksyShape.Panel)
             .background(Brush.linearGradient(listOf(MarksyTheme.BadgeTradingBg, MarksyTheme.Surface)))
             .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
-            .padding(horizontal = 16.dp, vertical = MarksySpace.CardPadding)
+            .padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.CardPadding)
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -556,7 +556,7 @@ private fun AiSummaryBanner(summary: String) {
                     modifier = Modifier.size(26.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
                 }
                 Spacer(Modifier.width(10.dp))
                 Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
@@ -569,14 +569,14 @@ private fun AiSummaryBanner(summary: String) {
 
 @Composable
 private fun SectionTitle(title: String, link: String? = null, onLink: () -> Unit = {}) = Row(
-    Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter, vertical = 4.dp),
+    Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Tight),
     verticalAlignment = Alignment.CenterVertically
 ) {
     SectionLabel(title, modifier = Modifier.weight(1f))
     link?.let {
         Text(
             "$it ›", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onLink).padding(horizontal = 6.dp, vertical = 4.dp)
+            modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onLink).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Tight)
         )
     }
 }

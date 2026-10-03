@@ -7,10 +7,9 @@ import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
+import com.marksy.os.MarksyFormat
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * EPIC-021 Calendar connector over the Android Calendar provider (read-only, READ_CALENDAR).
@@ -84,9 +83,9 @@ class CalendarConnector(
         val z = zone()
         val start = Instant.ofEpochMilli(i.begin).atZone(z)
         val end = Instant.ofEpochMilli(i.end).atZone(z)
-        val whenText = if (i.allDay) "${start.format(DAY)} (all day)"
-        else if (start.toLocalDate() == end.toLocalDate()) "${start.format(DAY)}, ${start.format(TIME)}–${end.format(TIME)}"
-        else "${start.format(DAY)}, ${start.format(TIME)} – ${end.format(DAY)}, ${end.format(TIME)}"
+        val whenText = if (i.allDay) "${MarksyFormat.weekdayDay(start)} (all day)"
+        else if (start.toLocalDate() == end.toLocalDate()) "${MarksyFormat.weekdayDay(start)}, ${MarksyFormat.time(start)}–${MarksyFormat.time(end)}"
+        else "${MarksyFormat.weekdayDay(start)}, ${MarksyFormat.time(start)} – ${MarksyFormat.weekdayDay(end)}, ${MarksyFormat.time(end)}"
         val body = buildList {
             add(whenText)
             i.location?.trim()?.takeIf { it.isNotEmpty() }?.let { add("Location: ${it.take(120)}") }
@@ -105,8 +104,6 @@ class CalendarConnector(
         const val FUTURE_MS = 14 * 24 * 3_600_000L
         const val MAX_INSTANCES = 300
         const val REFRESH_MS = 3 * 24 * 3_600_000L
-        private val DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
-        private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
 
         fun key(i: Instance) = "${i.eventId}@${i.begin}"
         fun beginOf(key: String) = key.substringAfter('@', "").toLongOrNull()

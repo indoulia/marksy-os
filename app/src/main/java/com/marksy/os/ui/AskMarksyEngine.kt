@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import com.marksy.os.MarksyFormat
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.MarketSnapshot
 import com.marksy.os.intelligence.EventIntelligence
@@ -62,14 +63,14 @@ object AskMarksyEngine {
         if (picks.isNotEmpty()) {
             parts += "Marksy picks: " + picks.joinToString("; ") { pick ->
                 "${pick.symbol} target ₹${whole(pick.targetPrice)}, stop ₹${whole(pick.stopLoss)}" +
-                    (pick.upsidePct?.let { ", upside ${String.format(Locale.US, "%.1f%%", it)}" } ?: "")
+                    (pick.upsidePct?.let { ", upside ${MarksyFormat.percent(it, 1, signed = false)}" } ?: "")
             } + "."
         } else if (market == null) {
             parts += "Marksy market data isn't available, so there are no live picks."
         } else {
             parts += "Marksy has no open opportunities right now."
         }
-        market?.indices?.firstOrNull()?.let { parts += "${it.name} ${String.format(Locale.US, "%+.2f%%", it.changePct)}." }
+        market?.indices?.firstOrNull()?.let { parts += "${it.name} ${MarksyFormat.percent(it.changePct)}." }
         parts += if (captured.isEmpty()) "No trading notifications captured today." else "${captured.size} trading notifications captured today."
         return Answer(parts.joinToString(" "), captured.take(MAX_EVENTS))
     }
@@ -153,5 +154,5 @@ object AskMarksyEngine {
             .sortedByDescending { it.second }
             .map { it.first }
 
-    private fun whole(value: Double) = String.format(Locale.getDefault(), "%,.0f", value)
+    private fun whole(value: Double) = MarksyFormat.number(value, 0)
 }

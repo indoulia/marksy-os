@@ -1,7 +1,7 @@
 package com.marksy.os.ui
 
+import com.marksy.os.MarksyFormat
 import com.marksy.os.gateway.MarketSnapshot
-import java.util.Locale
 import kotlin.math.abs
 
 /** One-paragraph Home summary built only from captured events and the Marksy market snapshot. */
@@ -34,5 +34,5 @@ object HomeSummary {
         return parts.joinToString(" ")
     }
 
-    private fun pct(value: Double) = String.format(Locale.US, "%.2f%%", value)
+    private fun pct(value: Double) = MarksyFormat.percent(value, signed = false)
 }

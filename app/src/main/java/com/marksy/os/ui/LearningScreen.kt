@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,7 +37,7 @@ fun LearningScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
+        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
@@ -51,7 +52,7 @@ fun LearningScreen(
                 }
                 Switch(checked = enabled, onCheckedChange = onEnabledChanged)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 MarksyButton("Reset learning", onClick = onResetLearning, style = MarksyButtonStyle.Text)
                 MarksyButton("Clear my corrections", onClick = onClearCorrections, style = MarksyButtonStyle.Text)
             }
@@ -64,7 +65,7 @@ fun LearningScreen(
             item { InlineEmpty("Nothing learned yet") }
         }
         items(subjects, key = { "${it.subject.type}|${it.subject.key}" }) { p ->
-            Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+            MarksyCard(spacing = 0.dp) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${p.subject.label} · ${p.subject.type.name.lowercase()}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                     val sign = if (p.adjustment > 0) "+" else ""
@@ -72,10 +73,10 @@ fun LearningScreen(
                 }
                 Text(p.reason, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
                 Text(
-                    "${p.positive} engaged · ${p.negative} ignored/dismissed · ${p.neutral} snoozed · confidence ${(p.confidence * 100).toInt()}%",
+                    "${p.positive} engaged · ${p.negative} ignored/dismissed · ${p.neutral} snoozed · confidence ${MarksyFormat.percent(p.confidence * 100.0, 0, signed = false)}",
                     color = MarksyTheme.TextMuted, style = MarksyType.Caption
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                     MarksyButton("Important", onClick = { onPreference(p.subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) }, style = MarksyButtonStyle.Text)
                     MarksyButton("Less", onClick = { onPreference(p.subject, PersonalLearning.Preference.LESS_IMPORTANT) }, style = MarksyButtonStyle.Text)
                     if (p.override != null) MarksyButton("Undo correction", onClick = { onPreference(p.subject, null) }, style = MarksyButtonStyle.Text)
@@ -115,7 +116,7 @@ private fun AiStatusCard(initial: List<Pair<ModelInfo, ModelState>>) {
             busy = false
         }
     }
-    Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding)) {
+    MarksyCard(spacing = 0.dp) {
         Text("On-device AI", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
         if (status.isEmpty()) {
             Text("No AI model is installed. Marksy uses deterministic, explainable intelligence.", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
