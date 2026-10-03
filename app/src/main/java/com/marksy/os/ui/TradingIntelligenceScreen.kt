@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.StockMentions
 
 @Composable
@@ -86,7 +87,7 @@ fun TradingIntelligenceScreen(
 @Composable
 private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> Unit) {
     Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("SHOW", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MyTipsStatus.entries.forEach { s -> Pill(s.label, selected = status == s) { onStatus(s) } }
         }
@@ -97,11 +98,11 @@ private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> 
 @Composable
 private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, stackBy: StackBy, onStackBy: (StackBy) -> Unit) {
     Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("SHOW", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(ShowOnly.ALL to "All", ShowOnly.TIPS to "Tips", ShowOnly.NEEDS_YOU to "Needs you").forEach { (v, l) -> Pill(l, selected = show == v) { onShow(v) } }
         }
-        Text("STACK BY", color = MarksyTheme.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+        Text("STACK BY", color = MarksyTheme.TextMuted, style = MarksyType.Label, modifier = Modifier.padding(top = 4.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(StackBy.SOURCE to "Source", StackBy.SYMBOL to "Symbol").forEach { (v, l) -> Pill(l, selected = stackBy == v) { onStackBy(v) } }
         }
@@ -145,12 +146,12 @@ fun tradingTitleNote(
 
 private fun marketMessage(market: MarketState, loaded: String): String = when (market) {
     MarketState.Loading -> "Loading market data…"
-    MarketState.NotConfigured -> "Connect the Marksy gateway in Settings to load market data."
+    MarketState.NotConfigured -> "Marksy is not connected"
     is MarketState.Unavailable -> "Marksy market data is unavailable right now."
     is MarketState.Loaded -> loaded
 }
 
-private fun changeColor(change: String): Color = if (change.startsWith("-")) MarksyTheme.RedUrgent else MarksyTheme.PrimaryEmerald
+private fun changeColor(change: String): Color = if (change.startsWith("-") || change.startsWith(MarksyFormat.MINUS)) MarksyTheme.Negative else MarksyTheme.PrimaryEmerald
 
 @Composable
 private fun TradingTickerCard(
@@ -158,15 +159,9 @@ private fun TradingTickerCard(
     price: String,
     change: String
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp))
-    ) {
+    MarksyCard {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -178,15 +173,15 @@ private fun TradingTickerCard(
                         .background(MarksyTheme.BadgeFinanceBg),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("📊", fontSize = 12.sp)
+                    Text("📊", style = MarksyType.Small)
                 }
                 Spacer(Modifier.width(8.dp))
-                Text(symbol, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(price, color = MarksyTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(6.dp))
-                Text(change, color = changeColor(change), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(change, color = changeColor(change), style = MarksyType.Small, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -197,16 +192,8 @@ private fun CapturedInsightCard(
     insight: TradingInsight,
     onClick: (() -> Unit)?
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MarksyTheme.Surface, disabledContainerColor = MarksyTheme.Surface),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, MarksyTheme.BorderGlow, RoundedCornerShape(14.dp)),
-        onClick = onClick ?: {},
-        enabled = onClick != null
-    ) {
-        Column(Modifier.padding(14.dp)) {
+    MarksyCard(onClick = onClick) {
+        Column {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -215,22 +202,22 @@ private fun CapturedInsightCard(
                     insight.source.ifBlank { "Trading Source" },
                     color = MarksyTheme.PrimaryEmerald,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    style = MarksyType.Body
                 )
-                Text(listOfNotNull(compactTime(insight.postedAt), insight.status).joinToString(" · "), color = MarksyTheme.TextMuted, fontSize = 10.sp)
+                Text(listOfNotNull(compactTime(insight.postedAt), insight.status).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             }
             Spacer(Modifier.height(4.dp))
             Text(
                 insight.headline.ifBlank { "Trading Alert" },
                 color = MarksyTheme.TextPrimary,
-                fontSize = 14.sp,
+                style = MarksyType.Subhead,
                 fontWeight = FontWeight.SemiBold
             )
             if (insight.body.isNotBlank()) {
                 Text(
                     insight.body,
                     color = MarksyTheme.TextSecondary,
-                    fontSize = 12.sp,
+                    style = MarksyType.Small,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)

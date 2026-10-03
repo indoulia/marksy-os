@@ -1,5 +1,6 @@
 package com.marksy.os.market
 
+import com.marksy.os.MarksyFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -126,12 +127,9 @@ object IpoLifecycle {
     }
 
     fun times(x: Double): String = (if (x >= 100) "%.0f" else if (x >= 10) "%.1f" else "%.2f").format(Locale.ENGLISH, x) + "x"
-    fun inr(n: Double): String = "₹" + IpoDetailFormatter.number(n.roundToLong())
-    fun pct(p: Double, decimals: Int = 1): String {
-        val text = "%.${decimals}f".format(Locale.ENGLISH, abs(p))
-        return (if (p >= 0 || text.all { it == '0' || it == '.' }) "+" else "−") + text + "%"
-    }
-    fun rupees(p: Double): String = (if (p >= 0) "+" else "−") + "₹" + IpoDetailFormatter.number(abs(p))
+    fun inr(n: Double): String = MarksyFormat.rupees(n.roundToLong().toDouble(), 0)
+    fun pct(p: Double, decimals: Int = 1): String = MarksyFormat.percent(p, decimals)
+    fun rupees(p: Double): String = MarksyFormat.signedRupees(p, if (p == Math.rint(p)) 0 else 2)
     fun lotsText(n: Int) = "$n lot${if (n == 1) "" else "s"}"
 
     fun odds(probability: Double): String? = when {

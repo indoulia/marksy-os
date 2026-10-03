@@ -50,7 +50,7 @@ class StockDetailScreenTest {
 
         compose.onNodeWithText("Past calls (1)").performClick()
         compose.onNodeWithText("Exited · Failed", substring = true).assertExists()
-        compose.onNodeWithText("-3.00%", substring = true).assertExists()
+        compose.onNodeWithText("−3.00%", substring = true).assertExists()
         compose.onNodeWithText("Invalidated", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Rating engine").assertExists()
     }
