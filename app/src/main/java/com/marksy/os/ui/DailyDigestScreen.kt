@@ -47,12 +47,12 @@ fun DailyDigestScreen(
             .fillMaxSize()
             .background(MarksyTheme.Background)
             .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = 4.dp, bottom = 18.dp),
+        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         item {
             Text(
-                "Today · " + MarksyFormat.day(java.time.LocalDate.now()),
+                "Today · " + MarksyFormat.weekdayDay(java.time.LocalDate.now()),
                 color = MarksyTheme.TextSecondary,
                 style = MarksyType.Body
             )
@@ -66,7 +66,7 @@ fun DailyDigestScreen(
         item {
             DigestCard(borderColor = MarksyTheme.PrimaryEmerald) {
                 Text(digest.title, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(MarksySpace.Inner))
 
                 DigestItemRow(
                     icon = Icons.Default.Notifications,
@@ -107,7 +107,7 @@ fun DailyDigestScreen(
                     ) { onOpenInbox((filter ?: SmartInboxModel.Filter.ALL).name) }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(MarksySpace.ListGap))
 
                 MarksyButton(
                     "Share Digest",
@@ -117,7 +117,8 @@ fun DailyDigestScreen(
                             .putExtra(Intent.EXTRA_TEXT, digest.shareText())
                         context.startActivity(Intent.createChooser(send, "Share digest"))
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Default.Share
                 )
             }
         }
@@ -126,7 +127,7 @@ fun DailyDigestScreen(
             item {
                 DigestCard {
                     Text("Needs attention", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(MarksySpace.Tight))
                     digest.attentionEvents.take(MAX_ATTENTION_ROWS).forEach { event ->
                         AttentionRow(event) { onEventSelected(event) }
                     }
@@ -138,9 +139,9 @@ fun DailyDigestScreen(
             item {
                 DigestCard {
                     Text("Top sources", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(MarksySpace.Tight))
                     digest.topSources.forEach { (name, count) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             Text("$count", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold)
                         }
@@ -156,7 +157,7 @@ private const val MAX_ATTENTION_ROWS = 5
 
 @Composable
 private fun DigestCard(borderColor: Color = MarksyTheme.BorderGlow, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().marksyCard(borderColor).padding(horizontal = 14.dp, vertical = 12.dp), content = content)
+    MarksyCard(border = borderColor, padding = PaddingValues(horizontal = MarksySpace.Section, vertical = MarksySpace.CardPadding), spacing = 0.dp, content = content)
 }
 
 @Composable
@@ -172,21 +173,21 @@ private fun DigestItemRow(
             .fillMaxWidth()
             .clip(MarksyShape.Chip)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = MarksySpace.Tight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(24.dp)
+                .size(MarksySize.IconLarge)
                 .clip(CircleShape)
                 .background(bgColor),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(13.dp))
+            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(MarksySize.IconSmall))
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(MarksySpace.ListGap))
         Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
     }
 }
 
@@ -197,7 +198,7 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(MarksyShape.Chip)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = MarksySpace.Tight),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -208,7 +209,7 @@ private fun AttentionRow(event: NotificationEventEntity, onClick: () -> Unit) {
                 style = MarksyType.Meta
             )
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
     }
 }
 

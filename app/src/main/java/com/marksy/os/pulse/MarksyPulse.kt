@@ -14,13 +14,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.marksy.os.MainActivity
+import com.marksy.os.MarksyFormat
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.ui.DailyDigestModel
 import com.marksy.os.upstox.UpstoxFeed
 import com.marksy.os.upstox.UpstoxIndices
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /** What the Pulse says; [publicText] is the lock-screen version and never names a sender, merchant or amount. */
@@ -28,7 +26,7 @@ data class PulseText(val title: String, val text: String, val publicText: String
     companion object {
         /** [due] already carries its label ("Overdue: …" or "Next: …"). */
         fun build(total: Int, attention: Int, busiest: List<Pair<String, Int>>, due: String?, index: Pair<String, Double>?): PulseText {
-            val market = index?.let { (name, pct) -> "$name ${String.format(Locale.US, "%+.2f%%", pct)}" }
+            val market = index?.let { (name, pct) -> "$name ${MarksyFormat.percent(pct)}" }
             val need = when (attention) { 0 -> null; 1 -> "1 needs your attention"; else -> "$attention need your attention" }
             val title = listOfNotNull(need ?: if (total == 0) "All clear" else "Nothing needs you", market).joinToString(" · ").ifBlank { "All clear" }
             val text = if (total == 0) "No notifications captured yet today." else listOfNotNull(
@@ -72,7 +70,7 @@ object MarksyPulse {
         val digest = DailyDigestModel.build(db.notificationEventDao().findInRange(dayStart, now, 5_000), now)
         val open = db.planItemDao().all().filter { it.completedAt == null && it.dueAt != null }
         fun describe(p: com.marksy.os.data.local.PlanItemEntity) =
-            listOfNotNull(p.title, p.amountMinor?.let { "₹" + String.format(Locale.getDefault(), "%,d", it / 100) }, SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(p.dueAt!!))).joinToString(" · ")
+            listOfNotNull(p.title, p.amountMinor?.let { MarksyFormat.rupees(it / 100.0, 0) }, MarksyFormat.day(java.time.Instant.ofEpochMilli(p.dueAt!!).atZone(java.time.ZoneId.systemDefault()).toLocalDate())).joinToString(" · ")
         // An overdue item matters more than the next one coming up.
         val due = open.filter { it.dueAt!! < dayStart }.minByOrNull { it.dueAt!! }?.let { "Overdue: " + describe(it) }
             ?: open.filter { it.dueAt!! >= dayStart }.minByOrNull { it.dueAt!! }?.let { "Next: " + describe(it) }

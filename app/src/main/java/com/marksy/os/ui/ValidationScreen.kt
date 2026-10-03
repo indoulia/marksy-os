@@ -32,7 +32,7 @@ fun ValidationScreen(repo: ValidationRepository, padding: PaddingValues) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + 20.dp),
+        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         if (!started) {
@@ -57,18 +57,18 @@ fun ValidationScreen(repo: ValidationRepository, padding: PaddingValues) {
         }
         item {
             val t = r.totals
-            Column(Modifier.fillMaxWidth().marksyCard().padding(MarksySpace.CardPadding), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            MarksyCard(spacing = MarksySpace.Hair) {
                 fun line(label: String, value: String) = label to value
                 listOf(
-                    line("Captured", t.captured.toString()),
+                    line("Captured", MarksyFormat.number(t.captured.toDouble(), 0)),
                     line("Classified", "${t.classified} (${r.classificationRate?.let { MarksyFormat.percent(it * 100, 1, signed = false) } ?: "n/a"})"),
                     line("Est. accuracy (from your corrections)", r.estimatedAccuracy?.let { MarksyFormat.percent(it * 100, 1, signed = false) } ?: "n/a"),
                     line("Duplicates / cross-source", "${t.duplicates} / ${t.crossSourceDuplicates}"),
-                    line("Important detected", t.important.toString()),
+                    line("Important detected", MarksyFormat.number(t.important.toDouble(), 0)),
                     line("Interactions / corrections", "${t.interactions} / ${t.corrections}"),
                     line("Rule runs / learning signals", "${t.ruleExecutions} / ${t.learningSignals}"),
                     line("AI calls / fallbacks", "${t.aiCalls} / ${t.aiFailures}"),
-                    line("Failures", t.failures.toString()),
+                    line("Failures", MarksyFormat.number(t.failures.toDouble(), 0)),
                     line("Avg processing", t.avgProcessingMs?.let { "$it ms" } ?: "n/a"),
                     line("Avg listener uptime", t.uptimePct?.let { MarksyFormat.percent(it, 1, signed = false) } ?: "n/a"),
                     line("Storage / battery", "${t.dbKb?.let { "$it KB" } ?: "n/a"} / ${t.batteryPct?.let { "$it%" } ?: "n/a"}")
