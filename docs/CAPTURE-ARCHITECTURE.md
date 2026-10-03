@@ -157,7 +157,8 @@ SMS permissions fall under a restrictive policy limited to default handlers or a
 ## 9. Known limitations
 
 - Notification redaction: apps or users can hide notification content; Android 15 redacts content for untrusted listeners when an OTP is detected, and notifications are hidden during screen sharing. Such cases become teaser/redacted workflows needing the user to open the source.
-- `FLAG_SECURE`: many broker and banking apps render black frames. Marksy reports "This app blocks screen capture" and does not retry or bypass.
+- `FLAG_SECURE`: many broker and banking apps render black frames. Marksy reports "This app blocks screen capture" and does not retry or bypass. Found on device: Moneycontrol (`com.divum.MoneyControl`) sets FLAG_SECURE on its HomeActivity window (tip screens); `adb screencap` returns an all-black frame apart from the status bar, so screen capture cannot read Moneycontrol tips by design. Play-safe alternatives, in order: (a) the source app's own Share action sending text or links to Marksy (Marksy accepts shared images only; an `ACTION_SEND text/plain` target is remaining work); (b) notification text when it carries the full call (already captured); (c) manual entry in the review form; (d) the source's website in a browser, if not protected. Explicitly excluded: reading protected screens via AccessibilityService, root, overlays, FLAG_SECURE bypass, or fetching paywalled content server-side.
+- Package-name case: Android package names are case-sensitive (e.g. `com.divum.MoneyControl`) while capture lists are lowercase. Capture now preserves the notification's package and matches installed launcher apps case-insensitively (found on device, fixed in bc1fae0). The pre-existing `SourceRegistry.displayName` lowercases before lookup and so labels such apps by package tail (e.g. "moneycontrol"); left unchanged deliberately because that label feeds the channel label sent to Marksy, and changing it could split an existing server channel.
 - App-window capture is available only on API 34+; below that the user shares the full screen, which can include unrelated content (see residual risk).
 - OCR limits: Latin script only, noisy text, broken lines and look-alike characters (`5O0`) become null fields plus ambiguity notes; the user reviews and edits.
 - Source-specific limits: only allow-listed app packages (server capture list or on-device broker hints) can send; chats and SMS never do.
@@ -167,19 +168,47 @@ SMS permissions fall under a restrictive policy limited to default handlers or a
 
 ## 10. Device-test results
 
-Device: OnePlus 12R, Android 16 (API 36), ColorOS. Build `feat/play-safe-capture` at 754e72b (Phases A and B), debug, installed over the user's existing install, 2026-10-04. Commit 754e72b predates the Phase C UI.
+Device: OnePlus 12R, Android 16 (API 36), ColorOS, 2026-10-04. Builds (debug, installed over the user's existing install): `754e72b` (Phases A and B), `162a4a5` (full UI), `bc1fae0` (fix round and device fixes).
 
-- DB migration 8 to 9 on real user data: app launched without a crash; capture sweep queried the new tables (`stale=0 workflows=0 candidates=0`).
-- Notification listener rebound after reinstall and backfilled 190 active notifications.
-- Share target registered for `image/*` (`cmd package query-activities` lists `MainActivity`).
-- Share without a URI grant: `image-unreadable`, no crash.
-- Share with grant and the real bundled ML Kit OCR on synthetic screenshots: complete tip (BUY TATAMOTORS, Entry 650, Target 700, Stop Loss 630, Short term) gave EXTRACTED; BUY INFY @ 1480, Target 1550 (no SL) gave REVIEW_REQUIRED; non-trading chat text gave not-a-tip; the same image again was a duplicate of candidate 1.
-- Rerun 2026-10-04 00:40: SELL HDFCBANK Entry 990 Target 950 SL 1010 Intraday gave EXTRACTED; "BUY SBIN or BUY PNB" gave REVIEW_REQUIRED; tip text plus "Your OTP is 482913" gave one-time-code with evidence only and no candidate or text; non-trading text gave not-a-tip; identical re-share was a duplicate. A live notification logged `no workflow (unsupported-source)`.
-- Leak check over the full log: Marksy's process logged none of the tip words, symbols, prices or the OTP (one whole-word match was a system BatteryStats line).
-- Permissions on device: only `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PROJECTION` added; no `READ_MEDIA_*`, `READ_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW` or SMS permissions. Test images were removed from the phone afterwards.
+Migration and listener
+- DB migration 8 to 9 on real user data: no crash; capture sweep queried the new tables (`stale=0 workflows=0 candidates=0`).
+- Notification listener rebound after each reinstall (backfilled 190, later 188 active notifications). A live notification logged `no workflow (unsupported-source)`.
+- Notification Access revoked via `cmd notification disallow_listener`: Health showed "Permission not granted" / "Off, tips can't be caught", no crash; re-allowed, listener reconnected.
 
-### MediaProjection, Photo Picker, review UI — pending device run
+Share and OCR (bundled ML Kit, synthetic screenshots)
+- Share target for `image/*` registered (`query-activities` lists `MainActivity`). Share without a URI grant: `image-unreadable`, no crash.
+- BUY TATAMOTORS Entry 650 Target 700 SL 630 Short term: EXTRACTED. SELL HDFCBANK Entry 990 Target 950 SL 1010 Intraday: EXTRACTED.
+- BUY INFY @ 1480 Target 1550 (no SL): REVIEW_REQUIRED. "BUY SBIN or BUY PNB" Target 820 SL 780: REVIEW_REQUIRED.
+- Non-trading text: not-a-tip. Tip text plus "Your OTP is 482913": `one-time-code`, evidence only, no candidate or text.
+- Identical re-share: duplicate of the earlier candidate; re-sharing an image whose candidate was rejected: duplicate, nothing re-opened.
 
-PENDING: to be filled by the controller after the device run. Not yet tested on device: Photo Picker, MediaProjection consent and app-window choice, FLAG_SECURE black frame, revocation, session timeout, review dialog and Send path, Captured screen lanes, Health capture card, API 26-35 behavior.
+Privacy and permissions
+- Leak check over full logs: Marksy's process logged no tip words, symbols, prices or the OTP (one whole-word match was a system BatteryStats line); MarksyCapture lines carry ids, method, state and fixed codes only.
+- Only `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_MEDIA_PROJECTION` added; no `READ_MEDIA_*`, `READ_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW` or SMS permissions. Test images were deleted from the phone after each run.
+
+UI (162a4a5, bc1fae0)
+- Captured tab "To review" lane listed candidates; OCR misread INFY as "INEY" (why review exists); the ambiguous SBIN/PNB card showed no symbol and "Check details".
+- Review dialog: method pill, "Source chosen by you", read %, editable fields, source picker ("kept on this phone only"), Send to Marksy disabled with "Tips with a source you picked yourself stay on this phone.", Recognized text collapsed. Keep on phone gave ACCEPTED `queued=false`; Reject gave REJECTED `queued=false`; both left the lane.
+- Photo Picker: "Add screenshot" opened `com.google.android.photopicker` with no permission prompt; Back cancelled with no row; pick and Done gave `USER_SELECTED_IMAGE` EXTRACTED and opened review automatically.
+- Health > Capture card: Notification access On, Screen capture "Asked every time", Photos "System picker, no permission", tip counts, Teasers waiting 0, last failure in words.
+- Rotation with a review open (portrait, landscape, portrait): review stayed open, no crash.
+- Process death (`run-as kill -9`): system restarted the process (listener bound); the next share gave `USER_SHARED_IMAGE` EXTRACTED and review opened.
+
+Defects found on device, fixed
+- Source picker listed not-installed and duplicate sources ("icicidirect", "kite", "lite", "pro"): now installed apps only, deduped (picker shows 5paisa, Coin, ICICI Direct, Kite, Moneycontrol, StockGro, Upstox, Other).
+- Workflow stored a lowercased package (`com.divum.moneycontrol`), so View/Capture tip could not open Moneycontrol and it was missing from the picker: case now preserved, launcher lookup case-insensitive (bc1fae0; see section 9).
+
+Real-world finding: Moneycontrol's HomeActivity window has FLAG_SECURE (`dumpsys window`); `screencap` of its tip screen is black apart from the status bar (see section 9).
+
+### Still untested on a device
+
+MediaProjection consent and the single-app (app-window) choice; "Capture now" and Stop; projection revocation; protected-screen detection on a real FLAG_SECURE app through Marksy's own capture; View tip with and without a preserved contentIntent; duplicate capture within a workflow; process death mid-session. Reason: these need a teaser workflow from an allow-listed source; none arrived during testing, and seeding a fake notification into the user's real data was not done. API 26-35 behavior is also not device-tested.
 
 Unit-tested only (JVM): lifecycle, extractor, planner, registry, gateway, delivery policy and run, retention, DAO and migration, frame inspector, session controller, messages, source opener, image intake.
+
+## 11. Remaining work
+
+- Text share target (`ACTION_SEND text/plain`) so source apps' Share action can send tip text or links.
+- Optional server-side `captureMethod`/`sourceVerified` field (marksy-api contract change).
+- The device tests listed above.
+- User decision on the WhatsApp AccessibilityService (section 8 options; none chosen).
