@@ -5,7 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,9 +60,9 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
             )
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Quantity", color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(1f))
-                Stepper("−") { if (quantity > 1) { quantity--; submitted = false } }
+                Stepper(Icons.Default.Remove, "Fewer") { if (quantity > 1) { quantity--; submitted = false } }
                 Text("$quantity", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
-                Stepper("+") { quantity++; submitted = false }
+                Stepper(Icons.Default.Add, "More") { quantity++; submitted = false }
             }
             price?.let { Text("Approx. ${MarksyFormat.rupees(it * quantity)}", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
             if (intent.target != null || intent.stop != null) Text(
@@ -84,8 +88,8 @@ private fun Choice(label: String, options: List<String>, selected: String, onSel
 }
 
 @Composable
-private fun Stepper(symbol: String, onClick: () -> Unit) {
+private fun Stepper(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Box(Modifier.size(36.dp).clip(CircleShape).background(MarksyTheme.Surface).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
+        Icon(icon, contentDescription = label, tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon))
     }
 }

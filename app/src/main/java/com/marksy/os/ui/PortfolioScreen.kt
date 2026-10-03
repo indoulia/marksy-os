@@ -633,7 +633,7 @@ private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit
         Box(Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
             Icon(Icons.Default.PieChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconLarge))
         }
-        Text("See what you own, next to live prices", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+        MarksyCardHeader("See what you own, next to live prices")
         Text(
             "Holdings need an Upstox sign-in once a day; Upstox's market-data token can't read them. Sign in to see today's and " +
                 "total P&L, holdings that need a look, and your sector mix.",
@@ -662,7 +662,7 @@ private fun LoadFailedCard(message: String, onRetry: () -> Unit) {
 private fun SignedOutCard(fetchedAt: Long, livePrices: Boolean, reason: String?, onSignIn: () -> Unit) {
     MarksyCard(border = MarksyTheme.Warning.copy(alpha = .55f)) {
         MarksyBadge("Signed out of Upstox", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, icon = Icons.Default.Schedule)
-        Text(reason ?: "Upstox ends every sign-in at 3:30 am", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
+        MarksyCardHeader(reason ?: "Upstox ends every sign-in at 3:30 am")
         Text(
             "Holdings as of ${compactTime(fetchedAt) ?: "your last sign-in"}; prices are ${if (livePrices) "live" else "from then too"}.",
             color = MarksyTheme.TextSecondary, style = MarksyType.Small

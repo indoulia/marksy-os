@@ -41,7 +41,7 @@ internal fun LazyListScope.fundamentalsContent(f: StockFundamentals, price: Doub
 @Composable
 private fun Section(title: String, note: String? = "Upstox", content: @Composable ColumnScope.() -> Unit) {
     MarksyCard {
-        SectionLabel(title, rule = false, trailing = note?.let { { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) } })
+        MarksyCardHeader(title, trailing = note?.let { { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) } })
         content()
     }
 }
@@ -94,7 +94,7 @@ private fun RatiosCard(f: StockFundamentals, price: Double?) {
         val graham = if (price != null && pe != null && pb != null) UpstoxFundamentals.grahamNumber(price, pe, pb) else null
         val dupont = UpstoxFundamentals.dupont(f.yearly, f.balance)
         if (graham != null || dupont != null) {
-            Text("Value checks · Marksy calculation", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            Text("Value checks · Marksy calculation", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
             if (graham != null && price != null) {
                 val gap = (price - graham) / graham * 100
                 Text(

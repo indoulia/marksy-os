@@ -3,6 +3,10 @@ package com.marksy.os.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +29,7 @@ import com.marksy.os.MarksyFormat
 internal fun QuoteGridCard(title: String, items: List<Triple<String, String, Double?>>, watchable: Boolean = false, onOpen: ((String) -> Unit)? = null, footer: (@Composable () -> Unit)? = null) {
     MarksyCard {
         run {
-            SectionLabel(title, rule = false)
+            MarksyCardHeader(title)
             items.chunked(2).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     row.forEach { (name, price, change) ->
@@ -60,9 +64,11 @@ internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, mo
     val down by androidx.compose.animation.core.animateFloatAsState(b.declines.toFloat(), label = "dec")
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = "$label: ${b.advances} advancing, ${b.declines} declining, ${b.unchanged} unchanged" }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("▲ ${b.advances}", color = MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.ArrowDropUp, contentDescription = null, tint = MarksyTheme.Positive, modifier = Modifier.size(MarksySize.Icon))
+            Text("${b.advances}", color = MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             Text("$label${if (b.unchanged > 0) " · ${b.unchanged} unch." else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
-            Text("${b.declines} ▼", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+            Text("${b.declines}", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MarksyTheme.Negative, modifier = Modifier.size(MarksySize.Icon))
         }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.Positive))

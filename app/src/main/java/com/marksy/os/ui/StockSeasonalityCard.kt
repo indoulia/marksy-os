@@ -48,10 +48,7 @@ internal fun SeasonalityCard(monthly: List<Candle>, name: String) {
     val monthName = MarksyFormat.month(Month.of(month), short = false)
     val years = if (all) table.keys.toList() else table.keys.take(RECENT_YEARS)
     MarksyCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Seasonality", color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text("Monthly change · Upstox", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
-        }
+        MarksyCardHeader("Seasonality", trailing = { Text("Monthly change · Upstox", color = MarksyTheme.TextMuted, style = MarksyType.Caption) })
         summary?.let { s ->
             val fell = s.negative * 2 > s.years
             Text(
