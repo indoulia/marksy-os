@@ -213,6 +213,33 @@ class CaptureGatewayTest {
         assertEquals(CaptureOutcome.Duplicate(framed), submit(hash = "frame2", method = CaptureMethod.MEDIA_PROJECTION, workflowId = id))
     }
 
+    // A frame already captured still ends its session: the workflow follows the existing candidate, never stuck authorized.
+    @Test
+    fun duplicateFrameClosesTheWorkflow() = runBlocking {
+        val shared = candidateId(submit(hash = "same"))
+        val id = authorizedWorkflow()
+        assertEquals(CaptureOutcome.Duplicate(shared), submit(hash = "same", method = CaptureMethod.MEDIA_PROJECTION, workflowId = id))
+        assertEquals(WorkflowState.REVIEW_REQUIRED.name, workflowState(id))
+        assertEquals(shared, dao.workflow(id)!!.candidateId)
+
+        gateway.review(shared, dao.candidate(shared)!!.fields, null, ReviewDecision.KEEP)
+        val later = gateway.onNotificationStored(teaser(key = "k2"))!!
+        gateway.captureRequested(later)
+        gateway.captureAuthorized(later)
+        submit(hash = "same", method = CaptureMethod.MEDIA_PROJECTION, workflowId = later)
+        assertEquals(WorkflowState.ACCEPTED.name, workflowState(later))
+    }
+
+    // A session lost to process death is failed on the next "Capture tip", not only by the daily sweep.
+    @Test
+    fun deadSessionIsFailedOnRetry() = runBlocking {
+        val id = authorizedWorkflow()
+        assertFalse(gateway.captureRequested(id))
+        assertTrue(gateway.captureRequested(id, sessionDead = true))
+        assertEquals(WorkflowState.CAPTURE_REQUESTED.name, workflowState(id))
+        assertTrue(logs.any { "workflow=$id ${CaptureFailure.STALE_SESSION}" in it })
+    }
+
     @Test
     fun expiredWorkflowAndSweep() = runBlocking {
         val expiring = gateway.onNotificationStored(teaser(key = "old"))!!

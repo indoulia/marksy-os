@@ -70,10 +70,12 @@ object ScreenCaptureConsent {
 
     suspend fun request(context: Context, workflowId: Long, launch: (Intent) -> Unit): ScreenCaptureStart {
         if (!notificationsShown(context)) return ScreenCaptureStart.NOTIFICATIONS_OFF
+        // Idle or Finished in this process: a workflow still authorized or extracting lost its session (e.g. to process death).
+        val sessionDead = controller.state.value.let { it is CaptureSessionState.Idle || it is CaptureSessionState.Finished }
         if (!controller.requestConsent(workflowId)) return ScreenCaptureStart.BUSY
         val gateway = MarksyContainer.captureGateway(context)
         // A consent answer lost to a recreated screen leaves the workflow at CAPTURE_REQUESTED; asking again is fine.
-        val requested = gateway.captureRequested(workflowId) ||
+        val requested = gateway.captureRequested(workflowId, sessionDead) ||
             MarksyContainer.database(context).captureDao().workflow(workflowId)?.state == WorkflowState.CAPTURE_REQUESTED.name
         if (!requested) {
             controller.abandon(workflowId)

@@ -86,7 +86,10 @@ class CaptureGateway(
         workflowId?.let { openWorkflow(it) }
         val workflow = workflowId?.let { dao.workflow(it) }
         if (workflow?.candidateId != null && workflow.state in REVIEWED_WORKFLOW) return duplicate(workflow.candidateId)
-        dao.candidateIdByHash(contentHash, now - DUPLICATE_WINDOW_MS)?.let { return duplicate(it) }
+        dao.candidateIdByHash(contentHash, now - DUPLICATE_WINDOW_MS)?.let { existing ->
+            workflow?.let { followCandidate(it.id, existing) }
+            return duplicate(existing)
+        }
 
         // A workflow's package is the originating notification's identity; otherwise only an allow-listed hint counts.
         val hinted = if (workflow == null) registry.resolve(sourceHint) else null
@@ -152,7 +155,14 @@ class CaptureGateway(
         return workflow.state != WorkflowState.NEEDS_SOURCE_VIEW.name || moveWorkflow(id, WorkflowState.USER_OPENED_SOURCE)
     }
 
-    suspend fun captureRequested(id: Long): Boolean = openWorkflow(id) != null && moveWorkflow(id, WorkflowState.CAPTURE_REQUESTED)
+    /** [sessionDead]: no capture session runs in this process, so an authorized or extracting workflow was orphaned by one. */
+    suspend fun captureRequested(id: Long, sessionDead: Boolean = false): Boolean {
+        val workflow = openWorkflow(id) ?: return false
+        if (sessionDead && workflow.state in SESSION_WORKFLOW && moveWorkflow(id, WorkflowState.CAPTURE_FAILED, CaptureFailure.STALE_SESSION)) {
+            log("capture workflow=$id ${CaptureFailure.STALE_SESSION}")
+        }
+        return moveWorkflow(id, WorkflowState.CAPTURE_REQUESTED)
+    }
 
     suspend fun captureAuthorized(id: Long): Boolean = openWorkflow(id) != null && moveWorkflow(id, WorkflowState.CAPTURE_AUTHORIZED)
 
@@ -202,6 +212,17 @@ class CaptureGateway(
     private fun duplicate(candidateId: Long): CaptureOutcome {
         log("capture duplicate of candidate=$candidateId")
         return CaptureOutcome.Duplicate(candidateId)
+    }
+
+    // The session's frame was captured before: the workflow follows that candidate instead of staying mid-capture.
+    private suspend fun followCandidate(workflowId: Long, candidateId: Long) {
+        dao.linkCandidate(workflowId, candidateId)
+        moveWorkflow(workflowId, WorkflowState.EXTRACTION_PENDING)
+        moveWorkflow(workflowId, WorkflowState.REVIEW_REQUIRED)
+        when (dao.candidate(candidateId)?.state) {
+            CaptureState.ACCEPTED.name -> moveWorkflow(workflowId, WorkflowState.ACCEPTED)
+            CaptureState.REJECTED.name -> moveWorkflow(workflowId, WorkflowState.REJECTED)
+        }
     }
 
     private suspend fun failExtraction(evidenceId: Long, workflow: CaptureWorkflowEntity?, code: String, method: CaptureMethod): CaptureOutcome.Failed {
@@ -256,6 +277,7 @@ class CaptureGateway(
         const val STALE_SESSION_MS = 10 * 60 * 1000L
         const val UNREVIEWED_TTL_MS = 3 * 24 * 60 * 60 * 1000L
         private val REVIEWED_WORKFLOW = setOf(WorkflowState.REVIEW_REQUIRED.name, WorkflowState.ACCEPTED.name)
+        private val SESSION_WORKFLOW = setOf(WorkflowState.CAPTURE_AUTHORIZED.name, WorkflowState.EXTRACTION_PENDING.name)
     }
 }
 
