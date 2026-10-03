@@ -29,31 +29,40 @@ interface NotificationEventDao {
     @Query("UPDATE notification_events SET category = :category, priority = :priority, confidence = :confidence, isTrading = :isTrading, deliveryState = CASE WHEN :queue AND deliveryState NOT IN ('IN_FLIGHT', 'DELIVERED') THEN 'PENDING' ELSE deliveryState END, intelligenceVersion = 0 WHERE id = :eventId AND isTrading = 0")
     suspend fun updateClassification(eventId: Long, category: String, priority: Int, confidence: Float, isTrading: Boolean, queue: Boolean): Int
 
+    // Every list read below is one snapshot: lists past the 2MB cursor window are read in chunks, and a write between chunks crashed the reader.
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<NotificationEventEntity>>
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE category = :category AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeByCategory(category: String, limit: Int): Flow<List<NotificationEventEntity>>
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC LIMIT :limit")
     fun observeTimeline(limit: Int): Flow<List<NotificationEventEntity>>
 
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE category != 'OTHER' AND archived = 0 ORDER BY postedAt DESC")
     fun observeHistory(): Flow<List<NotificationEventEntity>>
 
     /** Bounded by retention (7 days, 30 for trading), so safe to observe in full. */
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC")
     fun observeActive(): Flow<List<NotificationEventEntity>>
 
     /** High-value active events for the Home/Smart Inbox attention surfaces. */
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE priority >= :minimumPriority AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY priority DESC, postedAt DESC LIMIT :limit")
     fun observeByMinimumPriority(minimumPriority: Int, limit: Int): Flow<List<NotificationEventEntity>>
 
     /** Trading events remain source-driven and independently delivered to Marksy. */
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeTrading(limit: Int): Flow<List<NotificationEventEntity>>
 
     // Captured page: retired calls stay visible there (Earlier), unlike the active views.
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE isTrading = 1 AND archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE', 'RESOLVED') ORDER BY postedAt DESC LIMIT :limit")
     fun observeCaptured(limit: Int): Flow<List<NotificationEventEntity>>
 
@@ -165,6 +174,7 @@ interface NotificationEventDao {
     // ---- EPIC-011 Smart Inbox (thread-level actions take the thread's event ids) ----
 
     /** Non-archived events incl. resolved ones; bounded by retention and the limit. */
+    @Transaction
     @Query("SELECT * FROM notification_events WHERE archived = 0 AND lifecycleState IN ('NEW', 'ACTIVE') ORDER BY postedAt DESC LIMIT :limit")
     fun observeInbox(limit: Int): Flow<List<NotificationEventEntity>>
 
