@@ -223,15 +223,14 @@ fun AskMarksyScreen(
                     .size(MarksySize.Touch)
                     .scale(micScale)
                     .clip(CircleShape)
-                    .background(if (voice.listening) MarksyTheme.Negative else MarksyTheme.SurfaceRaised)
-                    .border(MarksySpace.Border, if (voice.listening) MarksyTheme.Negative else MarksyTheme.PrimaryEmerald, CircleShape)
+                    .background(if (voice.listening) MarksyTheme.Negative else MarksyTheme.PrimaryEmerald)
                     .clickable(onClick = onMic),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     if (voice.listening) Icons.Default.Stop else Icons.Default.Mic,
                     contentDescription = if (voice.listening) "Stop listening" else "Speak a question",
-                    tint = if (voice.listening) MarksyTheme.OnAccent else MarksyTheme.PrimaryEmerald,
+                    tint = MarksyTheme.OnAccent,
                     modifier = Modifier.size(MarksySize.Icon)
                 )
             }
