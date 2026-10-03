@@ -6,8 +6,6 @@ import com.marksy.os.MarksyFormat
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -30,30 +28,30 @@ fun ValidationScreen(repo: ValidationRepository, padding: PaddingValues) {
     }
     val started = repo.startDay() != null
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         if (!started) {
             item {
+                MarksyCard {
                 Text(
                     "Start a 30-day validation to measure how Marksy performs on your real notifications. " +
                         "Metrics are collected automatically on this device; nothing is estimated or back-filled.",
                     color = MarksyTheme.TextSecondary, style = MarksyType.Body
                 )
                 MarksyButton("Start 30-day validation", onClick = { repo.start(); version++ })
+                }
             }
-            return@LazyColumn
+            return@MarksyList
         }
         val r = report
         if (r == null) {
             item { MarksyLoader("Building report…") }
-            return@LazyColumn
+            return@MarksyList
         }
         item {
+            Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
             Text("Day ${r.daysElapsed} of 30 · ${r.daysWithData} day(s) with data", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
             if (r.gaps.isNotEmpty()) Text("No data on: ${r.gaps.joinToString()}", color = MarksyTheme.YellowImportant, style = MarksyType.Meta)
+            }
         }
         item {
             val t = r.totals
@@ -88,21 +86,36 @@ fun ValidationScreen(repo: ValidationRepository, padding: PaddingValues) {
             })
         }
         item { SectionLabel("By day") }
-        items(r.days.reversed()) { d ->
+        item {
+            MarksyGroupCard {
+            r.days.reversed().forEachIndexed { i, d ->
+            if (i > 0) MarksyDivider()
             Text(
                 "${d.day}: ${d.captured} captured · ${d.important} important · ${d.duplicates} dup · ${d.failures} fail" +
                     (d.uptimePct?.let { " · up ${MarksyFormat.percent(it, 0, signed = false)}" } ?: "") + if (!d.hasData) " · no data" else "",
-                color = if (d.hasData) MarksyTheme.TextSecondary else MarksyTheme.TextMuted, style = MarksyType.Meta
+                color = if (d.hasData) MarksyTheme.TextSecondary else MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.padding(vertical = MarksySpace.Gap)
             )
+            }
+            }
         }
         item { SectionLabel("By source") }
-        items(r.sources.take(20)) { s ->
-            Text("${s.source}: ${s.captured} captured · ${s.duplicates} dup · ${s.corrections} corrected · ${s.failures} fail", color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+        item {
+            MarksyGroupCard {
+            r.sources.take(20).forEachIndexed { i, s ->
+                if (i > 0) MarksyDivider()
+                Text("${s.source}: ${s.captured} captured · ${s.duplicates} dup · ${s.corrections} corrected · ${s.failures} fail", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(vertical = MarksySpace.Gap))
+            }
+            }
         }
         if (r.failureLog.isNotEmpty()) {
             item { SectionLabel("Recent failures") }
-            items(r.failureLog.take(10)) { f ->
-                Text("${MarksyFormat.dayTime(Instant.ofEpochMilli(f.at).atZone(ZoneId.systemDefault()))} · ${f.connectorId} · ${f.type} ${f.detail.orEmpty()}", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            item {
+                MarksyGroupCard {
+                r.failureLog.take(10).forEachIndexed { i, f ->
+                if (i > 0) MarksyDivider()
+                Text("${MarksyFormat.dayTime(Instant.ofEpochMilli(f.at).atZone(ZoneId.systemDefault()))} · ${f.connectorId} · ${f.type} ${f.detail.orEmpty()}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(vertical = MarksySpace.Gap))
+                }
+                }
             }
         }
         item {

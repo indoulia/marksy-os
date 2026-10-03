@@ -3,7 +3,6 @@ package com.marksy.os.ui
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,14 +23,10 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         }
     }
     val r = report
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         if (r == null) {
             item { MarksyLoader("Checking Marksy…") }
-            return@LazyColumn
+            return@MarksyList
         }
         item { Text(r.summary, color = color(r.level), style = MarksyType.Lead, fontWeight = FontWeight.Bold) }
         if (r.diagnostics.isNotEmpty()) {
@@ -44,13 +39,18 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
         }
         item { SectionLabel("Connectors") }
         item { ConnectorSetupCard() }
-        items(r.connectors) { c ->
+        item {
             MarksyGroupCard {
-                Text("${c.label} · ${c.status}", color = color(c.level), style = MarksyType.Body)
-                Text(
-                    "Uptime 24h: ${c.uptimePercent?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "no lifecycle data yet"} · captured today: ${c.capturedToday}",
-                    color = MarksyTheme.TextMuted, style = MarksyType.Meta
-                )
+                r.connectors.forEachIndexed { i, c ->
+                    if (i > 0) MarksyDivider()
+                    Column(Modifier.padding(vertical = MarksySpace.Gap)) {
+                        Text("${c.label} · ${c.status}", color = color(c.level), style = MarksyType.Body)
+                        Text(
+                            "Uptime 24h: ${c.uptimePercent?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "no lifecycle data yet"} · captured today: ${c.capturedToday}",
+                            color = MarksyTheme.TextMuted, style = MarksyType.Meta
+                        )
+                    }
+                }
             }
         }
         // Data sources first, then prediction quality, so a data outage is never read as a bad call.
@@ -63,10 +63,15 @@ fun HealthScreen(padding: PaddingValues, market: com.marksy.os.market.MarketInte
             item(key = "validation") { PredictionValidationCard(m) }
         }
         item { SectionLabel("Runtime") }
-        items(r.metrics) { m ->
-            Row(Modifier.fillMaxWidth()) {
-                Text(m.label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
-                Text(m.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small)
+        item {
+            MarksyGroupCard {
+                r.metrics.forEachIndexed { i, m ->
+                    if (i > 0) MarksyDivider()
+                    Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Gap)) {
+                        Text(m.label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
+                        Text(m.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small)
+                    }
+                }
             }
         }
     }

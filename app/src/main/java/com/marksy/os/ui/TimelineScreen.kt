@@ -6,7 +6,6 @@ import com.marksy.os.EmptyState
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -27,14 +26,7 @@ fun TimelineScreen(
     padding: PaddingValues,
     onEventSelected: (NotificationEventEntity) -> Unit = {}
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MarksyTheme.Background)
-            .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(padding)) {
         item {
             Text(
                 "Today · " + MarksyFormat.weekdayDay(LocalDate.now()),
@@ -98,9 +90,9 @@ private fun TimelineNodeRow(
 
         Spacer(Modifier.width(MarksySpace.ListGap))
 
-        Column(Modifier.weight(1f).marksyCard()) {
+        MarksyRowCard(Modifier.weight(1f)) {
             Row(
-                modifier = Modifier.padding(MarksySpace.CardPadding),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

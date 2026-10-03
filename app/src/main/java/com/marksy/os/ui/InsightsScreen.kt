@@ -1,10 +1,10 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.lazy.items
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -41,14 +41,7 @@ fun InsightsScreen(
     val observations = remember(periodEvents) { InsightsModel.from(periodEvents, now).observations }
     val snapshot = (market as? MarketState.Loaded)?.snapshot
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MarksyTheme.Background)
-            .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(padding)) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 HomePeriod.entries.forEach { option ->
@@ -65,7 +58,7 @@ fun InsightsScreen(
                 } else {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         DonutChart(breakdown.map { it.second to categoryColor(it.first) }, periodEvents.size)
-                        Spacer(Modifier.width(MarksySpace.Gutter))
+                        Spacer(Modifier.width(MarksySpace.Gap))
                         Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                             breakdown.forEach { (category, count) ->
                                 BreakdownLegendRow(categoryLabel(category), MarksyFormat.number(count.toDouble(), 0), categoryColor(category)) {
@@ -190,7 +183,7 @@ private fun AiInsightCard(
             ) {
                 Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(MarksySize.Icon))
             }
-            Spacer(Modifier.width(MarksySpace.CardPadding))
+            Spacer(Modifier.width(MarksySpace.Gap))
             Column {
                 Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(MarksySpace.Tight))

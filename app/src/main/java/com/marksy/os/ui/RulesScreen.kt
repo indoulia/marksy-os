@@ -5,9 +5,7 @@ import com.marksy.os.data.RuleRunner
 import com.marksy.os.intelligence.RuleConditionTree
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,14 +40,7 @@ fun RulesScreen(padding: PaddingValues) {
         rules.addAll(saved)
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MarksyTheme.Background)
-            .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(padding)) {
         item {
             Column {
                 Text("Create custom rules to filter, group and route notifications. Let Marksy work for you.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
@@ -61,44 +51,14 @@ fun RulesScreen(padding: PaddingValues) {
         item {
             MarksyCard(border = MarksyTheme.PrimaryEmerald) {
                 Text("Custom Rule Builder", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(MarksySpace.ListGap))
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(MarksyShape.Chip)
-                            .background(MarksyTheme.SurfaceRaised)
-                            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
-                    ) {
-                        Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
-                    }
+                    Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 }
-
-                Spacer(Modifier.height(MarksySpace.Gap))
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("THEN", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(MarksyShape.Chip)
-                            .background(MarksyTheme.SurfaceRaised)
-                            .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
-                    ) {
-                        Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
-                    }
+                    Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 }
-
-                Spacer(Modifier.height(MarksySpace.Section))
-
                 MarksyButton("+ Add Custom Rule", onClick = { editingRule = null; showEditor = true }, modifier = Modifier.fillMaxWidth())
             }
         }
@@ -216,7 +176,7 @@ private fun RuleEditorDialog(
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
+                verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)
             ) {
                 CompactTextField(
                     value = name,

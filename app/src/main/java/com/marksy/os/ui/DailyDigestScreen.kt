@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -41,15 +40,7 @@ fun DailyDigestScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MarksyTheme.Background)
-            .padding(padding),
-        contentPadding = PaddingValues(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(padding), state = listState) {
         item {
             Text(
                 "Today · " + MarksyFormat.weekdayDay(java.time.LocalDate.now()),
@@ -60,13 +51,12 @@ fun DailyDigestScreen(
 
         if (digest.totalNotifications == 0) {
             item { EmptyState("Nothing captured today", "Your digest builds up as notifications arrive.") }
-            return@LazyColumn
+            return@MarksyList
         }
 
         item {
-            DigestCard(borderColor = MarksyTheme.PrimaryEmerald) {
+            MarksyCard(border = MarksyTheme.PrimaryEmerald) {
                 Text(digest.title, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(MarksySpace.Inner))
 
                 DigestItemRow(
                     icon = Icons.Default.Notifications,
@@ -107,8 +97,6 @@ fun DailyDigestScreen(
                     ) { onOpenInbox((filter ?: SmartInboxModel.Filter.ALL).name) }
                 }
 
-                Spacer(Modifier.height(MarksySpace.ListGap))
-
                 MarksyButton(
                     "Share Digest",
                     onClick = {
@@ -125,9 +113,8 @@ fun DailyDigestScreen(
 
         if (digest.attentionEvents.isNotEmpty()) {
             item {
-                DigestCard {
+                MarksyCard {
                     Text("Needs attention", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(MarksySpace.Tight))
                     digest.attentionEvents.take(MAX_ATTENTION_ROWS).forEach { event ->
                         AttentionRow(event) { onEventSelected(event) }
                     }
@@ -137,9 +124,8 @@ fun DailyDigestScreen(
 
         if (digest.topSources.isNotEmpty()) {
             item {
-                DigestCard {
+                MarksyCard {
                     Text("Top sources", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(MarksySpace.Tight))
                     digest.topSources.forEach { (name, count) ->
                         Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -154,11 +140,6 @@ fun DailyDigestScreen(
 
 private const val ATTENTION_ITEM_INDEX = 2
 private const val MAX_ATTENTION_ROWS = 5
-
-@Composable
-private fun DigestCard(borderColor: Color = MarksyTheme.BorderGlow, content: @Composable ColumnScope.() -> Unit) {
-    MarksyCard(border = borderColor, content = content)
-}
 
 @Composable
 private fun DigestItemRow(
@@ -185,7 +166,7 @@ private fun DigestItemRow(
         ) {
             Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(MarksySize.IconSmall))
         }
-        Spacer(Modifier.width(MarksySpace.ListGap))
+        Spacer(Modifier.width(MarksySpace.Gap))
         Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
     }

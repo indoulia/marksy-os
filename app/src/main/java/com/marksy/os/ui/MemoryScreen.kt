@@ -5,8 +5,6 @@ import java.time.Instant
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,12 +27,9 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
     var confirmErase by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { repo.ingest() } }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
-        contentPadding = PaddingValues(bottom = padding.calculateBottomPadding() + MarksySpace.Gutter),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-    ) {
+    MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
+            MarksyCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Personal memory", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
@@ -46,24 +41,31 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
                 Switch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) })
             }
             MarksyButton("Erase learned memory", onClick = { confirmErase = true }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
+            }
         }
         PersonalMemory.Kind.entries.forEach { kind ->
             val ofKind = entries.filter { it.kind == kind.name }
             item(key = "k-${kind.name}") {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    SectionLabel(kind.label, ofKind.size, modifier = Modifier.weight(1f))
-                    if (kind != PersonalMemory.Kind.PREFERENCE) Switch(
+                SectionLabel(kind.label, ofKind.size, trailing = if (kind != PersonalMemory.Kind.PREFERENCE) ({
+                    Switch(
                         checked = kindState.getValue(kind),
                         enabled = enabled,
                         onCheckedChange = { v -> kindState = kindState + (kind to v); repo.setKindEnabled(kind, v) }
                     )
-                }
-                if (kind == PersonalMemory.Kind.LOCATION) {
+                }) else null)
+            }
+            if (kind == PersonalMemory.Kind.LOCATION) {
+                item(key = "n-${kind.name}") {
                     Text("Learned only from places named in your notifications (deliveries, rides, calendar). Marksy never reads your device location, and street numbers are dropped.", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 }
             }
-            items(ofKind, key = { "m-${it.id}" }) { e ->
-                MemoryRow(e, onForget = { scope.launch { repo.forget(e.id) } }, onRename = { renaming = e })
+            if (ofKind.isNotEmpty()) item(key = "g-${kind.name}") {
+                MarksyGroupCard {
+                    ofKind.forEachIndexed { i, e ->
+                        if (i > 0) MarksyDivider()
+                        MemoryRow(e, onForget = { scope.launch { repo.forget(e.id) } }, onRename = { renaming = e })
+                    }
+                }
             }
         }
     }
@@ -95,7 +97,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
 @Composable
 private fun MemoryRow(e: MemoryEntryEntity, onForget: () -> Unit, onRename: () -> Unit) {
     val cadence = runCatching { org.json.JSONObject(e.detailJson).optInt("cadenceDays", 0) }.getOrDefault(0)
-    MarksyGroupCard {
+    Column(Modifier.padding(vertical = MarksySpace.Gap)) {
         Text(e.label, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Medium)
         Text(
             buildString {

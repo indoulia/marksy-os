@@ -1,5 +1,6 @@
 package com.marksy.os.ui
 
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.IconButton
 import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
@@ -66,11 +67,9 @@ fun CalendarScreen(
         Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth == selectedDay
     }.sortedByDescending { it.postedAt } else emptyList()
 
-    Column(
-        Modifier.padding(padding).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.Tight)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Column(Modifier.fillMaxWidth().marksyCard().pointerInput(Unit) {
+    MarksyList(Modifier.padding(padding)) {
+        item {
+        MarksyCard(Modifier.pointerInput(Unit) {
             // Swipe left = next month, right = previous.
             var dragged = 0f
             detectHorizontalDragGestures(
@@ -78,7 +77,7 @@ fun CalendarScreen(
                 onDragEnd = { if (dragged <= -swipePx) shiftMonth(1) else if (dragged >= swipePx) shiftMonth(-1) }
             ) { _, delta -> dragged += delta }
         }) {
-            Column(Modifier.padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)) {
+            Column {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     IconButton(onClick = { shiftMonth(-1) }) { Text("‹", style = MarksyType.Title, color = MarksyTheme.PrimaryEmerald) }
                     Text(MarksyFormat.monthYear(month), color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
@@ -117,30 +116,23 @@ fun CalendarScreen(
                 }
             }
         }
-        Spacer(Modifier.height(MarksySpace.CardPadding))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (selectedDay > 0) MarksyFormat.weekdayDay(month.atDay(selectedDay.coerceAtMost(month.lengthOfMonth()))) else "Select a day", color = MarksyTheme.TextPrimary, style = MarksyType.Heading)
-            if (selectedDay > 0) {
-                Spacer(Modifier.width(MarksySpace.ListGap))
-                Text(
-                    "${selectedEvents.size} ${if (selectedEvents.size == 1) "message" else "messages"}",
-                    color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)
-                        .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Chip).padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Tight)
-                )
-            }
         }
-        Spacer(Modifier.height(MarksySpace.Gap))
+        item {
+            SectionLabel(
+                if (selectedDay > 0) MarksyFormat.weekdayDay(month.atDay(selectedDay.coerceAtMost(month.lengthOfMonth()))) else "Select a day",
+                count = if (selectedDay > 0) selectedEvents.size else null
+            )
+        }
         if (selectedDay <= 0) {
-            InlineEmpty("Tap any marked day to inspect its notifications.")
+            item { InlineEmpty("Tap any marked day to inspect its notifications.") }
         } else if (selectedEvents.isEmpty()) {
-            InlineEmpty("No meaningful notifications captured on this day.")
+            item { InlineEmpty("No meaningful notifications captured on this day.") }
         } else {
-            selectedEvents.forEach { event ->
-                MarksyCard(onClick = { onEventSelected(event) }, border = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, modifier = Modifier.padding(bottom = MarksySpace.Inner)) {
+            items(selectedEvents, key = { it.id }) { event ->
+                MarksyCard(onClick = { onEventSelected(event) }, border = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow) {
                     Text(event.sourceName, color = if (event.isTrading) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, fontWeight = FontWeight.SemiBold, style = MarksyType.Small)
                     Text(event.title.ifBlank { "Notification" }, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Medium, maxLines = 2)
-                    if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, modifier = Modifier.padding(top = MarksySpace.Tight))
+                    if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2)
                 }
             }
         }
