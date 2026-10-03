@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
+import com.marksy.os.MarksyFormat
 import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
@@ -15,8 +16,6 @@ import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PicksBasis
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /** Today's setups: Marksy's live calls, best first. Reports' setups are parsed by the server and land in My tips. */
 @Composable
@@ -33,9 +32,9 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
     val scan by MarketIntelligenceRepository.latestScan.collectAsState()
 
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
+        Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
+        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
     ) {
         when (val m = marksy) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading Marksy setups...") }
@@ -56,5 +55,4 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
     }
 }
 
-private val TIME = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault())
-private fun asOf(iso: String) = runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(TIME) }.getOrDefault(iso.take(16).replace('T', ' '))
+private fun asOf(iso: String) = runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).let(MarksyFormat::dayTime) }.getOrDefault(iso.take(16).replace('T', ' '))

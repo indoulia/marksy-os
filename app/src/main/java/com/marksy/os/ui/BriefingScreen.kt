@@ -38,7 +38,7 @@ fun BriefingScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MarksyTheme.Background).padding(horizontal = MarksySpace.Gutter),
         // Clears the three floating Morning / Evening / Overnight buttons.
-        contentPadding = PaddingValues(top = 8.dp, bottom = oneHandStackBottomPadding(3)),
+        contentPadding = PaddingValues(top = MarksySpace.Gap, bottom = oneHandStackBottomPadding(3)),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         val b = briefing
@@ -60,7 +60,7 @@ fun BriefingScreen(
                     Text("Why: ${line.why}", color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 2)
                     if (section.title == com.marksy.os.intelligence.DailyBriefing.MARKETS_SECTION) {
                         val stocks = remember(line.text, isSymbol) { com.marksy.os.market.StockMentions.find(line.text, isSymbol) }
-                        StockLinkPills(stocks, onOpenStock, Modifier.padding(top = 4.dp))
+                        StockLinkPills(stocks, onOpenStock, Modifier.padding(top = MarksySpace.Tight))
                     }
                 }
             }

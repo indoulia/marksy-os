@@ -79,7 +79,7 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
     ) {
         (alerts as? MarketDataState.Loaded)?.value?.let { list ->
             items(list, key = { "alert-${it.id}" }) { a ->
@@ -107,9 +107,9 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
 
 @Composable
 private fun TipAlertRow(alert: TipAlertDto, unread: Boolean, onClick: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().marksyCard(if (unread) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow)
-            .clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp)
+    MarksyCard(
+        border = if (unread) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow,
+        padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick
     ) {
         Text(alert.message, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis)
         compactTime(alert.triggeredAt)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
@@ -119,7 +119,7 @@ private fun TipAlertRow(alert: TipAlertDto, unread: Boolean, onClick: () -> Unit
 @Composable
 private fun FollowRow(item: FollowDto, following: Boolean, onToggle: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp),
+        Modifier.fillMaxWidth().marksyCard().padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -132,7 +132,7 @@ private fun FollowRow(item: FollowDto, following: Boolean, onToggle: (Boolean) -
                 color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(MarksySpace.Gap))
         FollowPill(following, onToggle)
     }
 }

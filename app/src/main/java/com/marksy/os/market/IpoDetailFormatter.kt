@@ -1,5 +1,6 @@
 package com.marksy.os.market
 
+import com.marksy.os.MarksyFormat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -7,7 +8,6 @@ import java.math.RoundingMode
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -29,8 +29,6 @@ object IpoDetailFormatter {
     private val SILENT_STATES = setOf("MISSING", "EMPTY", "UNAVAILABLE", "AVAILABLE", "FRESH", "OK", "NOT_APPLICABLE")
     private val ENVELOPE = setOf("state", "value", "asOf", "reason")
     private val TITLE_KEYS = listOf("label", "name", "title", "headline", "publication", "kind", "analyst", "source", "category")
-    private val DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
-    private val DATE_TIME = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
 
     fun rows(o: JSONObject, skip: Set<String> = emptySet(), depth: Int = 0, zone: ZoneId = ZoneId.systemDefault()): List<Row> {
         val keys = o.keys().asSequence().toList()
@@ -131,8 +129,8 @@ object IpoDetailFormatter {
     }
 
     private fun date(s: String, zone: ZoneId): String? =
-        runCatching { LocalDate.parse(s).format(DATE) }.getOrNull()
-            ?: runCatching { OffsetDateTime.parse(s).atZoneSameInstant(zone).format(DATE_TIME) }.getOrNull()
+        runCatching { MarksyFormat.fullDay(LocalDate.parse(s)) }.getOrNull()
+            ?: runCatching { OffsetDateTime.parse(s).atZoneSameInstant(zone).let { MarksyFormat.fullDay(it) + ", " + MarksyFormat.time(it) } }.getOrNull()
 
     private fun words(s: String) = s.lowercase(Locale.ROOT).replace('_', ' ').replaceFirstChar { it.titlecase(Locale.ROOT) }
 

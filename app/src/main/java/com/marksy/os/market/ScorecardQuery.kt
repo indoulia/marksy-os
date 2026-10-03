@@ -1,8 +1,7 @@
 package com.marksy.os.market
 
+import com.marksy.os.MarksyFormat
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /** §8.3 presets; the server resolves each to IST dates, so the phone never computes a window. */
 enum class ScorecardPeriod(val label: String) {
@@ -47,7 +46,7 @@ data class ScorecardQuery(
     fun label(): String {
         val start = startDate
         val end = endDate
-        val range = if (period == ScorecardPeriod.CUSTOM && start != null && end != null) "${DAY.format(start)} – ${DAY.format(end)}" else period.label
+        val range = if (period == ScorecardPeriod.CUSTOM && start != null && end != null) "${MarksyFormat.day(start)} – ${MarksyFormat.day(end)}" else period.label
         return range + (horizon?.let { " · ${it.label}" } ?: "")
     }
 
@@ -57,8 +56,6 @@ data class ScorecardQuery(
     ).joinToString("|")
 
     companion object {
-        private val DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-
         fun decode(text: String): ScorecardQuery = runCatching {
             val p = text.split("|")
             ScorecardQuery(
@@ -72,16 +69,13 @@ data class ScorecardQuery(
 
 /** Words for §8 numbers exactly as the server sent them; nothing here recomputes a metric. */
 object ScorecardText {
-    private val DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-    private val FULL_DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
-
-    fun date(d: LocalDate): String = DAY.format(d)
+    fun date(d: LocalDate): String = MarksyFormat.day(d)
 
     fun trust(t: ScorecardTrustDto): String = t.trustScore?.let { "Trust $it" } ?: "Trust —"
 
     /** The window the server resolved, in IST dates as echoed; "All time" for Lifetime. */
     fun range(f: ScorecardFilterEchoDto): String {
-        fun day(iso: String?) = iso?.let { runCatching { FULL_DAY.format(LocalDate.parse(it)) }.getOrDefault(it) }
+        fun day(iso: String?) = iso?.let { runCatching { MarksyFormat.fullDay(LocalDate.parse(it)) }.getOrDefault(it) }
         val start = day(f.startDate)
         val end = day(f.endDate)
         return if (start == null || end == null) "All time" else "$start – $end (IST)"
@@ -106,13 +100,13 @@ object ScorecardText {
         "Avg actual return" to opt(b.performance.avgActualReturn, ::ret), "Total actual return" to opt(b.performance.totalActualReturn, ::ret),
         "Avg promised return" to opt(b.performance.avgPromisedReturn, ::ret), "Total promised return" to opt(b.performance.totalPromisedReturn, ::ret),
         "Return realization" to opt(b.performance.returnRealizationPct, ::pct),
-        "Avg days to completion" to opt(b.performance.avgDaysToCompletion) { String.format(Locale.US, "%.2f", it) },
+        "Avg days to completion" to opt(b.performance.avgDaysToCompletion) { MarksyFormat.number(it, 2) },
         "Trust score" to (b.trust.trustScore?.toString() ?: "not enough history (${b.trust.completed}/${b.trust.minimumCompleted})"),
-        "Wilson lower bound" to opt(b.trust.wilsonLowerBound) { String.format(Locale.US, "%.3f", it) },
-        "Return quality" to opt(b.trust.returnQuality) { String.format(Locale.US, "%.3f", it) }
+        "Wilson lower bound" to opt(b.trust.wilsonLowerBound) { MarksyFormat.number(it, 3) },
+        "Return quality" to opt(b.trust.returnQuality) { MarksyFormat.number(it, 3) }
     )
 
-    private fun pct(v: Double) = String.format(Locale.US, "%.2f%%", v)
+    private fun pct(v: Double) = MarksyFormat.percent(v, 2, signed = false)
     private fun ret(v: Double) = LedgerCalls.returnText(v) ?: "—"
     private fun opt(v: Double?, format: (Double) -> String) = v?.let(format) ?: "—"
 }

@@ -43,7 +43,7 @@ internal fun MyTipsView(repository: MarketIntelligenceRepository, status: MyTips
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = MarksySpace.Gutter),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap),
-        contentPadding = PaddingValues(top = 10.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(top = MarksySpace.ListGap, bottom = bottomPadding)
     ) {
         when (val s = paged.state) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading your tips…") }
@@ -64,17 +64,17 @@ internal fun MyTipsView(repository: MarketIntelligenceRepository, status: MyTips
 @Composable
 private fun MyTipRow(item: MyTipDto, livePrice: Double?, onClick: () -> Unit) {
     val t = item.tip
-    Column(Modifier.fillMaxWidth().marksyCard().clickable(onClick = onClick).padding(horizontal = MarksySpace.CardPadding, vertical = 9.dp)) {
+    MarksyCard(padding = PaddingValues(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.ListGap), spacing = 0.dp, onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(t.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
             t.direction?.let { d ->
-                MarksyBadge(d, if (d == "SELL") MarksyTheme.Negative else MarksyTheme.Positive, MarksyTheme.SurfaceRaised, Modifier.padding(start = 6.dp))
+                MarksyBadge(d, if (d == "SELL") MarksyTheme.Negative else MarksyTheme.Positive, MarksyTheme.SurfaceRaised, Modifier.padding(start = MarksySpace.Inner))
             }
             Spacer(Modifier.weight(1f))
             Text(LedgerCalls.state(t), color = toneColor(LedgerCalls.tone(t)), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
-        Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = 2.dp))
-        Row(Modifier.padding(top = 2.dp)) {
+        Text(LedgerCalls.levelsText(t), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Hair))
+        Row(Modifier.padding(top = MarksySpace.Hair)) {
             LedgerCalls.progressText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold) }
             Spacer(Modifier.weight(1f))
             livePrice?.let { Text("${callRupees(it)} now", color = MarksyTheme.TextPrimary, style = MarksyType.Meta) }

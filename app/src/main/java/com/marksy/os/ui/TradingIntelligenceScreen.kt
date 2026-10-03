@@ -86,9 +86,9 @@ fun TradingIntelligenceScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> Unit) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             MyTipsStatus.entries.forEach { s -> Pill(s.label, selected = status == s) { onStatus(s) } }
         }
     }
@@ -97,13 +97,13 @@ private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, stackBy: StackBy, onStackBy: (StackBy) -> Unit) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             listOf(ShowOnly.ALL to "All", ShowOnly.TIPS to "Tips", ShowOnly.NEEDS_YOU to "Needs you").forEach { (v, l) -> Pill(l, selected = show == v) { onShow(v) } }
         }
-        Text("STACK BY", color = MarksyTheme.TextMuted, style = MarksyType.Label, modifier = Modifier.padding(top = 4.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("STACK BY", color = MarksyTheme.TextMuted, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.Tight))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             listOf(StackBy.SOURCE to "Source", StackBy.SYMBOL to "Symbol").forEach { (v, l) -> Pill(l, selected = stackBy == v) { onStackBy(v) } }
         }
     }
@@ -168,19 +168,19 @@ private fun TradingTickerCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(MarksySize.IconLarge)
                         .clip(CircleShape)
                         .background(MarksyTheme.BadgeFinanceBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("📊", style = MarksyType.Small)
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(MarksySpace.Gap))
                 Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(MarksySpace.Inner))
                 Text(change, color = changeColor(change), style = MarksyType.Small, fontWeight = FontWeight.Bold)
             }
         }
@@ -206,7 +206,7 @@ private fun CapturedInsightCard(
                 )
                 Text(listOfNotNull(compactTime(insight.postedAt), insight.status).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(MarksySpace.Tight))
             Text(
                 insight.headline.ifBlank { "Trading Alert" },
                 color = MarksyTheme.TextPrimary,
@@ -220,7 +220,7 @@ private fun CapturedInsightCard(
                     style = MarksyType.Small,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = MarksySpace.Tight)
                 )
             }
         }
