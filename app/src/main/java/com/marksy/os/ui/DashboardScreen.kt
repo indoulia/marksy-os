@@ -239,10 +239,10 @@ fun DashboardScreen(
 
         item {
             SectionLabel("Latest Activity", trailing = {
-                Text(
-                    "Timeline ›", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onOpenTimeline)
-                )
+                Row(Modifier.clip(MarksyShape.Chip).clickable(onClick = onOpenTimeline), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Timeline", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
+                }
             })
         }
         if (latest.isEmpty()) {
@@ -339,33 +339,21 @@ private fun MarketPulseCard(market: MarketState, digest: DailyDigest?, onOpenTra
         else -> null
     }
     MarksyCard(onClick = onOpenTrading) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-                    Spacer(Modifier.width(MarksySpace.Gap))
-                    Text("Market Pulse", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
+            MarksyCardHeader("Market Pulse", icon = Icons.Default.TrendingUp, trailing = {
+                when {
+                    closed -> MarketStatusBadge("CLOSED")
+                    liveQuotes != null && streaming -> MarketStatusBadge("LIVE")
+                    liveQuotes == null -> snapshot?.marketStatus?.let { MarketStatusBadge(it) }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    when {
-                        closed -> MarketStatusBadge("CLOSED")
-                        liveQuotes != null && streaming -> MarketStatusBadge("LIVE")
-                        liveQuotes == null -> snapshot?.marketStatus?.let { MarketStatusBadge(it) }
-                    }
-                    if (sourceLine != null) {
-                        Spacer(Modifier.width(MarksySpace.Inner))
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = "Data source",
-                            tint = if (live is UpstoxLiveState.Failed) MarksyTheme.Warning else MarksyTheme.TextMuted,
-                            modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable { showSource = !showSource }
-                        )
-                    }
+                if (sourceLine != null) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Data source",
+                        tint = if (live is UpstoxLiveState.Failed) MarksyTheme.Warning else MarksyTheme.TextMuted,
+                        modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable { showSource = !showSource }
+                    )
                 }
-            }
+            })
             // Source/freshness is one tap away instead of a permanent line.
             if (showSource && sourceLine != null) {
                 Text(sourceLine, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
@@ -405,8 +393,8 @@ private fun IndexGrid(items: List<Triple<String, Double, Double?>>) {
                     // Name left; price and change in fixed right-aligned columns so they line up row to row.
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(46.dp))
-                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Caption, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.width(37.dp))
+                        Text(formatIndex(value), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End, modifier = Modifier.padding(horizontal = MarksySpace.Inner))
+                        Text(change?.let(::formatChange).orEmpty(), color = if ((change ?: 0.0) < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Caption, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, textAlign = TextAlign.End)
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -451,21 +439,15 @@ internal fun MarketStatusBadge(status: String) {
     }
 }
 
-// Small indices (INDIA VIX ~12) need decimals to be meaningful.
-private fun formatIndex(value: Double): String = MarksyFormat.number(value, if (value < 1000) 2 else 0)
+// Same two decimals as Market Overview.
+private fun formatIndex(value: Double): String = MarksyFormat.number(value, 2)
 
 private fun formatChange(pct: Double): String = MarksyFormat.percent(pct)
 
 @Composable
 private fun AiSummaryBanner(summary: String) {
     MarksyCard(border = MarksyTheme.PrimaryEmerald) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(MarksySize.Icon).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
-            }
-            Spacer(Modifier.width(MarksySpace.Gap))
-            Text("Today at a glance", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
-        }
+        MarksyCardHeader("Today at a glance", icon = Icons.Default.AutoAwesome)
         Text(summary, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
     }
 }

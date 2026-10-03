@@ -92,6 +92,7 @@ import com.marksy.os.ui.MarksyBadge
 import com.marksy.os.ui.MarksyButton
 import com.marksy.os.ui.MarksyButtonStyle
 import com.marksy.os.ui.MarksyCard
+import com.marksy.os.ui.MarksyCardHeader
 import com.marksy.os.ui.MarksySpace
 import com.marksy.os.ui.MarksyType
 import com.marksy.os.ui.marksyCard
@@ -996,10 +997,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun SettingsCard(title: String, status: String, description: String, trailing: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     MarksyCard {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-            trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
-        }
+        MarksyCardHeader(title, trailing = { trailing?.invoke() ?: Text(status, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold) })
         Text(description, color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         action?.let { Spacer(Modifier.height(MarksySpace.Hair)); it() }
     }
