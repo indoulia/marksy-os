@@ -87,6 +87,13 @@ class CaptureGatewayTest {
         )
     }
 
+    @Test
+    fun workflowKeepsTheNotificationsPackageCase() = runBlocking {
+        // Device 2026-10-04: Moneycontrol is `com.divum.MoneyControl`; a lowercased name can't be launched.
+        val id = gateway.onNotificationStored(teaser().copy(sourcePackage = "com.Research.App"))!!
+        assertEquals("com.Research.App", dao.workflow(id)!!.sourcePackage)
+    }
+
     // A gallery or screenshot UI is never the source: an unsupported hint leaves the source for the user to pick.
     @Test
     fun unsupportedSourceIsDropped() = runBlocking {

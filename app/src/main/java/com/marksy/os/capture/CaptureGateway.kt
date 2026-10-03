@@ -65,7 +65,7 @@ class CaptureGateway(
         val now = clock()
         val id = dao.insertWorkflow(
             CaptureWorkflowEntity(
-                sourcePackage = event.sourcePackage.trim().lowercase(Locale.ROOT), sourceKey = event.sourceKey, notificationEventId = event.id,
+                sourcePackage = event.sourcePackage.trim(), sourceKey = event.sourceKey, notificationEventId = event.id,
                 reason = plan.reason.name, state = CaptureLifecycle.move(WorkflowState.NOTIFICATION_RECEIVED, WorkflowState.NEEDS_SOURCE_VIEW).name,
                 createdAt = now, updatedAt = now
             )

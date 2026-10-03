@@ -55,9 +55,17 @@ object MarksyContainer {
     fun captureSources(context: Context): com.marksy.os.capture.CaptureSourceRegistry {
         val app = context.applicationContext
         val store = com.marksy.os.gateway.CaptureStore(app)
+        val pm = app.packageManager
+        // Capture lists are lowercase but package names are case-sensitive (com.divum.MoneyControl); match launcher apps by lowercase.
+        val installed = { pkg: String ->
+            runCatching { pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0) }
+                .getOrDefault(emptyList()).map { it.activityInfo.packageName }.firstOrNull { it.equals(pkg.trim(), ignoreCase = true) }
+        }
         return com.marksy.os.capture.CaptureSourceRegistry(
-            store::capturePackages, { com.marksy.os.notification.SourceRegistry.displayName(app, it) },
-            isInstalled = { runCatching { app.packageManager.getApplicationInfo(it, 0) }.isSuccess }
+            store::capturePackages,
+            { pkg -> installed(pkg)?.let { real -> runCatching { pm.getApplicationLabel(pm.getApplicationInfo(real, 0)).toString().trim() }.getOrNull() }?.takeIf { it.isNotBlank() }
+                ?: com.marksy.os.notification.SourceRegistry.displayName(app, pkg) },
+            isInstalled = { installed(it) != null }
         )
     }
 
