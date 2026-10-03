@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.capture.CandidateDeliveryPolicy
 import com.marksy.os.capture.CaptureMessages
@@ -135,7 +137,9 @@ fun CaptureReviewDialog(
                         symbol, { symbol = it }, Modifier.weight(1f), label = "Symbol",
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
                     )
-                    TipSide.entries.forEach { s -> Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s) { side = s } }
+                    Row(Modifier.height(FieldHeight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+                        TipSide.entries.forEach { s -> Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s) { side = s } }
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     LevelField(entry, { entry = it }, "Entry", Modifier.weight(1f))
@@ -176,6 +180,9 @@ fun CaptureReviewDialog(
 @Composable
 private fun LevelField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier) =
     CompactTextField(value, onChange, modifier, label = label, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+
+/** CompactTextField's default height, so the side pills centre on the symbol field. */
+private val FieldHeight = 40.dp
 
 private fun level(v: Double?): String = v?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
 

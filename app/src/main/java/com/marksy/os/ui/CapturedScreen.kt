@@ -58,8 +58,10 @@ fun CapturedScreen(
     onSendNow: () -> Unit,
     onAllowBackground: () -> Unit,
     showHealth: Boolean,
-    onHealthDismiss: () -> Unit
+    onHealthDismiss: () -> Unit,
+    inbox: CaptureInbox = CaptureInbox()
 ) {
+    var toReviewOpen by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
     var earlierOpen by rememberSaveable { mutableStateOf(false) }
     var rejectedOpen by rememberSaveable { mutableStateOf(false) }
@@ -67,7 +69,8 @@ fun CapturedScreen(
     val toggle: (String) -> Unit = { key -> expanded = if (key in expanded) expanded - key else expanded + key }
 
     MarksyList {
-        if (lanes.isEmpty) item { EmptyState("Nothing captured yet", "Calls from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
+        captureToReview(inbox, now, toReviewOpen) { toReviewOpen = !toReviewOpen }
+        if (lanes.isEmpty && inbox.isEmpty) item { EmptyState("Nothing captured yet", "Calls from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
             item { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
             items(lanes.needsYou, key = { "n${it.row.event.id}" }) { NeedCard(it, now, { selected = it.row }, onRetry, onSendNow, onAllowBackground) }

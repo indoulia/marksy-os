@@ -77,6 +77,7 @@ import kotlinx.coroutines.CancellationException
 import com.marksy.os.ui.rememberRefreshState
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.ContextGraph
+import com.marksy.os.ui.CaptureSessionBar
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InboxActions
 import com.marksy.os.ui.BriefingScreen
@@ -325,6 +326,8 @@ class MainActivity : ComponentActivity() {
         }
         val snackbar = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
+        val showCaptureNotice: (String) -> Unit = remember(snackbar, scope) { { msg -> scope.launch { snackbar.showSnackbar(msg, duration = SnackbarDuration.Short) } } }
+        val captureActions = com.marksy.os.ui.rememberCaptureActions(showCaptureNotice)
         val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         LaunchedEffect(pendingEventId, inboxEvents) {
             val id = pendingEventId ?: return@LaunchedEffect
@@ -579,6 +582,8 @@ class MainActivity : ComponentActivity() {
                 }
             },
             bottomBar = {
+                Column {
+                CaptureSessionBar()
                 NavigationBar(
                     containerColor = MarksyTheme.Surface,
                     contentColor = MarksyTheme.TextSecondary
@@ -615,6 +620,7 @@ class MainActivity : ComponentActivity() {
                             )
                         )
                     }
+                }
                 }
             }
         ) { scaffoldPadding ->
@@ -778,7 +784,8 @@ class MainActivity : ComponentActivity() {
                         onSendNow = { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) },
                         onAllowBackground = ::openBatterySettings,
                         showHealth = showCaptureHealth,
-                        onHealthDismiss = { showCaptureHealth = false }
+                        onHealthDismiss = { showCaptureHealth = false },
+                        captureInbox = com.marksy.os.ui.rememberCaptureInbox(captureActions)
                     )
                 }
                 selectedTab == 2 -> MarketScreen(
@@ -853,8 +860,14 @@ class MainActivity : ComponentActivity() {
             val available = remember(event, actionMessage) { vm.availableActions(event) }
             var relatedVersion by remember(event.id) { mutableIntStateOf(0) }
             val related by produceState(emptyList<com.marksy.os.data.local.ContextEntity>(), event.id, relatedVersion) { value = vm.relatedEntities(event.id) }
+            val teaser by remember { MarksyContainer.database(applicationContext).captureDao().observeOpenWorkflows() }
+                .collectAsStateWithLifecycle(emptyList())
+            val workflow = teaser.firstOrNull { it.notificationEventId == event.id && it.state != com.marksy.os.capture.WorkflowState.REVIEW_REQUIRED.name }
+            val canCapture = workflow != null && MarksyContainer.captureSources(applicationContext).resolve(workflow.sourcePackage)?.offersScreenCapture == true
             EventDetailDialog(
                 event = event,
+                onViewTip = workflow?.let { w -> { captureActions.view(w.id) } },
+                onCaptureTip = if (canCapture) ({ captureActions.capture(workflow!!.id) }) else null,
                 engineActions = available,
                 related = related,
                 onUnlinkEntity = { entityId -> vm.unlinkEntity(entityId, event.id); relatedVersion++ },
