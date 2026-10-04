@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AlarmOff
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Schedule
@@ -103,6 +104,9 @@ fun EventDetailDialog(
     related: List<ContextEntity> = emptyList(),
     onUnlinkEntity: (Long) -> Unit = {},
     onOpenStock: ((String) -> Unit)? = null,
+    /** A teaser or hidden-content notification whose tip the user can open or capture (EPIC-039). */
+    onViewTip: (() -> Unit)? = null,
+    onCaptureTip: (() -> Unit)? = null,
 ) {
     var showReminderOptions by remember { mutableStateOf(false) }
     var reporting by remember(event.id) { mutableStateOf(false) }
@@ -199,6 +203,8 @@ fun EventDetailDialog(
                 SectionLabel("Actions")
                 MarksyCard {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                        onViewTip?.let { view -> ChipButton("View tip", Icons.Default.OpenInNew) { view(); onDismiss() } }
+                        onCaptureTip?.let { capture -> ChipButton("Capture tip", Icons.Default.CameraAlt, selected = true) { capture(); onDismiss() } }
                         ChipButton(
                             if (event.kept) "Kept" else "Keep",
                             if (event.kept) Icons.Default.Star else Icons.Default.StarBorder,

@@ -31,4 +31,11 @@ object RetentionPolicy {
      */
     fun cutoffFor(isTrading: Boolean, nowMillis: Long): Long =
         if (isTrading) tradingCutoff(nowMillis) else nonTradingCutoff(nowMillis)
+
+    const val CAPTURE_DAYS = 7L
+    const val ACCEPTED_CAPTURE_DAYS = 30L
+
+    /** EPIC-036 capture evidence, candidates and workflows: accepted tips 30 days, everything else 7. */
+    fun captureCutoff(accepted: Boolean, nowMillis: Long): Long =
+        nowMillis - (if (accepted) ACCEPTED_CAPTURE_DAYS else CAPTURE_DAYS) * MILLIS_PER_DAY
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.marksy.os.capture.CandidateDeliveryRun
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventDao
@@ -29,11 +30,13 @@ class TradingDeliveryWorker(
 
     private suspend fun deliverPending(): Result {
         val dao = MarksyContainer.database(applicationContext).notificationEventDao()
+        val captureDao = MarksyContainer.database(applicationContext).captureDao()
         val client = MarksyGatewayProvider.client()
         val now = System.currentTimeMillis()
 
         dao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
-        if (dao.findPendingCapture(1).isEmpty()) return Result.success()
+        captureDao.recoverStaleInFlight(TradingDeliveryPolicy.staleCutoff(now))
+        if (dao.findPendingCapture(1).isEmpty() && captureDao.findPendingDelivery(1).isEmpty()) return Result.success()
 
         if (client is UnconfiguredMarksyGatewayClient) {
             Log.i(TAG, "Trading delivery deferred: Marksy Gateway is not configured")
@@ -56,9 +59,10 @@ class TradingDeliveryWorker(
         // Finding C2(a): re-read chatSenders right after each findPendingCapture call (inside drain()),
         // not once for the whole run, so a chat row inserted mid-run still masks its own sender.
         val store = CaptureStore(applicationContext)
-        return if (
-            TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }, chatSenders = store::chatSenders).drain()
-        ) Result.retry() else Result.success()
+        val retryEvents = TradingDeliveryRun(dao, client, capture, isStopped = { isStopped }, chatSenders = store::chatSenders).drain()
+        // EPIC-036: reviewed captures the user chose to send go after the notification queue.
+        val retryCandidates = !isStopped && CandidateDeliveryRun(captureDao, client, capture, isStopped = { isStopped }, log = { Log.i(TAG, it) }).drain()
+        return if (retryEvents || retryCandidates) Result.retry() else Result.success()
     }
 
     private suspend fun loadCaptureContext(client: MarksyGatewayClient, now: Long): CaptureContext? {

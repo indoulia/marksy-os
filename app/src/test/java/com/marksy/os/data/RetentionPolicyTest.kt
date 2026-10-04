@@ -41,6 +41,14 @@ class RetentionPolicyTest {
         assertFalse(RetentionPolicy.shouldDelete(cutoff + 1L, cutoff))
     }
 
+    // EPIC-036: captured tips the user accepted are kept like trading events; everything else from capture a week.
+    @Test
+    fun captureRowsKeepSevenDaysAndAcceptedOnesThirty() {
+        val now = 10_000_000_000L
+        assertEquals(now - 7L * RetentionPolicy.MILLIS_PER_DAY, RetentionPolicy.captureCutoff(accepted = false, nowMillis = now))
+        assertEquals(now - 30L * RetentionPolicy.MILLIS_PER_DAY, RetentionPolicy.captureCutoff(accepted = true, nowMillis = now))
+    }
+
     @Test
     fun tradingUsesLongerRetentionWindow() {
         val now = 10_000_000_000L

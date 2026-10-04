@@ -77,6 +77,7 @@ import kotlinx.coroutines.CancellationException
 import com.marksy.os.ui.rememberRefreshState
 import com.marksy.os.intelligence.EventIntelligenceWorker
 import com.marksy.os.intelligence.ContextGraph
+import com.marksy.os.ui.CaptureSessionBar
 import com.marksy.os.ui.EventDetailDialog
 import com.marksy.os.ui.InboxActions
 import com.marksy.os.ui.BriefingScreen
@@ -119,9 +120,15 @@ class MainActivity : ComponentActivity() {
     private var pendingSymbol by mutableStateOf<String?>(null)
     /** Set by the Ask tile, launcher shortcuts and the Pulse action: which surface to open. */
     private var pendingOpen by mutableStateOf<String?>(null)
+    /** Set by a shared or picked screenshot or a finished screen capture: the tip candidate whose review opens. */
+    private var pendingCaptureReview by mutableStateOf<Long?>(null)
+    /** A fixed capture code to explain (e.g. `protected-screen`, `not-a-tip`); never captured text. */
+    private var captureNotice by mutableStateOf<String?>(null)
 
     companion object {
         const val EXTRA_OPEN = "com.marksy.os.OPEN"
+        const val EXTRA_REVIEW_CANDIDATE = "com.marksy.os.REVIEW_CANDIDATE"
+        const val EXTRA_CAPTURE_NOTICE = "com.marksy.os.CAPTURE_NOTICE"
         const val OPEN_ASK = "ask"
         const val OPEN_BRIEFING = "briefing"
         const val OPEN_SETUPS = "setups"
@@ -135,6 +142,18 @@ class MainActivity : ComponentActivity() {
         openPlanRequest = intent?.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false) == true
         pendingSymbol = intent?.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)
         pendingOpen = intent?.getStringExtra(EXTRA_OPEN)
+        // A recreated screen keeps its open review but never replays the launch intent's review or notice.
+        if (savedInstanceState == null) readCaptureExtras(intent)
+        else pendingCaptureReview = savedInstanceState.getLong(EXTRA_REVIEW_CANDIDATE, -1L).takeIf { it > 0 }
+        if (savedInstanceState == null) takeSharedImage(intent, identityApplies = true)
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                com.marksy.os.capture.CaptureRouting.pending.collect { outcome ->
+                    com.marksy.os.capture.CaptureRouting.reviewCandidate(outcome)?.let { pendingCaptureReview = it }
+                    com.marksy.os.capture.CaptureRouting.notice(outcome)?.let { captureNotice = it }
+                }
+            }
+        }
         lifecycleScope.launch { runCatching { com.marksy.os.pulse.MarksyPulse.update(applicationContext) } }
         RetentionScheduler.schedule(applicationContext)
         lifecycleScope.launch { repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) { com.marksy.os.alerts.PriceAlertStore.monitor(applicationContext) } }
@@ -163,6 +182,30 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(com.marksy.os.notification.PlanAlarmScheduler.EXTRA_OPEN_PLAN, false)) openPlanRequest = true
         intent.getStringExtra(com.marksy.os.alerts.PriceAlertNotifier.EXTRA_OPEN_SYMBOL)?.let { pendingSymbol = it }
         intent.getStringExtra(EXTRA_OPEN)?.let { pendingOpen = it }
+        readCaptureExtras(intent)
+        // getLaunchedFromPackage names the activity's first launcher, not this intent's sender.
+        takeSharedImage(intent, identityApplies = false)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingCaptureReview?.let { outState.putLong(EXTRA_REVIEW_CANDIDATE, it) }
+    }
+
+    private fun readCaptureExtras(intent: Intent?) {
+        intent?.getLongExtra(EXTRA_REVIEW_CANDIDATE, -1L)?.takeIf { it > 0 }?.let { pendingCaptureReview = it }
+        intent?.getStringExtra(EXTRA_CAPTURE_NOTICE)?.let { captureNotice = it }
+    }
+
+    /** Path A (EPIC-037): an image shared to Marksy is recognized in memory and opens its review. */
+    private fun takeSharedImage(intent: Intent?, identityApplies: Boolean) {
+        if (intent == null || !com.marksy.os.capture.ShareIntake.isImageShare(intent.action, intent.type)) return
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val uri = androidx.core.content.IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, android.net.Uri::class.java) ?: return
+        val hint = if (identityApplies && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            com.marksy.os.capture.ShareIntake.sourceHint(launchedFromPackage, packageName)
+        } else null
+        com.marksy.os.capture.CaptureRouting.intake(applicationContext, uri, com.marksy.os.capture.CaptureMethod.USER_SHARED_IMAGE, hint)
     }
 
     override fun onResume() {
@@ -294,6 +337,8 @@ class MainActivity : ComponentActivity() {
         }
         val snackbar = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
+        val showCaptureNotice: (String) -> Unit = remember(snackbar, scope) { { msg -> scope.launch { snackbar.showSnackbar(msg, duration = SnackbarDuration.Short) } } }
+        val captureActions = com.marksy.os.ui.rememberCaptureActions(showCaptureNotice)
         val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
         LaunchedEffect(pendingEventId, inboxEvents) {
             val id = pendingEventId ?: return@LaunchedEffect
@@ -548,6 +593,8 @@ class MainActivity : ComponentActivity() {
                 }
             },
             bottomBar = {
+                Column {
+                CaptureSessionBar()
                 NavigationBar(
                     containerColor = MarksyTheme.Surface,
                     contentColor = MarksyTheme.TextSecondary
@@ -584,6 +631,7 @@ class MainActivity : ComponentActivity() {
                             )
                         )
                     }
+                }
                 }
             }
         ) { scaffoldPadding ->
@@ -747,7 +795,8 @@ class MainActivity : ComponentActivity() {
                         onSendNow = { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) },
                         onAllowBackground = ::openBatterySettings,
                         showHealth = showCaptureHealth,
-                        onHealthDismiss = { showCaptureHealth = false }
+                        onHealthDismiss = { showCaptureHealth = false },
+                        captureInbox = com.marksy.os.ui.rememberCaptureInbox(captureActions)
                     )
                 }
                 selectedTab == 2 -> MarketScreen(
@@ -822,8 +871,14 @@ class MainActivity : ComponentActivity() {
             val available = remember(event, actionMessage) { vm.availableActions(event) }
             var relatedVersion by remember(event.id) { mutableIntStateOf(0) }
             val related by produceState(emptyList<com.marksy.os.data.local.ContextEntity>(), event.id, relatedVersion) { value = vm.relatedEntities(event.id) }
+            val teaser by remember { MarksyContainer.database(applicationContext).captureDao().observeOpenWorkflows() }
+                .collectAsStateWithLifecycle(emptyList())
+            val workflow = teaser.firstOrNull { it.notificationEventId == event.id && it.state != com.marksy.os.capture.WorkflowState.REVIEW_REQUIRED.name }
+            val canCapture = workflow != null && MarksyContainer.captureSources(applicationContext).resolve(workflow.sourcePackage)?.offersScreenCapture == true
             EventDetailDialog(
                 event = event,
+                onViewTip = workflow?.let { w -> { captureActions.view(w.id) } },
+                onCaptureTip = if (canCapture) ({ captureActions.capture(workflow!!.id) }) else null,
                 engineActions = available,
                 related = related,
                 onUnlinkEntity = { entityId -> vm.unlinkEntity(entityId, event.id); relatedVersion++ },
@@ -848,6 +903,17 @@ class MainActivity : ComponentActivity() {
                 onMarkUnread = { vm.setRead(event.id, false) },
                 onOpenStock = { symbol -> selectedEvent = null; openStockFrom(symbol, stockOrigin()) }
             )
+        }
+
+        pendingCaptureReview?.let { id ->
+            androidx.compose.runtime.CompositionLocalProvider(com.marksy.os.ui.LocalMarksySnackbar provides snackbar) {
+                com.marksy.os.ui.CaptureReviewHost(id) { pendingCaptureReview = null }
+            }
+        }
+        LaunchedEffect(captureNotice) {
+            val code = captureNotice ?: return@LaunchedEffect
+            captureNotice = null
+            scope.launch { snackbar.showSnackbar(com.marksy.os.capture.CaptureMessages.failure(code), duration = SnackbarDuration.Short) }
         }
 
         if (addingPlan || editingPlan != null) {

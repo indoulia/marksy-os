@@ -38,6 +38,27 @@ class PrivacyBoundaryTest {
         assertEquals(emptyList<String>(), offenders)
     }
 
+    // EPIC-040: capture adds no storage, overlay, package-query or SMS permission and never writes an image or frame.
+    @Test
+    fun captureAddsNoPolicyRiskPermissionAndNeverPersistsImages() {
+        val manifest = File(main, "AndroidManifest.xml").readText()
+        listOf("READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "SYSTEM_ALERT_WINDOW", "QUERY_ALL_PACKAGES", "RECEIVE_MMS", "WRITE_SMS")
+            .forEach { assertTrue("$it must not be requested", !manifest.contains("android.permission.$it")) }
+        val forbidden = Regex("""FileOutputStream|openFileOutput|MediaStore|\.compress\(|writeBytes\(""")
+        val capture = File(main, "java/com/marksy/os/capture")
+        assertTrue(capture.isDirectory)
+        assertEquals(emptyList<String>(), capture.walkTopDown().filter { it.extension == "kt" && forbidden.containsMatchIn(it.readText()) }.map { it.name }.toList())
+    }
+
+    // A capture reaches the Marksy backend only through the reviewed-candidate delivery run.
+    @Test
+    fun captureReachesTheBackendOnlyThroughCandidateDelivery() {
+        val backend = Regex("MarksyGatewayClient|MarksyTipsApiClient|MarksyGatewayProvider")
+        val offenders = File(main, "java/com/marksy/os/capture").walkTopDown()
+            .filter { it.extension == "kt" && it.name != "CandidateDeliveryPolicy.kt" && backend.containsMatchIn(it.readText()) }.map { it.name }.toList()
+        assertEquals(emptyList<String>(), offenders)
+    }
+
     // Holdings go from Upstox straight to the phone; nothing on the portfolio path may reach the Marksy backend.
     @Test
     fun portfolioNeverTalksToTheMarksyBackend() {

@@ -44,9 +44,50 @@ object MarksyContainer {
             ruleRunner = rules(context),
             intelligence = EventIntelligencePipeline(db.notificationEventDao(), graph = ContextGraph(db.contextGraphDao())),
             onTradingCaptured = onTradingCaptured,
-            onStored = { event -> plan(app).captureFromEvent(event) },
+            onStored = { event ->
+                runCatching { plan(app).captureFromEvent(event) }
+                captureGateway(app).onNotificationStored(event)
+            },
             chatAllowList = { com.marksy.os.notification.WhatsAppSenderWatchlist.get(app) }
         )
+    }
+
+    fun captureSources(context: Context): com.marksy.os.capture.CaptureSourceRegistry {
+        val app = context.applicationContext
+        val store = com.marksy.os.gateway.CaptureStore(app)
+        val pm = app.packageManager
+        // Capture lists are lowercase but package names are case-sensitive (com.divum.MoneyControl); match launcher apps by lowercase.
+        val installed = { pkg: String ->
+            runCatching { pm.queryIntentActivities(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0) }
+                .getOrDefault(emptyList()).map { it.activityInfo.packageName }.firstOrNull { it.equals(pkg.trim(), ignoreCase = true) }
+        }
+        return com.marksy.os.capture.CaptureSourceRegistry(
+            store::capturePackages,
+            { pkg -> installed(pkg)?.let { real -> runCatching { pm.getApplicationLabel(pm.getApplicationInfo(real, 0)).toString().trim() }.getOrNull() }?.takeIf { it.isNotBlank() }
+                ?: com.marksy.os.notification.SourceRegistry.displayName(app, pkg) },
+            isInstalled = { installed(it) != null }
+        )
+    }
+
+    fun captureGateway(context: Context): com.marksy.os.capture.CaptureGateway {
+        val app = context.applicationContext
+        return com.marksy.os.capture.CaptureGateway(
+            database(app).captureDao(), captureSources(app), log = { android.util.Log.i("MarksyCapture", it) },
+            onDeliveryQueued = { com.marksy.os.gateway.TradingDeliveryScheduler.requestImmediateDelivery(app) }
+        )
+    }
+
+    /** One process-wide ML Kit client; the model is loaded once. */
+    val textRecognizer: com.marksy.os.capture.TextRecognizer by lazy { com.marksy.os.capture.MlKitTextRecognizer() }
+
+    fun imageIntake(context: Context): com.marksy.os.capture.ImageIntake =
+        com.marksy.os.capture.ImageIntake(captureGateway(context), textRecognizer, log = { android.util.Log.i("MarksyCapture", it) })
+
+    fun workflowSourceOpener(context: Context): com.marksy.os.capture.WorkflowSourceOpener {
+        val app = context.applicationContext
+        return com.marksy.os.capture.WorkflowSourceOpener(captureGateway(app), database(app).captureDao()) { pkg, key ->
+            com.marksy.os.notification.OriginalAppLauncher.openDetailed(app, pkg, key)
+        }
     }
 
     fun plan(context: Context): com.marksy.os.plan.PlanRepository =
