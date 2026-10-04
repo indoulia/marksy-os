@@ -99,7 +99,7 @@ MediaProjection session: consent each time, then foreground service with the med
 - OCR is on device. ML Kit text recognition is bundled (no model download). Per Google's ML Kit data disclosure (https://developers.google.com/ml-kit/android-data-disclosure), on-device APIs can send usage and diagnostic data such as device and app info, performance metrics, API configuration, input/output sizes and error codes; the page does not list image content. Wording above is a paraphrase of a fetched summary; read the page directly before filling the Data safety form (partly unverified).
 - A one-time code anywhere in recognized text drops the whole capture (user rule 2026-10-02).
 - Only reviewed fields leave, rebuilt as a canonical line; never raw OCR text.
-- Only `sourceVerified` tips may be sent. Verified means Android package identity: the originating notification workflow, or `getLaunchedFromPackage` on API 34+ shares. A source the user picks in review is a local label only (it could forge another channel's record). Trust scores are universal, so the backend contract is unchanged. Remaining work, not done: an optional server `captureMethod`/`sourceVerified` field (contract change in marksy-api).
+- Only `sourceVerified` tips may be sent. Verified means Android package identity: the originating notification workflow, or `getLaunchedFromPackage` on API 34+ shares. A source the user picks in review is a local label only (it could forge another channel's record). Trust scores are universal, so the backend contract is unchanged. Decided by the user (2026-10-04): unverified tips, including most shares, stay on the phone; no server `captureMethod`/`sourceVerified` field.
 - Residual risk: a full-screen capture may show an app other than the workflow's source; the verified package comes from the notification, and Marksy cannot check the foreground app without `PACKAGE_USAGE_STATS`.
 - Own orders/holdings text (`isOwnOrderEvent`/`isOwnAccountEvent`) never sends.
 - No automated interaction with other apps (no clicks, scrolls, typing, navigation); the user opens the source app and taps Capture now.
@@ -208,7 +208,6 @@ Unit-tested only (JVM): lifecycle, extractor, planner, registry, gateway, delive
 
 ## 11. Remaining work
 
-- Text share target (`ACTION_SEND text/plain`) so source apps' Share action can send tip text or links.
-- Optional server-side `captureMethod`/`sourceVerified` field (marksy-api contract change).
+- Text share target (`ACTION_SEND text/plain`) so source apps' Share action can send tip text or links. Shared tips would mostly stay local (shares rarely carry a verified sender).
 - The device tests listed above.
 - User decision on the WhatsApp AccessibilityService (section 8 options; none chosen).

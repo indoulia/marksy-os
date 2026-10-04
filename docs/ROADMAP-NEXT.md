@@ -460,7 +460,6 @@ Acceptance: metrics are automatically collected; available by day and by source;
 3. `docs/CAPTURE-ARCHITECTURE.md`: permission and retention matrices, Play considerations, audit of the existing WhatsApp AccessibilityService (retain, disable for the Play build or remove: open decision), device-test results.
 
 ### Open
-- Optional server `captureMethod`/`sourceVerified` field (marksy-api contract change, not done).
 - Accessibility service decision (user).
 - Notes: the plan called these EPIC-010 to EPIC-014; those numbers were taken.
 
