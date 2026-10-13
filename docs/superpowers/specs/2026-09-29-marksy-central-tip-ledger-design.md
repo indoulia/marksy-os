@@ -154,6 +154,9 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
 - Target on the wrong side of the entry midpoint (promised return ≤ 0), or stop-loss on the wrong side →
   UNSCORABLE (`INCONSISTENT_LEVELS`).
 - Symbol not resolvable → DATA_UNRESOLVED (`UNRESOLVED_SYMBOL`).
+- Stated entry midpoint more than 10% from the market when first seen → UNSCORABLE (`ENTRY_OFF_MARKET`). The
+  market is `first_seen_price`, else the newest stored close (official or provisional); without either the entry
+  is not checked. Added 2026-10-13 after calls with made-up entries were scored as losses nobody could take.
 
 ### 6.3 Entry
 
