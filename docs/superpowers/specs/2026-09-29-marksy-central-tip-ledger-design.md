@@ -159,7 +159,9 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
   close of the session just ended (official, else the evening provisional). Without one the tip waits as
   PENDING_CHECK (not tracked, not alerted) and the next official tracker pass checks it against the price it was
   first seen at, else the nearest price that session traded at, then makes it ACTIVE or rejects it. A stock with no
-  stored price by then is recorded unchecked. `entry_check_price` / `entry_check_basis` record what was used.
+  stored price by then is recorded unchecked. A Marksy call is checked against the bar its scan priced from, so a
+  corrupt price is rejected but a call the market moved away from still counts against Marksy, and it never waits.
+  `entry_check_price` / `entry_check_basis` record what was used.
   Added 2026-10-13 after calls with made-up entries were scored as losses nobody could take.
 
 ### 6.3 Entry
