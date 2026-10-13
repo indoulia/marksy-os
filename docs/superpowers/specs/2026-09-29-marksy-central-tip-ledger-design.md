@@ -155,8 +155,12 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
   UNSCORABLE (`INCONSISTENT_LEVELS`).
 - Symbol not resolvable → DATA_UNRESOLVED (`UNRESOLVED_SYMBOL`).
 - Stated entry midpoint more than 10% from the market when first seen → UNSCORABLE (`ENTRY_OFF_MARKET`). The
-  market is `first_seen_price`, else the newest stored close (official or provisional); without either the entry
-  is not checked. Added 2026-10-13 after calls with made-up entries were scored as losses nobody could take.
+  market is a same-session price, never an older close: in market hours the live 1-minute price; outside them the
+  close of the session just ended (official, else the evening provisional). Without one the tip waits as
+  PENDING_CHECK (not tracked, not alerted) and the next official tracker pass checks it against the price it was
+  first seen at, else the nearest price that session traded at, then makes it ACTIVE or rejects it. A stock with no
+  stored price by then is recorded unchecked. `entry_check_price` / `entry_check_basis` record what was used.
+  Added 2026-10-13 after calls with made-up entries were scored as losses nobody could take.
 
 ### 6.3 Entry
 
