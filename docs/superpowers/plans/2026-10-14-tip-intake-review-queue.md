@@ -4050,7 +4050,7 @@ Any failed criterion → **stop and report options to the user**. Do not adjust 
 
 ### G4 — backup and restore test (on the VPS; separate approval)
 
-Nothing from production is copied to the laptop (D7). The user runs these after approving G4. Run the survey's three checksum statements on production immediately before and after the dumps; if the two differ (a write landed), repeat. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
+Nothing from production is copied to the laptop (D7). The user runs these after approving G4. Run the survey's `session_settings` and three checksum statements together inside one `BEGIN TRANSACTION READ ONLY` … `ROLLBACK` (the TimeZone/DateStyle pin does not carry across separate psql sessions) immediately before and after the dumps; if the two differ (a write landed), repeat. Run the restore pod's checksums the same way. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
 
 ```bash
 pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t tips -t tip_receipts -t external_tip_comparisons -t external_tip_outcomes -f /tmp/tip-intake-0193-rows.dump
