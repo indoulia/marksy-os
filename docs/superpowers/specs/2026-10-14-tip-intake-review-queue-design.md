@@ -47,8 +47,8 @@ Matching (central §5.2): `find_matchable` returns the ACTIVE tip with the key, 
 (`tip_receipts.intake_review_id`). Copies never create a second item. The EPIC-803 `(source, source_reference)`
 idempotency reads queue items too. EXIT receipts still attach only to ACTIVE tips.
 
-Responses: `POST /tips/ingest-text` returns `tipId: null` for a queued call (the phone already handles null, as
-for UNPARSED). `POST /tips` and the Supabase webhook return `TipAccepted` with `tipId` = the item's reserved
+Responses: `POST /tips/ingest-text` returns `tipId: null` for a queued call (the phone already records a blank
+`tipId` as a receipt only, as for UNPARSED — `gateway/MarksyTipsApiClient.kt:22-23`). `POST /tips` and the Supabase webhook return `TipAccepted` with `tipId` = the item's reserved
 `public_id` and `status: IN_REVIEW` — accepted, not an error, so senders don't retry. A queued Marksy call sets
 `Prediction.status` as a rejected tip does today (INVALIDATED).
 
@@ -87,8 +87,9 @@ T = R (`SERVER_RECEIPT`), so every item has one scoring start; its reason record
 
 **tip_intake_reviews**
 - `id`, `public_id` (unique; becomes the tip's `public_id` on promotion; migrated rows keep theirs)
-- `state` PENDING_CHECK | REJECTED | PROMOTED | DISMISSED · `reason` · `origin` INTAKE | MIGRATED_0193 ·
-  `origin_tip_id` (unique)
+- `state` PENDING_CHECK | REJECTED | PROMOTED | DISMISSED · `reason` · `rejected_status` (UNSCORABLE |
+  DATA_UNRESOLVED: what `intake_rejection` returns, the original status for migrated rows, UNSCORABLE for the
+  CLAIMED_TIME reasons) · `origin` INTAKE | MIGRATED_0193 · `origin_tip_id` (unique)
 - the call as the gate saw it: `source_channel_id`, `caller_id`, `prediction_id`, `stock_id`, `symbol`,
   `direction`, `entry_low`, `entry_high`, `target`, `stop_loss`, `horizon_sessions`, `horizon_basis`,
   `match_key`, `match_key_version`, `parser_version`, `source`, `client_name`, `source_reference`
@@ -111,17 +112,19 @@ RESUBMITTED, DISMISSED, MIGRATED), `before`, `after` (JSON), `note`.
 'INCONSISTENT_LEVELS', 'UNRESOLVED_SYMBOL', 'ENTRY_OFF_MARKET', 'CLAIMED_TIME_OLDER', 'CLAIMED_TIME_INVALID',
 'CLAIMED_TIME_UNVERIFIED')`. UNSCORABLE comes only from intake; the tracker's DATA_UNRESOLVED reasons
 (MISSING_BARS, NO_INTRADAY_BARS, NO_HISTORY) stay allowed. The ORM guard (`app/tip_ledger_guard.py`) refuses the
-same on insert and update with a named error, before the database does. A read-only preflight runs the same
+same on insert and update with a named error, before the database does. The CHECK is declared on the model as well
+as in 0193, because the test suite builds its schema from the models. A read-only preflight runs the same
 predicate over every `tips` row and must return zero (§9 step 8, §12 G3).
 
 ## 6. Admin review and the anti-hindsight control (mandatory)
 
 Admin API (existing admin tip-ledger router, admin scope):
-- `GET /admin/tip-ledger/intake-reviews?state=&reason=&channel=` (cursor) and `GET …/{id}` with receipts, events
-  and check evidence.
-- `POST …/{id}/resubmit` — corrected `symbol`, `direction`, `entryLow`, `entryHigh`, `target`, `stopLoss`,
-  `horizonSessions`; `note` required. REJECTED items only.
-- `POST …/{id}/dismiss` — `reason` (NOT_A_TIP | UNFIXABLE_TERMS | DUPLICATE | OFF_MARKET_CONFIRMED | OTHER),
+- `GET /admin/tip-ledger/intake-reviews?state=&reason=&channel=` (cursor) and
+  `GET /admin/tip-ledger/intake-reviews/{id}` with receipts, events and check evidence.
+- `POST /admin/tip-ledger/intake-reviews/{id}/resubmit` — corrected `symbol`, `direction`, `entryLow`, `entryHigh`,
+  `target`, `stopLoss`, `horizonSessions`; `note` required. REJECTED items only.
+- `POST /admin/tip-ledger/intake-reviews/{id}/dismiss` — `reason` (NOT_A_TIP | UNFIXABLE_TERMS | DUPLICATE |
+  OFF_MARKET_CONFIRMED | OTHER),
   `note` required. REJECTED items only: a PENDING_CHECK item is decided by the tracker, so a pending loser cannot
   be dismissed.
 
@@ -147,16 +150,19 @@ dismissal and edit writes an event with actor, time, before/after and note.
 ## 7. Scorecards
 
 Definitions are unchanged. The fact loader (`app/tip_scorecard_query.py`) also reads queue items that are not
-PROMOTED, so counts stay as they are:
+PROMOTED, under the conditions it applies to tips (`match_key` present, scoring start ≤ `as_of`), so counts stay
+as they are:
 - PENDING_CHECK → status PENDING_CHECK, open (as today).
-- REJECTED or DISMISSED → DATA_UNRESOLVED if the reason is UNRESOLVED_SYMBOL, else UNSCORABLE; `closed_at` =
-  scoring start; no outcome, no returns, so never in a percentage, return or trust score (central §8.1, §8.2).
+- REJECTED or DISMISSED → `rejected_status`; `closed_at` = scoring start (today's rejected tips close at
+  `first_seen_at`); no outcome, no returns, so never in a percentage, return or trust score (central §8.1, §8.2).
 - Channel, caller, engine, symbol and horizon filters read the item's columns; customer scope reads
   `tip_receipts.intake_review_id`; date basis `first_seen_at` reads `scoring_start_at`.
 
 Queue items leave the customer and admin tip lists (`/me/tips`, instrument calls, `/admin/tips`); admins see them
 on the review page. `GET /tips/{id}` for a queued `public_id` returns 404. Alerts are unchanged: intake failures were
-never alerted, and a promoted tip alerts like any new ACTIVE tip.
+never alerted; a promoted tip gets ENTERED/CLOSED alerts like any tip, and TIP_NEW only while its `first_seen_at` is
+inside the sweep window (`app/tip_alerts.py:_new_candidates`), exactly as a PENDING_CHECK tip that turns ACTIVE
+today.
 
 ## 8. Promotion
 
@@ -185,7 +191,8 @@ key appeared meanwhile, the item's receipts attach to it and the item is PROMOTE
    - `tip_daily_progress`, `tip_source_exits`, `stock_ratings.short_tip_id`/`long_tip_id`, and `revises_tip_id` /
      `merged_into_tip_id` on tips outside M — unhandled: abort and list the ids. None is expected: rejected tips are
      never tracked, exits and revisions attach to ACTIVE tips, rating tips are never rejected.
-   - Alert rows naming a moved `public_id` — abort if any (intake failures were never alerted).
+   - `recommendation_alerts` rows with `source_table = 'tips'` and `source_id` in M (a non-FK reference) — abort if
+     any (intake failures were never alerted).
 4. Insert one item per M row: origin MIGRATED_0193, `origin_tip_id`, the tip's `public_id`, PENDING_CHECK or
    REJECTED, the original reason, terms and times (`scoring_start_at` = `first_seen_at`,
    `scoring_start_basis = LEGACY`), `payload` = `to_jsonb(tip)`, one MIGRATED event each.
@@ -251,7 +258,8 @@ Admin and anti-hindsight:
 
 Invariant and migration:
 - Raw SQL insert of a PENDING_CHECK, UNSCORABLE or intake-reason row → IntegrityError; ORM insert → guard error.
-- 0193 on a fixture DB: moves exactly M; payloads equal the original rows; receipts relinked; checksums equal;
+- 0193 on a Postgres fixture DB (its SQL uses `to_jsonb`, `md5` and `ON CONFLICT`; the suite's SQLite cannot run
+  it, CI has no Postgres server, so these run against the local Postgres container): moves exactly M; payloads equal the original rows; receipts relinked; checksums equal;
   legacy rows copied; aborts on each unhandled reference; a re-run is a no-op; downgrade restores ids, rows and
   checksums; downgrade refuses after new intake data.
 - Scorecard parity before and after for every channel, caller, engine, customer and all.
@@ -301,3 +309,5 @@ No production read, change, merge or deployment happens until the gate before it
 - **G5** Rehearsal on the restored snapshot: upgrade → verify → downgrade (checksums equal the backup) → upgrade
   again.
 - **G6** The user approves production: merge, deploy (the migrate Job runs 0193), then the same verify on prod.
+  `vps-deploy.sh` runs under `set -euo pipefail` and waits for the migrate Job to complete before rolling out, so
+  an aborted 0193 leaves the old code and the old schema serving.

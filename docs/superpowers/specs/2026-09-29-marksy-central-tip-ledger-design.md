@@ -20,7 +20,9 @@ every caller inside it — Marksy included — gets one universal, auditable sco
 1. At most one matchable tip per `match_key` (§5.2); an identical call after the earlier one closed is a new tip.
 2. A tip has one or more receipts; a receipt belongs to exactly one customer and at most one tip.
 3. Tracking runs once per tip; at most one progress row per tip per session.
-4. Scorecards aggregate canonical tips, never receipts. Many receipts for one tip never raise any count.
+4. Scorecards aggregate canonical tips, never receipts. Many receipts for one tip never raise any count. Pending
+   and rejected intake-review items are counted as they were as tips (open / unscorable / data unresolved) and
+   never enter a percentage or the trust score (intake review spec §7).
 5. Call terms (channel, symbol, direction, stated entry, target, stop-loss, stated horizon) and `first_seen_at`
    are immutable. Tips and receipts are never deleted. A call that fails intake is never a tip: it waits in
    `tip_intake_reviews` (amended 2026-10-14, see `2026-10-14-tip-intake-review-queue-design.md`; migration 0193
@@ -262,7 +264,8 @@ No persisted aggregate table. Every customer, admin and dashboard scorecard call
 ### 8.1 Metrics
 
 Core counts:
-- Total tips = unique canonical tips matching the filters (includes unscorable and invalidated)
+- Total tips = unique canonical tips matching the filters (includes unscorable and invalidated; unscorable and
+  intake-rejected data-unresolved calls are read from `tip_intake_reviews`, intake review spec §7)
 - Open = tips without a terminal status as of `as_of`
 - Successful = TARGET_HIT + successful SOURCE_EXIT + successful DIRECTION_HORIZON
 - Failed = STOP_LOSS_HIT + failed SOURCE_EXIT + failed DIRECTION_HORIZON
