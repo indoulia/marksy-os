@@ -113,6 +113,32 @@ Today `register_prediction` (`app/marksy_tips.py:174`) and the legacy backfill (
     - A non-Marksy resubmit still works (the existing tests stay green).
 - **Task 11 (admin-app).** The Resubmit control shows only when `resubmittable` is true. The server enforces regardless.
 
+## Amendment A3 — promotion lock proven on PostgreSQL; CI runs on PostgreSQL (user, 2026-10-14)
+
+CI (`.github/workflows/test.yml`) runs the whole suite on a `postgres:16-alpine` service with `DATABASE_URL` pointing at it. Local runs so far used SQLite, which ignores `SELECT … FOR UPDATE`.
+
+- **Task 8b (new, after Task 8). Concurrent promotion on PostgreSQL.**
+  - Test file `tests/test_tip_intake_review_promotion_lock_pg.py`, using Task 8's `scratch_db()`. It skips only when `DATABASE_URL` is not PostgreSQL, so it runs in CI.
+  - Seed one PENDING_CHECK item whose check passes, with at least one receipt.
+  - Run A and B in two threads, each with its own engine connection and transaction, each calling the tracker's real promotion entry point (`check_pending_item` / the resolve pass).
+  - Coordinate them so both contend for the same row lock:
+    - A acquires the item lock. It is then held inside the transaction by a test-only patch of a function called after the lock, which blocks on a `threading.Event`.
+    - B starts. A third connection polls `pg_stat_activity` / `pg_locks` until B's backend shows `wait_event_type = 'Lock'` on that relation, which proves B is waiting on the row lock. Then the test releases A.
+  - Assert:
+    - A promotes.
+    - B returns without raising, in particular no IntegrityError or duplicate key, and skips the already-PROMOTED item.
+    - Exactly one `tips` row has the item's `public_id`.
+    - The item is PROMOTED with that `promoted_tip_id`.
+    - The receipts point at the tip exactly once.
+    - There is exactly one promotion event.
+  - Mutation check, recorded in the report and not committed: with the lock removed, the test fails.
+  - If B hits a duplicate key or promotes from a stale read, fix production, e.g. re-read the locked row with `populate_existing()`. Never weaken the lock. Keep `tips.public_id` unique as a separate safeguard.
+  - Add the file to G5's command and to Task 10's PostgreSQL runs.
+- **Task 10.**
+  - Also run the full suite with `DATABASE_URL` on a scratch database on the local PostgreSQL 16 test server, serially as CI does, and once on `main` (027eda3) the same way for a PostgreSQL baseline.
+  - A failure that is not in that baseline is a regression.
+  - Record CI's known `test_openapi_contract_freshness` pydantic difference separately.
+
 ## File Structure
 
 **marksy-api**
@@ -4065,7 +4091,7 @@ kubectl -n market-agent delete pod pg-0193-restore
 
 ```bash
 cd /c/AIAgent/marksy-api
-DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migration.py tests/test_tip_intake_review_scripts.py tests/test_fresh_database_migration.py -q -rs -p no:cacheprovider
+DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migration.py tests/test_tip_intake_review_scripts.py tests/test_tip_intake_review_promotion_lock_pg.py tests/test_fresh_database_migration.py -q -rs -p no:cacheprovider
 ```
 
 **Pass criteria:**

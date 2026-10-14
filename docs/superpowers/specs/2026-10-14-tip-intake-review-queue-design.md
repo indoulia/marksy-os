@@ -283,6 +283,9 @@ Gate and queue:
 
 Promotion:
 - Pending → promoted (one tip, `public_id` reused, receipts relinked); pending → rejected; still pending.
+- PostgreSQL, two tracker runs on independent connections contending for the same item's row lock (the second
+  observed waiting on it): one promotes, the other waits, then skips the PROMOTED item with no duplicate-key error;
+  one tip, item PROMOTED once, receipts relinked once. `tips.public_id` uniqueness stays a separate safeguard.
 - Run twice, and from two sessions at once → exactly one tip; a failure before commit leaves no partial state; an
   ACTIVE same-key tip → attach, no second tip.
 
@@ -301,8 +304,9 @@ Admin and anti-hindsight:
 
 Invariant and migration:
 - Raw SQL insert of a PENDING_CHECK, UNSCORABLE or intake-reason row → IntegrityError; ORM insert → guard error.
-- 0193 on a Postgres fixture DB (its SQL uses `to_jsonb`, `md5` and `ON CONFLICT`; the suite's SQLite cannot run
-  it, CI has no Postgres server, so these run against the local Postgres container): moves exactly M; payloads equal the original rows; receipts relinked; checksums equal;
+- 0193 on a Postgres fixture DB (its SQL uses `to_jsonb`, `md5` and `ON CONFLICT`, which SQLite cannot run). CI
+  runs the whole suite on a `postgres:16-alpine` service (`.github/workflows/test.yml`), so these run there and
+  locally against the throwaway container: moves exactly M; payloads equal the original rows; receipts relinked; checksums equal;
   legacy rows copied; aborts on each unhandled reference; a re-run is a no-op; downgrade restores ids, rows and
   checksums; downgrade refuses after new intake data.
 - Scorecard parity before and after for every channel, caller, engine, customer and all.
