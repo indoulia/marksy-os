@@ -104,6 +104,15 @@ Today `register_prediction` (`app/marksy_tips.py:174`) and the legacy backfill (
 - **Task 11 (admin-app).** The detail shows "Follows …" and "Duplicates: …". There is no new tab. Add one assertion to the existing detail test.
 - **Part C G3.** `unexpected_merged_or_revised` and `stranded_duplicates` must be empty. If `followers` shows a depth beyond 2, add a fixture at that depth before G5. Any other unexpected relationship stops the rollout and is reported with its counts.
 
+## Amendment A2 — Marksy calls are dismiss-only (user decision 2026-10-14; spec §6)
+
+- **Task 6 (admin).** `resubmit_review` refuses any item whose call Marksy generated (prediction-backed or rating-engine; use the codebase's existing Marksy-source test) with `LedgerAdminConflict`, which is 409 over HTTP, before any gate run or write. Dismiss stays allowed, with a reason and a note. No path promotes a Marksy item. Remove the `evaluate` scan-bar hook if resubmit was its only caller. The detail view exposes `resubmittable` (false for Marksy, MERGED_DUPLICATE and non-REJECTED items).
+  - Tests:
+    - `test_a_marksy_call_can_be_dismissed_but_never_resubmitted`: at the service layer and over HTTP, a resubmit with and without corrected terms gets 409. No tip is created. The item is unchanged (terms, times, reason, payload). No event is written for the refused attempt, unless refusals are audited as events by design (say which in the report).
+    - `test_dismissing_a_marksy_call_moves_no_prediction_or_scorecard_figure`: the prediction stays INVALIDATED with its outcome/score rows unchanged. The channel `scorecard()` is equal before and after the dismissal.
+    - A non-Marksy resubmit still works (the existing tests stay green).
+- **Task 11 (admin-app).** The Resubmit control shows only when `resubmittable` is true. The server enforces regardless.
+
 ## File Structure
 
 **marksy-api**
