@@ -4025,7 +4025,7 @@ sha256sum /tmp/tip-intake-0193-*.dump
 
 Then `kubectl cp` both files to `~/backups/` on the VPS and compare `sha256sum`.
 
-Off-VPS copy: the existing nightly job `market-agent-backup` (full `pg_dump`, AES-256-GCM encrypted on the VPS, uploaded to Google Drive; verified working 2026-10-14: `20261013T210002Z`, `off-site: STORED via google_drive`). It never touches the laptop. At G4, prove its restore path is current:
+Off-VPS copy: the existing nightly job `market-agent-backup` (full `pg_dump`, AES-256-GCM encrypted on the VPS, uploaded to Google Drive; verified working 2026-10-14: `20261013T210002Z`, `off-site: STORED via google_drive`). It never touches the laptop. The user has tested the end-to-end backup, Google Drive restore included (confirmed 2026-10-14). The restore-check job below proves only the on-node copy; run it to show that path is current:
 
 ```bash
 kubectl -n market-agent create job --from=cronjob/market-agent-restore-verification restore-check-0193
