@@ -3981,7 +3981,17 @@ pg_dump -Fc --schema-only -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/tip-inta
 sha256sum /tmp/tip-intake-0193-*.dump
 ```
 
-Then `kubectl cp` both files to `~/backups/` on the VPS and compare `sha256sum`. An off-VPS copy needs its own approval of the destination (the VPS disk failed on 2026-10-08).
+Then `kubectl cp` both files to `~/backups/` on the VPS and compare `sha256sum`.
+
+Off-VPS copy: the existing nightly job `market-agent-backup` (full `pg_dump`, AES-256-GCM encrypted on the VPS, uploaded to Google Drive; verified working 2026-10-14: `20261013T210002Z`, `off-site: STORED via google_drive`). It never touches the laptop. At G4, prove its restore path is current:
+
+```bash
+kubectl -n market-agent create job --from=cronjob/market-agent-restore-verification restore-check-0193
+kubectl -n market-agent wait --for=condition=complete job/restore-check-0193 --timeout=2700s
+kubectl -n market-agent logs job/restore-check-0193 --tail=30
+```
+
+The fresh pre-migration off-site copy is taken in G6 step 2a.
 
 Restore test on the VPS, in a throwaway pod with no volume:
 
@@ -3995,7 +4005,7 @@ kubectl -n market-agent exec pg-0193-restore -- sh -c 'createdb -U postgres rest
 kubectl -n market-agent delete pod pg-0193-restore
 ```
 
-**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal G3's; the sha256 sums match; the restore pod is deleted.
+**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal G3's; the sha256 sums match; the restore pod is deleted; `restore-check-0193` reports PASS, or NOT_VERIFIABLE only for tables written during the dump (e.g. `orchestration_executions`), never FAIL.
 
 ### G5 — rehearsal on synthetic fixtures (local, no production data)
 
@@ -4015,15 +4025,16 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
 
 ### G6 — production (user approval required; this plan grants none)
 
-1. Pick a window clear of tracker and capture jobs: not 08:00–09:00 IST and not 15:30–16:45 IST.
+1. Pick a window clear of tracker and capture jobs: not 08:00–09:00 IST and not 15:30–16:45 IST. It must also fall before that UTC day's 21:00 nightly backup (02:30 IST), so step 2a stores a new archive instead of reusing the day's.
 2. **Pre-snapshot with the running (pre-0193) code.** The user runs:
    ```bash
    ! cat scripts/tip_intake_review_verify.py | ssh marksy@103.178.160.233 "export KUBECONFIG=\$HOME/.kube/config; A=\$(kubectl -n market-agent get pods --field-selector=status.phase=Running -o name | grep -m1 api); tr -d '\r' | kubectl -n market-agent exec -i \$A -- python - snapshot > ~/tip-intake-0193-pre.json"
    ```
    (Confirm the API pod name prefix with `kubectl -n market-agent get pods -o name` first.)
+2a. **Fresh off-site backup** (user): `kubectl -n market-agent create job --from=cronjob/market-agent-backup backup-pre-0193`, wait for completion, and check its log shows `off-site: STORED via google_drive`. `REUSED` or no off-site line → stop.
 3. The user marks the PR ready and merges it: `gh pr ready <n> && gh pr merge <n> --merge`.
 4. **Deploy** (user): `! ssh marksy@103.178.160.233 'nohup bash ~/deployment/server/vps-deploy.sh > ~/deploy-0193.log 2>&1 &'`. Poll `tail ~/deploy-0193.log` until the migrate Job completes and the rollout finishes. A failed 0193 aborts before rollout, and the old code keeps serving.
 5. **Post-check** (user, on the VPS): `kubectl cp ~/tip-intake-0193-pre.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python scripts/tip_intake_review_verify.py check --pre /tmp/pre.json`.
    - Pass = `"ok": true`.
-   - Any problem → stop. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the G4 backup.
+   - Any problem → stop. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.

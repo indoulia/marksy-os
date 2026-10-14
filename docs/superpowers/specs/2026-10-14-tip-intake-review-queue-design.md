@@ -330,8 +330,9 @@ No production read, change, merge or deployment happens until the gate before it
   never raw values, as the evidence for the final CT3 policy.
 - **G4** Backup: `pg_dump` of `tips`, `tip_receipts`, `external_tip_comparisons`, `external_tip_outcomes`, plus a
   schema-only dump, kept on the VPS and restore-tested there into a throwaway Postgres pod that is deleted
-  afterwards (row counts and checksums match G3). No production data or secret is copied to the laptop (D7). An
-  off-VPS copy needs its own approval of where it goes.
+  afterwards (row counts and checksums match G3). No production data or secret is copied to the laptop (D7). The
+  off-VPS copy is the existing encrypted nightly backup to Google Drive (`market-agent-backup`), run on demand just
+  before G6, with its restore drill proven at G4.
 - **G5** Rehearsal on a throwaway local Postgres, never on production data (D7): schema from `alembic upgrade
   0192_tip_entry_check`, synthetic minimum fixtures covering every status, reason and reference category the G3
   survey reports. Upgrade → verify → downgrade (checksums equal the pre-upgrade values) → upgrade again, plus
