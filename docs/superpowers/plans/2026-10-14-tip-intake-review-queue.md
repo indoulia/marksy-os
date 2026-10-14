@@ -3274,10 +3274,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `load_directory`, `scorecard`, `TipFact`, `compute_metrics` (all already on main 027eda3).
 - Produces:
-  - `snapshot(session, as_of) -> dict` with keys `asOf, scorecards, moved, receipts`
+  - `snapshot(session, as_of) -> dict` with keys `asOf, scorecards, moved, receipts` plus `maxTipId, maxReceiptId, takenAt` (final review I2)
   - `check(session, pre: dict) -> list[str]`
   - CLI `python scripts/tip_intake_review_verify.py snapshot [--as-of ISO] > pre.json`
-  - CLI `python scripts/tip_intake_review_verify.py check --pre pre.json` (exit 1 on any problem)
+  - CLI `python scripts/tip_intake_review_verify.py check --pre pre.json` (exit 1 on any problem; prints later rows under `afterSnapshot`)
   - CLI `python scripts/tip_intake_review_survey.py` (runs the SQL file against `DATABASE_URL` in a read-only transaction)
 
 - [ ] **Step 1: Write the failing tests**
@@ -4108,11 +4108,14 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
    ! cat scripts/tip_intake_review_verify.py | ssh marksy@103.178.160.233 "export KUBECONFIG=\$HOME/.kube/config; A=\$(kubectl -n market-agent get pods --field-selector=status.phase=Running -o name | grep -m1 api); tr -d '\r' | kubectl -n market-agent exec -i \$A -- python - snapshot > ~/tip-intake-0193-pre.json"
    ```
    (Confirm the API pod name prefix with `kubectl -n market-agent get pods -o name` first.)
+   The snapshot runs in one REPEATABLE READ, READ ONLY transaction and records high-water marks `maxTipId`, `maxReceiptId` and `takenAt` (final review I2). Check that the three keys are present in `pre.json`.
 1a. **Deploy window** (final review M5). Between the migrate Job committing 0193 and the rollout finishing, old pods that queue a failing call hit `ck_tips_validated_only`. `record_intake` retries once, then that request returns 500. Before the window, confirm that the phone outbox retries failed submissions. Keep the scan and recommendation jobs out of the window, because a Marksy registration in an old-image job would roll back its recommendation. Expect transient 500s on failing intakes only.
 2a. **Fresh off-site backup** (user): `kubectl -n market-agent create job --from=cronjob/market-agent-backup backup-pre-0193`, wait for completion, and check its log shows `off-site: STORED via google_drive`. `REUSED` or no off-site line → stop.
 3. The user marks the PR ready and merges it: `gh pr ready <n> && gh pr merge <n> --merge`.
 4. **Deploy** (user): `! ssh marksy@103.178.160.233 'nohup bash ~/deployment/server/vps-deploy.sh > ~/deploy-0193.log 2>&1 &'`. Poll `tail ~/deploy-0193.log` until the migrate Job completes and the rollout finishes. A failed 0193 aborts before rollout, and the old code keeps serving.
 5. **Post-check** (user, on the VPS): `kubectl cp ~/tip-intake-0193-pre.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python -m scripts.tip_intake_review_verify check --pre /tmp/pre.json`.
    - Pass = `"ok": true`.
-   - Any problem → stop. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
+   - `check` compares only rows at or below the snapshot's marks. Tips, receipts and intake items created after the snapshot appear under `afterSnapshot` as counts (`newTips`, `newReceipts`, `intakeItems`, `movedAfterSnapshot`). They are informational, not problems.
+   - Exception: a row moved after the snapshot that fails 0193's move-set predicate is reported as a problem, because it is real migration damage.
+   - Any problem → stop. One rare cause to investigate while stopped: a transaction in flight at the snapshot instant that committed a lower id later shows as a named scorecard problem. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.
