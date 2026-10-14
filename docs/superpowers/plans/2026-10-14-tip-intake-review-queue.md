@@ -11,22 +11,24 @@
   - `app/tip_ledger.py` gains the gate (`evaluate` + `admit_or_queue`). Every tip-creating path calls it: intake, revision, re-parse, Marksy predictions, rating tips and admin resubmit.
   - The model-level `CheckConstraint` plus the ORM guard enforce the validated-only invariant. Migration 0193 adds it to production after moving the old rows.
   - `app/tip_scorecard_query.py` reads tips and non-promoted queue items through one union, so §8 counts are unchanged.
-  - Read-only `scripts/sql/tip_intake_review_survey.sql` and `scripts/tip_intake_review_verify.py` (`snapshot` / `check`) prove the migration on a restored snapshot and on production.
+  - Read-only `scripts/sql/tip_intake_review_survey.sql` and `scripts/tip_intake_review_verify.py` (`snapshot` / `check`) prove the migration on synthetic fixtures (G5) and on production (G6).
 - **Part B (admin-app, one PR, merged only after Part A is deployed).** An Intake Review page: list by state, resubmit with corrected terms, dismiss with a reason, history.
-- **Part C (gates runbook, no code).** G3 survey → G4 backup + restore test → G5 rehearsal → G6 user-approved merge and deploy. The user runs every production command.
+- **Part C (gates runbook, no code).** G3 survey → G4 backup + restore test on the VPS → G5 rehearsal on synthetic fixtures in a throwaway local Postgres → G6 user-approved merge and deploy. The user runs every production command, and each gate needs its own approval.
 
 **Tech Stack:**
 - Part A: Python 3.12, FastAPI 0.139, SQLAlchemy 2.0.52, Alembic 1.20.0, psycopg 3.3.5, pytest 8.4.2 + pytest-xdist 3.6.1. The suite runs on SQLite; migration and script tests run on PostgreSQL in a throwaway docker container.
 - Part B: React 18.3, TypeScript 5.6, Vite 5.4, @tanstack/react-query 5.59, vitest 2.1, Testing Library 16, MSW 2.6.
 
-**Spec:** `C:\AIAgent\marksy-os\docs\superpowers\specs\2026-10-14-tip-intake-review-queue-design.md` (branch `docs/tip-intake-review-queue`; D1–D10 below are reflected in it). The amendments to `2026-09-29-marksy-central-tip-ledger-design.md` are on the same branch. Executors read both.
+**Spec:** `C:\AIAgent\marksy-os\docs\superpowers\specs\2026-10-14-tip-intake-review-queue-design.md` (branch `docs/tip-intake-review-queue`; D1–D11 below are reflected in it). The amendments to `2026-09-29-marksy-central-tip-ledger-design.md` are on the same branch. Executors read both.
 
 ## Global Constraints
 
 - **Agent and production.** No production read, write, merge or deployment by the agent. Each production step in Part C is a command the user runs with `!` after saying go.
 - **Merge gate.** The marksy-api PR is opened as a **draft** titled `[DO NOT MERGE before G3–G5] …` and stays unmerged until G3, G4 and G5 pass: `vps-deploy.sh` builds `main`, so any deploy after a merge applies 0193. The admin-app PR merges only after Part A is deployed.
 - **Scorecard semantics.** §8 definitions, the trust score and the success, failure and hit-rate percentages are unchanged. `app/tip_scorecard.py` (`compute_metrics`, `_trust`) is not edited.
-- **Scoring start.** It defaults to server receipt R. A claimed time is used only under spec §4 (CT1–CT8); a refused claim never comes back.
+- **Trust Score ≠ Prediction Score.** The channel Trust Score and the Prediction Score / Prediction Trust Score (`predictions`, `prediction_outcomes`, `app/prediction_trust_score.py`) stay separate. No queue transition changes an existing tip's outcome, status, close or returns, or writes a prediction score or outcome. The only prediction write is today's: a Marksy call that fails intake closes its prediction INVALIDATED.
+- **No production data on the laptop (D7).** No production database, dump or secret is copied to the laptop. Migration rehearsal uses synthetic fixtures in a throwaway local Postgres that is deleted afterwards.
+- **Scoring start.** It defaults to server receipt R. A claimed time is used only under spec §4 (CT1–CT8); a refused claim never comes back. A claim within 120 s before R is treated as no claim (T = R, no bar read; D11). A missing timezone is never inferred.
 - **No admin overrides.** A resubmit runs the full gate. No request field sets a scoring start or claimed time (`extra="forbid"`). Only REJECTED items can be resubmitted or dismissed.
 - **Anti-hindsight.** An admission (resubmit or re-parse) keeps its original start only if no NSE market minute lies in [T0, A) (AH1). Otherwise scoring starts at A (AH2). An unknown calendar counts as "a market minute passed".
 - **Validated-only invariant.** `ck_tips_validated_only` = `status <> 'PENDING_CHECK' AND status <> 'UNSCORABLE' AND COALESCE(reason, '') NOT IN ('NO_DIRECTION', 'INCONSISTENT_LEVELS', 'UNRESOLVED_SYMBOL', 'ENTRY_OFF_MARKET', 'CLAIMED_TIME_OLDER', 'CLAIMED_TIME_INVALID', 'CLAIMED_TIME_UNVERIFIED')`. It is declared on the model and in 0193, and the ORM guard enforces it too.
@@ -40,13 +42,13 @@
 
 Each line below names an input the spec implies but whose behaviour a person would reasonably question. Each one gets its own test in the owning task.
 
-1. **The everyday phone receipt.** `devicePostedAt` arrives a few seconds before R during market hours. Expected: CT8 runs on the same minute bars `first_seen_price` already fetched (one Upstox call, not two), and the start is C or R, never a queue. Test in Task 3.
+1. **The everyday phone receipt.** `devicePostedAt` arrives a few seconds before R during market hours. Expected (D11): T = R (`SERVER_RECEIPT`), C kept for the record, no bar read for the claim (only `first_seen_price`'s one Upstox call), never a queue, also during an Upstox outage. Test in Task 3.
 2. **A claim on a call whose symbol does not resolve.** Expected: queued as `UNRESOLVED_SYMBOL` with T = R, not `CLAIMED_TIME_UNVERIFIED`. CT8 needs a stock and a direction; without them T = R and §6.2 rejects. Test in Task 3.
 3. **A copy of a call an admin already dismissed.** Expected: the receipt attaches to the dismissed item inside its horizon, no new item is created, and the unscorable count does not grow (decision D1). Test in Task 3.
 4. **An admin fix whose terms equal an ACTIVE tip's key.** Expected: the item's receipts join that tip and the item is PROMOTED to it. There is never a second ACTIVE tip, and `uq_tips_active_match_key` is never hit. Test in Task 6.
 5. **A migrated PENDING_CHECK row promoted after 0193.** Its payload is PostgreSQL `to_jsonb`, so numbers arrive as JSON numbers. Expected: the promoted tip's prices equal the original `Decimal`s exactly. Test in Task 8.
 
-## Decisions this plan makes (D1–D10 folded into the spec 2026-10-14; D11 open for the user)
+## Decisions this plan makes (D1–D11 folded into the spec; D7 and D11 decided by the user 2026-10-14)
 
 - **D1 — Dismissed items stay matchable inside their horizon (§3 matching).** The spec says "PENDING_CHECK, or REJECTED within its horizon". Without DISMISSED, every later copy of a dismissed call would create a new REJECTED item and grow the unscorable count. Today a copy of a rejected call attaches instead. *Spec line to amend: §3 "Matching".*
 - **D2 — Queue items carry `closed_at`.** For INTAKE items it is the scoring start; for migrated items it is the original `tips.closed_at`. §7 says `closed_at` = scoring start, but `app/tip_backfill.py:371` closed legacy rejections at a `seen` that can differ from `first_seen_at`. That would move terminal-basis windows at migration. *Spec lines: §5 column list, §7 mapping.*
@@ -54,13 +56,12 @@ Each line below names an input the spec implies but whose behaviour a person wou
 - **D4 — `tips.intake_review_id` has no FK.** `tip_intake_reviews.promoted_tip_id → tips.id` already links the pair, and a two-way FK cycle cannot be created on the suite's SQLite schema.
 - **D5 — 0193 moves the rows before it adds the new `tips` columns.** Each payload is then the 0192-shaped row and the downgrade checksum compares like with like. The spec's step 1 lists all DDL first.
 - **D6 — The G3 survey is a pure-SQL file** (`scripts/sql/tip_intake_review_survey.sql`). It has to run before the PR merges, through `psql` in the postgres pod. A small `.py` wrapper runs the same file on local databases.
-- **D7 — G4 also takes a rehearsal snapshot.** That is the full schema plus all data except the large market-data tables the survey names. The spec's four-table dump alone cannot run a migration. The four-table dump is still taken and restore-tested.
+- **D7 — No production data on the laptop (user, 2026-10-14).** G4's backup is restore-tested on the VPS in a throwaway Postgres pod. G5 rehearses 0193 in a throwaway local Postgres built by `alembic upgrade 0192_tip_entry_check`, with synthetic minimum fixtures covering every status, reason and reference category G3 reports: success, abort paths, exact rollback, receipt links and scorecard parity. Temporary data is deleted after verification. The survey no longer sizes tables for a snapshot; it counts claimed-time formats instead.
 - **D8 — CT8 touch checks include the minute bar covering C itself,** not only bars "starting in W". A touch inside that minute cannot be placed before or after C, so ambiguous evidence keeps T = R.
 - **D9 — A re-parse of a receipt whose claim is refused (CT2/3/5/6)** scores from the re-parse time when a market minute has passed since R (AH2 makes the claim moot). Otherwise it is queued with that reason.
 - **D10 — A Marksy prediction identical to a queued Marksy call follows the queued item.** Its prediction is closed INVALIDATED and no second item is created. Today it becomes a MERGED_DUPLICATE of the rejected tip.
-- **D11 (open, not implemented differently) — CT8 when Upstox is down.** The spec queues CT8 as UNVERIFIED when bars are unavailable. Every phone tip carries `devicePostedAt` a few seconds before R, so an in-hours Upstox outage would queue every phone call for admin, and after AH2 each would score from its admission. Today such calls wait as PENDING_CHECK. The plan implements the spec as written, in one function (`_market_verified`), so the alternatives are one-line changes:
-  - (b) a claim less than 120 s before R → T = R;
-  - (c) bars unavailable → T = R.
+- **D11 — Option (b) (user, 2026-10-14).** A claim less than 120 s before R is treated as no claim: T = R (`SERVER_RECEIPT`), C is stored, no bar read. An older claim that cannot be verified (bars unavailable or unpriced) is still queued `CLAIMED_TIME_UNVERIFIED`, never admitted silently at a new start. Implemented in `scoring_start`'s CT4 test (`claimed > received - CLAIM_SKEW`).
+- **Timezone-less claims (user, 2026-10-14).** CT3 (naive → `CLAIMED_TIME_INVALID`) stays as the interim rule. G3 collects format counts; the final acceptance policy is a later user decision. No code infers a timezone.
 
 ## File Structure
 
@@ -255,10 +256,17 @@ def test_a_report_date_is_not_a_time(report_day, reason):
     (datetime(2026, 9, 28, 9, 0), REASON_CLAIMED_TIME_INVALID),  # no timezone
     (ist(MON, 10, 2, 1), REASON_CLAIMED_TIME_INVALID),  # 121 s after receipt
     (ist(MON, 10, 1), None),  # inside the skew: a claim at or after receipt cannot move the start
+    (ist(MON, 9, 58, 1), None),  # D11: 119 s before receipt is no claim, and no bars are read
+    (ist(MON, 9, 58), REASON_CLAIMED_TIME_UNVERIFIED),  # 120 s before needs bars, and Upstox is down
 ])
-def test_a_claim_without_a_zone_or_after_receipt_never_moves_the_start(claim_at, reason):
+def test_a_claim_without_a_zone_or_near_receipt_never_moves_the_start(claim_at, reason):
     start = start_for(ist(MON, 10), claim_at)
     assert (start.at, start.basis, start.queue_reason) == (ist(MON, 10), START_SERVER_RECEIPT, reason)
+
+
+def test_a_claim_seconds_before_the_open_is_no_claim_not_an_older_session():
+    start = start_for(ist(MON, 9, 15, 20), ist(MON, 9, 14, 50))
+    assert (start.at, start.basis, start.queue_reason) == (ist(MON, 9, 15, 20), START_SERVER_RECEIPT, None)
 
 
 @pytest.mark.parametrize("claim_at, received, basis, reason", [
@@ -279,7 +287,7 @@ def test_sessions_weekends_holidays_and_boundaries(claim_at, received, basis, re
 
 @pytest.mark.parametrize("claim_at, received", [
     (ist(MON, 9, 15), ist(MON, 10)),
-    (ist(MON, 15, 29, 59), ist(MON, 15, 30, 1)),  # one market minute in between
+    (ist(MON, 15, 29, 59), ist(MON, 15, 32)),  # one market minute in between, claim 121 s before receipt
 ])
 def test_trading_between_claim_and_receipt_needs_the_minute_bars(claim_at, received):
     assert start_for(received, claim_at, bars=flat_bars(MON)).basis == START_CLAIMED_MARKET_VERIFIED
@@ -539,7 +547,7 @@ def scoring_start(*, received_at: datetime, claim: Claim | None, levels: CallLev
         if claim.at.tzinfo is None or claim.at > received + CLAIM_SKEW:
             return _queued(received, REASON_CLAIMED_TIME_INVALID)
         claimed = claim.at.astimezone(timezone.utc)
-        if claimed >= received:
+        if claimed > received - CLAIM_SKEW:  # D11: a claim this close to receipt is no claim
             return server
         day = session_of(received, on_or_before)
         if session_of(claimed, on_or_before) != day:
@@ -1132,7 +1140,7 @@ def test_the_everyday_phone_claim_costs_no_second_upstox_call(session):
     minutes = UpstoxMinuteBars(lambda: upstox)  # the production source: one fetch per (instrument, session)
     claim = Claim(NOW - timedelta(seconds=4), CLAIM_DEVICE_POSTED_AT)
     result = record_intake(session, _receipt(posted=claim.at), _intake(claim=claim), now=NOW, minute_bars=minutes)
-    assert result.tip.scoring_start_basis in (START_CLAIMED_MARKET_VERIFIED, "SERVER_RECEIPT_CLAIM_REJECTED")
+    assert result.tip.scoring_start_basis == START_SERVER_RECEIPT  # D11: seconds before R is no claim
     assert result.tip.claimed_created_at is not None and upstox.calls == 1
 
 
@@ -3293,11 +3301,15 @@ SELECT 'receipt_link_checksum' AS section, count(*), md5(string_agg(r.id || ':' 
 SELECT 'tips_checksum' AS section, count(*), md5(string_agg(to_jsonb(t)::text, '|' ORDER BY t.id)) FROM tips t;
 SELECT 'closed_not_first_seen' AS section, count(*) FROM tips
  WHERE (status = 'UNSCORABLE' OR reason IN ('NO_DIRECTION', 'INCONSISTENT_LEVELS', 'UNRESOLVED_SYMBOL', 'ENTRY_OFF_MARKET')) AND closed_at IS DISTINCT FROM first_seen_at;
-SELECT 'largest_tables' AS section, c.relname, pg_total_relation_size(c.oid) AS bytes FROM pg_class c
- JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY bytes DESC LIMIT 15;
-SELECT 'fk_into_largest' AS section, conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint
- WHERE contype = 'f' AND confrelid IN (SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                                       WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 15);
+SELECT 'claimed_time_formats' AS section, source, fmt, count(*) FROM (
+  SELECT source, CASE
+    WHEN v IS NULL THEN 'ABSENT'
+    WHEN v ~ '^\d{4}-\d{2}-\d{2}$' THEN 'DATE_ONLY'
+    WHEN v ~ '(Z|[+-]\d{2}(:?\d{2})?)$' THEN 'ZONED'
+    WHEN v ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}' THEN 'NAIVE'
+    ELSE 'OTHER' END AS fmt
+  FROM (SELECT source, raw_payload::jsonb ->> 'tipAsOf' AS v FROM tips WHERE tip_as_of IS NOT NULL) x
+) y GROUP BY source, fmt ORDER BY source, fmt;
 ROLLBACK;
 ```
 
@@ -3945,7 +3957,7 @@ OUT="$SCRATCH/survey-run.sh"
 
 ### G3 — read-only production survey
 
-**Precondition:** the user approved this plan and Part A passed Task 10. The survey file opens `BEGIN TRANSACTION READ ONLY` and ends with `ROLLBACK`.
+**Precondition:** Part A passed Task 10 **and the user separately approved running G3**. The survey file opens `BEGIN TRANSACTION READ ONLY` and ends with `ROLLBACK`.
 
 **Pass criteria (all must hold):**
 - `alembic_version` = `0192_tip_entry_check`.
@@ -3954,76 +3966,64 @@ OUT="$SCRATCH/survey-run.sh"
 - `preflight_outside_move_set` returns no rows.
 - `null_status_rows.with_reason` = 0.
 - `move_set` counts are plausible against the 2026-10-13 audit (2,284 tips). Record each count.
-- Record `server_version` (→ `PG_MAJOR`), `move_set_checksum`, `receipt_link_checksum`, `tips_checksum`, `closed_not_first_seen` (informational, see D2), `largest_tables` and `fk_into_largest`.
+- Record `server_version` (→ `PG_MAJOR`), `move_set_checksum`, `receipt_link_checksum`, `tips_checksum`, `closed_not_first_seen` (informational, see D2) and every status/reason/reference category present (G5's fixtures must cover each one).
+- Record `claimed_time_formats` (counts only, no raw values). It is the evidence for the final CT3 policy, which the user decides; nothing is inferred.
 
 Any failed criterion → **stop and report options to the user**. Do not adjust the migration by judgement.
 
-### G4 — backup and restore test
+### G4 — backup and restore test (on the VPS; separate approval)
 
-The user runs these after saying go. First the backup, in the postgres pod, written to the pod's `/tmp` rather than streamed (exec streams reset after ~5 min):
+Nothing from production is copied to the laptop (D7). The user runs these after approving G4. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
 
 ```bash
 pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t tips -t tip_receipts -t external_tip_comparisons -t external_tip_outcomes -f /tmp/tip-intake-0193-rows.dump
-pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" --exclude-table-data='<largest tables from G3 with no FK children in fk_into_largest>' -f /tmp/tip-intake-0193-rehearsal.dump
+pg_dump -Fc --schema-only -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/tip-intake-0193-schema.dump
 sha256sum /tmp/tip-intake-0193-*.dump
 ```
 
-Then:
-1. `kubectl cp` both files to `~/` on the VPS.
-2. `scp` them to the local backup folder and to the OneDrive archive folder used by ML-SAFE-BACKUP-001.
-3. Compare the `sha256sum` at every hop.
+Then `kubectl cp` both files to `~/backups/` on the VPS and compare `sha256sum`. An off-VPS copy needs its own approval of the destination (the VPS disk failed on 2026-10-08).
 
-Restore test, run locally by the agent once the files are local:
+Restore test on the VPS, in a throwaway pod with no volume:
 
 ```bash
-docker run -d --name marksy-pg-0193-rehearsal -e POSTGRES_PASSWORD=postgres -p 55442:5432 postgres:$PG_MAJOR
-for i in $(seq 1 300); do docker exec marksy-pg-0193-rehearsal pg_isready -U postgres -q && break; done
-docker cp tip-intake-0193-rehearsal.dump marksy-pg-0193-rehearsal:/tmp/r.dump
-docker exec marksy-pg-0193-rehearsal createdb -U postgres rehearsal
-docker exec marksy-pg-0193-rehearsal pg_restore -U postgres --no-owner --no-privileges -d rehearsal /tmp/r.dump
-cd /c/AIAgent/marksy-api && DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55442/rehearsal python scripts/tip_intake_review_survey.py > "$SCRATCH/survey-restored.json"
+kubectl -n market-agent run pg-0193-restore --image=postgres:$PG_MAJOR --restart=Never --env=POSTGRES_PASSWORD=restore-only
+kubectl -n market-agent wait --for=condition=Ready pod/pg-0193-restore --timeout=120s
+kubectl -n market-agent cp ~/backups/tip-intake-0193-schema.dump pg-0193-restore:/tmp/s.dump
+kubectl -n market-agent cp ~/backups/tip-intake-0193-rows.dump pg-0193-restore:/tmp/r.dump
+kubectl -n market-agent exec pg-0193-restore -- sh -c 'createdb -U postgres restore && pg_restore -U postgres --no-owner --no-privileges -d restore /tmp/s.dump && pg_restore -U postgres --data-only --disable-triggers -d restore /tmp/r.dump'
+# then the survey's three checksum statements through psql in pg-0193-restore, as in G3
+kubectl -n market-agent delete pod pg-0193-restore
 ```
 
-To prove the rows dump restores:
-1. `createdb -U postgres rowsonly -T rehearsal`.
-2. `TRUNCATE tip_receipts, external_tip_comparisons, external_tip_outcomes, tips CASCADE` in `rowsonly`.
-3. `pg_restore --data-only --disable-triggers -d rowsonly /tmp/rows.dump`.
-4. Re-run the survey on `rowsonly`.
+**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal G3's; the sha256 sums match; the restore pod is deleted.
 
-**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal the G3 values in both `rehearsal` and `rowsonly`. All sha256 sums match.
+### G5 — rehearsal on synthetic fixtures (local, no production data)
 
-### G5 — rehearsal on the restored snapshot
+1. Before G5, check the T8/T9 fixtures cover every status, reason and reference category G3 recorded. Add any missing one as a test fixture (TDD, focused commit) before rehearsing.
+2. Run the migration and script suites against a throwaway local Postgres, `PG_MAJOR` matching G3:
 
 ```bash
 cd /c/AIAgent/marksy-api
-export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:55442/rehearsal
-python scripts/tip_intake_review_verify.py snapshot --as-of "$(date -u +%FT%TZ)" > "$SCRATCH/pre-rehearsal.json"
-time python -m alembic upgrade head
-python scripts/tip_intake_review_verify.py check --pre "$SCRATCH/pre-rehearsal.json"
-python -m alembic downgrade 0192_tip_entry_check
-python scripts/tip_intake_review_survey.py > "$SCRATCH/survey-after-downgrade.json"   # checksums must equal G3
-python -m alembic upgrade head
-python scripts/tip_intake_review_verify.py check --pre "$SCRATCH/pre-rehearsal.json"
+python -m pytest tests/test_tip_intake_review_migration.py tests/test_tip_intake_review_scripts.py -q -p no:cacheprovider
 ```
 
 **Pass criteria:**
-- Both `check` runs print `"ok": true`.
-- The post-downgrade survey's three checksums equal G3's.
-- The upgrade time is well under the deploy's 300 s migrate-Job wait. Record it.
+- Every test passes: upgrade moves exactly M verbatim; each unhandled reference aborts with nothing left behind; downgrade restores ids, rows, receipt links and `legacy_rows` with checksums equal to the pre-upgrade values; downgrade refuses after post-0193 data; scorecard counts unchanged; migrated pending Decimals exact; verify `snapshot`/`check` clean and tampering caught.
+- Record the upgrade time on the largest fixture; it must be well under the deploy's 300 s migrate-Job wait.
 
-Clean up only what was created here: `docker rm -f marksy-pg-0193-rehearsal marksy-pg-0193-test`.
+Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and confirm no rehearsal database or dump remains.
 
 ### G6 — production (user approval required; this plan grants none)
 
 1. Pick a window clear of tracker and capture jobs: not 08:00–09:00 IST and not 15:30–16:45 IST.
 2. **Pre-snapshot with the running (pre-0193) code.** The user runs:
    ```bash
-   ! cat scripts/tip_intake_review_verify.py | ssh marksy@103.178.160.233 "export KUBECONFIG=\$HOME/.kube/config; A=\$(kubectl -n market-agent get pods --field-selector=status.phase=Running -o name | grep -m1 api); tr -d '\r' | kubectl -n market-agent exec -i \$A -- python - snapshot" > pre-prod.json
+   ! cat scripts/tip_intake_review_verify.py | ssh marksy@103.178.160.233 "export KUBECONFIG=\$HOME/.kube/config; A=\$(kubectl -n market-agent get pods --field-selector=status.phase=Running -o name | grep -m1 api); tr -d '\r' | kubectl -n market-agent exec -i \$A -- python - snapshot > ~/tip-intake-0193-pre.json"
    ```
    (Confirm the API pod name prefix with `kubectl -n market-agent get pods -o name` first.)
 3. The user marks the PR ready and merges it: `gh pr ready <n> && gh pr merge <n> --merge`.
 4. **Deploy** (user): `! ssh marksy@103.178.160.233 'nohup bash ~/deployment/server/vps-deploy.sh > ~/deploy-0193.log 2>&1 &'`. Poll `tail ~/deploy-0193.log` until the migrate Job completes and the rollout finishes. A failed 0193 aborts before rollout, and the old code keeps serving.
-5. **Post-check** (user): `kubectl cp pre-prod.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python scripts/tip_intake_review_verify.py check --pre /tmp/pre.json`.
+5. **Post-check** (user, on the VPS): `kubectl cp ~/tip-intake-0193-pre.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python scripts/tip_intake_review_verify.py check --pre /tmp/pre.json`.
    - Pass = `"ok": true`.
    - Any problem → stop. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the G4 backup.
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.

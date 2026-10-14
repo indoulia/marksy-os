@@ -1,6 +1,6 @@
 # Tip intake review queue — design
 
-Status: draft for review · 2026-10-14 · Repos: marksy-api (owner), admin-app, marksy-os (this spec only)
+Status: approved 2026-10-14 (G1), with D7 and D11 as recorded in the plan · Repos: marksy-api (owner), admin-app, marksy-os (this spec only)
 Amends: `2026-09-29-marksy-central-tip-ledger-design.md` §2, §4, §5.2, §6.2, §6.6, §8.1, §9, §11 (see §11 here).
 Approval of this spec authorizes no production survey, migration, merge or deployment (§12).
 
@@ -13,6 +13,9 @@ Approval of this spec authorizes no production survey, migration, merge or deplo
   cannot improve the result.
 - No admin decision can use outcome knowledge to improve a record (§6, mandatory anti-hindsight control).
 - Scorecard definitions and the trust score are unchanged; displayed counts do not move at migration (§7).
+- The channel Trust Score (`app/tip_scorecard.py`) and the Prediction Score / Prediction Trust Score
+  (`predictions`, `prediction_outcomes`, `app/prediction_trust_score.py`) stay separate. The queue feeds only
+  the channel scorecard and never writes a prediction score or outcome (§7).
 
 Not changed: the tracker's rules (central §6.1, §6.3–§6.7), the one-sided 10% entry rule, the phone app,
 scorecard definitions, the frozen SPG/ML tables (none of them read `tips`).
@@ -60,8 +63,12 @@ The first rule that matches decides. R is the default; a claim never moves the s
 - **CT1** No C → T = R (`SERVER_RECEIPT`).
 - **CT2** C is date-only: its date before S(R) → queue `CLAIMED_TIME_OLDER`; otherwise T = R (a date is not a
   time).
-- **CT3** C has no timezone, or C > R + 120 s → queue `CLAIMED_TIME_INVALID`.
-- **CT4** R ≤ C ≤ R + 120 s → T = R (a claim at or after receipt cannot move the start).
+- **CT3** C has no timezone, or C > R + 120 s → queue `CLAIMED_TIME_INVALID`. A missing timezone is never
+  inferred. This interim rule stands until the G3 format evidence (§12) is reviewed and the user sets the final
+  acceptance policy.
+- **CT4** R − 120 s < C ≤ R + 120 s → T = R (`SERVER_RECEIPT`). A claim within two minutes of receipt is treated
+  as no claim and is kept for the record only (decision D11, 2026-10-14). It needs no market data, so an Upstox
+  outage never queues an everyday phone receipt.
 - **CT5** S(C) or S(R) cannot be computed → queue `CLAIMED_TIME_UNVERIFIED`.
 - **CT6** S(C) < S(R) → queue `CLAIMED_TIME_OLDER`.
 - **CT7** Same session and no market minute in [C, R) → T = C (`CLAIMED_NO_TRADING`). Tracking is identical to
@@ -69,7 +76,8 @@ The first rule that matches decides. R is the default; a claim never moves the s
 - **CT8** Same session with market minutes. W = [max(C, 09:15), min(R, 15:30)) on S(R). Read that day's 1-minute
   bars from the tracker's source (`MinuteBarSource`).
   - Evidence required: the bars load and the existing covering-bar rule (`_intraday_price`) prices both ends of W.
-    Otherwise → queue `CLAIMED_TIME_UNVERIFIED`.
+    Otherwise → queue `CLAIMED_TIME_UNVERIFIED`. An older claim that cannot be verified, for example during an
+    Upstox outage, is queued for review; it is never admitted silently at a new scoring start.
   - T = C (`CLAIMED_MARKET_VERIFIED`) only if every bar overlapping W — including the minute covering C, since a
     touch inside it cannot be ordered against C — shows:
     a. no touch of a stated entry — BUY `low ≤ entry_high`, SELL `high ≥ entry_low`;
@@ -155,7 +163,12 @@ dismissal and edit writes an event with actor, time, before/after and note.
 
 ## 7. Scorecards
 
-Definitions are unchanged. The fact loader (`app/tip_scorecard_query.py`) also reads queue items that are not
+Definitions are unchanged. No queue transition (queue, attach, promote, resubmit, dismiss, migrate) changes an
+existing tip's outcome, status, close or returns, or any prediction's score or outcome. The only prediction write
+is today's: a Marksy call that fails intake closes its prediction INVALIDATED. Migration leaves every scorecard
+figure unchanged, and an admission is scored only from its §6 start.
+
+The fact loader (`app/tip_scorecard_query.py`) also reads queue items that are not
 PROMOTED, under the conditions it applies to tips (`match_key` present, scoring start ≤ `as_of`), so counts stay
 as they are:
 - PENDING_CHECK → status PENDING_CHECK, open (as today).
@@ -228,12 +241,14 @@ and CHECK refuse it.
 
 Claimed time (pure policy, fixed calendar fixture):
 - No claim → R. Date-only, same session → R; previous session → OLDER.
-- Naive C → INVALID. C > R + 120 s → INVALID. R < C ≤ R + 120 s → R.
+- Naive C → INVALID. C > R + 120 s → INVALID. R − 120 s < C ≤ R + 120 s → R, with no bar read: C = R − 119 s
+  with Upstox down → R, not queued; C = R − 120 s with Upstox down → UNVERIFIED; C = R − 30 s across the 09:15
+  open (previous session) → R, not OLDER.
 - No trading in between: Fri 16:00 → Sat 10:00 and Fri 16:00 → Mon 09:14 → C. Fri 16:00 → Mon 09:15 → OLDER.
 - Pre-open claim Mon 09:00, R Mon 10:00 → OLDER (S(C) is Friday).
 - Holiday Wed: Tue 16:00 → Wed 12:00 → C; claim on the holiday with R Thu 10:00 → OLDER.
 - Boundaries with R 10:00: C 09:14:59 → OLDER, C 09:15:00 → CT8. C 15:30:00 with R 16:00 → CT7 (no market
-  minute). C 15:29:59 with R 15:30:01 → CT8 over one minute.
+  minute). C 15:29:59 with R 15:32:00 → CT8 over one minute.
 - Calendar failure → UNVERIFIED.
 - CT8: neutral window → C; target, stop or entry touched in W → R; no stated entry with a better P_C → R, worse →
   C; bars unavailable, or not pricing both ends of W → UNVERIFIED.
@@ -311,13 +326,16 @@ No production read, change, merge or deployment happens until the gate before it
   would apply 0193.
 - **G3** Read-only prod survey (the user runs it): counts of M by status and reason, every §9 reference count, alert
   references, checksums of M, NULL-status rows, the preflight predicate over rows outside M — checked against the
-  expectations above.
-- **G4** Backup: `pg_dump` of `tips`, `tip_receipts`, `external_tip_comparisons`, `external_tip_outcomes`, kept on the
-  VPS and on OneDrive, and restore-tested into local Postgres (row counts and checksums match). Also a rehearsal
-  snapshot — the full schema and all data except the large market-data tables the survey names — because the four
-  tables alone cannot run a migration.
-- **G5** Rehearsal on the restored snapshot: upgrade → verify → downgrade (checksums equal the backup) → upgrade
-  again.
+  expectations above. It also counts claimed-time formats (`tipAsOf` by source: zoned, naive, date-only, other),
+  never raw values, as the evidence for the final CT3 policy.
+- **G4** Backup: `pg_dump` of `tips`, `tip_receipts`, `external_tip_comparisons`, `external_tip_outcomes`, plus a
+  schema-only dump, kept on the VPS and restore-tested there into a throwaway Postgres pod that is deleted
+  afterwards (row counts and checksums match G3). No production data or secret is copied to the laptop (D7). An
+  off-VPS copy needs its own approval of where it goes.
+- **G5** Rehearsal on a throwaway local Postgres, never on production data (D7): schema from `alembic upgrade
+  0192_tip_entry_check`, synthetic minimum fixtures covering every status, reason and reference category the G3
+  survey reports. Upgrade → verify → downgrade (checksums equal the pre-upgrade values) → upgrade again, plus
+  every abort path, receipt links and scorecard parity. The container and its data are deleted afterwards.
 - **G6** The user approves production: merge, deploy (the migrate Job runs 0193), then the same verify on prod.
   `vps-deploy.sh` runs under `set -euo pipefail` and waits for the migrate Job to complete before rolling out, so
   an aborted 0193 leaves the old code and the old schema serving.
