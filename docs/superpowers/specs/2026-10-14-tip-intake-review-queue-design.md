@@ -132,7 +132,7 @@ predicate over every `tips` row and must return zero (§9 step 8, §12 G3).
 ## 6. Admin review and the anti-hindsight control (mandatory)
 
 Admin API (existing admin tip-ledger router, admin scope):
-- `GET /api/v1/admin/intake-reviews?state=&reason=&channel=` (cursor) and `GET /api/v1/admin/intake-reviews/{id}`
+- `GET /api/v1/admin/intake-reviews?state=&reason=&channelId=` (cursor) and `GET /api/v1/admin/intake-reviews/{id}`
   with receipts, events and check evidence (siblings of `/admin/receipts` and `/admin/tips`).
 - `POST /api/v1/admin/intake-reviews/{id}/resubmit` — corrected `symbol`, `direction`, `entryLow`, `entryHigh`,
   `target`, `stopLoss`, `horizonSessions`; `note` required. REJECTED items only.
@@ -142,7 +142,9 @@ Admin API (existing admin tip-ledger router, admin scope):
   be dismissed.
 
 No overrides: a resubmit runs the full gate. An admin cannot set, keep or choose a claimed time, and cannot pass an
-off-market entry or a failed time check.
+off-market entry or a failed time check: a resubmitted `CLAIMED_TIME_*` item starts at its AH start (R or A), never at
+the refused claim. A resubmit that is not admitted changes only the terms and the reason; the item's scoring start,
+`closed_at`, claim fields and original payload stay as stored, and the attempt is recorded in its event.
 
 **Anti-hindsight rule.** Let T0 be the item's stored `scoring_start_at` (R, or a §4-verified C; §4 is not re-run at
 resubmit, so a refused claim can never return) and A the admission time (server clock at resubmit).

@@ -3316,7 +3316,7 @@ ROLLBACK;
 - [ ] **Step 4: `scripts/tip_intake_review_survey.py`**
 
 ```python
-"""Runs scripts/sql/tip_intake_review_survey.sql against DATABASE_URL in a read-only transaction (local restores and
+"""Runs scripts/sql/tip_intake_review_survey.sql against DATABASE_URL in a read-only transaction (local test databases and
 rehearsals); production runs the same file through psql in the postgres pod (plan G3)."""
 
 from __future__ import annotations
@@ -3973,7 +3973,7 @@ Any failed criterion → **stop and report options to the user**. Do not adjust 
 
 ### G4 — backup and restore test (on the VPS; separate approval)
 
-Nothing from production is copied to the laptop (D7). The user runs these after approving G4. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
+Nothing from production is copied to the laptop (D7). The user runs these after approving G4. Run the survey's three checksum statements on production immediately before and after the dumps; if the two differ (a write landed), repeat. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
 
 ```bash
 pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t tips -t tip_receipts -t external_tip_comparisons -t external_tip_outcomes -f /tmp/tip-intake-0193-rows.dump
@@ -4005,7 +4005,7 @@ kubectl -n market-agent exec pg-0193-restore -- sh -c 'createdb -U postgres rest
 kubectl -n market-agent delete pod pg-0193-restore
 ```
 
-**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal G3's; the sha256 sums match; the restore pod is deleted; `restore-check-0193` reports PASS, or NOT_VERIFIABLE only for tables written during the dump (e.g. `orchestration_executions`), never FAIL.
+**Pass criteria:** the restored `move_set_checksum`, `receipt_link_checksum` and `tips_checksum` equal the production values taken around the dump (G3's are a different moment of a live table); the sha256 sums match; the restore pod is deleted; `restore-check-0193` reports PASS, or NOT_VERIFIABLE only for tables written during the dump (e.g. `orchestration_executions`), never FAIL.
 
 ### G5 — rehearsal on synthetic fixtures (local, no production data)
 
@@ -4014,12 +4014,12 @@ kubectl -n market-agent delete pod pg-0193-restore
 
 ```bash
 cd /c/AIAgent/marksy-api
-python -m pytest tests/test_tip_intake_review_migration.py tests/test_tip_intake_review_scripts.py -q -p no:cacheprovider
+DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migration.py tests/test_tip_intake_review_scripts.py tests/test_fresh_database_migration.py -q -rs -p no:cacheprovider
 ```
 
 **Pass criteria:**
-- Every test passes: upgrade moves exactly M verbatim; each unhandled reference aborts with nothing left behind; downgrade restores ids, rows, receipt links and `legacy_rows` with checksums equal to the pre-upgrade values; downgrade refuses after post-0193 data; scorecard counts unchanged; migrated pending Decimals exact; verify `snapshot`/`check` clean and tampering caught.
-- Record the upgrade time on the largest fixture; it must be well under the deploy's 300 s migrate-Job wait.
+- Every test passes and **0 are skipped** (a skip means no PostgreSQL was reached): upgrade moves exactly M verbatim; each unhandled reference aborts with nothing left behind; downgrade restores ids, rows, receipt links and `legacy_rows` with checksums equal to the pre-upgrade values; downgrade refuses after post-0193 data; scorecard counts unchanged; migrated pending Decimals exact; verify `snapshot`/`check` clean and tampering caught.
+- Fixture timings are not a production estimate. G3's move-set size bounds the work (a few hundred rows plus one CHECK scan of `tips`), far under the deploy's 300 s migrate-Job wait.
 
 Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and confirm no rehearsal database or dump remains.
 
@@ -4034,7 +4034,7 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
 2a. **Fresh off-site backup** (user): `kubectl -n market-agent create job --from=cronjob/market-agent-backup backup-pre-0193`, wait for completion, and check its log shows `off-site: STORED via google_drive`. `REUSED` or no off-site line → stop.
 3. The user marks the PR ready and merges it: `gh pr ready <n> && gh pr merge <n> --merge`.
 4. **Deploy** (user): `! ssh marksy@103.178.160.233 'nohup bash ~/deployment/server/vps-deploy.sh > ~/deploy-0193.log 2>&1 &'`. Poll `tail ~/deploy-0193.log` until the migrate Job completes and the rollout finishes. A failed 0193 aborts before rollout, and the old code keeps serving.
-5. **Post-check** (user, on the VPS): `kubectl cp ~/tip-intake-0193-pre.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python scripts/tip_intake_review_verify.py check --pre /tmp/pre.json`.
+5. **Post-check** (user, on the VPS): `kubectl cp ~/tip-intake-0193-pre.json <api pod>:/tmp/pre.json`, then `kubectl exec <api pod> -- python -m scripts.tip_intake_review_verify check --pre /tmp/pre.json`.
    - Pass = `"ok": true`.
    - Any problem → stop. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.
