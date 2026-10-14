@@ -22,10 +22,13 @@ every caller inside it — Marksy included — gets one universal, auditable sco
 3. Tracking runs once per tip; at most one progress row per tip per session.
 4. Scorecards aggregate canonical tips, never receipts. Many receipts for one tip never raise any count.
 5. Call terms (channel, symbol, direction, stated entry, target, stop-loss, stated horizon) and `first_seen_at`
-   are immutable. Tips and receipts are never deleted.
+   are immutable. Tips and receipts are never deleted. A call that fails intake is never a tip: it waits in
+   `tip_intake_reviews` (amended 2026-10-14, see `2026-10-14-tip-intake-review-queue-design.md`; migration 0193
+   moved earlier failures there verbatim).
 6. A revised tip is a new tip. The original is tracked on its own terms to its own end.
 7. Re-parsing applies only to unparsed receipts. It may create a tip (dated from the receipt's original server
-   time) but never alters or duplicates an existing tip.
+   time only if no market minute has passed since, else from the re-parse — intake review spec §6) but never
+   alters or duplicates an existing tip.
 8. State transitions are idempotent; tracking is deterministic and replayable from market data.
 9. Marksy predictions and ratings go through the same ledger, tracker and scorecards as external tips.
 10. Customer APIs never expose another customer's identity; admin APIs may.
@@ -71,7 +74,8 @@ label), unique per `(scope, alias)` where scope is the medium the alias was seen
 - `entry_low`, `entry_high`, `entry_basis` STATED | FIRST_SEEN_PRICE
 - `target`, `stop_loss` (nullable)
 - `horizon_sessions`, `horizon_basis` STATED | CHANNEL_DEFAULT | ENGINE
-- `first_seen_at` (server time of the first receipt)
+- `first_seen_at` — the scoring start: the server time of the first receipt (`received_at`), unless the intake
+  review spec §4/§6 sets it to a verified claimed time or the admission time
 - `revises_tip_id`, `merged_into_tip_id`, `prediction_id` (nullable)
 - `match_key`, `match_key_version`, `parser_version`
 - lifecycle (the only mutable fields): `status, entry_status, outcome, reason, entered_session,
@@ -80,6 +84,8 @@ label), unique per `(scope, alias)` where scope is the medium the alias was seen
     INVALIDATED | UNSCORABLE | DATA_UNRESOLVED | MERGED_DUPLICATE
   - `entry_status`: WAITING | ENTERED · `outcome`: SUCCESS | FAILURE | EXPIRED | null
 - partial unique index on `match_key` where `status = 'ACTIVE'`; an ORM guard rejects term changes and deletes
+- CHECK `ck_tips_validated_only`: no PENDING_CHECK, no UNSCORABLE, no intake-rejection reason (intake review
+  spec §5)
 
 **tip_receipts** — `id, tip_id (nullable), user_id, device_event_key, kind, medium, app_package,
 channel_label, text (cleaned), device_posted_at, recorded_at, parser_version`.
@@ -117,8 +123,9 @@ for scoring.
    caller name.
 4. By kind:
    - **TIP** — compute `match_key`. A matchable tip with the same key gets the receipt attached; otherwise
-     insert a tip and the receipt. Matchable = ACTIVE, or rejected at intake (§6.2) with `first_seen_at`
-     within its horizon, so later copies of a rejected tip attach instead of duplicating it.
+     the call goes through the intake gate. Matchable = the ACTIVE tip, else an open intake-review item
+     (pending, or rejected within its horizon), so later copies of a rejected call attach instead of
+     duplicating it (intake review spec §3).
    - **REVISION** — new tip with `revises_tip_id` = the latest ACTIVE tip for the same canonical channel,
      symbol and direction. The original is untouched.
    - **EXIT** — attach to the ACTIVE tip(s) for the same canonical channel and symbol (and direction if
@@ -149,6 +156,9 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
   the ported `CallHorizon` rules (1 week = 5 sessions, 1 month = 20).
 
 ### 6.2 Rejected at intake (terminal, never tracked)
+
+Since 2026-10-14 a rejected or pending call is an intake-review item, never a `tips` row; the statuses below
+name its reason, and only an admin can resubmit it (intake review spec §3, §6).
 
 - No direction → UNSCORABLE (`NO_DIRECTION`).
 - Target on the wrong side of the entry midpoint (promised return ≤ 0), or stop-loss on the wrong side →
@@ -207,8 +217,8 @@ stated exit price if within that session's low–high; else the intraday price a
   - DIRECTION_HORIZON → SUCCESS if `actual_return > 0` (price moved the called way), else FAILURE
   - INVALIDATED, UNSCORABLE, DATA_UNRESOLVED, MERGED_DUPLICATE → no outcome
 - Direction-only tips have no `promised_return`; none is ever fabricated.
-- `closed_at` is the terminal event time (the session close, the exit message time, or `first_seen_at` for
-  tips rejected at intake).
+- `closed_at` is the terminal event time (the session close or the exit message time; intake-review items
+  count as closed at their scoring start, intake review spec §7).
 
 ### 6.7 Data, schedule, replay
 
@@ -318,6 +328,7 @@ Admin (admin scope):
   (customer ids, medium, times)
 - `/admin/users/{id}/tips`
 - `/admin/receipts?kind=UNPARSED|EXIT` — review unparsed and orphan-exit receipts, re-parse
+- `/admin/tip-ledger/intake-reviews` — list, resubmit through the gate, dismiss (intake review spec §6)
 - `/admin/scorecards` — same aggregation and filters as §8
 
 `/tips`, `/tips/scorecard` and `/tips/{id}/marksy-view` remain until their readers move, then are removed.
@@ -337,7 +348,7 @@ Admin (admin scope):
 ## 11. admin-app
 
 Screens for Channels (rename, aliases, merge), Callers, Tips with a receipts drawer, Unparsed / orphan-exit
-review, customer → tips, and Scorecards with the §8.3 filters. Built on the existing `PageHeader`, `Toolbar`,
+review, Intake review (resubmit/dismiss), customer → tips, and Scorecards with the §8.3 filters. Built on the existing `PageHeader`, `Toolbar`,
 `DataTable` and `tokens.css`.
 
 ## 12. Backfill
