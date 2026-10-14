@@ -4117,5 +4117,8 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
    - Pass = `"ok": true`.
    - `check` compares only rows at or below the snapshot's marks. Tips, receipts and intake items created after the snapshot appear under `afterSnapshot` as counts (`newTips`, `newReceipts`, `intakeItems`, `movedAfterSnapshot`). They are informational, not problems.
    - Exception: a row moved after the snapshot that fails 0193's move-set predicate is reported as a problem, because it is real migration damage.
-   - Any problem → stop. One rare cause to investigate while stopped: a transaction in flight at the snapshot instant that committed a lower id later shows as a named scorecard problem. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
+   - Any problem → stop. Two rare causes to investigate while stopped:
+     - a transaction in flight at the snapshot instant that committed a lower id later shows as a named scorecard problem;
+     - a later copy that fills the caller of a tip or migrated item the snapshot saw changes a `caller:<id>` card.
+   - `check` needs a `pre.json` taken with this branch's script; an older one fails with `KeyError: 'maxTipId'`. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.
