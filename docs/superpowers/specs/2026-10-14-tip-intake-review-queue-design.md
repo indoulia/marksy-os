@@ -43,14 +43,15 @@ resubmit (§6). In order:
    PENDING_CHECK. Any failure → queue REJECTED with the reason.
 
 Matching (central §5.2): `find_matchable` returns the ACTIVE tip with the key, else an open queue item with it
-(PENDING_CHECK, or REJECTED within its horizon), and the receipt attaches to that item
+(PENDING_CHECK, or REJECTED or DISMISSED within its horizon, so copies of a dismissed call never grow the counts), and the receipt attaches to that item
 (`tip_receipts.intake_review_id`). Copies never create a second item. The EPIC-803 `(source, source_reference)`
 idempotency reads queue items too. EXIT receipts still attach only to ACTIVE tips.
 
 Responses: `POST /tips/ingest-text` returns `tipId: null` for a queued call (the phone already records a blank
 `tipId` as a receipt only, as for UNPARSED — `gateway/MarksyTipsApiClient.kt:22-23`). `POST /tips` and the Supabase webhook return `TipAccepted` with `tipId` = the item's reserved
 `public_id` and `status: IN_REVIEW` — accepted, not an error, so senders don't retry. A queued Marksy call sets
-`Prediction.status` as a rejected tip does today (INVALIDATED).
+`Prediction.status` as a rejected tip does today (INVALIDATED). An identical later Marksy prediction follows the
+queued item and is closed INVALIDATED, where it used to become a MERGED_DUPLICATE of the rejected tip.
 
 ## 4. Scoring start (claimed-time policy)
 
@@ -69,7 +70,8 @@ The first rule that matches decides. R is the default; a claim never moves the s
   bars from the tracker's source (`MinuteBarSource`).
   - Evidence required: the bars load and the existing covering-bar rule (`_intraday_price`) prices both ends of W.
     Otherwise → queue `CLAIMED_TIME_UNVERIFIED`.
-  - T = C (`CLAIMED_MARKET_VERIFIED`) only if every bar starting in W shows:
+  - T = C (`CLAIMED_MARKET_VERIFIED`) only if every bar overlapping W — including the minute covering C, since a
+    touch inside it cannot be ordered against C — shows:
     a. no touch of a stated entry — BUY `low ≤ entry_high`, SELL `high ≥ entry_low`;
     b. no touch of the target or stop — BUY `high ≥ target` or `low ≤ stop_loss`, SELL `low ≤ target` or
        `high ≥ stop_loss`;
@@ -96,6 +98,8 @@ T = R (`SERVER_RECEIPT`), so every item has one scoring start; its reason record
 - §4 times and basis, `first_seen_price`, `entry_check_price`, `entry_check_basis`, `check_evidence` (JSON)
 - `payload` (JSON): the full row the gate would have inserted; for migrated rows `to_jsonb` of the original tips
   row, verbatim, plus `legacy_rows` (§9)
+- `closed_at` (the scoring start for new items; the original `tips.closed_at` for migrated ones, since backfilled
+  rejections closed at a time that can differ from `first_seen_at`)
 - `promoted_tip_id` (unique), `decided_at`, `decided_by`, `created_at`, `updated_at`
 - Uniqueness mirrors `tips`: `prediction_id`, `(source, source_reference)`, one TIP receipt per
   `(intake_review_id, user_id, medium)`.
@@ -105,7 +109,8 @@ T = R (`SERVER_RECEIPT`), so every item has one scoring start; its reason record
 RESUBMITTED, DISMISSED, MIGRATED), `before`, `after` (JSON), `note`.
 
 **Columns added** — `tip_receipts.intake_review_id` (kept after promotion, for history); on `tips`:
-`claimed_created_at`, `claimed_time_source`, `scoring_start_basis`, `intake_review_id`.
+`claimed_created_at`, `claimed_time_source`, `scoring_start_basis`, `intake_review_id` (no FK:
+`promoted_tip_id` already links the pair, and a two-way FK cycle cannot be built on the suite's SQLite schema).
 
 **Invariant** — `tips` CHECK `ck_tips_validated_only`:
 `status <> 'PENDING_CHECK' AND status <> 'UNSCORABLE' AND COALESCE(reason, '') NOT IN ('NO_DIRECTION',
@@ -119,11 +124,11 @@ predicate over every `tips` row and must return zero (§9 step 8, §12 G3).
 ## 6. Admin review and the anti-hindsight control (mandatory)
 
 Admin API (existing admin tip-ledger router, admin scope):
-- `GET /admin/tip-ledger/intake-reviews?state=&reason=&channel=` (cursor) and
-  `GET /admin/tip-ledger/intake-reviews/{id}` with receipts, events and check evidence.
-- `POST /admin/tip-ledger/intake-reviews/{id}/resubmit` — corrected `symbol`, `direction`, `entryLow`, `entryHigh`,
+- `GET /api/v1/admin/intake-reviews?state=&reason=&channel=` (cursor) and `GET /api/v1/admin/intake-reviews/{id}`
+  with receipts, events and check evidence (siblings of `/admin/receipts` and `/admin/tips`).
+- `POST /api/v1/admin/intake-reviews/{id}/resubmit` — corrected `symbol`, `direction`, `entryLow`, `entryHigh`,
   `target`, `stopLoss`, `horizonSessions`; `note` required. REJECTED items only.
-- `POST /admin/tip-ledger/intake-reviews/{id}/dismiss` — `reason` (NOT_A_TIP | UNFIXABLE_TERMS | DUPLICATE |
+- `POST /api/v1/admin/intake-reviews/{id}/dismiss` — `reason` (NOT_A_TIP | UNFIXABLE_TERMS | DUPLICATE |
   OFF_MARKET_CONFIRMED | OTHER),
   `note` required. REJECTED items only: a PENDING_CHECK item is decided by the tracker, so a pending loser cannot
   be dismissed.
@@ -141,7 +146,8 @@ resubmit, so a refused claim can never return) and A the admission time (server 
   session's open. R, A and the review delay A − R stay on the tip and in the event.
 - AH1/AH2 need no market data, so missing evidence cannot weaken them.
 - Admin re-parse of an UNPARSED receipt (`POST /admin/receipts/{id}/reparse`) is an admission too and follows
-  AH1/AH2 (amends central invariant 7).
+  AH1/AH2 (amends central invariant 7). A re-parse whose claim §4 refuses scores from the re-parse once a market
+  minute has passed since R; before that it is queued with the refusal reason.
 - The tracker's promotion of PENDING_CHECK items (§8) is mechanical, outcome-blind and keeps T0.
 
 Dismissed items stay auditable and count as rejected (§7); they never count as scored outcomes. Every admission,
@@ -153,8 +159,7 @@ Definitions are unchanged. The fact loader (`app/tip_scorecard_query.py`) also r
 PROMOTED, under the conditions it applies to tips (`match_key` present, scoring start ≤ `as_of`), so counts stay
 as they are:
 - PENDING_CHECK → status PENDING_CHECK, open (as today).
-- REJECTED or DISMISSED → `rejected_status`; `closed_at` = scoring start (today's rejected tips close at
-  `first_seen_at`); no outcome, no returns, so never in a percentage, return or trust score (central §8.1, §8.2).
+- REJECTED or DISMISSED → `rejected_status`, closed at the item's `closed_at` (§5); no outcome, no returns, so never in a percentage, return or trust score (central §8.1, §8.2).
 - Channel, caller, engine, symbol and horizon filters read the item's columns; customer scope reads
   `tip_receipts.intake_review_id`; date basis `first_seen_at` reads `scoring_start_at`.
 
@@ -182,7 +187,8 @@ key appeared meanwhile, the item's receipts attach to it and the item is PROMOTE
 ## 9. Migration 0193
 
 **Upgrade** — one transaction:
-1. Create the §5 tables and columns, without the CHECK.
+1. Create the §5 tables and `tip_receipts.intake_review_id`. The new `tips` columns wait for step 8, so each payload
+   is the exact 0192-shaped row and the downgrade checksum compares like with like.
 2. Select the move set M: tips with status PENDING_CHECK or UNSCORABLE, or reason in the intake rejection reasons.
 3. Inventory every reference to M and handle or abort:
    - `tip_receipts.tip_id` — handled: relinked to the item (step 5).
@@ -201,7 +207,8 @@ key appeared meanwhile, the item's receipts attach to it and the item is PROMOTE
 6. Abort unless the md5 of M's ordered `to_jsonb` rows, taken before step 4, equals the md5 of the stored
    payloads (without `legacy_rows`).
 7. Delete M from `tips` (migration SQL; the ORM delete guard stays for application code).
-8. Preflight: abort, listing ids, if any remaining `tips` row violates the §5 predicate.
+8. Add the new `tips` columns, then the preflight: abort, listing ids, if any remaining `tips` row violates the §5
+   predicate.
 9. Add `ck_tips_validated_only`.
 
 **Downgrade** — the exact inverse for migrated rows: re-insert each tip from its payload with its original id,
@@ -292,7 +299,8 @@ requires a reason.
 ## 12. Files and rollout gates
 
 marksy-api: alembic `0193_tip_intake_reviews`; `app/tip_claimed_time.py` (new, the §4 policy, pure); the §9
-application files; `scripts/tip_intake_review_survey.py` (read-only inventory, checksums, preflight) and
+application files; `scripts/sql/tip_intake_review_survey.sql` (read-only inventory, checksums, preflight; pure SQL so
+it runs through psql in the prod pod before the PR merges, with a `.py` wrapper for local databases) and
 `scripts/tip_intake_review_verify.py` (counts, checksums, receipt links, scorecard parity).
 admin-app: `src/pages/IntakeReviewPage.tsx` with its test, `src/api/tipLedger.ts`, navigation.
 marksy-os: this spec and the central-spec amendments only.
@@ -305,7 +313,9 @@ No production read, change, merge or deployment happens until the gate before it
   references, checksums of M, NULL-status rows, the preflight predicate over rows outside M — checked against the
   expectations above.
 - **G4** Backup: `pg_dump` of `tips`, `tip_receipts`, `external_tip_comparisons`, `external_tip_outcomes`, kept on the
-  VPS and on OneDrive, and restore-tested into local Postgres (row counts and checksums match).
+  VPS and on OneDrive, and restore-tested into local Postgres (row counts and checksums match). Also a rehearsal
+  snapshot — the full schema and all data except the large market-data tables the survey names — because the four
+  tables alone cannot run a migration.
 - **G5** Rehearsal on the restored snapshot: upgrade → verify → downgrade (checksums equal the backup) → upgrade
   again.
 - **G6** The user approves production: merge, deploy (the migrate Job runs 0193), then the same verify on prod.

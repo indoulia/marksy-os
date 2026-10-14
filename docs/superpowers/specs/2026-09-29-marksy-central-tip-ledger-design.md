@@ -126,7 +126,7 @@ for scoring.
 4. By kind:
    - **TIP** — compute `match_key`. A matchable tip with the same key gets the receipt attached; otherwise
      the call goes through the intake gate. Matchable = the ACTIVE tip, else an open intake-review item
-     (pending, or rejected within its horizon), so later copies of a rejected call attach instead of
+     (pending, or rejected or dismissed within its horizon), so later copies of a rejected call attach instead of
      duplicating it (intake review spec §3).
    - **REVISION** — new tip with `revises_tip_id` = the latest ACTIVE tip for the same canonical channel,
      symbol and direction. The original is untouched.
@@ -331,7 +331,7 @@ Admin (admin scope):
   (customer ids, medium, times)
 - `/admin/users/{id}/tips`
 - `/admin/receipts?kind=UNPARSED|EXIT` — review unparsed and orphan-exit receipts, re-parse
-- `/admin/tip-ledger/intake-reviews` — list, resubmit through the gate, dismiss (intake review spec §6)
+- `/admin/intake-reviews` — list, resubmit through the gate, dismiss (intake review spec §6)
 - `/admin/scorecards` — same aggregation and filters as §8
 
 `/tips`, `/tips/scorecard` and `/tips/{id}/marksy-view` remain until their readers move, then are removed.

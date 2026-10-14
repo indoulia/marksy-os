@@ -19,7 +19,7 @@
 - Part A: Python 3.12, FastAPI 0.139, SQLAlchemy 2.0.52, Alembic 1.20.0, psycopg 3.3.5, pytest 8.4.2 + pytest-xdist 3.6.1. The suite runs on SQLite; migration and script tests run on PostgreSQL in a throwaway docker container.
 - Part B: React 18.3, TypeScript 5.6, Vite 5.4, @tanstack/react-query 5.59, vitest 2.1, Testing Library 16, MSW 2.6.
 
-**Spec:** `C:\AIAgent\marksy-os\docs\superpowers\specs\2026-10-14-tip-intake-review-queue-design.md` (branch `docs/tip-intake-review-queue`, cc9b6f3). The amendments to `2026-09-29-marksy-central-tip-ledger-design.md` are on the same branch. Executors read both.
+**Spec:** `C:\AIAgent\marksy-os\docs\superpowers\specs\2026-10-14-tip-intake-review-queue-design.md` (branch `docs/tip-intake-review-queue`; D1–D10 below are reflected in it). The amendments to `2026-09-29-marksy-central-tip-ledger-design.md` are on the same branch. Executors read both.
 
 ## Global Constraints
 
@@ -46,7 +46,7 @@ Each line below names an input the spec implies but whose behaviour a person wou
 4. **An admin fix whose terms equal an ACTIVE tip's key.** Expected: the item's receipts join that tip and the item is PROMOTED to it. There is never a second ACTIVE tip, and `uq_tips_active_match_key` is never hit. Test in Task 6.
 5. **A migrated PENDING_CHECK row promoted after 0193.** Its payload is PostgreSQL `to_jsonb`, so numbers arrive as JSON numbers. Expected: the promoted tip's prices equal the original `Decimal`s exactly. Test in Task 8.
 
-## Decisions this plan makes (spec gaps; listed for the user's approval)
+## Decisions this plan makes (D1–D10 folded into the spec 2026-10-14; D11 open for the user)
 
 - **D1 — Dismissed items stay matchable inside their horizon (§3 matching).** The spec says "PENDING_CHECK, or REJECTED within its horizon". Without DISMISSED, every later copy of a dismissed call would create a new REJECTED item and grow the unscorable count. Today a copy of a rejected call attaches instead. *Spec line to amend: §3 "Matching".*
 - **D2 — Queue items carry `closed_at`.** For INTAKE items it is the scoring start; for migrated items it is the original `tips.closed_at`. §7 says `closed_at` = scoring start, but `app/tip_backfill.py:371` closed legacy rejections at a `seen` that can differ from `first_seen_at`. That would move terminal-basis windows at migration. *Spec lines: §5 column list, §7 mapping.*
