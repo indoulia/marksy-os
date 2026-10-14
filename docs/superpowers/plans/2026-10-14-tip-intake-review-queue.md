@@ -63,6 +63,47 @@ Each line below names an input the spec implies but whose behaviour a person wou
 - **D11 — Option (b) (user, 2026-10-14).** A claim less than 120 s before R is treated as no claim: T = R (`SERVER_RECEIPT`), C is stored, no bar read. An older claim that cannot be verified (bars unavailable or unpriced) is still queued `CLAIMED_TIME_UNVERIFIED`, never admitted silently at a new start. Implemented in `scoring_start`'s CT4 test (`claimed > received - CLAIM_SKEW`).
 - **Timezone-less claims (user, 2026-10-14).** CT3 (naive → `CLAIMED_TIME_INVALID`) stays as the interim rule. G3 collects format counts; the final acceptance policy is a later user decision. No code infers a timezone.
 
+## Amendment A1 — migrated duplicate followers (user decision 2026-10-14; spec §5, §6, §7, §9, §10, §12 G3)
+
+Today `register_prediction` (`app/marksy_tips.py:174`) and the legacy backfill (`app/tip_backfill.py:373`) store an identical later Marksy call as a MERGED_DUPLICATE tip whose `merged_into_tip_id` points at a rejected tip. Those followers move with their parents as terminal MERGED_DUPLICATE items. They are never scored, promoted, resubmitted or dismissed. The scorecard loader already excludes MERGED_DUPLICATE tips (`app/tip_scorecard_query.py:502`, `app/tip_scorecard.py:150`), so counts stay equal. Each item below binds the named task, tests first. Integrity checks are extended, never relaxed.
+
+- **Task 6 (admin).**
+  - Model `TipIntakeReview.merged_into_review_id: Mapped[int | None] = mapped_column(ForeignKey("tip_intake_reviews.id"))`; vocabulary `REVIEW_MERGED_DUPLICATE = "MERGED_DUPLICATE"`.
+  - Resubmit and dismiss refuse a MERGED_DUPLICATE item, by the same path as a PENDING item (409 over HTTP).
+  - Admitting or dismissing a parent leaves its followers MERGED_DUPLICATE, with no tip and no event of their own.
+  - The list accepts `state=MERGED_DUPLICATE`. The detail adds `mergedIntoReviewId` (the parent item's public id) and `followerIds`.
+  - Tests: `test_a_merged_duplicate_item_cannot_be_resubmitted_or_dismissed`, `test_admitting_or_dismissing_a_parent_leaves_its_followers_inert`, and the relationship fields in the HTTP test.
+- **Task 7 (scorecards).** The union skips state MERGED_DUPLICATE. Test `test_a_merged_duplicate_item_is_counted_nowhere`: the scorecard is the same with and without a follower item.
+- **Task 8 (migration).**
+  - DDL `merged_into_review_id INTEGER REFERENCES tip_intake_reviews (id)`, matching the model.
+  - F comes from a recursive CTE over `merged_into_tip_id` from M, restricted to status MERGED_DUPLICATE. The rows moved are M ∪ F.
+  - State: status MERGED_DUPLICATE → MERGED_DUPLICATE, whatever the reason. After the insert, an UPDATE sets each follower's `merged_into_review_id` to its direct parent's item. Abort if any MERGED_DUPLICATE item is left without one.
+  - New aborts: a row outside M ∪ F whose `merged_into_tip_id` or `revises_tip_id` points into M ∪ F; a moved MERGED_DUPLICATE row whose target is not moved.
+  - Receipt relink count, checksum and delete all cover M ∪ F.
+  - Downgrade re-inserts parents before followers (chain-depth order) and restores `merged_into_tip_id` verbatim from the payload.
+  - Fixtures in `tests/_tip_0193_pg.py`:
+    - a rejected Marksy parent;
+    - a direct follower carrying one receipt and one `external_tip_comparisons` row;
+    - a second follower pointing at the first (the two-level chain).
+  - Tests:
+    - `test_followers_move_with_their_parents_and_keep_each_level`: states, `merged_into_review_id` per level, `public_id`, times, verbatim payload, receipt and legacy rows.
+    - `test_a_non_duplicate_pointing_into_the_move_set_aborts`, parametrized over `merged_into_tip_id` and `revises_tip_id`.
+    - `test_a_moved_duplicate_whose_parent_stays_aborts`.
+    - Followers added to the downgrade test: restored after parents, `merged_into_tip_id` intact, checksums equal, then upgrade again and get the same items.
+    - Followers added to the re-run no-op test.
+    - `test_no_reference_dangles_after_upgrade_or_downgrade`: LEFT JOIN checks over `tips.merged_into_tip_id`, `tips.revises_tip_id`, `tip_receipts.tip_id` / `intake_review_id` and `tip_intake_reviews.merged_into_review_id`.
+    - Followers added to the scorecard-parity test.
+- **Task 9 (survey and verify).**
+  - New survey sections, all counts and ids with no tip content:
+    - `followers` (depth, count);
+    - `unexpected_merged_or_revised` (ref, status, count);
+    - `stranded_duplicates` (count).
+  - `move_set`, its checksum and both reference sections cover M ∪ F.
+  - Verify `check` adds: each MERGED_DUPLICATE item's parent item has `origin_tip_id` equal to its payload's `merged_into_tip_id`; the moved count equals |M ∪ F|; no reference dangles.
+  - Test: the fixture's depths 1 and 2 are counted once each, and both abort sections are empty.
+- **Task 11 (admin-app).** The detail shows "Follows …" and "Duplicates: …". There is no new tab. Add one assertion to the existing detail test.
+- **Part C G3.** `unexpected_merged_or_revised` and `stranded_duplicates` must be empty. If `followers` shows a depth beyond 2, add a fixture at that depth before G5. Any other unexpected relationship stops the rollout and is reported with its counts.
+
 ## File Structure
 
 **marksy-api**
@@ -3963,6 +4004,7 @@ OUT="$SCRATCH/survey-run.sh"
 - `alembic_version` = `0192_tip_entry_check`.
 - `move_set_stray` returns no rows (no unexpected status; no match key without `first_seen_at`).
 - `unhandled_references` returns no rows.
+- `unexpected_merged_or_revised` and `stranded_duplicates` return no rows; `followers` depth ≤ 2 (Amendment A1). Otherwise stop and report the counts by relationship type.
 - `preflight_outside_move_set` returns no rows.
 - `null_status_rows.with_reason` = 0.
 - `move_set` counts are plausible against the 2026-10-13 audit (2,284 tips). Record each count.

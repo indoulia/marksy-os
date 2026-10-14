@@ -97,9 +97,10 @@ T = R (`SERVER_RECEIPT`), so every item has one scoring start; its reason record
 
 **tip_intake_reviews**
 - `id`, `public_id` (unique; becomes the tip's `public_id` on promotion; migrated rows keep theirs)
-- `state` PENDING_CHECK | REJECTED | PROMOTED | DISMISSED · `reason` · `rejected_status` (UNSCORABLE |
+- `state` PENDING_CHECK | REJECTED | PROMOTED | DISMISSED | MERGED_DUPLICATE (migrated followers only, §9; terminal) · `reason` · `rejected_status` (UNSCORABLE |
   DATA_UNRESOLVED: what `intake_rejection` returns, the original status for migrated rows, UNSCORABLE for the
-  CLAIMED_TIME reasons) · `origin` INTAKE | MIGRATED_0193 · `origin_tip_id` (unique)
+  CLAIMED_TIME reasons) · `origin` INTAKE | MIGRATED_0193 · `origin_tip_id` (unique) · `merged_into_review_id` (FK → this table,
+  nullable): the item a MERGED_DUPLICATE item follows
 - the call as the gate saw it: `source_channel_id`, `caller_id`, `prediction_id`, `stock_id`, `symbol`,
   `direction`, `entry_low`, `entry_high`, `target`, `stop_loss`, `horizon_sessions`, `horizon_basis`,
   `match_key`, `match_key_version`, `parser_version`, `source`, `client_name`, `source_reference`
@@ -160,7 +161,10 @@ resubmit, so a refused claim can never return) and A the admission time (server 
   minute has passed since R; before that it is queued with the refusal reason.
 - The tracker's promotion of PENDING_CHECK items (§8) is mechanical, outcome-blind and keeps T0.
 
-Dismissed items stay auditable and count as rejected (§7); they never count as scored outcomes. Every admission,
+Dismissed items stay auditable and count as rejected (§7); they never count as scored outcomes.
+
+A MERGED_DUPLICATE item (§9) can be neither resubmitted nor dismissed, is never promoted, and is unchanged when its
+parent is admitted, dismissed or promoted. The detail view shows the relationship both ways. Every admission,
 dismissal and edit writes an event with actor, time, before/after and note.
 
 ## 7. Scorecards
@@ -170,8 +174,8 @@ existing tip's outcome, status, close or returns, or any prediction's score or o
 is today's: a Marksy call that fails intake closes its prediction INVALIDATED. Migration leaves every scorecard
 figure unchanged, and an admission is scored only from its §6 start.
 
-The fact loader (`app/tip_scorecard_query.py`) also reads queue items that are not
-PROMOTED, under the conditions it applies to tips (`match_key` present, scoring start ≤ `as_of`), so counts stay
+The fact loader (`app/tip_scorecard_query.py`) also reads queue items that are neither
+PROMOTED nor MERGED_DUPLICATE (the loader excludes MERGED_DUPLICATE tips today, `tip_scorecard_query.py:502`), under the conditions it applies to tips (`match_key` present, scoring start ≤ `as_of`), so counts stay
 as they are:
 - PENDING_CHECK → status PENDING_CHECK, open (as today).
 - REJECTED or DISMISSED → `rejected_status`, closed at the item's `closed_at` (§5); no outcome, no returns, so never in a percentage, return or trust score (central §8.1, §8.2).
@@ -205,28 +209,37 @@ key appeared meanwhile, the item's receipts attach to it and the item is PROMOTE
 1. Create the §5 tables and `tip_receipts.intake_review_id`. The new `tips` columns wait for step 8, so each payload
    is the exact 0192-shaped row and the downgrade checksum compares like with like.
 2. Select the move set M: tips with status PENDING_CHECK or UNSCORABLE, or reason in the intake rejection reasons.
+   Add the followers F (user decision 2026-10-14): tips with status MERGED_DUPLICATE whose `merged_into_tip_id`
+   chain, followed recursively, reaches a row in M. Today `register_prediction` and the legacy backfill make an
+   identical later Marksy call a MERGED_DUPLICATE of a rejected one. The rows moved are M ∪ F.
 3. Inventory every reference to M and handle or abort:
    - `tip_receipts.tip_id` — handled: relinked to the item (step 5).
    - `external_tip_comparisons`, `external_tip_outcomes` (retired EPIC-803 tables) — handled: copied verbatim with
      `to_jsonb` into the item's `payload.legacy_rows`, then removed.
-   - `tip_daily_progress`, `tip_source_exits`, `stock_ratings.short_tip_id`/`long_tip_id`, and `revises_tip_id` /
-     `merged_into_tip_id` on tips outside M — unhandled: abort and list the ids. None is expected: rejected tips are
-     never tracked, exits and revisions attach to ACTIVE tips, rating tips are never rejected.
+   - `merged_into_tip_id` from F — handled: each follower moves with its parent (step 4).
+   - `tip_daily_progress`, `tip_source_exits`, `stock_ratings.short_tip_id`/`long_tip_id`, `revises_tip_id` from any
+     row outside M ∪ F, and `merged_into_tip_id` from a row outside M ∪ F — unhandled: abort and list the ids. None
+     is expected: rejected tips are never tracked, exits and revisions attach to ACTIVE tips, rating tips are never
+     rejected, and only MERGED_DUPLICATE rows point at a rejected tip.
+   - A moved row with status MERGED_DUPLICATE whose `merged_into_tip_id` target is not moved — abort (outside the
+     tested cases).
    - `recommendation_alerts` rows with `source_table = 'tips'` and `source_id` in M (a non-FK reference) — abort if
      any (intake failures were never alerted).
 4. Insert one item per M row: origin MIGRATED_0193, `origin_tip_id`, the tip's `public_id`, PENDING_CHECK or
-   REJECTED, the original reason, terms and times (`scoring_start_at` = `first_seen_at`,
+   REJECTED (MERGED_DUPLICATE for any row with that status, whatever its reason), the original reason, terms and times (`scoring_start_at` = `first_seen_at`,
    `scoring_start_basis = LEGACY`), `payload` = `to_jsonb(tip)`, one MIGRATED event each.
-   `ON CONFLICT (origin_tip_id) DO NOTHING`, so a re-run moves nothing twice.
-5. Relink receipts; abort unless the relinked count equals the count of receipts that pointed into M.
-6. Abort unless the md5 of M's ordered `to_jsonb` rows, taken before step 4, equals the md5 of the stored
+   `ON CONFLICT (origin_tip_id) DO NOTHING`, so a re-run moves nothing twice. Then set each follower's
+   `merged_into_review_id` to the item whose `origin_tip_id` is its payload's `merged_into_tip_id` (its direct
+   parent, so chains keep every level). Abort unless every MERGED_DUPLICATE item has one.
+5. Relink receipts; abort unless the relinked count equals the count of receipts that pointed into M ∪ F.
+6. Abort unless the md5 of M ∪ F's ordered `to_jsonb` rows, taken before step 4, equals the md5 of the stored
    payloads (without `legacy_rows`).
-7. Delete M from `tips` (migration SQL; the ORM delete guard stays for application code).
+7. Delete M ∪ F from `tips`, followers before parents, (migration SQL; the ORM delete guard stays for application code).
 8. Add the new `tips` columns, then the preflight: abort, listing ids, if any remaining `tips` row violates the §5
    predicate.
 9. Add `ck_tips_validated_only`.
 
-**Downgrade** — the exact inverse for migrated rows: re-insert each tip from its payload with its original id,
+**Downgrade** — the exact inverse for migrated rows: re-insert each tip from its payload with its original id, parents before followers so `merged_into_tip_id` holds,
 restore receipt links and `legacy_rows`, drop the CHECK, columns and tables, and verify the checksums against the
 pre-upgrade values. It refuses if any data exists that the old schema cannot hold without loss: an INTAKE-origin
 item, an event other than MIGRATED, or a tip with a claimed time or a basis other than `SERVER_RECEIPT`. After that point, recovery means rolling forward or
@@ -287,6 +300,15 @@ Invariant and migration:
   legacy rows copied; aborts on each unhandled reference; a re-run is a no-op; downgrade restores ids, rows and
   checksums; downgrade refuses after new intake data.
 - Scorecard parity before and after for every channel, caller, engine, customer and all.
+- Followers (§9 F): a direct follower and a two-level chain move with their parents as MERGED_DUPLICATE items, ids,
+  public ids, times, payloads and receipt links preserved, each `merged_into_review_id` naming its direct parent;
+  a follower's receipt and legacy rows move with it; scorecard counts unchanged (followers count in neither
+  schema); upgrade → downgrade → upgrade restores followers after parents with `merged_into_tip_id` intact and the
+  same checksums; a second move pass is a no-op; after upgrade and after downgrade no reference dangles.
+- Abort cases: a non-duplicate row whose `merged_into_tip_id` or `revises_tip_id` points into M ∪ F; a moved
+  MERGED_DUPLICATE row whose target stays in `tips`.
+- Followers stay inert: resubmit and dismiss refuse them; admitting or dismissing the parent leaves them
+  MERGED_DUPLICATE with no tip; the fact loader skips them.
 
 Regression: the existing tip suites (`tests/test_tip_*`, `tests/test_api_tips*`, `tests/test_external_tip_*`).
 admin-app: page tests in the existing RTL style — list and filters, a failed resubmit shows its reason, dismiss
@@ -329,7 +351,9 @@ No production read, change, merge or deployment happens until the gate before it
 - **G3** Read-only prod survey (the user runs it): counts of M by status and reason, every §9 reference count, alert
   references, checksums of M, NULL-status rows, the preflight predicate over rows outside M — checked against the
   expectations above. It also counts claimed-time formats (`tipAsOf` by source: zoned, naive, date-only, other),
-  never raw values, as the evidence for the final CT3 policy.
+  never raw values, as the evidence for the final CT3 policy. It counts followers by chain depth and each
+  §9 abort category by relationship type and status, with ids only and no tip content. Any non-zero abort
+  category, or a chain deeper than the tested cases, stops the rollout and is reported with its counts.
 - **G4** Backup: `pg_dump` of `tips`, `tip_receipts`, `external_tip_comparisons`, `external_tip_outcomes`, plus a
   schema-only dump, kept on the VPS and restore-tested there into a throwaway Postgres pod that is deleted
   afterwards (row counts and checksums match G3). No production data or secret is copied to the laptop (D7). The
