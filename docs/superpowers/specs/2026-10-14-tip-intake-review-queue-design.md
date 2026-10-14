@@ -109,7 +109,7 @@ T = R (`SERVER_RECEIPT`), so every item has one scoring start; its reason record
   row, verbatim, plus `legacy_rows` (§9)
 - `closed_at` (the scoring start for new items; the original `tips.closed_at` for migrated ones, since backfilled
   rejections closed at a time that can differ from `first_seen_at`)
-- `promoted_tip_id` (unique), `decided_at`, `decided_by`, `created_at`, `updated_at`
+- `promoted_tip_id` (indexed, not unique: several items can join one tip, §8), `decided_at`, `decided_by`, `created_at`, `updated_at`
 - Uniqueness mirrors `tips`: `prediction_id`, `(source, source_reference)`, one TIP receipt per
   `(intake_review_id, user_id, medium)`.
 
@@ -199,8 +199,8 @@ transaction per item:
    `promoted_tip_id`; set `tip_id` on its receipts; write the event. Fail → REJECTED with the reason. Still no
    price → unchanged.
 
-Retries are safe: the state check runs under the row lock, and `tips.public_id`, `promoted_tip_id` and
-`uq_tips_active_match_key` are unique. A crash before commit rolls everything back. If an ACTIVE tip with the same
+Retries are safe: the state check runs under the row lock, and `tips.public_id` and `uq_tips_active_match_key`
+are unique. A crash before commit rolls everything back. If an ACTIVE tip with the same
 key appeared meanwhile, the item's receipts attach to it and the item is PROMOTED to that tip — never a second tip.
 
 ## 9. Migration 0193
