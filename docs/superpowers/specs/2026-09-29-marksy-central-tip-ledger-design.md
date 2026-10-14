@@ -154,8 +154,9 @@ receipts move to the earlier tip, and it is excluded from scorecards but kept.
 - Target on the wrong side of the entry midpoint (promised return ≤ 0), or stop-loss on the wrong side →
   UNSCORABLE (`INCONSISTENT_LEVELS`).
 - Symbol not resolvable → DATA_UNRESOLVED (`UNRESOLVED_SYMBOL`).
-- Stated entry midpoint more than 10% from the market when first seen → UNSCORABLE (`ENTRY_OFF_MARKET`). The
-  market is a same-session price, never an older close: in market hours the live 1-minute price; outside them the
+- Stated entry midpoint more than 10% on the wrong side of the market when first seen (a BUY above it, a SELL
+  below it) → UNSCORABLE (`ENTRY_OFF_MARKET`). A BUY far below or a SELL far above is a conditional entry, kept
+  ACTIVE: the tracker waits for it and voids it `NEVER_ENTERED` after 5 sessions. The market is a same-session price, never an older close: in market hours the live 1-minute price; outside them the
   close of the session just ended (official, else the evening provisional). Without one the tip waits as
   PENDING_CHECK (not tracked, not alerted) and the next official tracker pass checks it against the price it was
   first seen at, else the nearest price that session traded at, then makes it ACTIVE or rejects it. A stock with no
