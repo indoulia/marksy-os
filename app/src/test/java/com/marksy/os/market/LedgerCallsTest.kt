@@ -75,6 +75,26 @@ class LedgerCallsTest {
         assertEquals("INVALIDATED", LedgerCalls.lifecycleWord(prediction("INVALIDATED", null)))
     }
 
+    // TPR-001 states: the server's value or its reason in words, stale data with its session, never a fallback 0.
+    @Test
+    fun targetProgressReadsTheServersValueOrItsReason() {
+        fun line(status: String, reason: String?, value: Double? = null, start: Double? = 33.33, basis: String = "FINAL", day: String? = "2026-10-14") =
+            LedgerCalls.targetProgressLine(tip().copy(targetProgress = TargetProgressDto(
+                "TPR-001", status, reason, value, start, "2026-10-15T04:00:00Z", day?.let { 104.0 }, day, null, "upstox-v3", basis, "CURRENT", null
+            )))
+
+        assertEquals("Target progress 60% · started at 33% · 14 Oct close", line("AVAILABLE", null, 60.0))
+        assertEquals("Target progress 99.96% · started at 33% · 15 Oct close · provisional", line("AVAILABLE", null, 99.96, basis = "PROVISIONAL", day = "2026-10-15"))
+        assertEquals("Target progress starts at entry (33%)", line("UNAVAILABLE", "AWAITING_ENTRY"))
+        assertEquals("Target progress paused · price stale since 14 Oct close", line("UNAVAILABLE", "PRICE_STALE"))
+        assertEquals("Target progress paused · price freshness unknown", line("UNAVAILABLE", "PRICE_STALE", day = null))
+        assertEquals("Target progress waits for the first close", line("UNAVAILABLE", "PRICE_UNAVAILABLE", day = null))
+        assertEquals("Target progress paused · 14 Oct close reached a level, result pending", line("UNAVAILABLE", "LIFECYCLE_RECONCILIATION_REQUIRED"))
+        assertEquals("Target progress unavailable · levels out of order", line("UNAVAILABLE", "INVALID_GEOMETRY", start = null))
+        assertNull(line("UNAVAILABLE", "NOT_OPEN", start = null))
+        assertNull(LedgerCalls.targetProgressLine(tip()))
+    }
+
     private fun prediction(lifecycleState: String, ledger: String?) = ActivePredictionDto.parse(JSONObject(
         """{"predictionId": 7, "symbol": "RENUKA", "lifecycleState": "$lifecycleState", "ledger": ${ledger ?: "null"}}"""
     ))

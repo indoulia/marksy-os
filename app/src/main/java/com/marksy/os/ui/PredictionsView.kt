@@ -153,6 +153,13 @@ internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: Strin
             Text("Entry ${callRupees(p.entryPrice)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f).padding(horizontal = MarksySpace.Inner), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text("Target ${callRupees(p.targetPrice)}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Caption)
         }
+        // Server-computed (TPR-001) and only on a live call, so an ended or closed one never shows a live value.
+        p.ledger?.takeIf { LedgerCalls.isLive(p) }?.let { t ->
+            LedgerCalls.targetProgressLine(t)?.let {
+                Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight))
+            }
+            if (t.targetProgress?.status == LedgerCalls.TARGET_PROGRESS_AVAILABLE) Text(LedgerCalls.TARGET_PROGRESS_NOTE, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+        }
         Text(
             listOfNotNull(
                 p.remainingTradingDays?.let { "$it day${if (it == 1) "" else "s"} left" } ?: "${p.horizon}-day call",

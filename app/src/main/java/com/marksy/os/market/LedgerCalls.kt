@@ -10,6 +10,7 @@ import java.util.Locale
 object LedgerCalls {
     const val STATUS_ACTIVE = "ACTIVE"
     private const val DATA_BASIS_PROVISIONAL = "PROVISIONAL"
+    const val TARGET_PROGRESS_AVAILABLE = "AVAILABLE"
 
     enum class Tone { POSITIVE, NEGATIVE, NEUTRAL, MUTED }
 
@@ -81,6 +82,33 @@ object LedgerCalls {
             else -> Tone.NEUTRAL
         }
     }
+
+    /** Shown under an available Target Progress; the server computes the value, the app only words it. */
+    const val TARGET_PROGRESS_NOTE = "Where the price sits between stop-loss (0%) and target (100%), not a chance of success."
+
+    /** `TPR-001` in words; null for a closed tip or an older backend, and never a 0 standing in for a missing value. */
+    fun targetProgressLine(t: LedgerTipDto): String? {
+        val tp = t.targetProgress ?: return null
+        val close = tp.priceSessionDate?.let { d -> runCatching { MarksyFormat.day(LocalDate.parse(d)) }.getOrDefault(d) }
+        val started = tp.startValue?.let { "started at ${progressPct(it)}" }
+        if (tp.status == TARGET_PROGRESS_AVAILABLE && tp.value != null) return listOfNotNull(
+            "Target progress ${progressPct(tp.value)}", started, close?.let { "$it close" },
+            "provisional".takeIf { tp.dataBasis == DATA_BASIS_PROVISIONAL }
+        ).joinToString(" · ")
+        return when (tp.reason) {
+            "NOT_OPEN" -> null
+            "AWAITING_ENTRY" -> "Target progress starts at entry" + (tp.startValue?.let { " (${progressPct(it)})" } ?: "")
+            "PRICE_UNAVAILABLE" -> "Target progress waits for the first close"
+            "PRICE_STALE" -> "Target progress paused · " + (close?.let { "price stale since $it close" } ?: "price freshness unknown")
+            "LIFECYCLE_RECONCILIATION_REQUIRED" -> "Target progress paused · ${close ?: "latest"} close reached a level, result pending"
+            "INSUFFICIENT_TERMS" -> "Target progress needs a target and a stop-loss"
+            "INVALID_GEOMETRY" -> "Target progress unavailable · levels out of order"
+            else -> "Target progress unavailable"
+        }
+    }
+
+    // Two decimals only where rounding would read as 0% or 100% on a tip that is still open.
+    private fun progressPct(v: Double) = MarksyFormat.percent(v, if (v < 0.5 || v >= 99.5) 2 else 0, signed = false)
 
     fun progressLine(p: ProgressPointDto): String = listOfNotNull(
         runCatching { MarksyFormat.day(LocalDate.parse(p.sessionDate)) }.getOrDefault(p.sessionDate),

@@ -100,7 +100,12 @@ internal fun ScorecardsView(
                     SummaryCard("External", s.external, Modifier.weight(1f))
                 }
             }
-            item(key = "legend") { OutcomeLegend() }
+            item(key = "legend") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { OutcomeLegend() }
+                    ScorecardText.asOf(s.filter.asOf)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1) }
+                }
+            }
         }
         when (val r = ranked) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading scorecards…") }

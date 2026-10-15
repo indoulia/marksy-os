@@ -31,6 +31,31 @@ class LedgerModelsTest {
         "actualReturn": "0.100000", "predictionId": null, "channel": {"channelId": 3, "name": "Upstox", "type": "BROKER_APP"},
         "caller": {"callerId": 9, "name": "Rahul"}, "latestProgress": $latest"""
 
+    // TPR-001 is additive: a pre-TPR payload still parses, and a stale value arrives as an explicit null.
+    @Test
+    fun parsesTargetProgressAndToleratesItsAbsence() {
+        val available = """{"version": "TPR-001", "status": "AVAILABLE", "reason": null, "value": "60.00", "startValue": "33.33",
+            "evaluatedAt": "2026-10-15T04:00:00Z", "price": "104.000000", "priceSessionDate": "2026-10-14",
+            "priceAt": "2026-10-14T10:00:00Z", "priceSource": "upstox-v3", "dataBasis": "FINAL", "freshness": "CURRENT",
+            "currentReturn": "0.040000"}"""
+        val stale = """{"version": "TPR-001", "status": "UNAVAILABLE", "reason": "PRICE_STALE", "value": null, "startValue": "33.33",
+            "evaluatedAt": "2026-10-19T12:00:00Z", "price": "104.000000", "priceSessionDate": "2026-10-14",
+            "priceAt": "2026-10-14T10:00:00Z", "priceSource": "upstox-v3", "dataBasis": "FINAL", "freshness": "OVERDUE",
+            "currentReturn": null}"""
+
+        val old = LedgerTipDto.parse(JSONObject("{${ledgerTip("ACTIVE")}}"))
+        val now = LedgerTipDto.parse(JSONObject("{${ledgerTip("ACTIVE")}, \"targetProgress\": $available}")).targetProgress!!
+        val paused = LedgerTipDto.parse(JSONObject("{${ledgerTip("ACTIVE")}, \"targetProgress\": $stale}")).targetProgress!!
+
+        assertNull(old.targetProgress)
+        assertEquals(listOf("TPR-001", "AVAILABLE", "2026-10-14", "FINAL", "CURRENT"), listOf(now.version, now.status, now.priceSessionDate, now.dataBasis, now.freshness))
+        assertEquals(listOf(60.0, 33.33, 104.0, 0.04), listOf(now.value, now.startValue, now.price, now.currentReturn))
+        assertNull(now.reason)
+        assertEquals("PRICE_STALE", paused.reason)
+        assertNull(paused.value)
+        assertNull(paused.currentReturn)
+    }
+
     @Test
     fun parsesMyTipsWithTheirReceiptsAndProvisionalProgress() {
         val page = MyTipPageDto.parse(JSONObject("""{"data": [{${ledgerTip("ACTIVE", progress)},

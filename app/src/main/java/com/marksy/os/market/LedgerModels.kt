@@ -54,6 +54,41 @@ data class ProgressPointDto(
     }
 }
 
+/** `TPR-001`: where an open tip's latest close sits between its stop-loss (0) and target (100); never a probability. */
+data class TargetProgressDto(
+    val version: String,
+    val status: String,
+    val reason: String?,
+    val value: Double?,
+    val startValue: Double?,
+    val evaluatedAt: String,
+    val price: Double?,
+    val priceSessionDate: String?,
+    val priceAt: String?,
+    val priceSource: String?,
+    val dataBasis: String?,
+    val freshness: String?,
+    val currentReturn: Double?
+) {
+    companion object {
+        fun parse(json: JSONObject) = TargetProgressDto(
+            version = json.textOrNull("version") ?: "",
+            status = json.textOrNull("status") ?: "",
+            reason = json.textOrNull("reason"),
+            value = json.doubleOrNull("value"),
+            startValue = json.doubleOrNull("startValue"),
+            evaluatedAt = json.textOrNull("evaluatedAt") ?: "",
+            price = json.doubleOrNull("price"),
+            priceSessionDate = json.textOrNull("priceSessionDate"),
+            priceAt = json.textOrNull("priceAt"),
+            priceSource = json.textOrNull("priceSource"),
+            dataBasis = json.textOrNull("dataBasis"),
+            freshness = json.textOrNull("freshness"),
+            currentReturn = json.doubleOrNull("currentReturn")
+        )
+    }
+}
+
 /** The canonical call (spec §4): terms, lifecycle and latest progress; `channel` and `caller` are canonical. */
 data class LedgerTipDto(
     val tipId: String,
@@ -80,7 +115,9 @@ data class LedgerTipDto(
     val predictionId: Int?,
     val channel: ChannelRefDto?,
     val caller: CallerRefDto?,
-    val latestProgress: ProgressPointDto?
+    val latestProgress: ProgressPointDto?,
+    /** Null from a backend before `TPR-001`. */
+    val targetProgress: TargetProgressDto? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = LedgerTipDto(
@@ -108,7 +145,8 @@ data class LedgerTipDto(
             predictionId = json.intOrNull("predictionId"),
             channel = json.optJSONObject("channel")?.let(ChannelRefDto::parse),
             caller = json.optJSONObject("caller")?.let(CallerRefDto::parse),
-            latestProgress = json.optJSONObject("latestProgress")?.let(ProgressPointDto::parse)
+            latestProgress = json.optJSONObject("latestProgress")?.let(ProgressPointDto::parse),
+            targetProgress = json.optJSONObject("targetProgress")?.let(TargetProgressDto::parse)
         )
     }
 }
