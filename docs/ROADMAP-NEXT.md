@@ -29,6 +29,8 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 This is a reuse-first cross-repository workstream. Implemented 2026-10-15 on `feat/trust-target-progress` in both repos (not merged or deployed); the EPIC-039 real-data shadow run awaits owner approval. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
 
+**Numbering note:** EPIC-036 to EPIC-039 here are the score epics in `docs/epics/`. The same numbers, plus EPIC-040, also name the earlier play-safe capture epics (sections below, `docs/CAPTURE-ARCHITECTURE.md` and code comments). EPIC-040 also names the ML admin shell above. Nothing is renumbered, so cite these as "score EPIC-03x", "capture EPIC-03x" or "ML admin EPIC-040".
+
 - **EPIC-036 — Audit and freeze semantics:** [epic](epics/EPIC-036-score-semantics-audit.md)
 - **EPIC-037 — Per-open-tip Target Progress API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
 - **EPIC-038 — Marksy OS integration:** [epic](epics/EPIC-038-marksy-os-score-integration.md)
