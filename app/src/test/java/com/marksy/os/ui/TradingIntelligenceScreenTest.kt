@@ -125,7 +125,7 @@ class TradingIntelligenceScreenTest {
         assertEquals("Each share is of all 1 closed call, judged by price; unevaluable ones count in N · avg return is their mean price return", trackRecordNote(one))
     }
 
-    // Regression (device, 2026-10-15): Inbox's long filter list plus Captured's options pushed Close and Add screenshot off screen.
+    // Regression (device, 2026-10-15): Inbox's long filter list pushed Close and Add screenshot off screen, then scrolled Captured calls out of sight.
     @Test
     fun capturedFilterPanelLeavesItsButtonsOnScreen() {
         compose.setContent { CapturedInboxView(emptyList(), PaddingValues(), {}, {}, {}, {}, {}, false, {}, CaptureInbox()) }
@@ -134,6 +134,7 @@ class TradingIntelligenceScreenTest {
 
         compose.onNodeWithContentDescription("Close filters").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add screenshot").assertIsDisplayed()
+        compose.onNodeWithText("Captured calls").assertIsDisplayed()
     }
 
     @Test

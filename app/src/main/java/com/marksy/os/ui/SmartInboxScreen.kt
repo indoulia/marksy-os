@@ -195,8 +195,10 @@ fun SmartInboxScreen(
 /** Inbox's filter value for the captured-call log, which MainActivity shows in place of the notification lanes. */
 const val InboxCapturedFilter = "CAPTURED"
 
-/** The Inbox filter list: the categories, then the captured-call log. */
-val inboxFilters: List<Pair<String, String>> = SmartInboxModel.Filter.entries.map { it.name to it.label } + (InboxCapturedFilter to "Captured calls")
+/** The Inbox filter list: the categories, with the captured-call log next to Trading so a long list never scrolls it out of sight. */
+val inboxFilters: List<Pair<String, String>> = SmartInboxModel.Filter.entries.flatMap { f ->
+    listOf(f.name to f.label) + if (f == SmartInboxModel.Filter.TRADING) listOf(InboxCapturedFilter to "Captured calls") else emptyList()
+}
 
 /** Header note for the Inbox tab: what needs the user and how much is new, or the active filter. */
 fun inboxTitleNote(summary: SmartInboxModel.InboxSummary, filterName: String): String? {
