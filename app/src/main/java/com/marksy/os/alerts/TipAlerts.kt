@@ -45,7 +45,7 @@ object TipAlertNotices {
     fun summaryTitle(alerts: List<TipAlertDto>): String = "${alerts.size} tip alerts"
 }
 
-/** Posts tip alerts with the server's own (already masked) message text; a tap opens My tips · Following. */
+/** Posts tip alerts with the server's own (already masked) message text; a tap opens Trading › Open · Following. */
 object TipAlertNotifier {
     private const val CHANNEL_ID = "marksy_tip_alerts"
     private const val GROUP = "com.marksy.os.TIP_ALERTS"

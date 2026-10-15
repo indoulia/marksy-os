@@ -72,7 +72,9 @@ private fun MyTipRow(item: MyTipDto, livePrice: Double?, onClick: () -> Unit) {
         Row(Modifier.padding(top = MarksySpace.Hair)) {
             LedgerCalls.progressText(t)?.let { Text(it, color = toneColor(LedgerCalls.progressTone(t)), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold) }
             Spacer(Modifier.weight(1f))
-            livePrice?.let { Text("${callRupees(it)} now", color = MarksyTheme.TextPrimary, style = MarksyType.Meta) }
+            // A closed tip shows when it was called, never a "now" price.
+            if (LedgerCalls.isActive(t)) livePrice?.let { Text("${callRupees(it)} now", color = MarksyTheme.TextPrimary, style = MarksyType.Meta) }
+            else Text(listOfNotNull("called ${LedgerCalls.day(t.firstSeenAt)}", LedgerCalls.horizonText(t.horizonSessions)).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Text(
             listOfNotNull(t.channel?.name, t.caller?.name, item.channelHeadline?.let(LedgerCalls::recordText)).joinToString(" · "),

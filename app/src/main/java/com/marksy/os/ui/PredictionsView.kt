@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,10 +61,9 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
     }
 }
 
-/** Results: Marksy's track record, closed calls and calls that ended early, each with its outcome. Live calls are in Setups. */
+/** History's Marksy lists: the track record with its closed calls, or the calls that ended early, each with its outcome. Live calls are in Setups. */
 @Composable
-internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
-    var showEnded by rememberSaveable { mutableStateOf(false) }
+internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded: Boolean, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
     val open = remember { Paged { c -> repository.activePredictions(c).map { it.items to it.nextCursor } } }
     val closed = remember { Paged { c -> repository.closedPredictions(c).map { it.items to it.nextCursor } } }
     val summary by produceState<PerformanceSummaryDto?>(null) { value = (repository.performanceSummary() as? MarketDataState.Loaded)?.value }
@@ -78,13 +76,8 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     val endedHint = "Calls withdrawn, invalidated or left without market data before closing appear here."
 
     MarksyList(bottom = bottomPadding) {
-        item(key = "record") { TrackRecordStrip(summary) }
-        item(key = "segments") {
-            Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                Pill("Closed", selected = !showEnded) { showEnded = false }
-                Pill("Ended" + (if (ended.isEmpty()) "" else " (${ended.size}${if (open.hasMore) "+" else ""})"), selected = showEnded) { showEnded = true }
-            }
-        }
+        // The record summarises closed calls only, so it sits above them and not above ended ones.
+        if (!showEnded) item(key = "record") { TrackRecordStrip(summary) }
         when (val s = paged.state) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading Marksy calls…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
@@ -119,15 +112,17 @@ private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
     val s = summary ?: return
     if (s.closedCount == 0) return
     MarksyRowCard {
-        MarksyCardHeader("Track record") {
+        MarksyCardHeader("Marksy track record") {
             Text("${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
-            Stat("Target", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
-            Stat("Stopped", s.stopLossRate?.let(::share), MarksyTheme.Negative)
+            Stat("Target hit", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
+            Stat("Stop-loss hit", s.stopLossRate?.let(::share), MarksyTheme.Negative)
             Stat("Expired", s.horizonExpiryRate?.let(::share), MarksyTheme.TextSecondary)
             Stat("Avg return", s.avgRealizedReturn?.let(::returnPct), if ((s.avgRealizedReturn ?: 0.0) >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative)
         }
+        // The server divides each share by every closed call, unevaluable ones included, so they need not add to 100%.
+        Text("Shares of all ${s.closedCount} closed calls · avg return is their mean realised return", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
     }
 }
 

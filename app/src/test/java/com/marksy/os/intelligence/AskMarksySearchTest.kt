@@ -102,8 +102,10 @@ class AskMarksySearchTest {
     fun sitemapNavigatesToPagesAndTabs() {
         fun nav(text: String) = ask(Store(), text).also { assertEquals(text, Intent.NAVIGATE, it.query.intent) }.action!!
         assertEquals(AskMarksy.Action("Open Plan · Reminders", Page.PLAN, "Reminders", auto = true), nav("open reminders"))
-        assertEquals("My tips" to Page.TRADING, nav("go to trade calls").let { it.arg to it.page })
-        assertEquals("My tips" to Page.TRADING, nav("open my tips").let { it.arg to it.page })
+        assertEquals("Open" to Page.TRADING, nav("go to trade calls").let { it.arg to it.page })
+        assertEquals("Open" to Page.TRADING, nav("open my tips").let { it.arg to it.page })
+        assertEquals(com.marksy.os.ui.TradingMarksyResults to Page.TRADING, nav("open marksy results").let { it.arg to it.page })
+        assertEquals(com.marksy.os.ui.InboxCapturedFilter to Page.INBOX, nav("open captured").let { it.arg to it.page })
         assertEquals(Page.TRUST, nav("open scorecards").page)
         assertEquals(Page.TRUST, nav("open trust score").page)
         assertEquals("IPOS" to Page.MARKET, nav("take me to IPOs").let { it.arg to it.page })
@@ -123,9 +125,9 @@ class AskMarksySearchTest {
         AskMarksy.SITEMAP.forEach { (word, a) ->
             val valid = when (a.page) {
                 Page.PLAN -> a.arg == null || a.arg in com.marksy.os.ui.PlanViews
-                Page.TRADING -> a.arg == null || a.arg in com.marksy.os.ui.TradingFilters
+                Page.TRADING -> a.arg == null || a.arg in com.marksy.os.ui.TradingFilters || a.arg == com.marksy.os.ui.TradingMarksyResults
                 Page.MARKET -> a.arg == null || a.arg in com.marksy.os.ui.MarketSections.map { it.first }
-                Page.INBOX -> a.arg == null || a.arg in SmartInboxModel.Filter.entries.map { it.name }
+                Page.INBOX -> a.arg == null || a.arg in com.marksy.os.ui.inboxFilters.map { it.first }
                 else -> true
             }
             assertTrue("$word -> $a", valid)
