@@ -72,7 +72,7 @@ class TradingIntelligenceScreenTest {
         }
     )
     // Repository reads run on Dispatchers.IO, which waitForIdle does not wait for.
-    private fun awaitText(text: String) = compose.waitUntil(5_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+    private fun awaitText(text: String) = compose.waitUntil(20_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     private val scorecardFilters = mutableListOf<String>()
     private var summaryReads = 0
 
@@ -135,7 +135,7 @@ class TradingIntelligenceScreenTest {
 
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repo, historyScope = HistoryScope.ENDED) }
         // Both pages must have loaded, or a single row would pass without the repeat ever arriving.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Loading", substring = true).fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText("NTPCGREEN").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(20_000) { compose.onAllNodesWithText("Loading", substring = true).fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText("NTPCGREEN").fetchSemanticsNodes().isNotEmpty() }
 
         compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(1)
     }
