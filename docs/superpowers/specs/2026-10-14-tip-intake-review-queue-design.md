@@ -64,8 +64,8 @@ The first rule that matches decides. R is the default; a claim never moves the s
 - **CT2** C is date-only: its date before S(R) → queue `CLAIMED_TIME_OLDER`; otherwise T = R (a date is not a
   time).
 - **CT3** C has no timezone, or C > R + 120 s → queue `CLAIMED_TIME_INVALID`. A missing timezone is never
-  inferred. This interim rule stands until the G3 format evidence (§12) is reviewed and the user sets the final
-  acceptance policy.
+  inferred. Final as of G3 (2026-10-15): production holds no claimed time without a zone (64 zoned, 2,210
+  absent), so a zone-less value stays queued as INVALID, is stored NULL and kept only as text.
 - **CT4** R − 120 s < C ≤ R + 120 s → T = R (`SERVER_RECEIPT`). A claim within two minutes of receipt is treated
   as no claim and is kept for the record only (decision D11, 2026-10-14). It needs no market data, so an Upstox
   outage never queues an everyday phone receipt.
