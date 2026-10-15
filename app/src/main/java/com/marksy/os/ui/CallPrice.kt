@@ -27,6 +27,9 @@ internal data class CallPrice(val price: Double?, val label: String?, val live: 
             return CallPrice(quote.lastPrice, label, live)
         }
 
+        /** The Setups note when the backend names no scan session: the stored close's session, never a time of day. */
+        fun storedSession(lastPriceAt: String?): String? = lastPriceAt?.let(::sessionDay)?.let { "Last stored close: $it session" }
+
         // `lastPriceAt` stamps the stored bar's session, not when the price was seen, so only its date is shown.
         private fun sessionDay(iso: String): String? =
             runCatching { MarksyFormat.day(OffsetDateTime.parse(iso).atZoneSameInstant(IST).toLocalDate()) }.getOrNull()

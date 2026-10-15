@@ -3,6 +3,7 @@ package com.marksy.os.ui
 import com.marksy.os.upstox.FeedFreshness
 import com.marksy.os.upstox.UpstoxLtp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
@@ -32,5 +33,13 @@ class CallPriceTest {
         assertEquals(CallPrice(104.0, "Close · 14 Oct", live = false), of(null, FeedFreshness.OFF))
         assertEquals(CallPrice(104.0, "Close · date unknown", live = false), of(null, FeedFreshness.LIVE, storedAt = null))
         assertEquals(CallPrice(null, null, live = false), of(null, FeedFreshness.LIVE, stored = null, storedAt = null))
+    }
+
+    // `lastPriceAt` is the stored bar's midnight-IST session anchor, so it is never shown as a quote time.
+    @Test
+    fun theStoredPriceStampReadsAsASessionNotATime() {
+        assertEquals("Last stored close: 14 Oct session", CallPrice.storedSession("2026-10-13T18:30:00Z"))
+        assertNull(CallPrice.storedSession("2026-10-14 00:00"))
+        assertNull(CallPrice.storedSession(null))
     }
 }
