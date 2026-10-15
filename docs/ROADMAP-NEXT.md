@@ -27,7 +27,7 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 ## Trust Score & Target Progress workstream (2026-10-15)
 
-This is a reuse-first cross-repository workstream. It is implementation-ready but has **not been executed**. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+This is a reuse-first cross-repository workstream. Implemented 2026-10-15 on `feat/trust-target-progress` in both repos (not merged or deployed); the EPIC-039 real-data shadow run awaits owner approval. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
 
 - **EPIC-036 — Audit and freeze semantics:** [epic](epics/EPIC-036-score-semantics-audit.md)
 - **EPIC-037 — Per-open-tip Target Progress API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)

@@ -1,6 +1,6 @@
 # EPIC-038 — Marksy OS Trust Score and Target Progress integration
 
-**Status:** READY FOR AUTONOMOUS EXECUTION  
+**Status:** DONE 2026-10-15 on `feat/trust-target-progress` (not merged); no device check (no device connected)  
 **Priority:** P1  
 **Owner:** marksy-os  
 **Depends on:** EPIC-036 contract freeze and EPIC-037 API contract  
