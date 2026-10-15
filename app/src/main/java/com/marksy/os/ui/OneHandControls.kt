@@ -107,7 +107,7 @@ fun BoxScope.OneHandControls(
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
         // The panel gets only the height the buttons leave and scrolls within it, so a long list never pushes Close off screen.
-        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras, Modifier.weight(1f, fill = false)) { onFilterSelected(it); filtersOpen = false }
+        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, Modifier.weight(1f, fill = false), extras = filterExtras) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
             // Always opens the list so filters switch in place; the dot marks one applied, the list's default resets it.
             FloatingRoundButton(if (filtersOpen) Icons.Default.Close else Icons.Default.FilterList, if (filtersOpen) "Close filters" else "Filters", filterActive && !filtersOpen) {
@@ -144,7 +144,7 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
         Modifier.align(Alignment.BottomStart).padding(horizontal = MarksySpace.Wide, vertical = MarksySpace.Section),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
-        if (open) FloatingMenuPanel(options, selected, Alignment.Start, action?.let { a -> { MenuActionRow(a) { open = false; a.onClick() } } }) { onSelected(it); open = false }
+        if (open) FloatingMenuPanel(options, selected, Alignment.Start, extras = action?.let { a -> { MenuActionRow(a) { open = false; a.onClick() } } }) { onSelected(it); open = false }
         FloatingRoundButton(if (open) Icons.Default.Close else icon, label, false) { open = !open }
     }
 }
@@ -163,8 +163,8 @@ private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
 
 @Composable
 private fun FloatingMenuPanel(
-    options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, extras: (@Composable () -> Unit)? = null,
-    modifier: Modifier = Modifier, onPick: (String) -> Unit
+    options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, modifier: Modifier = Modifier,
+    extras: (@Composable () -> Unit)? = null, onPick: (String) -> Unit
 ) {
     Column(
         modifier
