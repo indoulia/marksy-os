@@ -84,7 +84,7 @@ internal fun TipSheetContent(
         if (t != null && t.alsoBy.isNotEmpty()) AlsoTippedBy(t, onRow = onSourceRow)
         t?.let { Timeline(it) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-            m.trade?.let { trade -> MarksyButton("${if (trade.side == TradeSide.SELL) "Sell" else "Buy"} ${m.symbol}", { onTrade(trade) }, Modifier.weight(1f)) }
+            (m.trade ?: m.track?.takeIf { it.live }?.let { TipTrack.trade(m.symbol, it) })?.let { trade -> MarksyButton("${if (trade.side == TradeSide.SELL) "Sell" else "Buy"} ${m.symbol}", { onTrade(trade) }, Modifier.weight(1f)) }
             MarksyButton("View stock", { onOpenStock(m.symbol) }, Modifier.weight(1f), style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
         }
     }

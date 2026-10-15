@@ -176,7 +176,7 @@ fun MarketScreen(
         }
         // The IPO page draws its own stack (filters, search, reminders, watch).
         if (tab != MarketTab.IPOS) OneHandControls(
-            filters = MarketSections,
+            filters = emptyList(), // sections live in the sticky tab grid
             selectedFilter = tab.name,
             filterIsView = false,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },

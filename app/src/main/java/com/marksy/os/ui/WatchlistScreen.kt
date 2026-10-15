@@ -204,7 +204,7 @@ fun WatchlistScreen(
         )
         // Delete lives in Settings (ManageWatchlistsDialog), away from easy taps.
         OneHandControls(
-            filters = MarketSections,
+            filters = emptyList(), // sections live in the sticky tab grid
             selectedFilter = MarketTab.WATCHLIST.name,
             filterIsView = false,
             onFilterSelected = onSectionSelected,
