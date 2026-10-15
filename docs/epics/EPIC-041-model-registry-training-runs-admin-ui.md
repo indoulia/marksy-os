@@ -1,6 +1,6 @@
 # EPIC-041 — Model registry and training runs in Admin App
 
-**Status:** BLOCKED ON EPIC-040 CONTRACT AUDIT COMPLETION  
+**Status:** PARTIAL 2026-10-15 — model registry/lineage read and ML job runs (start/retry via existing `/ops`) built; no training-run records or cancel contract exist ([contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md) §6)  
 **Priority:** P1  
 **Owner:** Admin App with ML service support  
 **Spec:** [ML Admin Control Plane design](../superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)

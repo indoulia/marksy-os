@@ -1,6 +1,6 @@
 # EPIC-042 — Learning and research workspace
 
-**Status:** BLOCKED ON EPIC-040 CONTRACT AUDIT COMPLETION  
+**Status:** PARTIAL 2026-10-15 — experiments, champion/challenger, shadow aggregates, horizon/regime evaluation, SPG selection evaluations and a descriptive leaderboard built; selection rounds/winner lock not on the service ([contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md) §6)  
 **Priority:** P1  
 **Owner:** Admin App with ML service support  
 **Spec:** [ML Admin Control Plane design](../superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)
