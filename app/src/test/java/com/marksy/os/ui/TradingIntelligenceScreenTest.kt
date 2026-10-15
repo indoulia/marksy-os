@@ -12,6 +12,8 @@ import androidx.compose.ui.test.assertCountEquals
 import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.ActivePredictionPageDto
 import com.marksy.os.market.ChannelRefDto
+import com.marksy.os.market.ClosedPredictionDto
+import com.marksy.os.market.ClosedPredictionPageDto
 import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.MarketApiClient
 import com.marksy.os.market.MarketIntelligenceRepository
@@ -55,6 +57,20 @@ class TradingIntelligenceScreenTest {
     )
 
     private val requested = mutableListOf<String?>()
+    private var closedCalls: List<ClosedPredictionDto> = emptyList()
+
+    private fun closedCall(id: Int, symbol: String, tipId: String?, status: String = "STOP_LOSS_HIT", reason: String? = null) = ClosedPredictionDto(
+        id = id, symbol = symbol, asOf = "2026-09-30", horizonDays = 3, predictedReturn = 0.05, realizedReturn = -0.03, outcome = "FAILURE", excludedReason = null,
+        ledger = tipId?.let {
+            LedgerTipDto(
+                tipId = it, symbol = symbol, direction = "BUY", entryLow = 100.0, entryHigh = 100.0, entryBasis = null, target = 105.0, stopLoss = 97.0,
+                horizonSessions = 3, horizonBasis = null, firstSeenAt = "2026-09-30T07:06:44Z", status = status, entryStatus = null,
+                outcome = if (status == "INVALIDATED") null else "FAILURE", reason = reason, enteredSession = null, closedSession = null, closedAt = null,
+                exitPrice = null, promisedReturn = null, actualReturn = if (status == "INVALIDATED") null else -0.044365, predictionId = id,
+                channel = null, caller = null, latestProgress = null
+            )
+        }
+    )
     // Repository reads run on Dispatchers.IO, which waitForIdle does not wait for.
     private fun awaitText(text: String) = compose.waitUntil(5_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     private val scorecardFilters = mutableListOf<String>()
@@ -82,6 +98,7 @@ class TradingIntelligenceScreenTest {
                 listOf(engineCard(3, "Rating engine"), engineCard(2, "Prediction engine")))
         }
         override suspend fun performanceSummary(range: String): PerformanceSummaryDto? { summaryReads++; return null }
+        override suspend fun closedPredictions(cursor: String?) = ClosedPredictionPageDto(closedCalls, null)
         override suspend fun marketSummary() = throw NotImplementedError()
         override suspend fun liveQuotes(symbols: List<String>?) = throw NotImplementedError()
         override suspend fun liveFeedHealth() = throw NotImplementedError()
@@ -174,6 +191,49 @@ class TradingIntelligenceScreenTest {
         compose.onNodeWithContentDescription("Close filters").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add screenshot").assertIsDisplayed()
         compose.onNodeWithText("Captured calls").assertIsDisplayed()
+    }
+
+    // Prod 2026-10-15: KIRLOSBROS predictions 2003 and 2004 share ledger tip 46 (2004's own tip is its MERGED_DUPLICATE follower).
+    @Test
+    fun closedRowsFoldOnlyOnASharedLedgerTipAndKeepEveryPrediction() {
+        val items = listOf(
+            closedCall(1, "KIRLOSBROS", "46"), closedCall(2, "KIRLOSBROS", "46"),
+            closedCall(3, "PGHL", "50"), closedCall(4, "ALBERTDAVD", "51"),
+            closedCall(5, "WEWIN", "60", "INVALIDATED", "SOURCE_EXIT_BEFORE_ENTRY"),
+            closedCall(6, "NOLEDGER", null), closedCall(7, "NOLEDGER", null)
+        )
+        val sections = closedSections(items)
+
+        assertEquals(listOf(1 to 2, 3 to 1, 4 to 1, 6 to 1, 7 to 1), sections.shown.map { it.row.id to it.predictions })
+        assertEquals(listOf(5), sections.invalidated.map { it.row.id })
+        assertEquals(items.size, (sections.shown + sections.invalidated).sumOf { it.predictions })
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h1600dp")
+    fun invalidatedCallsFoldBelowTheScoredOnesAndOpenOnTap() {
+        closedCalls = listOf(
+            closedCall(1, "KIRLOSBROS", "46"), closedCall(2, "KIRLOSBROS", "46"), closedCall(3, "PGHL", "50"),
+            closedCall(5, "WEWIN", "60", "INVALIDATED", "SOURCE_EXIT_BEFORE_ENTRY"), closedCall(8, "VISACHROME", "61", "INVALIDATED", "SOURCE_EXIT_BEFORE_ENTRY")
+        )
+        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository(), historyScope = HistoryScope.MARKSY) }
+        awaitText("PGHL")
+
+        compose.onAllNodesWithText("KIRLOSBROS").assertCountEquals(1)
+        compose.onNodeWithText("2 predictions", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Invalidated before entry").assertIsDisplayed()
+        compose.onNodeWithText("2 calls · voided before entry, so excluded from scored results").assertIsDisplayed()
+        compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
+
+        compose.onNodeWithText("Invalidated before entry").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("WEWIN").assertIsDisplayed()
+        compose.onNodeWithText("VISACHROME").assertIsDisplayed()
+        compose.onAllNodesWithText("Invalidated · source exit before entry").assertCountEquals(2)
+
+        compose.onNodeWithText("Invalidated before entry").performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
     }
 
     @Test

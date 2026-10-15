@@ -156,7 +156,7 @@ fun CapturedScreen(
 }
 
 @Composable
-private fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
+internal fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
     MarksyRowCard(onClick = onClick) {
         MarksyCardHeader(title, trailing = { ExpandChevron(open) })
         Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta)

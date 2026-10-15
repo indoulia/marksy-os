@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +82,8 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded
     val quotes = rememberUpstoxQuotes(remember(ended) { ended.map { it.symbol }.distinct() })
     val feed = rememberFeedFreshness()
     val paged = if (showEnded) open else closed
+    val sections = remember(closed.items) { closedSections(closed.items) }
+    var invalidatedOpen by rememberSaveable { mutableStateOf(false) }
     val endedHint = "Calls withdrawn, invalidated or left without market data before closing appear here."
 
     MarksyList(bottom = bottomPadding) {
@@ -92,7 +95,10 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded
             is MarketDataState.Error -> item { EmptyState("Calls unavailable", s.message) }
             is MarketDataState.Empty -> item { EmptyState(if (showEnded) "No ended calls" else "No closed calls yet", if (showEnded) endedHint else "Calls appear here once their target, stop or horizon is reached.") }
             else -> {
-                if (!showEnded) items(closed.items, key = { "c-${it.id}" }) { ClosedCallRow(it) { onOpenStock(it.symbol) } }
+                if (!showEnded) {
+                    items(sections.shown, key = { "c-${it.row.id}" }) { c -> ClosedCallRow(c.row, c.predictions) { onOpenStock(c.row.symbol) } }
+                    if (sections.shown.isEmpty() && !closed.hasMore) item(key = "no-scored") { InlineEmpty("No scored calls yet") }
+                }
                 else {
                     if (ended.isEmpty() && !open.hasMore) item { EmptyState("No ended calls", endedHint) }
                     items(ended, key = { "e-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol], feed, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
@@ -100,6 +106,17 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded
                 if (paged.hasMore) item(key = "more-$showEnded-${paged.items.size}") {
                     LaunchedEffect(Unit) { paged.more() }
                     MarksyLoader("Loading more…")
+                }
+                if (!showEnded && sections.invalidated.isNotEmpty()) {
+                    val n = sections.invalidated.size
+                    item(key = "invalidated-fold") {
+                        FoldRow(
+                            "Invalidated before entry",
+                            "$n call${if (n == 1) "" else "s"}${if (closed.hasMore) " so far" else ""} · voided before entry, so excluded from scored results",
+                            invalidatedOpen
+                        ) { invalidatedOpen = !invalidatedOpen }
+                    }
+                    if (invalidatedOpen) items(sections.invalidated, key = { "i-${it.row.id}" }) { c -> ClosedCallRow(c.row, c.predictions) { onOpenStock(c.row.symbol) } }
                 }
             }
         }
@@ -235,8 +252,22 @@ private fun CallRange(stop: Double, entry: Double, target: Double, price: Double
     }
 }
 
+/** One ledger call and how many predictions the ledger merged into it (a MERGED_DUPLICATE follower reads the tip it follows). */
+internal data class ClosedCall(val row: ClosedPredictionDto, val predictions: Int)
+
+/** Calls the ledger voided before entry sit apart from the rest, which keep their server order. */
+internal data class ClosedSections(val shown: List<ClosedCall>, val invalidated: List<ClosedCall>)
+
+// Rows fold only on a shared ledger tip id, never on symbol, outcome or return; a row without a ledger stays its own call.
+internal fun closedSections(items: List<ClosedPredictionDto>): ClosedSections {
+    val calls = items.groupBy { c -> c.ledger?.tipId?.takeIf { it.isNotEmpty() }?.let { "t:$it" } ?: "p:${c.id}" }
+        .values.map { ClosedCall(it.first(), it.size) }
+    val (invalidated, shown) = calls.partition { it.row.ledger?.status == LedgerCalls.STATUS_INVALIDATED }
+    return ClosedSections(shown, invalidated)
+}
+
 @Composable
-private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
+private fun ClosedCallRow(c: ClosedPredictionDto, predictions: Int = 1, onClick: () -> Unit) {
     val o = c.outcome.orEmpty().uppercase()
     val tone = c.ledger?.let(LedgerCalls::tone)
     val tint = when {
@@ -255,7 +286,7 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
                 Text(LedgerCalls.closedLabel(c) ?: c.outcome?.let(::words) ?: "Closed", color = tint, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = MarksySpace.Gap))
             }
             Text(
-                listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.let { runCatching { MarksyFormat.day(java.time.LocalDate.parse(it.take(10))) }.getOrDefault(it.take(10)) }, c.excludedReason?.let { "not scored" })
+                listOfNotNull(c.predictedReturn?.let { "called ${returnPct(it)}" }, "${c.horizonDays}-day", c.asOf?.let { runCatching { MarksyFormat.day(java.time.LocalDate.parse(it.take(10))) }.getOrDefault(it.take(10)) }, c.excludedReason?.let { "not scored" }, "$predictions predictions".takeIf { predictions > 1 })
                     .joinToString(" · "),
                 color = MarksyTheme.TextMuted, style = MarksyType.Meta
             )
