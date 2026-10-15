@@ -1,6 +1,6 @@
 # EPIC-040 — Admin Control Plane shell and dashboard
 
-**Status:** IMPLEMENTED 2026-10-15 on local branches (admin-app + marksy-api `feat/ml-admin-control-plane`); admin-app tests not yet run. Audit + contract: [contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md)  
+**Status:** IMPLEMENTED 2026-10-15 on local branches (admin-app + marksy-api `feat/ml-admin-control-plane`); admin-app typecheck, lint, 73/73 vitest and build passed 2026-10-15 (Node 20.18.0) at f3f9e13. Audit + contract: [contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md)  
 **Priority:** P1  
 **Owner:** Admin App; coordinate backend gaps with the ML services repository  
 **Spec:** [ML Admin Control Plane design](../superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)
