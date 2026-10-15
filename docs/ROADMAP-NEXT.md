@@ -27,7 +27,7 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 ## Trust Score & Target Progress workstream (2026-10-15)
 
-This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api #102, marksy-os #143), not deployed. The EPIC-048 real-data shadow run is approved but has not run yet. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api #102, marksy-os #143), not deployed. The EPIC-048 real-data shadow run (2026-10-15) found no improvement, so source reliability stays shadow-only. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
 
 **Numbering note:** these epics were EPIC-036 to EPIC-039 until 2026-10-15. They were renumbered because the play-safe capture epics below already use EPIC-036 to EPIC-040. EPIC-040 is still shared by play-safe capture and the ML admin shell above.
 
