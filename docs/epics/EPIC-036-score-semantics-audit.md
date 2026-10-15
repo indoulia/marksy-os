@@ -1,21 +1,21 @@
-# EPIC-036 — Trust Score vs Prediction Score: audit and contract freeze
+# EPIC-036 — Trust Score vs Target Progress: audit and contract freeze
 
 **Status:** READY FOR AUTONOMOUS EXECUTION  
 **Priority:** P1  
 **Owner:** Cross-repository; contract coordinated from marksy-os  
 **Repositories:** `indoulia/marksy-api`, `indoulia/marksy-os`  
-**Spec:** [Trust and Prediction Score design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
+**Spec:** [Trust Score and Target Progress design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
 
 ## Goal
 
-Confirm and preserve the distinction between entity-level historical Trust Score and per-tip open Prediction Score. Audit before coding because the existing ledger, scorecard and screens are already substantial.
+Confirm and preserve the distinction between entity-level historical Trust Score and per-open-tip Target Progress (the 0–100 position between stop-loss and target; not a probability). "Prediction Score" is reserved for a future evidence-calibrated estimate and is not built by this workstream. Audit before coding because the existing ledger, scorecard and screens are already substantial.
 
 ## Stories (4; maximum 5)
 
 ### S1 — Audit existing backend score paths
-Inspect `app/tip_scorecard.py`, `app/tip_scorecard_query.py`, scorecard routes/schemas, `app/prediction_trust_score.py`, active/closed prediction routes, tip tracker and relevant tests. Record which code calculates each score and its subject.
+Inspect `app/tip_scorecard.py`, `app/tip_scorecard_query.py`, scorecard routes/schemas, `app/prediction_trust_score.py`, active/closed prediction routes, tip tracker and relevant tests. Record which code calculates each score and its subject, including the existing `POS-001` prediction opportunity score and `OPR-001` composite score (`docs/api/SCORE-METRICS.md`).
 
-**Acceptance:** a path-level gap matrix distinguishes canonical-tip Trust Score, Marksy/model-level prediction trust, model confidence/rating, current return and the proposed open-tip Prediction Score.
+**Acceptance:** a path-level gap matrix distinguishes canonical-tip Trust Score, Marksy/model-level prediction trust, prediction/composite opportunity scores, model confidence/rating, current return, risk–reward and the proposed open-tip Target Progress.
 
 ### S2 — Audit existing Android integration
 Inspect `TrustScreen.kt`, `ScorecardsView.kt`, `PredictionsView.kt`, DTOs, repository methods and existing tests.
@@ -23,7 +23,7 @@ Inspect `TrustScreen.kt`, `ScorecardsView.kt`, `PredictionsView.kt`, DTOs, repos
 **Acceptance:** existing working screens/components are identified for reuse; no duplicate screen or navigation is proposed.
 
 ### S3 — Freeze score semantics and response contract
-Use the existing `SCR-001` Wilson lower-bound Trust Score as baseline. Specify open-tip score inputs, status, freshness, unavailable reasons and version. Reuse current routes when possible.
+Use the existing `SCR-001` Wilson lower-bound Trust Score as baseline. Specify Target Progress inputs, status, freshness, unavailable reasons and version, under names that say "target progress", never "prediction score". Reuse current routes when possible.
 
 **Acceptance:** contract documents subject, units, as-of semantics, invalid states, compatibility behavior and no-look-ahead rules.
 
@@ -34,4 +34,4 @@ Cover entity vs tip identity, open tips excluded from historical trust, sample s
 
 ## Non-goals
 
-No new Trust Score algorithm; no production ranking or publish-gate change; no screen redesign; no schema migration unless proven necessary by the audit.
+No new Trust Score algorithm; no probability-based Prediction Score; no production ranking or publish-gate change; no screen redesign; no schema migration unless proven necessary by the audit.

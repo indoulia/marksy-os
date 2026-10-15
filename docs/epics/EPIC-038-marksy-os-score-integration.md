@@ -1,14 +1,14 @@
-# EPIC-038 — Marksy OS Trust and Prediction Score integration
+# EPIC-038 — Marksy OS Trust Score and Target Progress integration
 
 **Status:** READY FOR AUTONOMOUS EXECUTION  
 **Priority:** P1  
 **Owner:** marksy-os  
 **Depends on:** EPIC-036 contract freeze and EPIC-037 API contract  
-**Spec:** [Trust and Prediction Score design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
+**Spec:** [Trust Score and Target Progress design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
 
 ## Goal
 
-Show the backend's entity Trust Score and individual open-tip Prediction Score in existing screens, without duplicating formulas or redesigning the app.
+Show the backend's entity Trust Score and individual open-tip Target Progress in existing screens, without duplicating formulas or redesigning the app.
 
 ## Stories (5)
 
@@ -22,13 +22,13 @@ Reuse `TrustScreen.kt` and `ScorecardsView.kt`. Ensure supported channel/source/
 
 **Acceptance:** trust score is never computed from currently open tips; sample counts and unavailable states match API results.
 
-### S3 — Add per-open-tip Prediction Score to Predictions
-Reuse `PredictionsView.kt` and existing open-tip models. Show Prediction Score only for eligible open tips, with a compact explanation: current price position between stop-loss and target, not probability of success.
+### S3 — Add per-open-tip Target Progress to Predictions
+Reuse `PredictionsView.kt` and existing open-tip models. Show Target Progress, labelled "Target progress", only for eligible open tips, with a compact explanation: current price position between stop-loss and target, not probability of success; a new tip starts at its entry's position. Never label anything "Prediction Score".
 
-**Acceptance:** current return remains a separate field; closed/invalidated/duplicate tips do not show a live score.
+**Acceptance:** current return and risk–reward remain separate; closed/invalidated/duplicate tips do not show a live value.
 
 ### S4 — Handle real-world states
-Show explicit loading, stale-price, insufficient-terms, unavailable-price, API-error and closed-tip states. Do not show 0 as a fallback for missing score and do not use sample/demo values in production paths.
+Show explicit loading, stale-price, insufficient-terms, unavailable-price, API-error and closed-tip states. Do not show 0 as a fallback for missing Target Progress and do not use sample/demo values in production paths.
 
 **Acceptance:** UI tests cover each state and verify stale data is labelled with its timestamp.
 
@@ -39,4 +39,4 @@ Run relevant JVM/unit tests and the full test suite, assemble debug APK, and per
 
 ## Non-goals
 
-No new tab, navigation redesign, trading execution, or client-side scoring algorithm.
+No new tab, navigation redesign, trading execution, client-side scoring algorithm, or Prediction Score display.
