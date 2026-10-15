@@ -4048,6 +4048,19 @@ OUT="$SCRATCH/survey-run.sh"
 
 Any failed criterion → **stop and report options to the user**. Do not adjust the migration by judgement.
 
+**Record, 2026-10-15 at about 05:15 UTC: PASS.**
+- Read-only `on`; `server_version` 16.15, so `PG_MAJOR` = 16; `alembic_version` = `0192_tip_entry_check`.
+- `move_set`: DATA_UNRESOLVED/UNRESOLVED_SYMBOL 2, PENDING_CHECK 2, so M = 4.
+- These returned 0 rows: `move_set_stray`, `followers`, `stranded_duplicates`, `unexpected_merged_or_revised`, `unhandled_references`, `preflight_outside_move_set`.
+- `handled_references`: tip_receipts 4, external_tip_comparisons 1, external_tip_outcomes 0. `null_status_rows`: 0, with 0 carrying a reason.
+- Checksums:
+  - `move_set_checksum`: 4 rows, jsonb `3dec3cbd21a4b695d43e9bff8a7e8235`, text `91af30c5e84f292bf588bdda585760c3`;
+  - `receipt_link_checksum`: 4, `dc81afd6a8433c8bec03fe27efd36330`;
+  - `tips_checksum`: 2,286, `704b005d1b0a67cffbb5da9bc116b6bd`.
+- `closed_not_first_seen` 0.
+- `claimed_time_formats`: 64 ZONED (by channel: 3 on 4, 60 on 14, 1 on 16), 2,210 ABSENT, 0 without a zone. CT3 is final on this evidence (spec §4).
+- `verify_scope_counts`: 15 channels, 2 callers, 3 customers, 21 scorecard calls.
+
 ### G4 — backup and restore test (on the VPS; separate approval)
 
 Nothing from production is copied to the laptop (D7). The user runs these after approving G4. Run the survey's `session_settings` and three checksum statements together inside one `BEGIN TRANSACTION READ ONLY` … `ROLLBACK` (the TimeZone/DateStyle pin does not carry across separate psql sessions) immediately before and after the dumps; if the two differ (a write landed), repeat. Run the restore pod's checksums the same way. In the postgres pod, written to the pod's `/tmp` (exec streams reset after ~5 min):
@@ -4107,6 +4120,14 @@ DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migrat
    - take the preserving dump, and list the records with the R3 rules;
    - restore the "backup" into a fresh database.
    Pass: every listed record is absent from the restore and present in the preserving dump, and no record created after the snapshot is missing from the list.
+   Automated as `tests/test_tip_intake_review_recovery_pg.py`. It uses PostgreSQL template copies (`CREATE DATABASE … TEMPLATE`) for the backup, the preserving dump and the restore; G4 covers the pg_dump/pg_restore mechanics.
+
+**Record, 2026-10-15 (local PostgreSQL 16.14, synthetic data only): PASS.**
+- Step 1: the fixtures cover every G3 category (DATA_UNRESOLVED/UNRESOLVED_SYMBOL, PENDING_CHECK, receipts, comparisons) and more. Nothing was added.
+- Step 2: 95 passed, 0 skipped, at c3c3648.
+- Step 3: the recovery rehearsal passes, with the module set at 96 passed and 0 skipped, at a92b68b and again at 45e5401 (closed-session pricing fix).
+  - The list matches exactly the rows gained after deploy: 1 tip, 2 receipts, 1 item and 2 events.
+  - The restore is byte-identical to the backup.
 
 Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and confirm no rehearsal database or dump remains.
 
@@ -4132,6 +4153,16 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
   - **Defer CT8 until the receipt minute's bar is final**, keeping the call queued with no tip until then. The finished bar's high and low include moments after R, which can only reject the claim (T = R), never accept it. P_R must come from that minute's open. `covering_price` will not do, because in the second half of the minute it reads the finished bar's close, which comes after R. With P_R from the open, the anti-hindsight guarantee holds. It needs its own spec amendment, TDD and review before G6.
   - **Not acceptable:** ending W at the last finished minute. That would leave the final seconds before R unchecked, which silently weakens CT8.
 - `INCONCLUSIVE`, or `AUTH` or `THROTTLED` outcomes: rerun later. Never conclude from a failed run.
+
+**Record, run 1, 2026-10-15, 10:42–10:45 IST: `NO_CURRENT_DAY_BARS`.**
+- Of 13 samples, 12 got HTTP 200 with 0 candles and 1 failed with a ConnectError.
+- The historical endpoint has no current-day bars at all, so the deployed in-hours entry check also never gets a live price, and such calls stay PENDING_CHECK until the tracker prices them.
+- Response: marksy-api #98 adds Upstox V3 Intraday Candle Data for today behind `UPSTOX_INTRADAY_CANDLES`. Its cost is UNKNOWN because Upstox's docs state none, so it stays inert.
+- **G6 prerequisite:**
+  1. the owner confirms the pricing, and the entry flips to COST_FREE with a source;
+  2. the change is deployed;
+  3. this check runs again on the intraday path and shows the minute R falls in present at admission.
+  Until then, G6 is blocked.
 
 ### G6 — production (user approval required; this plan grants none)
 
@@ -4172,11 +4203,12 @@ It also aborts if a restored row would differ by one byte from the checksum reco
 - A downgrade that cannot restore exactly aborts.
 - On a fresh database, downgrade then upgrade round-trips cleanly.
 - Separately, the user tested the Google Drive backup restore end to end on 2026-10-14.
+- Route 3's preserve-and-reconcile listing, R2–R3, is rehearsed on synthetic data (G5 step 3, PASS 2026-10-15).
 
 **Not tested.**
 - The production steps of route 1.
 - Any forward fix of 0193.
-- The preserve-and-reconcile steps of route 3, until G5 step 3 rehearses R2–R3 on synthetic data.
+- R5's re-entry of preserved receipts. There is no tooling for it yet.
 
 **Route 1, downgrade (only before new-format data exists).**
 1. Stop every writer on the new image. Roll the API deployment back to the previous image, and suspend the CronJobs that run the new image (`kubectl -n market-agent get cronjobs`). Old pods on the 0193 schema return 500 on failing intakes (step 1a) and write no new-format data.
@@ -4199,5 +4231,6 @@ It also aborts if a restored row would differ by one byte from the checksum reco
   - every queue item and event not MIGRATED;
   - rows other tables gained after `takenAt`.
   This is a superset, because the snapshot precedes the backup. Keep the ids and counts on the VPS.
+  `python -m scripts.tip_intake_review_verify reconcile --pre pre.json` lists the first four by id, in one read-only transaction. Other tables written after `takenAt` (other jobs' output) need their own listing.
 - R4. Restore from the on-node copy first, or from Google Drive via `scripts/restore_from_offsite.py` if the node is lost. The disaster-recovery runbook the backup notes cite is not in the repo; write it down before relying on route 3. Then redeploy the previous image, because the restored database is at 0192.
 - R5. Reconcile from the preserved dump before reopening intake. No reconciliation tooling exists yet. Build it and test it on synthetic data before any restore that would drop real records. Receipts re-enter through the normal intake, whose source-reference idempotency stops duplicates; never by copying rows. Queue decisions that have no 0192 form are recorded in a reconciliation note.
