@@ -4098,6 +4098,16 @@ DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migrat
 - Every test passes and **0 are skipped** (a skip means no PostgreSQL was reached): upgrade moves exactly M verbatim; each unhandled reference aborts with nothing left behind; downgrade restores ids, rows, receipt links and `legacy_rows` with checksums equal to the pre-upgrade values; downgrade refuses after post-0193 data; scorecard counts unchanged; migrated pending Decimals exact; verify `snapshot`/`check` clean and tampering caught.
 - Fixture timings are not a production estimate. G3's move-set size bounds the work (a few hundred rows plus one CHECK scan of `tips`), far under the deploy's 300 s migrate-Job wait.
 
+3. **Recovery rehearsal** (G6 route 3, R2–R3), on a throwaway rehearsal database seeded with synthetic data:
+   - dump it at 0192 as the "backup";
+   - take `snapshot`;
+   - upgrade to 0193;
+   - create post-deploy records through the app: a queued failing call, a dismiss, and an admitted tip with a verified claimed time;
+   - confirm the downgrade refuses;
+   - take the preserving dump, and list the records with the R3 rules;
+   - restore the "backup" into a fresh database.
+   Pass: every listed record is absent from the restore and present in the preserving dump, and no record created after the snapshot is missing from the list.
+
 Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and confirm no rehearsal database or dump remains.
 
 ### G6 — production (user approval required; this plan grants none)
@@ -4120,5 +4130,51 @@ Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and con
    - Any problem → stop. Two rare causes to investigate while stopped:
      - a transaction in flight at the snapshot instant that committed a lower id later shows as a named scorecard problem;
      - a later copy that fills the caller of a tip or migrated item the snapshot saw changes a `caller:<id>` card.
-   - `check` needs a `pre.json` taken with this branch's script; an older one fails with `KeyError: 'maxTipId'`. `alembic downgrade 0192_tip_entry_check` is safe only while the queue holds nothing but migrated rows. After that, roll forward or restore the step 2a backup (on-node copy first, Google Drive via `scripts/restore_from_offsite.py` if the node is lost).
+   - `check` needs a `pre.json` taken with this branch's script; an older one fails with `KeyError: 'maxTipId'`.
+   - On a problem, choose a route from **Rollback limits and recovery** below.
 6. Merge and deploy the admin-app PR. Then open Intake Review and check that the Rejected tab shows the G3 `move_set` counts.
+
+#### Rollback limits and recovery (read before approving G6)
+
+**Downgrade stops working once new-format data arrives.** `alembic downgrade 0192_tip_entry_check` is an exact inverse only while the database holds nothing that 0192 cannot represent. It refuses as soon as any of these exist; when it refuses, it changes nothing and the database stays at 0193:
+- a queue item 0193 did not migrate. Every failing or pending call after deploy creates one, so expect this within the first trading hour.
+- a history event other than MIGRATED: a resubmit, dismiss, receipt attach or RECHECKED fill.
+- any change to a migrated item: a decision, a promotion, a first-seen fill or a claimed time.
+- a tip with a claimed time, a claimed-time source, an `intake_review_id`, or a scoring basis other than SERVER_RECEIPT.
+It also aborts if a restored row would differ by one byte from the checksum recorded at upgrade.
+
+**Tested.** These run in this branch's PostgreSQL suite, with 0 skipped:
+- With only migrated rows, downgrade restores ids, rows, receipt links, legacy rows and checksums exactly.
+- For each of the 8 post-0193 data kinds, downgrade refuses and leaves the database byte-identical at 0193.
+- A downgrade that cannot restore exactly aborts.
+- On a fresh database, downgrade then upgrade round-trips cleanly.
+- Separately, the user tested the Google Drive backup restore end to end on 2026-10-14.
+
+**Not tested.**
+- The production steps of route 1.
+- Any forward fix of 0193.
+- The preserve-and-reconcile steps of route 3, until G5 step 3 rehearses R2–R3 on synthetic data.
+
+**Route 1, downgrade (only before new-format data exists).**
+1. Stop every writer on the new image. Roll the API deployment back to the previous image, and suspend the CronJobs that run the new image (`kubectl -n market-agent get cronjobs`). Old pods on the 0193 schema return 500 on failing intakes (step 1a) and write no new-format data.
+2. Run `alembic downgrade 0192_tip_entry_check` from a one-off pod on the new image, the way the deploy's migrate Job runs it. Only the new image carries 0193's downgrade.
+3. If it refuses, nothing changed; go to route 2. If it succeeds, resume the CronJobs on the previous image.
+
+**Route 2, forward fix (the default once new-format data exists).**
+- Keep 0193 running and fix the defect in code. Add a migration (0194) only if stored data needs repair, and audit every repaired row with a history event, as for every queue edit.
+- The fix follows this PR's path: TDD, the PostgreSQL suite with 0 skipped, a local rehearsal on synthetic data, then a user-approved merge and deploy with `snapshot` before and `check` after.
+- Meanwhile, wrongly queued calls wait in review and nothing is lost. Tips admitted since deploy are the ids above the snapshot's `maxTipId`.
+
+**Route 3, restore the step 2a backup (last resort).** A restore rewinds the whole database to the backup instant. Every later write in every table is lost: tips, receipts, progress, queue items, admin decisions, and every other job's output. Before any restore:
+- R1. Freeze writers: scale the API to 0 and suspend every CronJob, so that the preserved copy is final.
+- R2. Preserve the current database. Run a full `pg_dump -Fc` in the postgres pod, copy it to `~/backups/post-0193-<UTC timestamp>.dump` on the VPS, and compare `sha256sum`.
+  - Do not use `market-agent-backup` for this. Its `backup_id` is the UTC date, so a run on the step 2a day reports `REUSED` and stores nothing.
+  - Never copy the dump to the laptop (D7).
+- R3. List what must be reconciled, using the snapshot marks:
+  - tips with id > `maxTipId`;
+  - receipts with id > `maxReceiptId`;
+  - every queue item and event not MIGRATED;
+  - rows other tables gained after `takenAt`.
+  This is a superset, because the snapshot precedes the backup. Keep the ids and counts on the VPS.
+- R4. Restore from the on-node copy first, or from Google Drive via `scripts/restore_from_offsite.py` if the node is lost. The disaster-recovery runbook the backup notes cite is not in the repo; write it down before relying on route 3. Then redeploy the previous image, because the restored database is at 0192.
+- R5. Reconcile from the preserved dump before reopening intake. No reconciliation tooling exists yet. Build it and test it on synthetic data before any restore that would drop real records. Receipts re-enter through the normal intake, whose source-reference idempotency stops duplicates; never by copying rows. Queue decisions that have no 0192 form are recorded in a reconciliation note.
