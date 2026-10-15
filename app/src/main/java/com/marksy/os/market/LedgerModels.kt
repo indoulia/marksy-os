@@ -35,7 +35,9 @@ data class ProgressPointDto(
     val toTargetPct: Double?,
     val toStopPct: Double?,
     val barBasis: String,
-    val dataBasis: String
+    val dataBasis: String,
+    /** That session's close; null from a backend before the revamp API. */
+    val close: Double? = null
 ) {
     companion object {
         fun parse(json: JSONObject) = ProgressPointDto(
@@ -49,7 +51,46 @@ data class ProgressPointDto(
             toTargetPct = json.doubleOrNull("toTargetPct"),
             toStopPct = json.doubleOrNull("toStopPct"),
             barBasis = json.textOrNull("barBasis") ?: "",
-            dataBasis = json.textOrNull("dataBasis") ?: ""
+            dataBasis = json.textOrNull("dataBasis") ?: "",
+            close = json.doubleOrNull("close")
+        )
+
+        /** `GET /tips/{id}/progress`: the list under `data`, or under `data.progress`. */
+        fun parseList(envelope: JSONObject): List<ProgressPointDto> =
+            (envelope.optJSONArray("data") ?: envelope.optJSONObject("data")?.optJSONArray("progress")).ledgerObjects().map(::parse)
+    }
+}
+
+/** Marksy's own read of a tip; `probability` is 0–1. */
+data class MarksyViewDto(val probability: Double?, val verdict: String?, val comparedAt: String?) {
+    companion object {
+        fun parse(json: JSONObject) = MarksyViewDto(json.doubleOrNull("probability"), json.textOrNull("verdict"), json.textOrNull("comparedAt"))
+    }
+}
+
+/** The same tip from another source, or from the same source on another day. */
+data class AlsoTippedDto(
+    val tipId: String,
+    val channel: ChannelRefDto?,
+    val caller: CallerRefDto?,
+    val firstSeenAt: String,
+    val recommendedPrice: Double?,
+    val status: String,
+    val entryStatus: String?,
+    val returnToDate: Double?,
+    val actualReturn: Double?
+) {
+    companion object {
+        fun parse(json: JSONObject) = AlsoTippedDto(
+            tipId = json.textOrNull("tipId") ?: "",
+            channel = json.optJSONObject("channel")?.let(ChannelRefDto::parse),
+            caller = json.optJSONObject("caller")?.let(CallerRefDto::parse),
+            firstSeenAt = json.textOrNull("firstSeenAt") ?: "",
+            recommendedPrice = json.doubleOrNull("recommendedPrice"),
+            status = json.textOrNull("status") ?: "",
+            entryStatus = json.textOrNull("entryStatus"),
+            returnToDate = json.doubleOrNull("returnToDate"),
+            actualReturn = json.doubleOrNull("actualReturn")
         )
     }
 }
@@ -117,7 +158,17 @@ data class LedgerTipDto(
     val caller: CallerRefDto?,
     val latestProgress: ProgressPointDto?,
     /** Null from a backend before `TPR-001`. */
-    val targetProgress: TargetProgressDto? = null
+    val targetProgress: TargetProgressDto? = null,
+    // Revamp API fields; each is null (or empty) from an older backend.
+    val recommendedPrice: Double? = null,
+    val enteredPrice: Double? = null,
+    val enteredOn: String? = null,
+    val buyBy: String? = null,
+    val horizonEndsOn: String? = null,
+    val sessionsElapsed: Int? = null,
+    val marksyView: MarksyViewDto? = null,
+    val repeats: Int? = null,
+    val alsoBy: List<AlsoTippedDto> = emptyList()
 ) {
     companion object {
         fun parse(json: JSONObject) = LedgerTipDto(
@@ -146,7 +197,16 @@ data class LedgerTipDto(
             channel = json.optJSONObject("channel")?.let(ChannelRefDto::parse),
             caller = json.optJSONObject("caller")?.let(CallerRefDto::parse),
             latestProgress = json.optJSONObject("latestProgress")?.let(ProgressPointDto::parse),
-            targetProgress = json.optJSONObject("targetProgress")?.let(TargetProgressDto::parse)
+            targetProgress = json.optJSONObject("targetProgress")?.let(TargetProgressDto::parse),
+            recommendedPrice = json.doubleOrNull("recommendedPrice"),
+            enteredPrice = json.doubleOrNull("enteredPrice"),
+            enteredOn = json.textOrNull("enteredOn"),
+            buyBy = json.textOrNull("buyBy"),
+            horizonEndsOn = json.textOrNull("horizonEndsOn"),
+            sessionsElapsed = json.intOrNull("sessionsElapsed"),
+            marksyView = json.optJSONObject("marksyView")?.let(MarksyViewDto::parse),
+            repeats = json.intOrNull("repeats"),
+            alsoBy = json.optJSONArray("alsoBy").ledgerObjects().map(AlsoTippedDto::parse)
         )
     }
 }
