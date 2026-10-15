@@ -11,6 +11,19 @@ V6 — Personal Intelligence
 
 The objective is to strengthen the existing Marksy architecture and intelligence pipeline rather than continuously creating unrelated UI surfaces.
 
+## Trust & Prediction Score workstream (2026-10-15)
+
+This is a reuse-first cross-repository workstream. It is implementation-ready but has **not been executed**. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+
+- **EPIC-036 — Audit and freeze semantics:** [epic](epics/EPIC-036-score-semantics-audit.md)
+- **EPIC-037 — Per-open-tip Prediction Score API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
+- **EPIC-038 — Marksy OS integration:** [epic](epics/EPIC-038-marksy-os-score-integration.md)
+- **EPIC-039 — Historical source-reliability shadow evaluation:** [OS coordination epic](epics/EPIC-039-source-reliability-shadow-evaluation.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)
+
+**Design:** [Trust and Prediction Score engine](superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md) · **Execution plan:** [ordered cross-repo plan](superpowers/plans/2026-10-15-trust-and-prediction-score-engine.md).
+
+Audit found that the existing API already implements the `SCR-001` Wilson-lower-bound Trust Score, canonical tip scorecards, and the API/OS already contain Trust and Predictions screens. Therefore this work must extend only demonstrated gaps: do not create a second Trust Score, do not confuse `app/prediction_trust_score.py` with an individual tip score, and do not redesign existing screens. Historical source reliability remains shadow-only until a separate evidence-based decision approves any production use.
+
 ## Status (2026-09-27)
 
 This covers the Android app (this repo) only. Backend work in `marksy-api` is tracked there. 559 unit tests pass.
