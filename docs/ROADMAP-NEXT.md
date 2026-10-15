@@ -27,7 +27,7 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 ## Trust Score & Target Progress workstream (2026-10-15)
 
-This is a reuse-first cross-repository workstream. Implemented 2026-10-15 on `feat/trust-target-progress` in both repos (not merged or deployed); the EPIC-039 real-data shadow run awaits owner approval. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api #102, marksy-os #143), not deployed. The EPIC-039 real-data shadow run is approved but has not run yet. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
 
 **Numbering note:** EPIC-036 to EPIC-039 here are the score epics in `docs/epics/`. The same numbers, plus EPIC-040, also name the earlier play-safe capture epics (sections below, `docs/CAPTURE-ARCHITECTURE.md` and code comments). EPIC-040 also names the ML admin shell above. Nothing is renumbered, so cite these as "score EPIC-03x", "capture EPIC-03x" or "ML admin EPIC-040".
 
@@ -358,7 +358,7 @@ Acceptance: metrics are automatically collected; available by day and by source;
 - Marksy interpretation never overwrites or masquerades as provider facts.
 - News links resolve to the original/source destination when available.
 - No fabricated fundamentals, news, corporate events or sentiment are shown.
-- EPIC-036 to EPIC-040 Play-safe capture: implemented on branch `feat/play-safe-capture`, not merged. Device-verified (OnePlus 12R, Android 16, Phases A and B build): migration 8 to 9 on real data, share target, real ML Kit OCR on shared screenshots (EXTRACTED, REVIEW_REQUIRED, not-a-tip, duplicate, one-time-code drop), log leak check, permission diff. Unit-tested only: gateway, delivery policy, retention, frame inspector, session controller, UI wiring. Not yet on device: Photo Picker, MediaProjection, FLAG_SECURE, review dialog. See `docs/CAPTURE-ARCHITECTURE.md`.
+- EPIC-036 to EPIC-040 Play-safe capture: merged 2026-10-15 in PR #136. Device-verified (OnePlus 12R, Android 16, Phases A and B build): migration 8 to 9 on real data, share target, real ML Kit OCR on shared screenshots (EXTRACTED, REVIEW_REQUIRED, not-a-tip, duplicate, one-time-code drop), log leak check, permission diff. Unit-tested only: gateway, delivery policy, retention, frame inspector, session controller, UI wiring. Not yet on device: Photo Picker, MediaProjection, FLAG_SECURE, review dialog. See `docs/CAPTURE-ARCHITECTURE.md`.
 
 ## EPIC-034 — Market Intelligence Experience & Realtime Hardening
 

@@ -2,7 +2,7 @@
 
 > Path keeps its original `prediction-score` slug so links do not break; the metric is Target Progress (terminology decision 2026-10-15).
 
-**Status:** DONE 2026-10-15 in marksy-api `feat/trust-target-progress` (not merged or deployed)  
+**Status:** DONE 2026-10-15; merged in marksy-api #102, not deployed  
 **Priority:** P1  
 **Owner:** Backend implementation in marksy-api; coordinated by this Marksy OS epic  
 **Authoritative backend checklist:** [marksy-api EPIC-854](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)  
