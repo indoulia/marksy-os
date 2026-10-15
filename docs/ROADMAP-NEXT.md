@@ -11,6 +11,20 @@ V6 — Personal Intelligence
 
 The objective is to strengthen the existing Marksy architecture and intelligence pipeline rather than continuously creating unrelated UI surfaces.
 
+## ML Admin Control Plane workstream (2026-10-15)
+
+The static reference artifact `marksy_ml_admin_control_plane.html` was created earlier as a visual prototype. Its sample values are illustrative only. The implementation-ready coordination spec and ordered epics now live here; no Admin UI implementation is implied by these documents.
+
+- **Design:** [ML Admin Control Plane](superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)
+- **Execution plan:** [ordered implementation plan](superpowers/plans/2026-10-15-marksy-ml-admin-control-plane.md)
+- **EPIC-040 — Admin shell, service boundary and dashboard:** [epic](epics/EPIC-040-admin-control-plane-shell-dashboard.md)
+- **EPIC-041 — Model registry and training runs:** [epic](epics/EPIC-041-model-registry-training-runs-admin-ui.md)
+- **EPIC-042 — Learning and research workspace:** [epic](epics/EPIC-042-learning-research-model-lab-evaluation.md)
+- **EPIC-043 — Datasets and data quality:** [epic](epics/EPIC-043-datasets-data-quality-admin-ui.md)
+- **EPIC-044 — Promotion/SPG governance and audit:** [epic](epics/EPIC-044-promotion-spg-audit-admin-ui.md)
+
+**Non-negotiable boundary:** Admin App → supported ML services/API → `marksy_ml`. No direct database access or ad-hoc UI API calls. Production eligibility and publication remain controlled by SPG-001. First implementation step is to locate the actual Admin App repository and audit the existing service contracts; missing capabilities must be recorded as dependencies, not faked or bypassed.
+
 ## Trust & Prediction Score workstream (2026-10-15)
 
 This is a reuse-first cross-repository workstream. It is implementation-ready but has **not been executed**. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
