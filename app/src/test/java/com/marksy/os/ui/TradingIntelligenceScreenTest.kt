@@ -3,6 +3,8 @@ package com.marksy.os.ui
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -112,15 +114,26 @@ class TradingIntelligenceScreenTest {
         assertEquals(listOf("ACTIVE", "CLOSED"), requested)
     }
 
-    // The server's track record counts calls by call date and divides every share by all closed calls, unevaluable ones too.
+    // The server's track record counts calls by call date, judges them by price and divides every share by all closed calls.
     @Test
     fun trackRecordWordingMatchesTheServerCalculation() {
         val s = PerformanceSummaryDto("30d", 40, 18, 0.39, 0.33, 0.22, 0.0047, smallSample = true)
         assertEquals("30 days of calls · 18 closed · small sample", trackRecordPeriod(s))
-        assertEquals("Each share is of all 18 closed calls, unevaluable ones included · avg return is their mean realised return", trackRecordNote(s))
+        assertEquals("Each share is of all 18 closed calls, judged by price; unevaluable ones count in N · avg return is their mean price return", trackRecordNote(s))
         val one = s.copy(closedCount = 1, smallSample = false)
         assertEquals("30 days of calls · 1 closed", trackRecordPeriod(one))
-        assertEquals("Each share is of all 1 closed call, unevaluable ones included · avg return is their mean realised return", trackRecordNote(one))
+        assertEquals("Each share is of all 1 closed call, judged by price; unevaluable ones count in N · avg return is their mean price return", trackRecordNote(one))
+    }
+
+    // Regression (device, 2026-10-15): Inbox's long filter list plus Captured's options pushed Close and Add screenshot off screen.
+    @Test
+    fun capturedFilterPanelLeavesItsButtonsOnScreen() {
+        compose.setContent { CapturedInboxView(emptyList(), PaddingValues(), {}, {}, {}, {}, {}, false, {}, CaptureInbox()) }
+        compose.onNodeWithContentDescription("Filters").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Close filters").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Add screenshot").assertIsDisplayed()
     }
 
     @Test

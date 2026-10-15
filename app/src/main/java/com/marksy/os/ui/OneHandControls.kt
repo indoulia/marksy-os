@@ -106,7 +106,8 @@ fun BoxScope.OneHandControls(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
     ) {
-        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras) { onFilterSelected(it); filtersOpen = false }
+        // The panel gets only the height the buttons leave and scrolls within it, so a long list never pushes Close off screen.
+        if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, filterExtras, Modifier.weight(1f, fill = false)) { onFilterSelected(it); filtersOpen = false }
         if (filters.isNotEmpty()) {
             // Always opens the list so filters switch in place; the dot marks one applied, the list's default resets it.
             FloatingRoundButton(if (filtersOpen) Icons.Default.Close else Icons.Default.FilterList, if (filtersOpen) "Close filters" else "Filters", filterActive && !filtersOpen) {
@@ -161,9 +162,12 @@ private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
 }
 
 @Composable
-private fun FloatingMenuPanel(options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, extras: (@Composable () -> Unit)? = null, onPick: (String) -> Unit) {
+private fun FloatingMenuPanel(
+    options: List<Pair<String, String>>, selected: String?, align: Alignment.Horizontal, extras: (@Composable () -> Unit)? = null,
+    modifier: Modifier = Modifier, onPick: (String) -> Unit
+) {
     Column(
-        Modifier
+        modifier
             .shadow(10.dp, MarksyShape.Panel)
             .clip(MarksyShape.Panel)
             .background(MarksyTheme.SurfaceRaised)

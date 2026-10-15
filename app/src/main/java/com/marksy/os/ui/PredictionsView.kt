@@ -129,9 +129,9 @@ private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
 // The server's window is on the call date (`as_of_timestamp`), not the close date.
 internal fun trackRecordPeriod(s: PerformanceSummaryDto) = "${s.range.replace("d", " days")} of calls · ${s.closedCount} closed" + if (s.smallSample) " · small sample" else ""
 
-// The server divides each share by every closed call, unevaluable ones too, so the shares need not add to 100%; its average spans the same calls.
+// The server judges every closed call by price from its scan-close entry and divides each share by all of them, unevaluable ones too.
 internal fun trackRecordNote(s: PerformanceSummaryDto) =
-    "Each share is of all ${s.closedCount} closed call${if (s.closedCount == 1) "" else "s"}, unevaluable ones included · avg return is their mean realised return"
+    "Each share is of all ${s.closedCount} closed call${if (s.closedCount == 1) "" else "s"}, judged by price; unevaluable ones count in N · avg return is their mean price return"
 
 @Composable
 private fun Stat(label: String, value: String?, tint: Color) {
