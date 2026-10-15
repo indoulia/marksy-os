@@ -103,6 +103,8 @@ import kotlin.math.roundToInt
 object PortfolioChrome {
     val note = MutableStateFlow<String?>(null)
     val hasHoldings = MutableStateFlow(false)
+    /** Holdings for Market's section grid; null until the page has loaded some. */
+    val holdings = MutableStateFlow<Int?>(null)
 
     // The page leaves composition whenever a stock opens; its choices live here for as long as the app runs.
     internal val metric = mutableStateOf(PortfolioMetric.PERIOD)
@@ -223,6 +225,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
     SideEffect {
         PortfolioChrome.note.value = note
         PortfolioChrome.hasHoldings.value = holdings.isNotEmpty()
+        PortfolioChrome.holdings.value = holdings.size.takeIf { it > 0 }
     }
 
     MarksyRefreshBox(refresh) {

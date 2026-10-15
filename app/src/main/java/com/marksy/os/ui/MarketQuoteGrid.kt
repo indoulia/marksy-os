@@ -65,20 +65,20 @@ internal fun QuoteGrid(items: List<Triple<String, String, Double?>>, watchable: 
 
 /** Advances vs declines as one split bar (green, grey unchanged, red); the split animates as prices tick. */
 @Composable
-internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, modifier: Modifier = Modifier) {
+internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, modifier: Modifier = Modifier, barOnly: Boolean = false) {
     if (b.total == 0) return
     val up by androidx.compose.animation.core.animateFloatAsState(b.advances.toFloat(), label = "adv")
     val flat by androidx.compose.animation.core.animateFloatAsState(b.unchanged.toFloat(), label = "unch")
     val down by androidx.compose.animation.core.animateFloatAsState(b.declines.toFloat(), label = "dec")
     Column(modifier.semantics(mergeDescendants = true) { contentDescription = "$label: ${b.advances} advancing, ${b.declines} declining, ${b.unchanged} unchanged" }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (!barOnly) Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.ArrowDropUp, contentDescription = null, tint = MarksyTheme.Positive, modifier = Modifier.size(MarksySize.Icon))
             Text("${b.advances}", color = MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             Text("$label${if (b.unchanged > 0) " · ${b.unchanged} unch." else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
             Text("${b.declines}", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MarksyTheme.Negative, modifier = Modifier.size(MarksySize.Icon))
         }
-        Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
+        Row(Modifier.fillMaxWidth().padding(top = if (barOnly) MarksySpace.Hair else MarksySpace.Tight).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.Positive))
             if (flat > 0.01f) Box(Modifier.weight(flat).fillMaxHeight().background(MarksyTheme.TextMuted))
             if (down > 0.01f) Box(Modifier.weight(down).fillMaxHeight().background(MarksyTheme.Negative))

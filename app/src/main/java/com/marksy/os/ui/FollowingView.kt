@@ -63,9 +63,12 @@ internal fun rememberFollowToggle(repository: MarketIntelligenceRepository): (Fo
     }
 }
 
-/** Trading › Open · Following: tip alerts (new calls from followed channels, callers and engines; entries; closes), then who is followed. */
+/** Trading › Open · Following: tip alerts (new tips from followed channels, callers and engines; entries; closes), then who is followed. */
 @Composable
-internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
+internal fun FollowingView(
+    repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit,
+    onTrade: (TradeIntent) -> Unit = {}, onScore: (com.marksy.os.market.ScorecardSource) -> Unit = {}
+) {
     val follows by produceState<MarketDataState<FollowListDto>>(MarketDataState.Loading) { value = repository.follows() }
     val alerts by produceState<MarketDataState<List<TipAlertDto>>>(MarketDataState.Loading) { value = repository.tipAlerts() }
     val followed by MarketIntelligenceRepository.followed.collectAsState()
@@ -73,7 +76,9 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
     val scope = rememberCoroutineScope()
     var read by remember { mutableStateOf(emptySet<Long>()) }
     var open by remember { mutableStateOf<String?>(null) }
-    open?.let { id -> TipDetailDialog(repository, id, onOpenStock = { open = null; onOpenStock(it) }) { open = null } }
+    open?.let { id ->
+        TipSheetFor(repository, id, onDismiss = { open = null }, onTrade = { open = null; onTrade(it) }, onOpenStock = { open = null; onOpenStock(it) }, onScore = { open = null; onScore(it) })
+    }
 
     MarksyList(bottom = bottomPadding) {
         (alerts as? MarketDataState.Loaded)?.value?.let { list ->
@@ -91,7 +96,7 @@ internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPaddi
             is MarketDataState.Loading -> item { MarksyLoader("Loading who you follow…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
             is MarketDataState.Error -> item { EmptyState("Your follows are unavailable", f.message) }
-            is MarketDataState.Empty -> item { EmptyState(MyTipsStatus.FOLLOWING.empty, "Follow a channel, caller or engine from Scorecards or a stock's calls to hear about its calls.") }
+            is MarketDataState.Empty -> item { EmptyState("Not following anyone yet", "Follow a channel, caller or engine from Scorecards or a stock's tips to hear about its tips.") }
             is MarketDataState.Loaded -> items(f.value.items, key = { "follow-${it.key.type}-${it.key.id}" }) { item ->
                 FollowRow(item, Follows.isFollowing(followed, item.key, fallback = true)) { toggle(item.key, item.name, it) }
             }
