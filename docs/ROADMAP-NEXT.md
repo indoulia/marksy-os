@@ -27,14 +27,14 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 ## Trust Score & Target Progress workstream (2026-10-15)
 
-This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api #102, marksy-os #143), not deployed. The EPIC-039 real-data shadow run is approved but has not run yet. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api #102, marksy-os #143), not deployed. The EPIC-048 real-data shadow run is approved but has not run yet. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
 
-**Numbering note:** EPIC-036 to EPIC-039 here are the score epics in `docs/epics/`. The same numbers, plus EPIC-040, also name the earlier play-safe capture epics (sections below, `docs/CAPTURE-ARCHITECTURE.md` and code comments). EPIC-040 also names the ML admin shell above. Nothing is renumbered, so cite these as "score EPIC-03x", "capture EPIC-03x" or "ML admin EPIC-040".
+**Numbering note:** these epics were EPIC-036 to EPIC-039 until 2026-10-15. They were renumbered because the play-safe capture epics below already use EPIC-036 to EPIC-040. EPIC-040 is still shared by play-safe capture and the ML admin shell above.
 
-- **EPIC-036 — Audit and freeze semantics:** [epic](epics/EPIC-036-score-semantics-audit.md)
-- **EPIC-037 — Per-open-tip Target Progress API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
-- **EPIC-038 — Marksy OS integration:** [epic](epics/EPIC-038-marksy-os-score-integration.md)
-- **EPIC-039 — Historical source-reliability shadow evaluation:** [OS coordination epic](epics/EPIC-039-source-reliability-shadow-evaluation.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)
+- **EPIC-045 — Audit and freeze semantics:** [epic](epics/EPIC-045-score-semantics-audit.md)
+- **EPIC-046 — Per-open-tip Target Progress API:** [OS coordination epic](epics/EPIC-046-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
+- **EPIC-047 — Marksy OS integration:** [epic](epics/EPIC-047-marksy-os-score-integration.md)
+- **EPIC-048 — Historical source-reliability shadow evaluation:** [OS coordination epic](epics/EPIC-048-source-reliability-shadow-evaluation.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)
 
 **Design:** [Trust Score and Target Progress](superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md) · **Execution plan:** [ordered cross-repo plan](superpowers/plans/2026-10-15-trust-and-prediction-score-engine.md).
 

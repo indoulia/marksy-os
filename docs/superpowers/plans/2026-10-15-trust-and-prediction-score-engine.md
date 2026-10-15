@@ -10,11 +10,11 @@
 
 - `indoulia/marksy-api`: canonical formulas, data access, lifecycle, response contracts, persistence if proven necessary, backend tests.
 - `indoulia/marksy-os`: typed API DTOs/repository integration, existing Trust and Predictions screens, Android tests and UI states.
-- Do not implement the same backend story twice. `docs/epics/EPIC-854-open-tip-prediction-score-api.md` is the authoritative backend checklist for EPIC-037. `docs/epics/EPIC-855-source-reliability-shadow-evaluation.md` is the authoritative backend checklist for EPIC-039.
+- Do not implement the same backend story twice. `docs/epics/EPIC-854-open-tip-prediction-score-api.md` is the authoritative backend checklist for EPIC-046. `docs/epics/EPIC-855-source-reliability-shadow-evaluation.md` is the authoritative backend checklist for EPIC-048.
 
 ## Ordered execution
 
-### EPIC-036 — Audit and freeze score semantics
+### EPIC-045 — Audit and freeze score semantics
 1. Read the spec and current implementation in both repositories, including routes, DTOs, models, tests, migrations, and the existing central tip-ledger design/plan.
 2. Produce a concise gap matrix: already correct / missing / defective, with exact file paths and existing tests. Confirm Trust Score uses the existing `SCR-001` Wilson lower-bound implementation and identify all current meanings of "prediction score" (including `POS-001` prediction opportunity score and `OPR-001` composite score in `docs/api/SCORE-METRICS.md`), "rating", "confidence", and "prediction trust", so Target Progress collides with none of them.
 3. Freeze the response contract and scoring semantics. If a required change conflicts with an existing contract, record the conflict and select the least-invasive compatible behavior; do not stop for routine design choices.
@@ -22,7 +22,7 @@
 
 **Exit gate:** no duplicate scoring engine proposed; API contract and acceptance cases are documented.
 
-### EPIC-037 — Per-tip Target Progress in marksy-api
+### EPIC-046 — Per-tip Target Progress in marksy-api
 1. Execute the implementation checklist in API EPIC-854; reuse the canonical tip ledger and tracker.
 2. Implement Target Progress only when valid geometry and fresh current price exist; return explicit unavailability reasons otherwise.
 3. Preserve existing fields/routes and add response fields only where needed.
@@ -31,7 +31,7 @@
 
 **Exit gate:** API response is deterministic, backward compatible and tested against the actual PostgreSQL deployment engine where required.
 
-### EPIC-038 — Marksy OS integration
+### EPIC-047 — Marksy OS integration
 1. Extend existing scorecard/prediction DTOs and repository parsing; preserve old payload compatibility.
 2. Update the existing Trust screen only if the audit finds a missing field/state. Do not redesign the screen.
 3. Update the existing Predictions screen to show per-tip Target Progress, labelled "Target progress", with a short explanation that it is the price's position between stop-loss and target, not a probability, and that a new tip starts at its entry's position. Keep live return and risk–reward separate.
@@ -40,7 +40,7 @@
 
 **Exit gate:** existing screens show the correct metric for the correct subject, with no client-side formula and no "Prediction Score" label.
 
-### EPIC-039 — Historical source reliability, shadow-only
+### EPIC-048 — Historical source reliability, shadow-only
 1. Execute API EPIC-855; export point-in-time Trust Score/sample-size features from the existing canonical ledger only.
 2. Build chronological walk-forward evaluation that computes each feature using only information available at that historical timestamp.
 3. Compare baseline versus baseline-plus-source-features by horizon and regime; report sample coverage, uncertainty, failures and leakage checks.

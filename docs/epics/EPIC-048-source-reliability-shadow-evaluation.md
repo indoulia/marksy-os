@@ -1,4 +1,6 @@
-# EPIC-039 — Historical source reliability as a shadow prediction feature
+# EPIC-048 — Historical source reliability as a shadow prediction feature
+
+**Formerly:** EPIC-039, renumbered 2026-10-15 because EPIC-039 also names a play-safe capture epic.
 
 **Status:** IMPLEMENTED 2026-10-15 as marksy-api `SRS-001` (shadow-only), merged in marksy-api #102; real-data run approved 2026-10-15, not yet run  
 **Priority:** P2  
