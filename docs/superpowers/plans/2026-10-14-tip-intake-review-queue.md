@@ -4110,6 +4110,29 @@ DATABASE_URL="$PG_TEST_URL" python -m pytest tests/test_tip_intake_review_migrat
 
 Clean up only what was created here: `docker rm -f marksy-pg-0193-test`, and confirm no rehearsal database or dump remains.
 
+### Pre-G6 — Upstox forming-minute check (read-only, live Upstox; separate approval)
+
+**Why.** CT8 verifies a late in-hours claim only if every minute up to receipt has its bar, including the still-forming minute that R falls in (final review I1). Intake reads Upstox `/v3/historical-candle/{key}/minutes/1/{today}/{today}`.
+- If that endpoint returns only finished minutes, every in-hours claim more than 120 s old queues `CLAIMED_TIME_UNVERIFIED`.
+- If it returns no current-day minutes, the same happens.
+- G3 reads past data, so it cannot show which case applies.
+
+**Run** (user, while the market is open). Run it at least twice, at different times of day (e.g. about 10:00 and about 14:30 IST). Each run of `--minutes 4` takes 17 samples in about 5 minutes, which stays under the exec-stream reset.
+```bash
+! cat scripts/upstox_forming_minute_probe.py | ssh marksy@103.178.160.233 "export KUBECONFIG=\$HOME/.kube/config; A=\$(kubectl -n market-agent get pods --field-selector=status.phase=Running -o name | grep -m1 api); F=~/upstox-probe-\$(date -u +%Y%m%dT%H%M).jsonl; tr -d '\r' | kubectl -n market-agent exec -i \$A -- python - --minutes 4 > \$F; tail -1 \$F"
+```
+- **What it touches.** One instrument (RELIANCE, `NSE_EQ|INE002A01018`), today only, at most 17 reads per run. It goes through `UpstoxClient.fetch_minute_candles`, which has a read-only URL guard, so it places no orders and changes no subscriptions.
+- **Credentials.** The credential resolves on a connection whose every transaction is READ ONLY. No credential or error text is printed.
+- **Where results go.** Per-sample lines stay on the VPS. The last line is the summary: `verdict`, `strictCheck`, `outcomes`, `formingPresent`, `changedBeforeClose`, `absentAfterClose` and `limitations`.
+
+**Read the result.**
+- `FORMING_MINUTE_PROVIDED` with `strictCheck` `ALWAYS` in every run: the strict check can pass for a genuine late call. Proceed to G6.
+- `FORMING_MINUTE_NOT_PROVIDED`, `NO_CURRENT_DAY_BARS` or `MIXED`: in-hours late claims will queue. Admission does not change on this result alone, and no-backdating stays. The options are:
+  - **Accept the queueing.** It is safe, but means more admin work, and calls admitted later score from admission.
+  - **Defer CT8 until the receipt minute's bar is final**, keeping the call queued with no tip until then. The finished bar's high and low include moments after R, which can only reject the claim (T = R), never accept it. P_R must come from that minute's open. `covering_price` will not do, because in the second half of the minute it reads the finished bar's close, which comes after R. With P_R from the open, the anti-hindsight guarantee holds. It needs its own spec amendment, TDD and review before G6.
+  - **Not acceptable:** ending W at the last finished minute. That would leave the final seconds before R unchecked, which silently weakens CT8.
+- `INCONCLUSIVE`, or `AUTH` or `THROTTLED` outcomes: rerun later. Never conclude from a failed run.
+
 ### G6 — production (user approval required; this plan grants none)
 
 1. Pick a window clear of tracker and capture jobs: not 08:00–09:00 IST and not 15:30–16:45 IST. It must also fall before that UTC day's 21:00 nightly backup (02:30 IST), so step 2a stores a new archive instead of reusing the day's.
