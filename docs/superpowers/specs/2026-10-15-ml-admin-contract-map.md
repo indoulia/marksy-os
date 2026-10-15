@@ -127,6 +127,7 @@ Lists: `/admin/ml/spg/decisions` and `/admin/ml/audit` are cursor-paginated (`me
 - **TG-001 embargo.** SPG decisions for holdout month 2026-11 are withheld until 2026-12-12 00:00 UTC (after the November exam): excluded from lists, lineage and audit; their detail and `/spg/pairs` return 409 `MRA_EMBARGOED`. The gate outcome itself reveals the held-out result, so it is embargoed too.
 - **No fabricated values.** Missing lineage is listed in `lineageUnavailable` / `metadataUnavailable`; the UI renders "not recorded", never a guess.
 - **Stale is never healthy; a failure is never hidden.** Data-quality `status`: no checks recorded → UNKNOWN; latest validation run FAILED, any REQUIRED violation or any blocking failure → FAILING (outranks STALE); a contract check that missed an expected trading session → STALE; else PASSING. Freshness is trading-calendar aware. Validation-run freshness is reported separately (the script has no CronJob).
+- **Production-only (decision 2026-10-15).** Every screen reads only existing `marksy-api` production sources and labels itself "Source: Marksy API — production records only" with a per-screen scope line. Empty, failed and not-configured are distinct states: an empty result says no production records exist; a 404 on an `/admin/ml` collection route (API not deployed) reads "Not configured"; any other error reads "Failed to load" with the request id. Nothing is synthesised to fill an empty screen.
 - **Mutations** are only the existing `/ops` job start/run-again (server dedupe, cooldown, session actor, event audit). The UI confirms first, disables while pending, never auto-retries, and after a timeout re-reads active runs instead of resubmitting.
 
 ## 6. Remaining backend dependencies (not built here)
@@ -138,3 +139,13 @@ Lists: `/admin/ml/spg/decisions` and `/admin/ml/audit` are cursor-paginated (`me
 5. Server-side research leaderboard with comparability rules.
 6. Promotion/handoff operation that routes through SPG-001.
 7. General admin action audit log with persisted request ids (today only ops triggers and client revocation record an actor).
+
+## 7. Research-results integration — separate future decision (not implemented)
+
+Decision 2026-10-15: `marksy-ml` and its research database stay excluded; this release is production-only. The Admin App and `marksy-api` must not connect to, query, copy or synchronise the research database or its ARP-001/EXP/challenger artifacts.
+
+Showing research results later needs its own approval of:
+
+1. A publishing contract: research publishes a frozen, hashed result bundle to an approved `marksy-api` endpoint or table. The Admin App never reads research storage.
+2. Explicit provenance on every record (`source: RESEARCH | PRODUCTION`, origin run/experiment id, artifact sha256, protocol version), with the UI keeping the two visibly separate.
+3. Protocol rules: no frozen evaluation boundary crossed and no held-out data exposed (ARP-001, TG-001), and a research result never feeds SPG-001 or publication without a separate promotion decision.
