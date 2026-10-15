@@ -147,9 +147,9 @@ class TradingIntelligenceScreenTest {
     @Test
     fun marksyTrackRecordIsThePredictionEngineLedgerScorecard() {
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository(), historyScope = HistoryScope.MARKSY) }
-        awaitText("Last 30 days of calls · 55 completed")
+        awaitText("Last 30 days of calls")
 
-        compose.onNodeWithText("Last 30 days of calls · 55 completed").assertIsDisplayed()
+        compose.onNodeWithText("Last 30 days of calls").assertIsDisplayed()
         compose.onNodeWithText("Succeeded").assertIsDisplayed()
         compose.onNodeWithText("Hit rate 36.4% of 55 completed · 12 invalidated and 5 open not counted · avg return is per completed call from its entry").assertIsDisplayed()
         assertEquals(listOf("caller?period=LAST_30_DAYS"), scorecardFilters)

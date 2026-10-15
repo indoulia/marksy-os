@@ -31,7 +31,6 @@ import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.EntityScorecardDto
 import com.marksy.os.market.ScorecardBodyDto
-import com.marksy.os.market.ScorecardCountsDto
 import com.marksy.os.market.ScorecardEntity
 import com.marksy.os.market.ScorecardPeriod
 import com.marksy.os.market.ScorecardQuery
@@ -132,7 +131,8 @@ private fun TrackRecordStrip(record: ScorecardBodyDto?) {
     val ret = r.performance.avgActualReturn
     MarksyRowCard {
         MarksyCardHeader("Marksy track record") {
-            Text(trackRecordPeriod(c), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+            // The completed count is in the note: on the header it pushed the title into an ellipsis on the phone.
+            Text("${TrackRecordQuery.label()} of calls", color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat("Succeeded", "${c.successful}", MarksyTheme.PrimaryEmerald)
@@ -143,8 +143,6 @@ private fun TrackRecordStrip(record: ScorecardBodyDto?) {
         Text(trackRecordNote(r), color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
     }
 }
-
-internal fun trackRecordPeriod(c: ScorecardCountsDto) = "${TrackRecordQuery.label()} of calls · ${c.completed} completed"
 
 // Server §8.1: invalidated, unscorable and data-unresolved calls are counted but never enter a rate or a return.
 internal fun trackRecordNote(r: ScorecardBodyDto): String {
