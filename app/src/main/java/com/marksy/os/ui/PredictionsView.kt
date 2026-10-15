@@ -36,9 +36,9 @@ import com.marksy.os.upstox.UpstoxLtp
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** A cursor-paged list that grows as its last row scrolls into view. */
+/** A cursor-paged list that grows as its last row scrolls into view; with [key], a row a later page repeats is kept once (a repeated list key crashes the list). */
 @Stable
-internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<Pair<List<T>, String?>>) {
+internal class Paged<T>(private val key: ((T) -> Any)? = null, private val fetch: suspend (String?) -> MarketDataState<Pair<List<T>, String?>>) {
     var items by mutableStateOf<List<T>>(emptyList())
     var state by mutableStateOf<MarketDataState<Unit>>(MarketDataState.Loading)
     var hasMore by mutableStateOf(true)
@@ -51,7 +51,7 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
         if (busy || !hasMore) return
         busy = true
         when (val r = fetch(cursor)) {
-            is MarketDataState.Loaded -> { items = items + r.value.first; cursor = r.value.second; hasMore = cursor != null; state = MarketDataState.Loaded(Unit) }
+            is MarketDataState.Loaded -> { items = (items + r.value.first).let { all -> key?.let(all::distinctBy) ?: all }; cursor = r.value.second; hasMore = cursor != null; state = MarketDataState.Loaded(Unit) }
             is MarketDataState.Empty -> { hasMore = false; state = if (items.isEmpty()) MarketDataState.Empty else MarketDataState.Loaded(Unit) }
             is MarketDataState.Error -> { hasMore = false; failed = true; if (items.isEmpty()) state = r }
             is MarketDataState.Unavailable -> { hasMore = false; state = r }
@@ -64,7 +64,8 @@ internal class Paged<T>(private val fetch: suspend (String?) -> MarketDataState<
 /** History's Marksy lists: the track record with its closed calls, or the calls that ended early, each with its outcome. Live calls are in Setups. */
 @Composable
 internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded: Boolean, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
-    val open = remember { Paged { c -> repository.activePredictions(c).map { it.items to it.nextCursor } } }
+    // Keyset-paged on a re-rankable score: a re-rank between pages can repeat a call (kept once) or skip one (open marksy-api follow-up).
+    val open = remember { Paged<ActivePredictionDto>({ it.predictionId }) { c -> repository.activePredictions(c).map { it.items to it.nextCursor } } }
     val closed = remember { Paged { c -> repository.closedPredictions(c).map { it.items to it.nextCursor } } }
     val summary by produceState<PerformanceSummaryDto?>(null) { value = (repository.performanceSummary() as? MarketDataState.Loaded)?.value }
     LaunchedEffect(Unit) { closed.more(); open.more() }
@@ -113,7 +114,7 @@ private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
     if (s.closedCount == 0) return
     MarksyRowCard {
         MarksyCardHeader("Marksy track record") {
-            Text("${s.range.replace("d", " days")} · ${s.closedCount} closed${if (s.smallSample) " · small sample" else ""}", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+            Text(trackRecordPeriod(s), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat("Target hit", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
@@ -121,10 +122,16 @@ private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
             Stat("Expired", s.horizonExpiryRate?.let(::share), MarksyTheme.TextSecondary)
             Stat("Avg return", s.avgRealizedReturn?.let(::returnPct), if ((s.avgRealizedReturn ?: 0.0) >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative)
         }
-        // The server divides each share by every closed call, unevaluable ones included, so they need not add to 100%.
-        Text("Shares of all ${s.closedCount} closed calls · avg return is their mean realised return", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
+        Text(trackRecordNote(s), color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
     }
 }
+
+// The server's window is on the call date (`as_of_timestamp`), not the close date.
+internal fun trackRecordPeriod(s: PerformanceSummaryDto) = "${s.range.replace("d", " days")} of calls · ${s.closedCount} closed" + if (s.smallSample) " · small sample" else ""
+
+// The server divides each share by every closed call, unevaluable ones too, so the shares need not add to 100%; its average spans the same calls.
+internal fun trackRecordNote(s: PerformanceSummaryDto) =
+    "Each share is of all ${s.closedCount} closed call${if (s.closedCount == 1) "" else "s"}, unevaluable ones included · avg return is their mean realised return"
 
 @Composable
 private fun Stat(label: String, value: String?, tint: Color) {

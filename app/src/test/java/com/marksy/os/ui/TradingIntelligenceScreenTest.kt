@@ -9,11 +9,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertCountEquals
 import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.ActivePredictionPageDto
+import com.marksy.os.market.ChannelRefDto
+import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.MarketApiClient
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MyTipDto
 import com.marksy.os.market.MyTipPageDto
+import com.marksy.os.market.PerformanceSummaryDto
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -37,14 +40,14 @@ class TradingIntelligenceScreenTest {
             tipId = symbol, symbol = symbol, direction = "BUY", entryLow = 100.0, entryHigh = 100.0, entryBasis = null, target = 110.0, stopLoss = null,
             horizonSessions = 5, horizonBasis = null, firstSeenAt = "2026-10-01T04:00:00Z", status = status, entryStatus = null, outcome = outcome, reason = null,
             enteredSession = null, closedSession = null, closedAt = null, exitPrice = null, promisedReturn = null, actualReturn = if (outcome == null) null else 0.1,
-            predictionId = null, channel = null, caller = null, latestProgress = null
+            predictionId = null, channel = ChannelRefDto(1, "5paisa", "BROKER_APP"), caller = null, latestProgress = null
         ),
-        null, null, emptyList(), 0
+        ScorecardHeadlineDto(14, 3, 11, 6, 4, 1, 1, 54.5, 57.0, 0.012, 62), null, emptyList(), 0
     )
 
     private val requested = mutableListOf<String?>()
 
-    private fun repository(vararg calls: ActivePredictionDto) = MarketIntelligenceRepository(object : MarketApiClient {
+    private fun repository(vararg calls: ActivePredictionDto, laterPage: List<ActivePredictionDto>? = null) = MarketIntelligenceRepository(object : MarketApiClient {
         override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
             requested += status
             return MyTipPageDto(listOf(if (status == "ACTIVE") tip("HAL", "ACTIVE") else tip("TCS", "TARGET_HIT", "SUCCESS")), null)
@@ -55,7 +58,8 @@ class TradingIntelligenceScreenTest {
         override suspend fun indexHistory(name: String, range: String) = throw NotImplementedError()
         override suspend fun sectors() = throw NotImplementedError()
         override suspend fun instrument(symbol: String, includeCalls: Boolean) = throw NotImplementedError()
-        override suspend fun activePredictions(cursor: String?) = ActivePredictionPageDto(calls.toList(), null)
+        override suspend fun activePredictions(cursor: String?) =
+            if (cursor == null) ActivePredictionPageDto(calls.toList(), laterPage?.let { "p2" }) else ActivePredictionPageDto(laterPage.orEmpty(), null)
         override suspend fun activePrediction(id: Int) = throw NotImplementedError()
         override suspend fun ipos(stage: String?, query: String?) = throw NotImplementedError()
         override suspend fun ipoAttention(limit: Int) = throw NotImplementedError()
@@ -76,7 +80,20 @@ class TradingIntelligenceScreenTest {
         compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(2)
     }
 
+    // Regression: the active feed is keyset-paged on a re-rankable score, so a later page can repeat a call; Ended crashed on the repeated key.
+    @Test
+    fun aCallRepeatedOnALaterPageRendersOnce() {
+        val ended = call(1, 100.0, state = "INVALIDATED")
+        val repo = repository(ended, call(2, 104.0), laterPage = listOf(ended))
+
+        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repo, historyScope = HistoryScope.ENDED) }
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(1)
+    }
+
     // Open is the default and asks the ledger only for active tips; History's default lists the closed ones with their outcome.
+    // A tip names its source but not the source's Trust Score, which is history, not this tip's performance.
     @Test
     fun openShowsActiveTipsAndHistoryShowsClosedOnes() {
         val repo = repository()
@@ -84,6 +101,8 @@ class TradingIntelligenceScreenTest {
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = view.value, marketRepository = repo) }
         compose.waitForIdle()
         compose.onNodeWithText("HAL").assertIsDisplayed()
+        compose.onNodeWithText("5paisa").assertIsDisplayed()
+        compose.onAllNodesWithText("Trust", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("TCS").assertCountEquals(0)
 
         view.value = "History"
@@ -91,6 +110,17 @@ class TradingIntelligenceScreenTest {
         compose.onNodeWithText("Target hit").assertIsDisplayed()
         compose.onAllNodesWithText("HAL").assertCountEquals(0)
         assertEquals(listOf("ACTIVE", "CLOSED"), requested)
+    }
+
+    // The server's track record counts calls by call date and divides every share by all closed calls, unevaluable ones too.
+    @Test
+    fun trackRecordWordingMatchesTheServerCalculation() {
+        val s = PerformanceSummaryDto("30d", 40, 18, 0.39, 0.33, 0.22, 0.0047, smallSample = true)
+        assertEquals("30 days of calls · 18 closed · small sample", trackRecordPeriod(s))
+        assertEquals("Each share is of all 18 closed calls, unevaluable ones included · avg return is their mean realised return", trackRecordNote(s))
+        val one = s.copy(closedCount = 1, smallSample = false)
+        assertEquals("30 days of calls · 1 closed", trackRecordPeriod(one))
+        assertEquals("Each share is of all 1 closed call, unevaluable ones included · avg return is their mean realised return", trackRecordNote(one))
     }
 
     @Test

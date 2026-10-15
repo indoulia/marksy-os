@@ -77,7 +77,8 @@ private fun MyTipRow(item: MyTipDto, livePrice: Double?, onClick: () -> Unit) {
             else Text(listOfNotNull("called ${LedgerCalls.day(t.firstSeenAt)}", LedgerCalls.horizonText(t.horizonSessions)).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Text(
-            listOfNotNull(t.channel?.name, t.caller?.name, item.channelHeadline?.let(LedgerCalls::recordText)).joinToString(" · "),
+            // Source only: its Trust Score is history and lives in Trust, not this tip's performance.
+            listOfNotNull(t.channel?.name, t.caller?.name).joinToString(" · "),
             color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis
         )
         Text(LedgerCalls.receivedVia(item), color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
