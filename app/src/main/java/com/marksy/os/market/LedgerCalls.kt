@@ -10,6 +10,7 @@ import java.util.Locale
 object LedgerCalls {
     const val STATUS_ACTIVE = "ACTIVE"
     private const val DATA_BASIS_PROVISIONAL = "PROVISIONAL"
+    private const val DATA_BASIS_FINAL = "FINAL"
     const val TARGET_PROGRESS_AVAILABLE = "AVAILABLE"
 
     enum class Tone { POSITIVE, NEGATIVE, NEUTRAL, MUTED }
@@ -84,27 +85,38 @@ object LedgerCalls {
     }
 
     /** Shown under an available Target Progress; the server computes the value, the app only words it. */
-    const val TARGET_PROGRESS_NOTE = "Where the price sits between stop-loss (0%) and target (100%), not a chance of success."
+    fun targetProgressNote(liveBar: Boolean): String =
+        "Where that close sits between stop-loss (0%) and target (100%), not a chance of success." + if (liveBar) " The bar uses the live price." else ""
 
-    /** `TPR-001` in words; null for a closed tip or an older backend, and never a 0 standing in for a missing value. */
+    /** `TPR-001` in words from the server's stored close; null for a closed tip or an older backend, and never a 0 standing in for a missing value. */
     fun targetProgressLine(t: LedgerTipDto): String? {
         val tp = t.targetProgress ?: return null
         val close = tp.priceSessionDate?.let { d -> runCatching { MarksyFormat.day(LocalDate.parse(d)) }.getOrDefault(d) }
         val started = tp.startValue?.let { "started at ${progressPct(it)}" }
         if (tp.status == TARGET_PROGRESS_AVAILABLE && tp.value != null) return listOfNotNull(
-            "Target progress ${progressPct(tp.value)}", started, close?.let { "$it close" },
-            "provisional".takeIf { tp.dataBasis == DATA_BASIS_PROVISIONAL }
+            "Target progress ${progressPct(tp.value)}", started, storedClose(tp, close)
         ).joinToString(" · ")
         return when (tp.reason) {
             "NOT_OPEN" -> null
+            "AWAITING_FIRST_CLOSE" -> "Target progress · Awaiting first daily close"
             "AWAITING_ENTRY" -> "Target progress starts at entry" + (tp.startValue?.let { " (${progressPct(it)})" } ?: "")
-            "PRICE_UNAVAILABLE" -> "Target progress waits for the first close"
+            "PRICE_UNAVAILABLE" -> "Target progress unavailable · no daily close stored"
             "PRICE_STALE" -> "Target progress paused · " + (close?.let { "price stale since $it close" } ?: "price freshness unknown")
             "LIFECYCLE_RECONCILIATION_REQUIRED" -> "Target progress paused · ${close ?: "latest"} close reached a level, result pending"
             "INSUFFICIENT_TERMS" -> "Target progress needs a target and a stop-loss"
             "INVALID_GEOMETRY" -> "Target progress unavailable · levels out of order"
             else -> "Target progress unavailable"
         }
+    }
+
+    // The official candle and the same-evening provisional price read differently; an unknown basis or date is said, not guessed.
+    private fun storedClose(tp: TargetProgressDto, day: String?): String {
+        val kind = when (tp.dataBasis) { DATA_BASIS_FINAL -> "daily close"; DATA_BASIS_PROVISIONAL -> "provisional close"; else -> "close" }
+        return listOfNotNull(
+            listOfNotNull(day, kind, tp.price?.let(MarksyFormat::rupees)).joinToString(" "),
+            "basis unknown".takeIf { tp.dataBasis != DATA_BASIS_FINAL && tp.dataBasis != DATA_BASIS_PROVISIONAL },
+            "date unknown".takeIf { day == null }
+        ).joinToString(" · ")
     }
 
     // Two decimals only where rounding would read as 0% or 100% on a tip that is still open.

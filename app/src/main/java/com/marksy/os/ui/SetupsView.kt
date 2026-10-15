@@ -28,6 +28,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             .sortedWith(compareByDescending<ActivePredictionDto> { it.isActionableNow }.thenByDescending { it.compositeOpportunityScore ?: -1.0 })
     }
     val quotes = rememberUpstoxQuotes(remember(live) { live.map { it.symbol }.distinct() })
+    val feed = rememberFeedFreshness()
     val scan by MarketIntelligenceRepository.latestScan.collectAsState()
 
     MarksyList(bottom = bottomPadding) {
@@ -45,7 +46,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
         }
         items(live, key = { "m-${it.predictionId}" }) { p ->
             val basis = PicksBasis.label(p) ?: p.lastPriceAt?.let { "as of ${asOf(it)}" }
-            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = basis) { onOpenStock(p.symbol) }
+            OpenCallRow(p, quotes[p.symbol], feed, note = basis) { onOpenStock(p.symbol) }
         }
     }
 }

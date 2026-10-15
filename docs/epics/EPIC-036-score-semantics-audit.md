@@ -60,9 +60,10 @@ Gap matrix. "Correct" means reuse unchanged.
 
 The full field contract lives with the backend in `marksy-api/docs/api/SCORE-METRICS.md` ("Target Progress"). In short:
 - New nullable object `targetProgress` on `LedgerTipView`, version `TPR-001`; absent on an older backend.
-- `status` is `AVAILABLE` or `UNAVAILABLE`. Reasons, checked in this order: `NOT_OPEN`, `INSUFFICIENT_TERMS`, `INVALID_GEOMETRY`, `AWAITING_ENTRY`, `PRICE_UNAVAILABLE`, `PRICE_STALE`, `LIFECYCLE_RECONCILIATION_REQUIRED`.
+- `status` is `AVAILABLE` or `UNAVAILABLE`. Reasons, checked in this order: `NOT_OPEN`, `INSUFFICIENT_TERMS`, `INVALID_GEOMETRY`, `AWAITING_FIRST_CLOSE`, `AWAITING_ENTRY`, `PRICE_UNAVAILABLE`, `PRICE_STALE`, `LIFECYCLE_RECONCILIATION_REQUIRED`.
 - `value` is 0–100 with 2 dp, strictly between 0 and 100 while open (the tracker treats a level as touched at equality). `startValue` is the entry's own position, so a fresh tip's starting point is visible.
-- The observation is the latest stored daily close whose session closed at or before `evaluatedAt`, with its session date, source, data basis and per-stock `MDF-335-001` freshness. Only CURRENT and AWAITING_PUBLICATION count as fresh.
+- The observation is the latest stored daily close whose session closed at or before `evaluatedAt`, with its session date, source, data basis and per-stock `MDF-335-001` freshness. Only CURRENT and AWAITING_PUBLICATION count as fresh. It is never a live price.
+- A close is eligible only if its session closed after the call was first seen (the tracker's session 0). Until then the reason is `AWAITING_FIRST_CLOSE` and no observation is echoed (added 2026-10-15, before release).
 - `currentReturn` uses the tracker's `signed_return` on the same observation.
 - Deviations from the spec proposal, both from the existing lifecycle:
   - `AWAITING_ENTRY` is added, because a waiting buy-on-dip call has not started.
