@@ -18,7 +18,7 @@ Use the canonical ledger's immutable direction, entry, target, stop-loss, status
 **Acceptance:** duplicate receipts do not change the score; merged duplicates and terminal tips do not receive a live score.
 
 ### S2 — Calculate orientation-aware progress
-For valid BUY/SELL geometry, calculate a 0–100 price-position score between stop-loss and target, as specified in the design. This is not probability or confidence.
+For valid BUY geometry (`stop < entry < target`) or SELL geometry (`target < entry < stop`), calculate a 0–100 price-position score between stop-loss and target, as specified in the design. This is not probability or confidence.
 
 **Acceptance:** deterministic golden tests cover BUY and SELL, entry position, target/stop boundaries, decimal precision, invalid geometry and terminal-boundary reconciliation.
 
