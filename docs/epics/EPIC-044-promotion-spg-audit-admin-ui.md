@@ -1,6 +1,6 @@
 # EPIC-044 — Promotion/SPG governance and audit trail in Admin App
 
-**Status:** BLOCKED ON EPIC-040 CONTRACT AUDIT COMPLETION  
+**Status:** PARTIAL 2026-10-15 — SPG-001 state, decisions and promotions read-only (no handoff operation exists, so none is offered); audit from server-written records only (no admin action log) ([contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md) §6)  
 **Priority:** P1  
 **Owner:** Admin App with ML service support  
 **Spec:** [ML Admin Control Plane design](../superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)

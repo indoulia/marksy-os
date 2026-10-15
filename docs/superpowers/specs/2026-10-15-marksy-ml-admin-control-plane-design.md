@@ -1,7 +1,7 @@
 # Marksy ML Admin Control Plane — design
 
 **Date:** 2026-10-15  
-**Status:** PLANNED — documentation only; implementation not started  
+**Status:** IMPLEMENTED (partial; local branches, not deployed) — see [contract map](2026-10-15-ml-admin-contract-map.md)  
 **Coordination repo:** `indoulia/marksy-os`  
 **Reference artifact:** `marksy_ml_admin_control_plane.html` (static prototype in the user's Library; illustrative data only)
 

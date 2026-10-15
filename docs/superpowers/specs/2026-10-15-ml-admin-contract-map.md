@@ -124,8 +124,9 @@ Lists: `/admin/ml/spg/decisions` and `/admin/ml/audit` are cursor-paginated (`me
 
 - **SPG-001 stays authoritative.** `spg/pairs` returns `publish_gate_meta` output verbatim; `currentAuthorization` calls `authorize_publication`. The UI never computes eligibility and has no promote/handoff control.
 - **Held-out integrity.** Only recorded gate decisions (holdout already consumed) are read. No per-trade or per-stock rows: trade dispositions and shadow scores are aggregates. TG-001 tables and `TRADE_GEOMETRY` are excluded until its exam is decided.
+- **TG-001 embargo.** SPG decisions for holdout month 2026-11 are withheld until 2026-12-12 00:00 UTC (after the November exam): excluded from lists, lineage and audit; their detail and `/spg/pairs` return 409 `MRA_EMBARGOED`. The gate outcome itself reveals the held-out result, so it is embargoed too.
 - **No fabricated values.** Missing lineage is listed in `lineageUnavailable` / `metadataUnavailable`; the UI renders "not recorded", never a guess.
-- **Stale is never healthy.** Data-quality `status` precedence: no data → UNKNOWN, stale → STALE, any blocking failure → FAILING, else PASSING (server-side, `staleAfterHours` = 36).
+- **Stale is never healthy; a failure is never hidden.** Data-quality `status`: no checks recorded → UNKNOWN; latest validation run FAILED, any REQUIRED violation or any blocking failure → FAILING (outranks STALE); a contract check that missed an expected trading session → STALE; else PASSING. Freshness is trading-calendar aware. Validation-run freshness is reported separately (the script has no CronJob).
 - **Mutations** are only the existing `/ops` job start/run-again (server dedupe, cooldown, session actor, event audit). The UI confirms first, disables while pending, never auto-retries, and after a timeout re-reads active runs instead of resubmitting.
 
 ## 6. Remaining backend dependencies (not built here)

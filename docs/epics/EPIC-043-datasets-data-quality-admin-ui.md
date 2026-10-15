@@ -1,6 +1,6 @@
 # EPIC-043 — Datasets and data quality in Admin App
 
-**Status:** BLOCKED ON EPIC-040 CONTRACT AUDIT COMPLETION  
+**Status:** PARTIAL 2026-10-15 — data quality complete for recorded checks; datasets derived from immutable SPG benchmark records (no dataset registry exists) ([contract map](../superpowers/specs/2026-10-15-ml-admin-contract-map.md) §6)  
 **Priority:** P2  
 **Owner:** Admin App with ML service support  
 **Spec:** [ML Admin Control Plane design](../superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)

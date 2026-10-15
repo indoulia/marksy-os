@@ -13,7 +13,7 @@ The objective is to strengthen the existing Marksy architecture and intelligence
 
 ## ML Admin Control Plane workstream (2026-10-15)
 
-The static reference artifact `marksy_ml_admin_control_plane.html` was created earlier as a visual prototype. Its sample values are illustrative only. The implementation-ready coordination spec and ordered epics now live here; no Admin UI implementation is implied by these documents.
+The static reference artifact `marksy_ml_admin_control_plane.html` was created earlier as a visual prototype. Its sample values are illustrative only. Implemented 2026-10-15 on local branches `feat/ml-admin-control-plane` in admin-app and marksy-api (read-only `/api/v1/admin/ml/*` over existing tables; not merged or deployed). Status: EPIC-040 implemented, EPIC-041..044 PARTIAL. Gaps and backend dependencies: [contract map](superpowers/specs/2026-10-15-ml-admin-contract-map.md) §6.
 
 - **Design:** [ML Admin Control Plane](superpowers/specs/2026-10-15-marksy-ml-admin-control-plane-design.md)
 - **Execution plan:** [ordered implementation plan](superpowers/plans/2026-10-15-marksy-ml-admin-control-plane.md)
