@@ -1,6 +1,6 @@
 # EPIC-036 — Trust Score vs Target Progress: audit and contract freeze
 
-**Status:** DONE 2026-10-15 on `feat/trust-target-progress` (not merged)  
+**Status:** DONE 2026-10-15; merged in marksy-os #143 and marksy-api #102, not deployed  
 **Priority:** P1  
 **Owner:** Cross-repository; contract coordinated from marksy-os  
 **Repositories:** `indoulia/marksy-api`, `indoulia/marksy-os`  

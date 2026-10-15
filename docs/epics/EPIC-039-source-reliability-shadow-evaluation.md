@@ -1,6 +1,6 @@
 # EPIC-039 — Historical source reliability as a shadow prediction feature
 
-**Status:** IMPLEMENTED 2026-10-15 as marksy-api `SRS-001` (shadow-only); real-data run pending owner approval  
+**Status:** IMPLEMENTED 2026-10-15 as marksy-api `SRS-001` (shadow-only), merged in marksy-api #102; real-data run approved 2026-10-15, not yet run  
 **Priority:** P2  
 **Owner:** marksy-api (experiment); marksy-os coordinates the execution plan  
 **Authoritative backend checklist:** [marksy-api EPIC-855](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)  
