@@ -29,7 +29,13 @@ import com.marksy.os.market.ClosedPredictionDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
-import com.marksy.os.market.PerformanceSummaryDto
+import com.marksy.os.market.EntityScorecardDto
+import com.marksy.os.market.ScorecardBodyDto
+import com.marksy.os.market.ScorecardCountsDto
+import com.marksy.os.market.ScorecardEntity
+import com.marksy.os.market.ScorecardPeriod
+import com.marksy.os.market.ScorecardQuery
+import com.marksy.os.market.ScorecardSources
 import com.marksy.os.market.PicksBasis
 import com.marksy.os.upstox.FeedFreshness
 import com.marksy.os.upstox.UpstoxLtp
@@ -67,7 +73,9 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded
     // Keyset-paged on a re-rankable score: a re-rank between pages can repeat a call (kept once) or skip one (open marksy-api follow-up).
     val open = remember { Paged<ActivePredictionDto>({ it.predictionId }) { c -> repository.activePredictions(c).map { it.items to it.nextCursor } } }
     val closed = remember { Paged { c -> repository.closedPredictions(c).map { it.items to it.nextCursor } } }
-    val summary by produceState<PerformanceSummaryDto?>(null) { value = (repository.performanceSummary() as? MarketDataState.Loaded)?.value }
+    val record by produceState<ScorecardBodyDto?>(null) {
+        value = (repository.scorecards(ScorecardEntity.ENGINE, TrackRecordQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard)?.body
+    }
     LaunchedEffect(Unit) { closed.more(); open.more() }
     // Withdrawn or unpriced calls still sit in the active feed; they never count or rank as open.
     val ended = remember(open.items) { open.items.filterNot(LedgerCalls::isLive) }
@@ -78,7 +86,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, showEnded
 
     MarksyList(bottom = bottomPadding) {
         // The record summarises closed calls only, so it sits above them and not above ended ones.
-        if (!showEnded) item(key = "record") { TrackRecordStrip(summary) }
+        if (!showEnded) item(key = "record") { TrackRecordStrip(record) }
         when (val s = paged.state) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading Marksy calls…") }
             is MarketDataState.Unavailable -> item { EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.") }
@@ -108,30 +116,51 @@ internal inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<
     MarketDataState.Unavailable -> MarketDataState.Unavailable
 }
 
+// The ledger's §8.1 record, not `/performance/summary`: that price-only label record also counts calls withdrawn before entry.
+private val TrackRecordQuery = ScorecardQuery(entity = ScorecardEntity.ENGINE, period = ScorecardPeriod.LAST_30_DAYS)
+// marksy-api `CALLER_PREDICTION_ENGINE`: the engine whose calls these lists show.
+private const val PREDICTION_ENGINE = "Prediction engine"
+
+internal fun predictionEngineCard(cards: List<EntityScorecardDto>): EntityScorecardDto? =
+    cards.firstOrNull { ScorecardSources.isEngine(it) && it.name == PREDICTION_ENGINE }
+
 @Composable
-private fun TrackRecordStrip(summary: PerformanceSummaryDto?) {
-    val s = summary ?: return
-    if (s.closedCount == 0) return
+private fun TrackRecordStrip(record: ScorecardBodyDto?) {
+    val r = record ?: return
+    val c = r.counts
+    if (c.total == 0) return
+    val ret = r.performance.avgActualReturn
     MarksyRowCard {
         MarksyCardHeader("Marksy track record") {
-            Text(trackRecordPeriod(s), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+            Text(trackRecordPeriod(c), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.SpaceBetween) {
-            Stat("Target hit", s.targetHitRate?.let(::share), MarksyTheme.PrimaryEmerald)
-            Stat("Stop-loss hit", s.stopLossRate?.let(::share), MarksyTheme.Negative)
-            Stat("Expired", s.horizonExpiryRate?.let(::share), MarksyTheme.TextSecondary)
-            Stat("Avg return", s.avgRealizedReturn?.let(::returnPct), if ((s.avgRealizedReturn ?: 0.0) >= 0) MarksyTheme.PrimaryEmerald else MarksyTheme.Negative)
+            Stat("Succeeded", "${c.successful}", MarksyTheme.PrimaryEmerald)
+            Stat("Failed", "${c.failed}", MarksyTheme.Negative)
+            Stat("Expired", "${c.expired}", MarksyTheme.TextSecondary)
+            Stat("Avg return", LedgerCalls.returnText(ret), ScorecardGraphics.returnTone(ret))
         }
-        Text(trackRecordNote(s), color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
+        Text(trackRecordNote(r), color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(top = MarksySpace.Tight))
     }
 }
 
-// The server's window is on the call date (`as_of_timestamp`), not the close date.
-internal fun trackRecordPeriod(s: PerformanceSummaryDto) = "${s.range.replace("d", " days")} of calls · ${s.closedCount} closed" + if (s.smallSample) " · small sample" else ""
+internal fun trackRecordPeriod(c: ScorecardCountsDto) = "${TrackRecordQuery.label()} of calls · ${c.completed} completed"
 
-// The server judges every closed call by price from its scan-close entry and divides each share by all of them, unevaluable ones too.
-internal fun trackRecordNote(s: PerformanceSummaryDto) =
-    "Each share is of all ${s.closedCount} closed call${if (s.closedCount == 1) "" else "s"}, judged by price; unevaluable ones count in N · avg return is their mean price return"
+// Server §8.1: invalidated, unscorable and data-unresolved calls are counted but never enter a rate or a return.
+internal fun trackRecordNote(r: ScorecardBodyDto): String {
+    val c = r.counts
+    val left = listOfNotNull(
+        c.invalidated.takeIf { it > 0 }?.let { "$it invalidated" },
+        c.unscorable.takeIf { it > 0 }?.let { "$it unscorable" },
+        c.dataUnresolved.takeIf { it > 0 }?.let { "$it without market data" },
+        c.open.takeIf { it > 0 }?.let { "$it open" }
+    )
+    return listOfNotNull(
+        r.performance.hitRatePct?.let { "Hit rate ${MarksyFormat.percent(it, 1, signed = false)} of ${c.completed} completed" },
+        left.takeIf { it.isNotEmpty() }?.let { (if (it.size == 1) it.first() else it.dropLast(1).joinToString(", ") + " and " + it.last()) + " not counted" },
+        "avg return is per completed call from its entry"
+    ).joinToString(" · ")
+}
 
 @Composable
 private fun Stat(label: String, value: String?, tint: Color) {
@@ -239,7 +268,6 @@ private fun ClosedCallRow(c: ClosedPredictionDto, onClick: () -> Unit) {
 }
 
 private fun words(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
-private fun share(f: Double) = MarksyFormat.percent(f * 100, 0, signed = false)
 // Returns arrive as fractions (0.032 = 3.2%).
 private fun returnPct(f: Double) = MarksyFormat.percent(f * 100, 2)
 internal fun callRupees(v: Double) = MarksyFormat.rupees(v)

@@ -18,7 +18,14 @@ import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MyTipDto
 import com.marksy.os.market.MyTipPageDto
+import com.marksy.os.market.EntityScorecardDto
+import com.marksy.os.market.EntityScorecardListDto
 import com.marksy.os.market.PerformanceSummaryDto
+import com.marksy.os.market.ScorecardBodyDto
+import com.marksy.os.market.ScorecardCountsDto
+import com.marksy.os.market.ScorecardFilterEchoDto
+import com.marksy.os.market.ScorecardPerformanceDto
+import com.marksy.os.market.ScorecardTrustDto
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -48,12 +55,33 @@ class TradingIntelligenceScreenTest {
     )
 
     private val requested = mutableListOf<String?>()
+    // Repository reads run on Dispatchers.IO, which waitForIdle does not wait for.
+    private fun awaitText(text: String) = compose.waitUntil(5_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+    private val scorecardFilters = mutableListOf<String>()
+    private var summaryReads = 0
+
+    private fun engineCard(id: Int, name: String, invalidated: Int = 12, open: Int = 5) = EntityScorecardDto(
+        "caller", id, name, 7, "Marksy",
+        ScorecardBodyDto(
+            ScorecardCountsDto(total = 55 + invalidated + open, open = open, successful = 20, failed = 25, expired = 10, completed = 55, exited = 4,
+                invalidated = invalidated, unscorable = 0, dataUnresolved = 0),
+            ScorecardPerformanceDto(44.4, 55.6, 36.4, -0.004, null, null, null, null, null),
+            ScorecardTrustDto(40, 55, 10, null, null, invalidated)
+        ),
+        engine = true
+    )
 
     private fun repository(vararg calls: ActivePredictionDto, laterPage: List<ActivePredictionDto>? = null) = MarketIntelligenceRepository(object : MarketApiClient {
         override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
             requested += status
             return MyTipPageDto(listOf(if (status == "ACTIVE") tip("HAL", "ACTIVE") else tip("TCS", "TARGET_HIT", "SUCCESS")), null)
         }
+        override suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto {
+            scorecardFilters += "$entity?$filter"
+            return EntityScorecardListDto("v", entity, ScorecardFilterEchoDto("LAST_30_DAYS", null, null, "FIRST_SEEN", null, null, null, null, null, "2026-10-15T00:00:00Z"),
+                listOf(engineCard(3, "Rating engine"), engineCard(2, "Prediction engine")))
+        }
+        override suspend fun performanceSummary(range: String): PerformanceSummaryDto? { summaryReads++; return null }
         override suspend fun marketSummary() = throw NotImplementedError()
         override suspend fun liveQuotes(symbols: List<String>?) = throw NotImplementedError()
         override suspend fun liveFeedHealth() = throw NotImplementedError()
@@ -89,7 +117,8 @@ class TradingIntelligenceScreenTest {
         val repo = repository(ended, call(2, 104.0), laterPage = listOf(ended))
 
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repo, historyScope = HistoryScope.ENDED) }
-        compose.waitForIdle()
+        // Both pages must have loaded, or a single row would pass without the repeat ever arriving.
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Loading", substring = true).fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText("NTPCGREEN").fetchSemanticsNodes().isNotEmpty() }
 
         compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(1)
     }
@@ -101,28 +130,38 @@ class TradingIntelligenceScreenTest {
         val repo = repository()
         val view = mutableStateOf(TradingFilters.first())
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = view.value, marketRepository = repo) }
-        compose.waitForIdle()
+        awaitText("HAL")
         compose.onNodeWithText("HAL").assertIsDisplayed()
         compose.onNodeWithText("5paisa").assertIsDisplayed()
         compose.onAllNodesWithText("Trust", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("TCS").assertCountEquals(0)
 
         view.value = "History"
-        compose.waitForIdle()
+        awaitText("Target hit")
         compose.onNodeWithText("Target hit").assertIsDisplayed()
         compose.onAllNodesWithText("HAL").assertCountEquals(0)
         assertEquals(listOf("ACTIVE", "CLOSED"), requested)
     }
 
-    // The server's track record counts calls by call date, judges them by price and divides every share by all closed calls.
+    // The strip is the Prediction engine's ledger scorecard: calls count from their real entry, and invalidated ones are named, never scored.
     @Test
-    fun trackRecordWordingMatchesTheServerCalculation() {
-        val s = PerformanceSummaryDto("30d", 40, 18, 0.39, 0.33, 0.22, 0.0047, smallSample = true)
-        assertEquals("30 days of calls · 18 closed · small sample", trackRecordPeriod(s))
-        assertEquals("Each share is of all 18 closed calls, judged by price; unevaluable ones count in N · avg return is their mean price return", trackRecordNote(s))
-        val one = s.copy(closedCount = 1, smallSample = false)
-        assertEquals("30 days of calls · 1 closed", trackRecordPeriod(one))
-        assertEquals("Each share is of all 1 closed call, judged by price; unevaluable ones count in N · avg return is their mean price return", trackRecordNote(one))
+    fun marksyTrackRecordIsThePredictionEngineLedgerScorecard() {
+        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository(), historyScope = HistoryScope.MARKSY) }
+        awaitText("Last 30 days of calls · 55 completed")
+
+        compose.onNodeWithText("Last 30 days of calls · 55 completed").assertIsDisplayed()
+        compose.onNodeWithText("Succeeded").assertIsDisplayed()
+        compose.onNodeWithText("Hit rate 36.4% of 55 completed · 12 invalidated and 5 open not counted · avg return is per completed call from its entry").assertIsDisplayed()
+        assertEquals(listOf("caller?period=LAST_30_DAYS"), scorecardFilters)
+        assertEquals(0, summaryReads)
+    }
+
+    @Test
+    fun trackRecordPicksThePredictionEngineAndNamesOnlyWhatItLeftOut() {
+        val prediction = engineCard(2, "Prediction engine", invalidated = 0, open = 0)
+        assertEquals(prediction, predictionEngineCard(listOf(engineCard(3, "Rating engine"), prediction)))
+        assertEquals(null, predictionEngineCard(listOf(engineCard(3, "Rating engine"))))
+        assertEquals("Hit rate 36.4% of 55 completed · avg return is per completed call from its entry", trackRecordNote(prediction.body))
     }
 
     // Regression (device, 2026-10-15): Inbox's long filter list pushed Close and Add screenshot off screen, then scrolled Captured calls out of sight.
