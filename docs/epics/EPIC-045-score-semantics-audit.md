@@ -1,4 +1,6 @@
-# EPIC-036 — Trust Score vs Target Progress: audit and contract freeze
+# EPIC-045 — Trust Score vs Target Progress: audit and contract freeze
+
+**Formerly:** EPIC-036, renumbered 2026-10-15 because EPIC-036 also names a play-safe capture epic.
 
 **Status:** DONE 2026-10-15; merged in marksy-os #143 and marksy-api #102, not deployed  
 **Priority:** P1  
@@ -70,4 +72,4 @@ The full field contract lives with the backend in `marksy-api/docs/api/SCORE-MET
   - The boundary check uses the observed close only; intrabar high/low touches are left to the tracker.
 - Trust Score is unchanged.
 
-**Golden tests:** `marksy-api/tests/test_score_semantics.py` covers subject separation, open tips excluded from Trust Score at any count, fewer than 10 completed tips, duplicates and later closes. Target Progress goldens are written red-first under EPIC-037/854 S1.
+**Golden tests:** `marksy-api/tests/test_score_semantics.py` covers subject separation, open tips excluded from Trust Score at any count, fewer than 10 completed tips, duplicates and later closes. Target Progress goldens are written red-first under EPIC-046/854 S1.

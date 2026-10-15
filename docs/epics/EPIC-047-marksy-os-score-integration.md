@@ -1,9 +1,11 @@
-# EPIC-038 — Marksy OS Trust Score and Target Progress integration
+# EPIC-047 — Marksy OS Trust Score and Target Progress integration
+
+**Formerly:** EPIC-038, renumbered 2026-10-15 because EPIC-038 also names a play-safe capture epic.
 
 **Status:** DONE 2026-10-15; merged in marksy-os #143; no device check (no device connected)  
 **Priority:** P1  
 **Owner:** marksy-os  
-**Depends on:** EPIC-036 contract freeze and EPIC-037 API contract  
+**Depends on:** EPIC-045 contract freeze and EPIC-046 API contract  
 **Spec:** [Trust Score and Target Progress design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
 
 ## Goal

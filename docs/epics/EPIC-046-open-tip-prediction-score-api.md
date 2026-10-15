@@ -1,4 +1,6 @@
-# EPIC-037 — Per-tip Target Progress API
+# EPIC-046 — Per-tip Target Progress API
+
+**Formerly:** EPIC-037, renumbered 2026-10-15 because EPIC-037 also names a play-safe capture epic.
 
 > Path keeps its original `prediction-score` slug so links do not break; the metric is Target Progress (terminology decision 2026-10-15).
 
