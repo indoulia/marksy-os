@@ -178,7 +178,7 @@ class EventIntelligencePipelineTest {
         }
 
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7, MarksyDatabase.MIGRATION_7_8)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7, MarksyDatabase.MIGRATION_7_8, MarksyDatabase.MIGRATION_8_9)
             .allowMainThreadQueries().build()
         try {
             val rows = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }
@@ -213,7 +213,7 @@ class EventIntelligencePipelineTest {
             raw.version = 3
         }
         val migrated = Room.databaseBuilder(context, MarksyDatabase::class.java, name)
-            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7, MarksyDatabase.MIGRATION_7_8)
+            .addMigrations(MarksyDatabase.MIGRATION_1_2, MarksyDatabase.MIGRATION_2_3, MarksyDatabase.MIGRATION_3_4, MarksyDatabase.MIGRATION_4_5, MarksyDatabase.MIGRATION_5_6, MarksyDatabase.MIGRATION_6_7, MarksyDatabase.MIGRATION_7_8, MarksyDatabase.MIGRATION_8_9)
             .allowMainThreadQueries().build()
         try {
             val row = runBlocking { migrated.notificationEventDao().findNeedingIntelligence(EventIntelligencePipeline.VERSION, 10) }.single()

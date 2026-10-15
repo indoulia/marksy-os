@@ -46,7 +46,8 @@ fun TradingIntelligenceScreen(
     onSendNow: () -> Unit = {},
     onAllowBackground: () -> Unit = {},
     showHealth: Boolean = false,
-    onHealthDismiss: () -> Unit = {}
+    onHealthDismiss: () -> Unit = {},
+    captureInbox: CaptureInbox = CaptureInbox()
 ) {
     var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
     var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
@@ -63,7 +64,7 @@ fun TradingIntelligenceScreen(
             selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
-            else -> CapturedList(captured, stackBy, show, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss)
+            else -> CapturedList(captured, stackBy, show, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, captureInbox)
         }
     }
     OneHandControls(
@@ -71,6 +72,7 @@ fun TradingIntelligenceScreen(
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
         filterIsView = false,
+        actions = if (selectedFilter == TAB_CAPTURED) listOf(FloatingAction(Icons.Default.AddPhotoAlternate, "Add screenshot", onClick = captureInbox.onAddScreenshot)) else emptyList(),
         // One filter button: My tips' status and Captured's options sit in its panel under the tabs.
         extrasActive = (selectedFilter == TAB_CAPTURED && show != ShowOnly.ALL) || (selectedFilter == TAB_TIPS && tipsStatus != MyTipsStatus.OPEN),
         filterExtras = when (selectedFilter) {
@@ -112,14 +114,14 @@ private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, s
 @Composable
 private fun CapturedList(
     events: List<com.marksy.os.data.local.NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, onOpenStock: (String) -> Unit,
-    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit
+    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
 ) {
     val isSymbol = rememberSymbolCheck()
     val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
     val lanes = remember(events, stackBy, show, isSymbol, now) {
         CapturedModel.lanes(events, now, stackBy, show) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
     }
-    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss)
+    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
 }
 
 private const val TAB_PICKS = "Setups"

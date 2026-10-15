@@ -2,9 +2,11 @@ package com.marksy.os.gateway
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.marksy.os.capture.CandidateDeliveryRun
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.data.local.TipCandidateEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -127,6 +129,34 @@ class TradingDeliveryRunTest {
         val messages = ShadowLog.getLogs().map { it.msg }
         assertTrue(messages.any { it.contains("gate-error") && it.contains("IllegalStateException") })
         assertFalse(messages.any { it.contains(secretMessage) })
+    }
+
+    // EPIC-036: an accepted candidate waits for the capture list, then leaves as its reviewed canonical line only.
+    @Test
+    fun aReviewedCandidateIsDeliveredAsItsCanonicalLineOnly() = runBlocking {
+        val captureDao = db.captureDao()
+        val id = captureDao.insertCandidate(
+            TipCandidateEntity(
+                evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = true,
+                capturedAt = 1L, evidenceRef = "sha256:ab", extractedText = "BUY RENUKA @ 23 Target 26 SL 22 from Rahul", confidence = .9,
+                symbol = "RENUKA", side = "BUY", entry = 23.0, target = 26.0, stopLoss = 22.0, horizon = null, visibleTimestamp = null,
+                ambiguities = "", state = "ACCEPTED", userChoseSend = true, deliveryState = DeliveryState.PENDING.name, updatedAt = 1L
+            )
+        )
+        val sent = mutableListOf<CapturedMessage>()
+        val testClient = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+
+        assertTrue(CandidateDeliveryRun(captureDao, testClient, capture.copy(capturePackages = null)).drain())
+        assertEquals(DeliveryState.PENDING.name, captureDao.candidate(id)!!.deliveryState)
+        assertFalse(CandidateDeliveryRun(captureDao, testClient, capture).drain())
+        assertEquals(listOf("BUY RENUKA @ 23 Target 26 SL 22"), sent.map { it.text })
+        assertEquals(DeliveryState.DELIVERED.name, captureDao.candidate(id)!!.deliveryState)
     }
 
     private fun row(key: String, postedAt: Long) = NotificationEventEntity(
