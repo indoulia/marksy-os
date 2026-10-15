@@ -173,7 +173,7 @@ fun SmartInboxScreen(
             item(key = "footer") { InboxFooter(lanes.snoozedCount, onOpenHistory) }
         }
         OneHandControls(
-            filters = SmartInboxModel.Filter.entries.map { it.name to it.label },
+            filters = inboxFilters,
             selectedFilter = filter.name,
             onFilterSelected = onFilterSelected,
             searchQuery = searchQuery,
@@ -190,6 +190,14 @@ fun SmartInboxScreen(
         val dialogActions = actions.copy(markSeen = { ids -> holdPlace(actionThread); actions.markSeen(ids) })
         ThreadActionsDialog(actionThread, dialogActions, onDismiss = { actionThreadKey = null })
     }
+}
+
+/** Inbox's filter value for the captured-call log, which MainActivity shows in place of the notification lanes. */
+const val InboxCapturedFilter = "CAPTURED"
+
+/** The Inbox filter list: the categories, with the captured-call log next to Trading so a long list never scrolls it out of sight. */
+val inboxFilters: List<Pair<String, String>> = SmartInboxModel.Filter.entries.flatMap { f ->
+    listOf(f.name to f.label) + if (f == SmartInboxModel.Filter.TRADING) listOf(InboxCapturedFilter to "Captured calls") else emptyList()
 }
 
 /** Header note for the Inbox tab: what needs the user and how much is new, or the active filter. */

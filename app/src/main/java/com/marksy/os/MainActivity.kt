@@ -291,6 +291,7 @@ class MainActivity : ComponentActivity() {
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
         var tradingFilter by rememberSaveable { mutableStateOf(TradingFilters.first()) }
         var tipsStatus by rememberSaveable { mutableStateOf(com.marksy.os.ui.MyTipsStatus.OPEN) }
+        var historyScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.HistoryScope.MINE) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.WATCHLIST.name) }
@@ -440,7 +441,8 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 && marketTabName == MarketTab.PORTFOLIO.name -> portfolioNote
             // Overview, Updates: the section name, so every Market page carries its green label.
             selectedTab == 2 -> MarketTab.entries.firstOrNull { it.name == marketTabName }?.label
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, capturedNote)
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, historyScope)
+            selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter -> capturedNote
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
             else -> null
@@ -468,7 +470,7 @@ class MainActivity : ComponentActivity() {
             when (pendingOpen) {
                 OPEN_ASK -> showAsk = true
                 OPEN_BRIEFING -> { showAsk = false; showBriefing = true }
-                OPEN_SETUPS -> { showAsk = false; showBriefing = false; tradingFilter = TradingFilters.first(); selectedTab = 3 }
+                OPEN_SETUPS -> { showAsk = false; showBriefing = false; tradingFilter = com.marksy.os.ui.TradingSetupsFilter; selectedTab = 3 }
                 OPEN_IPOS -> { showAsk = false; showBriefing = false; marketTabName = MarketTab.IPOS.name; selectedTab = 2 }
                 OPEN_FOLLOWING -> {
                     showAsk = false; showBriefing = false
@@ -575,7 +577,7 @@ class MainActivity : ComponentActivity() {
                                     it, color = MarksyTheme.PrimaryEmerald, style = if (tabPage) MarksyType.Lead else MarksyType.Caption,
                                     fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false).let { m -> if (selectedTab == 3 && tradingFilter == "Captured") m.clickable { showCaptureHealth = true } else m }
+                                    modifier = Modifier.weight(1f, fill = false).let { m -> if (selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter) m.clickable { showCaptureHealth = true } else m }
                                 )
                             }
                             if (titleLive) {
@@ -701,7 +703,10 @@ class MainActivity : ComponentActivity() {
                             AskMarksy.Page.HOME -> selectedTab = 0
                             AskMarksy.Page.INBOX -> { inboxFilterName = a.arg ?: SmartInboxModel.Filter.ALL.name; selectedTab = 1 }
                             AskMarksy.Page.PLAN -> { planView = a.arg ?: com.marksy.os.ui.PlanViews.first(); showPlan = true }
-                            AskMarksy.Page.TRADING -> { tradingFilter = a.arg ?: TradingFilters.first(); selectedTab = 3 }
+                            AskMarksy.Page.TRADING -> {
+                                val (view, scope) = com.marksy.os.ui.tradingRoute(a.arg)
+                                tradingFilter = view; scope?.let { historyScope = it }; selectedTab = 3
+                            }
                             AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.WATCHLIST.name; selectedTab = 2 }
                             AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.WATCHLIST.name; selectedTab = 2 }
                             AskMarksy.Page.TRUST -> selectedTab = 4
@@ -748,6 +753,17 @@ class MainActivity : ComponentActivity() {
                     onAddReminder = { addingPlan = true },
                     modifier = Modifier.fillMaxSize()
                 ) }
+                selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter -> com.marksy.os.ui.CapturedInboxView(
+                    capturedEvents, padding,
+                    onFilterSelected = { inboxFilterName = it },
+                    onOpenStock = { openStockFrom(it, "1") },
+                    onRetry = { id -> vm.retryDelivery(id) { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) } },
+                    onSendNow = { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) },
+                    onAllowBackground = ::openBatterySettings,
+                    showHealth = showCaptureHealth,
+                    onHealthDismiss = { showCaptureHealth = false },
+                    inbox = com.marksy.os.ui.rememberCaptureInbox(captureActions)
+                )
                 selectedTab == 1 -> SmartInboxScreen(
                     events = inboxEvents.filterNot { it.id in inboxHidden },
                     padding = padding,
@@ -784,19 +800,15 @@ class MainActivity : ComponentActivity() {
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
-                        capturedEvents, PaddingValues(bottom = padding.calculateBottomPadding()), market,
+                        PaddingValues(bottom = padding.calculateBottomPadding()), market,
                         selectedFilter = tradingFilter,
                         onFilterSelected = { tradingFilter = it },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
                         tipsStatus = tipsStatus,
                         onTipsStatusChange = { tipsStatus = it },
-                        onRetry = { id -> vm.retryDelivery(id) { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) } },
-                        onSendNow = { TradingDeliveryScheduler.requestImmediateDelivery(applicationContext) },
-                        onAllowBackground = ::openBatterySettings,
-                        showHealth = showCaptureHealth,
-                        onHealthDismiss = { showCaptureHealth = false },
-                        captureInbox = com.marksy.os.ui.rememberCaptureInbox(captureActions)
+                        historyScope = historyScope,
+                        onHistoryScopeChange = { historyScope = it }
                     )
                 }
                 selectedTab == 2 -> MarketScreen(

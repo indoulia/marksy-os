@@ -9,6 +9,8 @@ import java.util.Locale
 /** Words a ledger tip's server state, outcome and returns (spec §6.6, §7): a withdrawn losing call is a failed exit, not an invalidation. */
 object LedgerCalls {
     const val STATUS_ACTIVE = "ACTIVE"
+    // The tracker voids a call only before a valid entry (marksy-api tip_tracker `_void`).
+    const val STATUS_INVALIDATED = "INVALIDATED"
     private const val DATA_BASIS_PROVISIONAL = "PROVISIONAL"
     private const val DATA_BASIS_FINAL = "FINAL"
     const val TARGET_PROGRESS_AVAILABLE = "AVAILABLE"

@@ -6,6 +6,9 @@ import com.marksy.os.MarksyFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -20,12 +23,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,9 +49,62 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
+import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.market.StockMentions
 import java.math.BigDecimal
 
 private const val SHOWN_PER_STACK = 2
+
+/** Inbox › Captured calls: the capture log under the shared Inbox filter, with its Show options and Add screenshot on the stack. */
+@Composable
+fun CapturedInboxView(
+    events: List<NotificationEventEntity>, padding: PaddingValues, onFilterSelected: (String) -> Unit, onOpenStock: (String) -> Unit,
+    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
+) {
+    var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
+    var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
+    Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
+        CapturedList(events, stackBy, show, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
+        OneHandControls(
+            filters = inboxFilters,
+            selectedFilter = InboxCapturedFilter,
+            onFilterSelected = onFilterSelected,
+            filterIsView = false,
+            actions = listOf(FloatingAction(Icons.Default.AddPhotoAlternate, "Add screenshot", onClick = inbox.onAddScreenshot)),
+            extrasActive = show != ShowOnly.ALL,
+            filterExtras = { CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, stackBy: StackBy, onStackBy: (StackBy) -> Unit) {
+    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+        Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+            listOf(ShowOnly.ALL to "All", ShowOnly.TIPS to "Tips", ShowOnly.NEEDS_YOU to "Needs you").forEach { (v, l) -> Pill(l, selected = show == v) { onShow(v) } }
+        }
+        Text("STACK BY", color = MarksyTheme.TextMuted, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.Tight))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+            listOf(StackBy.SOURCE to "Source", StackBy.SYMBOL to "Symbol").forEach { (v, l) -> Pill(l, selected = stackBy == v) { onStackBy(v) } }
+        }
+    }
+}
+
+/** Capture log lanes; a ticker named in a call opens its stock page. */
+@Composable
+private fun CapturedList(
+    events: List<NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, onOpenStock: (String) -> Unit,
+    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
+) {
+    val isSymbol = rememberSymbolCheck()
+    val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
+    val lanes = remember(events, stackBy, show, isSymbol, now) {
+        CapturedModel.lanes(events, now, stackBy, show) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
+    }
+    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
+}
 
 /** Capture log: what the phone caught and whether Marksy got it, in lanes (Needs you, Today, Earlier, Rejected orders). */
 @Composable
@@ -98,7 +156,7 @@ fun CapturedScreen(
 }
 
 @Composable
-private fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
+internal fun FoldRow(title: String, sub: String, open: Boolean, onClick: () -> Unit) {
     MarksyRowCard(onClick = onClick) {
         MarksyCardHeader(title, trailing = { ExpandChevron(open) })
         Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Meta)

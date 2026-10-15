@@ -29,11 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
-import com.marksy.os.market.StockMentions
 
 @Composable
 fun TradingIntelligenceScreen(
-    captured: List<com.marksy.os.data.local.NotificationEventEntity>,
     padding: PaddingValues,
     market: MarketState = MarketState.Loading,
     selectedFilter: String = TradingFilters.first(),
@@ -42,16 +40,11 @@ fun TradingIntelligenceScreen(
     marketRepository: com.marksy.os.market.MarketIntelligenceRepository? = null,
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
     onTipsStatusChange: (MyTipsStatus) -> Unit = {},
-    onRetry: (Long) -> Unit = {},
-    onSendNow: () -> Unit = {},
-    onAllowBackground: () -> Unit = {},
-    showHealth: Boolean = false,
-    onHealthDismiss: () -> Unit = {},
-    captureInbox: CaptureInbox = CaptureInbox()
+    historyScope: HistoryScope = HistoryScope.MINE,
+    onHistoryScopeChange: (HistoryScope) -> Unit = {}
 ) {
-    var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
-    var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
-    // Marksy supplies the calls and their record; prices tick live from the user's Upstox feed.
+    val following = tipsStatus == MyTipsStatus.FOLLOWING
+    // Open: the user's live tips. Setups: Marksy's live calls. History: how calls ended. Captured calls are reviewed in Inbox.
     Box(
         Modifier
             .fillMaxSize()
@@ -61,10 +54,13 @@ fun TradingIntelligenceScreen(
     ) {
     Column(Modifier.fillMaxSize()) {
         when {
-            selectedFilter == TAB_PREDICTIONS && marketRepository != null -> PredictionsView(marketRepository, OneHandListBottomPadding, onOpenStock)
-            selectedFilter == TAB_TIPS && marketRepository != null -> MyTipsView(marketRepository, tipsStatus, OneHandListBottomPadding, onOpenStock)
             selectedFilter == TAB_PICKS -> SetupsView(marketRepository, OneHandListBottomPadding, onOpenStock)
-            else -> CapturedList(captured, stackBy, show, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, captureInbox)
+            marketRepository == null -> EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.")
+            selectedFilter == TAB_HISTORY -> when (historyScope) {
+                HistoryScope.MINE -> MyTipsView(marketRepository, MyTipsStatus.CLOSED, OneHandListBottomPadding, onOpenStock)
+                else -> PredictionsView(marketRepository, historyScope == HistoryScope.ENDED, OneHandListBottomPadding, onOpenStock)
+            }
+            else -> MyTipsView(marketRepository, if (following) MyTipsStatus.FOLLOWING else MyTipsStatus.OPEN, OneHandListBottomPadding, onOpenStock)
         }
     }
     OneHandControls(
@@ -72,13 +68,12 @@ fun TradingIntelligenceScreen(
         selectedFilter = selectedFilter,
         onFilterSelected = onFilterSelected,
         filterIsView = false,
-        actions = if (selectedFilter == TAB_CAPTURED) listOf(FloatingAction(Icons.Default.AddPhotoAlternate, "Add screenshot", onClick = captureInbox.onAddScreenshot)) else emptyList(),
-        // One filter button: My tips' status and Captured's options sit in its panel under the tabs.
-        extrasActive = (selectedFilter == TAB_CAPTURED && show != ShowOnly.ALL) || (selectedFilter == TAB_TIPS && tipsStatus != MyTipsStatus.OPEN),
+        // One filter button: each view's Show options sit in its panel under the views.
+        extrasActive = (selectedFilter == TAB_HISTORY && historyScope != HistoryScope.MINE) || (selectedFilter !in setOf(TAB_PICKS, TAB_HISTORY) && following),
         filterExtras = when (selectedFilter) {
-            TAB_CAPTURED -> ({ CapturedFilterSections(show, { show = it }, stackBy, { stackBy = it }) })
-            TAB_TIPS -> ({ TipsFilterSection(tipsStatus, onTipsStatusChange) })
-            else -> null
+            TAB_PICKS -> null
+            TAB_HISTORY -> ({ ShowSection(HistoryScope.entries, historyScope, HistoryScope::label, onHistoryScopeChange) })
+            else -> ({ ShowSection(listOf(MyTipsStatus.OPEN, MyTipsStatus.FOLLOWING), if (following) MyTipsStatus.FOLLOWING else MyTipsStatus.OPEN, { if (it == MyTipsStatus.OPEN) "Mine" else it.label }, onTipsStatusChange) })
         }
     )
     }
@@ -86,62 +81,42 @@ fun TradingIntelligenceScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TipsFilterSection(status: MyTipsStatus, onStatus: (MyTipsStatus) -> Unit) {
+private fun <T> ShowSection(options: List<T>, selected: T, label: (T) -> String, onPick: (T) -> Unit) {
     Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            MyTipsStatus.entries.forEach { s -> Pill(s.label, selected = status == s) { onStatus(s) } }
+            options.forEach { o -> Pill(label(o), selected = o == selected) { onPick(o) } }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, stackBy: StackBy, onStackBy: (StackBy) -> Unit) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-        Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            listOf(ShowOnly.ALL to "All", ShowOnly.TIPS to "Tips", ShowOnly.NEEDS_YOU to "Needs you").forEach { (v, l) -> Pill(l, selected = show == v) { onShow(v) } }
-        }
-        Text("STACK BY", color = MarksyTheme.TextMuted, style = MarksyType.Label, modifier = Modifier.padding(top = MarksySpace.Tight))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            listOf(StackBy.SOURCE to "Source", StackBy.SYMBOL to "Symbol").forEach { (v, l) -> Pill(l, selected = stackBy == v) { onStackBy(v) } }
-        }
-    }
-}
+/** History's lists: the user's closed tips, or Marksy's own closed or ended calls. */
+enum class HistoryScope(val label: String) { MINE("My tips"), MARKSY("Marksy closed"), ENDED("Marksy ended") }
 
-/** Capture log lanes; a ticker named in a call opens its stock page. */
-@Composable
-private fun CapturedList(
-    events: List<com.marksy.os.data.local.NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, onOpenStock: (String) -> Unit,
-    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
-) {
-    val isSymbol = rememberSymbolCheck()
-    val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
-    val lanes = remember(events, stackBy, show, isSymbol, now) {
-        CapturedModel.lanes(events, now, stackBy, show) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
-    }
-    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
-}
-
+private const val TAB_OPEN = "Open"
 private const val TAB_PICKS = "Setups"
-private const val TAB_PREDICTIONS = "Results"
-private const val TAB_TIPS = "My tips"
-private const val TAB_CAPTURED = "Captured"
-val TradingFilters = listOf(TAB_PICKS, TAB_PREDICTIONS, TAB_TIPS, TAB_CAPTURED)
-/** The My tips filter, for a tip-alert notification that opens My tips · Following. */
-const val TradingTipsFilter = TAB_TIPS
+private const val TAB_HISTORY = "History"
+val TradingFilters = listOf(TAB_OPEN, TAB_PICKS, TAB_HISTORY)
+/** The Open view, whose Following list a tip-alert notification opens. */
+const val TradingTipsFilter = TAB_OPEN
+const val TradingSetupsFilter = TAB_PICKS
+/** Ask Marksy's argument for Marksy's results: History, on Marksy's closed calls. */
+const val TradingMarksyResults = "Marksy results"
 
-/** Title superscript: the tab, plus Marksy's scan session or the My tips status. */
+/** An Ask Marksy argument → the view to show and, for Marksy's results, the History list; anything else opens Open. */
+fun tradingRoute(arg: String?): Pair<String, HistoryScope?> =
+    if (arg == TradingMarksyResults) TAB_HISTORY to HistoryScope.MARKSY else (TradingFilters.firstOrNull { it == arg } ?: TAB_OPEN) to null
+
+/** Title superscript: the view, plus Marksy's scan session, Following, or History's list. */
 fun tradingTitleNote(
     filter: String,
     scan: com.marksy.os.market.LatestScanDto?,
     tipsStatus: MyTipsStatus = MyTipsStatus.OPEN,
-    capturedNote: String? = null
+    historyScope: HistoryScope = HistoryScope.MINE
 ): String = when (filter) {
-    TAB_CAPTURED -> capturedNote ?: filter
-    TAB_TIPS -> "$filter · ${tipsStatus.label}"
-    else -> filter + (if (filter == TAB_PICKS) com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" } else null).orEmpty()
+    TAB_PICKS -> filter + com.marksy.os.market.PicksBasis.day(scan?.scanSessionDate)?.let { " · $it" }.orEmpty()
+    TAB_HISTORY -> "$filter · ${historyScope.label}"
+    else -> TAB_OPEN + (if (tipsStatus == MyTipsStatus.FOLLOWING) " · ${tipsStatus.label}" else "")
 }
 
 

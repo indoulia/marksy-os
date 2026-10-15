@@ -63,7 +63,7 @@ internal fun rememberFollowToggle(repository: MarketIntelligenceRepository): (Fo
     }
 }
 
-/** My tips · Following: tip alerts (new calls from followed channels, callers and engines; entries; closes), then who is followed. */
+/** Trading › Open · Following: tip alerts (new calls from followed channels, callers and engines; entries; closes), then who is followed. */
 @Composable
 internal fun FollowingView(repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
     val follows by produceState<MarketDataState<FollowListDto>>(MarketDataState.Loading) { value = repository.follows() }

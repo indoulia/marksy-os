@@ -13,7 +13,7 @@ import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PicksBasis
 
-/** Today's setups: Marksy's live calls, best first. Reports' setups are parsed by the server and land in My tips. */
+/** Today's setups: Marksy's live calls, best first. Reports' setups are parsed by the server and land in Open. */
 @Composable
 internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding: Dp, onOpenStock: (String) -> Unit) {
     val marksy by produceState<MarketDataState<List<ActivePredictionDto>>>(MarketDataState.Loading, repository) {
@@ -36,7 +36,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             else -> if (live.isEmpty()) item {
                 EmptyState(
                     "No live Marksy setups right now",
-                    if (all.isNotEmpty()) "All ${all.size} open calls have ended. See Results for how they did."
+                    if (all.isNotEmpty()) "All ${all.size} open calls have ended. See History · Marksy ended for how they did."
                     else "Marksy's new calls appear here after each market close." + scan?.let(PicksBasis::label)?.let { " Last scan: $it." }.orEmpty()
                 )
             }
