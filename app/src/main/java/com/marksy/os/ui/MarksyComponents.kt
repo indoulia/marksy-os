@@ -230,7 +230,8 @@ fun MarksySegmented(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     label: (String) -> String = { it },
-    color: (String) -> Color = { MarksyTheme.PrimaryEmerald }
+    color: (String) -> Color = { MarksyTheme.PrimaryEmerald },
+    count: (String) -> Int? = { null }
 ) {
     Row(
         modifier.clip(MarksyShape.Pill).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Pill).padding(MarksySpace.Hair),
@@ -238,14 +239,29 @@ fun MarksySegmented(
     ) {
         options.forEach { option ->
             val on = option == selected
-            Text(
-                label(option), color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Small,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 1,
-                modifier = Modifier.weight(1f).clip(MarksyShape.Pill).background(if (on) color(option) else Color.Transparent)
-                    .clickable { onSelect(option) }.padding(vertical = MarksySpace.Inner)
-            )
+            Row(
+                Modifier.weight(1f).clip(MarksyShape.Pill).background(if (on) color(option) else Color.Transparent)
+                    .clickable { onSelect(option) }.padding(vertical = MarksySpace.Inner),
+                horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    label(option), color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Small,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center, maxLines = 1
+                )
+                count(option)?.let { CountBadge(it, on) }
+            }
         }
     }
+}
+
+/** A count beside a tab or segment label; [on] when it sits on the selected (accent) fill. */
+@Composable
+fun CountBadge(count: Int, on: Boolean) {
+    Text(
+        "$count", color = if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold, maxLines = 1,
+        modifier = Modifier.clip(MarksyShape.Pill).background(if (on) MarksyTheme.Background else MarksyTheme.Divider).padding(horizontal = MarksySpace.Inner, vertical = MarksySpace.Border)
+    )
 }
 
 @Composable

@@ -91,7 +91,7 @@ fun BoxScope.OneHandControls(
 ) {
     var searchOpen by rememberSaveable(searchResetKey) { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
-    val filterActive = filters.isNotEmpty() && (if (filterIsView) selectedFilter != filters.first().first else extrasActive)
+    val filterActive = if (filters.isEmpty()) extrasActive else if (filterIsView) selectedFilter != filters.first().first else extrasActive
     val searchActive = !searchQuery.isNullOrEmpty()
 
     // Tapping outside the open filter list dismisses it.
@@ -108,7 +108,7 @@ fun BoxScope.OneHandControls(
     ) {
         // The panel gets only the height the buttons leave and scrolls within it, so a long list never pushes Close off screen.
         if (filtersOpen) FloatingMenuPanel(filters, selectedFilter, Alignment.End, Modifier.weight(1f, fill = false), extras = filterExtras) { onFilterSelected(it); filtersOpen = false }
-        if (filters.isNotEmpty()) {
+        if (filters.isNotEmpty() || filterExtras != null) {
             // Always opens the list so filters switch in place; the dot marks one applied, the list's default resets it.
             FloatingRoundButton(if (filtersOpen) Icons.Default.Close else Icons.Default.FilterList, if (filtersOpen) "Close filters" else "Filters", filterActive && !filtersOpen) {
                 filtersOpen = !filtersOpen

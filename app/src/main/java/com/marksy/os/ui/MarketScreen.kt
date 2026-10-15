@@ -4,6 +4,8 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +55,12 @@ fun MarketScreen(
     onArchiveEvent: (NotificationEventEntity) -> Unit = {},
     onHideEvent: (NotificationEventEntity) -> Unit = {},
     onOpenStock: ((String) -> Unit)? = null,
-    onIpoNote: (String?) -> Unit = {}
+    onIpoNote: (String?) -> Unit = {},
+    market: com.marksy.os.gateway.MarketState = com.marksy.os.gateway.MarketState.Loading,
+    liveIndices: com.marksy.os.upstox.UpstoxLiveState = com.marksy.os.upstox.UpstoxLiveState.NotConfigured,
+    tabCounts: Map<String, Int?> = emptyMap(),
+    onOpenSetups: () -> Unit = {},
+    onOpenScorecard: (com.marksy.os.market.ScorecardSource) -> Unit = {}
 ) {
     val tab = MarketTab.entries.firstOrNull { it.name == tabName } ?: MarketTab.OVERVIEW
 
@@ -65,12 +72,20 @@ fun MarketScreen(
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
     var openTip by remember { mutableStateOf<String?>(null) }
     openTip?.let { TipDetailDialog(repository, it, onOpenStock = null) { openTip = null } }
+    var pick by remember { mutableStateOf<TipCardModel?>(null) }
+    pick?.let { m ->
+        TipSheet(m, repository, onDismiss = { pick = null }, onTrade = { pick = null; ticket = it }, onOpenStock = { pick = null; onOpenStock?.invoke(it) }, onScore = { pick = null; onOpenScorecard(it) })
+    }
     var portfolioQuery by rememberSaveable { mutableStateOf("") }
     var portfolioSort by remember { mutableStateOf(false) }
     val portfolioHoldings by PortfolioChrome.hasHoldings.collectAsState()
 
     // Section switching uses the same bottom-right floating filter as Inbox and Trading.
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding()).consumeWindowInsets(padding)) {
+      Column(Modifier.fillMaxSize()) {
+        // The stock page is not a section, so it keeps its own layout without the grid.
+        if (tab != MarketTab.STOCKS) MarketTabGrid(tab.name, tabCounts) { onTabSelected(it); onSymbolSelected(null) }
+        Box(Modifier.weight(1f)) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         when (tab) {
             MarketTab.WATCHLIST -> Unit
@@ -89,7 +104,12 @@ fun MarketScreen(
                 val health by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.LiveFeedHealthDto>, refresh.key) {
                     while (true) { value = repository.liveFeedHealth(); kotlinx.coroutines.delay(60_000) }
                 }
-                MarksyRefreshBox(refresh) { MarketOverviewScreen(state = state, padding = inner, health = health, onOpenStock = onOpenStock) }
+                MarksyRefreshBox(refresh) {
+                    MarketOverviewScreen(
+                        state = state, padding = inner, health = health, onOpenStock = onOpenStock, market = market, live = liveIndices,
+                        repository = repository, onTrade = { ticket = it }, onOpenSetups = onOpenSetups, onOpenTip = { pick = it }
+                    )
+                }
             }
             MarketTab.STOCKS -> {
                 val symbol = selectedSymbol
@@ -144,6 +164,8 @@ fun MarketScreen(
                 }
             }
         }
+        }
+      }
         // Search and sort only once there are holdings to search.
         val portfolioTools = tab == MarketTab.PORTFOLIO && portfolioHoldings
         val stockSearch = tab == MarketTab.STOCKS
@@ -154,7 +176,7 @@ fun MarketScreen(
         }
         // The IPO page draws its own stack (filters, search, reminders, watch).
         if (tab != MarketTab.IPOS) OneHandControls(
-            filters = MarketSections,
+            filters = emptyList(), // sections live in the sticky tab grid
             selectedFilter = tab.name,
             filterIsView = false,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
@@ -216,4 +238,35 @@ private fun MarketUpdateCard(event: NotificationEventEntity, onClick: () -> Unit
         Text(event.title, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (event.body.isNotBlank()) Text(event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 3, overflow = TextOverflow.Ellipsis)
     }
+}
+
+/** Market's sections as a sticky three-column grid, each with its count when known. */
+@Composable
+internal fun MarketTabGrid(selected: String, counts: Map<String, Int?>, onSelect: (String) -> Unit) {
+    val holdings by PortfolioChrome.holdings.collectAsState()
+    val all = counts + (MarketTab.PORTFOLIO.name to holdings)
+    Column(
+        Modifier.fillMaxWidth().background(MarksyTheme.Background).padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
+    ) {
+        MarketSections.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                row.forEach { (name, label) ->
+                    val on = name == selected
+                    Row(
+                        Modifier.weight(1f).clip(MarksyShape.Pill).background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
+                            .border(MarksySpace.Border, if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, MarksyShape.Pill)
+                            .clickable(onClickLabel = label) { onSelect(name) }.padding(vertical = MarksySpace.Inner),
+                        horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, androidx.compose.ui.Alignment.CenterHorizontally),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(label, color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+                        all[name]?.let { CountBadge(it, on) }
+                    }
+                }
+                repeat(3 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+    MarksyDivider()
 }

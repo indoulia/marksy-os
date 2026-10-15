@@ -197,7 +197,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             }
         }
         OneHandControls(
-            filters = MarketSections,
+            filters = emptyList(), // sections live in the sticky tab grid
             selectedFilter = MarketTab.IPOS.name,
             filterIsView = false,
             onFilterSelected = onSectionSelected,

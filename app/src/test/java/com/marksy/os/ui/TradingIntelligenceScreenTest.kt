@@ -118,6 +118,7 @@ class TradingIntelligenceScreenTest {
     // Regression: two Marksy calls for the same symbol crashed the list ("Key pick-NTPCGREEN was already used").
     // Invalidated calls must not be offered as setups.
     @Test
+    @Config(sdk = [34], qualifiers = "w411dp-h1600dp")
     fun twoCallsForTheSameSymbolBothRenderAndInvalidatedOnesAreLeftOut() {
         val repo = repository(call(1, 100.0), call(2, 104.0), call(3, 106.0, state = "INVALIDATED"))
 
@@ -130,18 +131,18 @@ class TradingIntelligenceScreenTest {
     // Regression: the active feed is keyset-paged on a re-rankable score, so a later page can repeat a call; Ended crashed on the repeated key.
     @Test
     fun aCallRepeatedOnALaterPageRendersOnce() {
-        val ended = call(1, 100.0, state = "INVALIDATED")
+        val ended = call(1, 100.0, state = "DATA_UNRESOLVED")
         val repo = repository(ended, call(2, 104.0), laterPage = listOf(ended))
 
-        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repo, historyScope = HistoryScope.ENDED) }
+        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repo, historyScope = HistoryScope.MARKSY) }
         // Both pages must have loaded, or a single row would pass without the repeat ever arriving.
         compose.waitUntil(20_000) { compose.onAllNodesWithText("Loading", substring = true).fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithText("NTPCGREEN").fetchSemanticsNodes().isNotEmpty() }
 
         compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(1)
     }
 
-    // Open is the default and asks the ledger only for active tips; History's default lists the closed ones with their outcome.
-    // A tip names its source but not the source's Trust Score, which is history, not this tip's performance.
+    // Open is the default and lists active tips; History lists the closed ones with their outcome. Both feeds load up front for the counts.
+    // A tip's Trust chip is its channel's Trust Score from the ledger's scorecard.
     @Test
     fun openShowsActiveTipsAndHistoryShowsClosedOnes() {
         val repo = repository()
@@ -149,36 +150,37 @@ class TradingIntelligenceScreenTest {
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = view.value, marketRepository = repo) }
         awaitText("HAL")
         compose.onNodeWithText("HAL").assertIsDisplayed()
-        compose.onNodeWithText("5paisa").assertIsDisplayed()
-        compose.onAllNodesWithText("Trust", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("5paisa", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Trust 62 ›").assertIsDisplayed()
         compose.onAllNodesWithText("TCS").assertCountEquals(0)
 
         view.value = "History"
         awaitText("Target hit")
         compose.onNodeWithText("Target hit").assertIsDisplayed()
         compose.onAllNodesWithText("HAL").assertCountEquals(0)
-        assertEquals(listOf("ACTIVE", "CLOSED"), requested)
+        assertEquals(listOf("ACTIVE", "CLOSED"), requested.sortedBy { it })
     }
 
-    // The strip is the Prediction engine's ledger scorecard: calls count from their real entry, and invalidated ones are named, never scored.
+    // The strip is the Prediction engine's ledger scorecard as the server sent it: completed tips count from their real entry.
     @Test
     fun marksyTrackRecordIsThePredictionEngineLedgerScorecard() {
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository(), historyScope = HistoryScope.MARKSY) }
-        awaitText("Last 30 days of calls")
+        awaitText("LAST 30 DAYS · 55 COMPLETED")
 
-        compose.onNodeWithText("Last 30 days of calls").assertIsDisplayed()
-        compose.onNodeWithText("Succeeded").assertIsDisplayed()
-        compose.onNodeWithText("Hit rate 36.4% of 55 completed · 12 invalidated and 5 open not counted · avg return is per completed call from its entry").assertIsDisplayed()
+        compose.onNodeWithText("20 succeeded · 25 failed · 10 expired · 36.4% hit").assertIsDisplayed()
         assertEquals(listOf("caller?period=LAST_30_DAYS"), scorecardFilters)
         assertEquals(0, summaryReads)
     }
 
     @Test
-    fun trackRecordPicksThePredictionEngineAndNamesOnlyWhatItLeftOut() {
+    fun trackRecordPicksThePredictionEngineAndWordsItsRecord() {
         val prediction = engineCard(2, "Prediction engine", invalidated = 0, open = 0)
         assertEquals(prediction, predictionEngineCard(listOf(engineCard(3, "Rating engine"), prediction)))
         assertEquals(null, predictionEngineCard(listOf(engineCard(3, "Rating engine"))))
-        assertEquals("Hit rate 36.4% of 55 completed · avg return is per completed call from its entry", trackRecordNote(prediction.body))
+        val strip = TradingLists.historySummary(prediction.body)!!
+        assertEquals("LAST 30 DAYS · 55 COMPLETED", strip.caption)
+        assertEquals("−0.40%", strip.big)
+        assertEquals(null, TradingLists.historySummary(null))
     }
 
     // Regression (device, 2026-10-15): Inbox's long filter list pushed Close and Add screenshot off screen, then scrolled Captured calls out of sight.
@@ -221,17 +223,17 @@ class TradingIntelligenceScreenTest {
 
         compose.onAllNodesWithText("KIRLOSBROS").assertCountEquals(1)
         compose.onNodeWithText("2 predictions", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Invalidated before entry").assertIsDisplayed()
-        compose.onNodeWithText("2 calls · voided before entry, so excluded from scored results").assertIsDisplayed()
+        compose.onNodeWithText("Voided before buy").assertIsDisplayed()
+        compose.onNodeWithText("2 tips · voided before anyone could buy · not scored").assertIsDisplayed()
         compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
 
-        compose.onNodeWithText("Invalidated before entry").performClick()
+        compose.onNodeWithText("Voided before buy").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("WEWIN").assertIsDisplayed()
         compose.onNodeWithText("VISACHROME").assertIsDisplayed()
-        compose.onAllNodesWithText("Invalidated · source exit before entry").assertCountEquals(2)
+        compose.onAllNodesWithText("Voided before buy").assertCountEquals(3)
 
-        compose.onNodeWithText("Invalidated before entry").performClick()
+        compose.onAllNodesWithText("Voided before buy")[0].performClick()
         compose.waitForIdle()
         compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
     }
@@ -242,7 +244,8 @@ class TradingIntelligenceScreenTest {
         assertEquals("History" to HistoryScope.MARKSY, tradingRoute(TradingMarksyResults))
         assertEquals("Setups" to null, tradingRoute("Setups"))
         assertEquals("Open" to null, tradingRoute(null))
-        assertEquals("History · Marksy closed", tradingTitleNote("History", null, historyScope = HistoryScope.MARKSY))
-        assertEquals("Open · Following", tradingTitleNote("Open", null, tipsStatus = MyTipsStatus.FOLLOWING))
+        assertEquals("History · Marksy", tradingTitleNote("History", null, historyScope = HistoryScope.MARKSY))
+        assertEquals("History", tradingTitleNote("History", null))
+        assertEquals("Open · Following", tradingTitleNote("Open", null, openScope = OpenScope.FOLLOWING))
     }
 }

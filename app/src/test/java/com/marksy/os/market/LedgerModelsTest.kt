@@ -122,4 +122,44 @@ class LedgerModelsTest {
         assertEquals("TARGET_HIT", detail.ledger!!.status)
         assertNull(TipDetailDto.parse(JSONObject("""{"tipId": "legacy", "ledger": null, "progress": []}""")).ledger)
     }
+
+    // Revamp fields are optional: today's payload parses with them absent, and a payload with them keeps every value.
+    @Test
+    fun parsesRevampFieldsAndToleratesTheirAbsence() {
+        val old = LedgerTipDto.parse(JSONObject("{${ledgerTip()}}"))
+        assertNull(old.recommendedPrice)
+        assertNull(old.marksyView)
+        assertNull(old.repeats)
+        assertEquals(emptyList<AlsoTippedDto>(), old.alsoBy)
+        assertNull(ProgressPointDto.parse(JSONObject(progress)).close)
+
+        val tip = LedgerTipDto.parse(JSONObject("""{${ledgerTip()}, "recommendedPrice": "130450.000000", "enteredPrice": "130620.000000",
+            "enteredOn": "2026-10-13", "buyBy": "2026-10-17", "horizonEndsOn": "2026-10-27", "sessionsElapsed": 2, "repeats": 3,
+            "marksyView": {"probability": "0.724", "verdict": "AGREES", "comparedAt": "2026-10-13T05:00:00Z"},
+            "alsoBy": [{"tipId": "uuid-2", "channel": {"channelId": 4, "name": "Options Desk", "type": "WHATSAPP_GROUP"}, "caller": null,
+                "firstSeenAt": "2026-10-11T04:00:00Z", "recommendedPrice": "4398.00", "status": "ACTIVE", "entryStatus": "ENTERED",
+                "returnToDate": "0.030100", "actualReturn": null}]}"""))
+        assertEquals(130450.0, tip.recommendedPrice!!, 0.0)
+        assertEquals(130620.0, tip.enteredPrice!!, 0.0)
+        assertEquals(listOf("2026-10-13", "2026-10-17", "2026-10-27"), listOf(tip.enteredOn, tip.buyBy, tip.horizonEndsOn))
+        assertEquals(2, tip.sessionsElapsed)
+        assertEquals(3, tip.repeats)
+        assertEquals(0.724, tip.marksyView!!.probability!!, 1e-9)
+        assertEquals("AGREES", tip.marksyView!!.verdict)
+        val also = tip.alsoBy.single()
+        assertEquals("uuid-2", also.tipId)
+        assertEquals("Options Desk", also.channel!!.name)
+        assertNull(also.caller)
+        assertEquals(0.0301, also.returnToDate!!, 1e-9)
+        assertNull(also.actualReturn)
+    }
+
+    // `GET /tips/{id}/progress` may list the sessions under `data` or `data.progress`; each may carry its close.
+    @Test
+    fun parsesTheProgressListWithCloses() {
+        val withClose = progress.dropLast(1) + """, "close": "4530.40"}"""
+        assertEquals(listOf(4530.4), ProgressPointDto.parseList(JSONObject("""{"data": [$withClose]}""")).map { it.close })
+        assertEquals(listOf("2026-09-22"), ProgressPointDto.parseList(JSONObject("""{"data": {"progress": [$progress]}}""")).map { it.sessionDate })
+        assertEquals(emptyList<ProgressPointDto>(), ProgressPointDto.parseList(JSONObject("""{"data": null}""")))
+    }
 }

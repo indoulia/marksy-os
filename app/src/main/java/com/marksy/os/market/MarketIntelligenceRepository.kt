@@ -79,6 +79,20 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
 
     suspend fun tipDetail(tipId: String): MarketDataState<TipDetailDto> = fetch(ledger = true) { it.tipDetail(tipId) }
 
+    /** A tip's sessions with their closes; a backend without `/tips/{id}/progress` gives the ones `GET /tips/{id}` carries. */
+    suspend fun tipProgress(tipId: String): MarketDataState<List<ProgressPointDto>> {
+        val own = fetch(ledger = true) { it.tipProgress(tipId) }
+        if (own is MarketDataState.Loaded) return own
+        return when (val d = tipDetail(tipId)) {
+            is MarketDataState.Loaded -> MarketDataState.Loaded(d.value.progress)
+            is MarketDataState.Stale -> MarketDataState.Loaded(d.value.progress)
+            is MarketDataState.Error -> d
+            MarketDataState.Empty -> MarketDataState.Empty
+            MarketDataState.Loading -> MarketDataState.Loading
+            MarketDataState.Unavailable -> MarketDataState.Unavailable
+        }
+    }
+
     /** Re-reads the customer's follows from the server and publishes them as [followed]. */
     suspend fun follows(): MarketDataState<FollowListDto> =
         fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { c -> c.follows().also { _followed.value = Follows.keys(it) } }

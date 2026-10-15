@@ -290,8 +290,8 @@ class MainActivity : ComponentActivity() {
         var selectedTab by rememberSaveable { mutableIntStateOf(0) }
         var inboxFilterName by rememberSaveable { mutableStateOf(SmartInboxModel.Filter.ALL.name) }
         var tradingFilter by rememberSaveable { mutableStateOf(TradingFilters.first()) }
-        var tipsStatus by rememberSaveable { mutableStateOf(com.marksy.os.ui.MyTipsStatus.OPEN) }
-        var historyScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.HistoryScope.MINE) }
+        var openScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.OpenScope.ALL) }
+        var historyScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.HistoryScope.ALL) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.WATCHLIST.name) }
@@ -441,7 +441,7 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 && marketTabName == MarketTab.PORTFOLIO.name -> portfolioNote
             // Overview, Updates: the section name, so every Market page carries its green label.
             selectedTab == 2 -> MarketTab.entries.firstOrNull { it.name == marketTabName }?.label
-            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, tipsStatus, historyScope)
+            selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, openScope, historyScope)
             selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter -> capturedNote
             selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
@@ -474,7 +474,7 @@ class MainActivity : ComponentActivity() {
                 OPEN_IPOS -> { showAsk = false; showBriefing = false; marketTabName = MarketTab.IPOS.name; selectedTab = 2 }
                 OPEN_FOLLOWING -> {
                     showAsk = false; showBriefing = false
-                    tradingFilter = com.marksy.os.ui.TradingTipsFilter; tipsStatus = com.marksy.os.ui.MyTipsStatus.FOLLOWING; selectedTab = 3
+                    tradingFilter = com.marksy.os.ui.TradingTipsFilter; openScope = com.marksy.os.ui.OpenScope.FOLLOWING; selectedTab = 3
                 }
             }
             pendingOpen = null
@@ -519,6 +519,13 @@ class MainActivity : ComponentActivity() {
             feedStatus is UpstoxFeed.Status.Reconnecting -> UpstoxLiveState.Failed((feedStatus as UpstoxFeed.Status.Reconnecting).reason, tokenRejected = false)
             else -> UpstoxLiveState.Loading
         }
+
+        // A tip's Marksy or Trust chip opens that scorecard on the Trust tab.
+        val openScorecard: (com.marksy.os.market.ScorecardSource) -> Unit = { source -> scorecardTrail = listOf(source); selectedTab = 4 }
+        val marketTabCounts = mapOf(
+            MarketTab.WATCHLIST.name to com.marksy.os.ui.watchlistCurrentId(watchView, watchlists, watchItems)?.let { id -> watchItems.count { it.watchlistId == id } },
+            MarketTab.UPDATES.name to inboxEvents.count { it.category == "MARKET" && it.id !in marketHidden }
+        )
 
         val headerState = rememberCollapsingHeaderState()
         LaunchedEffect(screenTitle) { headerState.reset() }
@@ -796,7 +803,8 @@ class MainActivity : ComponentActivity() {
                     query = watchQuery,
                     onQueryChange = { watchQuery = it },
                     onOpenStock = { openStockFrom(it, "2") },
-                    onSectionSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null }
+                    onSectionSelected = { marketTabName = it; stockTrail = emptyList(); stockReturn = null },
+                    tabCounts = marketTabCounts
                 )
                 selectedTab == 3 -> MarksyRefreshBox(marketRefresh, Modifier.padding(top = padding.calculateTopPadding())) {
                     TradingIntelligenceScreen(
@@ -805,10 +813,11 @@ class MainActivity : ComponentActivity() {
                         onFilterSelected = { tradingFilter = it },
                         onOpenStock = { openStockFrom(it, "3") },
                         marketRepository = remember { MarksyContainer.marketIntelligence(applicationContext) },
-                        tipsStatus = tipsStatus,
-                        onTipsStatusChange = { tipsStatus = it },
+                        openScope = openScope,
+                        onOpenScopeChange = { openScope = it },
                         historyScope = historyScope,
-                        onHistoryScopeChange = { historyScope = it }
+                        onHistoryScopeChange = { historyScope = it },
+                        onOpenScorecard = openScorecard
                     )
                 }
                 selectedTab == 2 -> MarketScreen(
@@ -832,7 +841,12 @@ class MainActivity : ComponentActivity() {
                     onArchiveEvent = { archiveThreadWithUndo(listOf(it)) },
                     onHideEvent = { marketHidden = marketHidden + it.id },
                     onOpenStock = { openStockFrom(it, "2") },
-                    onIpoNote = { ipoNote = it }
+                    onIpoNote = { ipoNote = it },
+                    market = market,
+                    liveIndices = upstoxLive,
+                    tabCounts = marketTabCounts,
+                    onOpenSetups = { tradingFilter = com.marksy.os.ui.TradingSetupsFilter; selectedTab = 3 },
+                    onOpenScorecard = openScorecard
                 )
                 selectedTab == 4 -> com.marksy.os.ui.TrustScreen(
                     repository = remember { MarksyContainer.marketIntelligence(applicationContext) },

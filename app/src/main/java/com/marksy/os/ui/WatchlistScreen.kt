@@ -156,7 +156,8 @@ fun WatchlistScreen(
     query: String,
     onQueryChange: (String) -> Unit = {},
     onOpenStock: (String) -> Unit,
-    onSectionSelected: (String) -> Unit
+    onSectionSelected: (String) -> Unit,
+    tabCounts: Map<String, Int?> = emptyMap()
 ) {
     val scope = rememberCoroutineScope()
     val list = currentList(view, lists, items)
@@ -166,7 +167,13 @@ fun WatchlistScreen(
     var quickAdding by rememberSaveable { mutableStateOf(false) }
     var moving by remember { mutableStateOf<String?>(null) }
 
+    var ticket by remember { mutableStateOf<TradeIntent?>(null) }
+    ticket?.let { TradeTicketSheet(it) { ticket = null } }
+
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
+      Column(Modifier.fillMaxSize()) {
+        MarketTabGrid(MarketTab.WATCHLIST.name, tabCounts, onSectionSelected)
+        Box(Modifier.weight(1f)) {
         val inner = PaddingValues(bottom = OneHandListBottomPadding)
         val q = query.trim()
         when {
@@ -181,9 +188,12 @@ fun WatchlistScreen(
                 onOpen = onOpenStock,
                 onRemove = { symbol -> scope.launch { repository.remove(list.id, symbol) } },
                 onMove = { moving = it },
-                onAdd = { quickAdding = true }
+                onAdd = { quickAdding = true },
+                onTrade = { ticket = it }
             )
         }
+        }
+      }
         OneHandQuickMenu(
             options = rankedWatchlists(lists, items).map { it.id.toString() to "${it.name}  ${counts[it.id] ?: 0}" },
             selected = list?.id?.toString(),
@@ -194,7 +204,7 @@ fun WatchlistScreen(
         )
         // Delete lives in Settings (ManageWatchlistsDialog), away from easy taps.
         OneHandControls(
-            filters = MarketSections,
+            filters = emptyList(), // sections live in the sticky tab grid
             selectedFilter = MarketTab.WATCHLIST.name,
             filterIsView = false,
             onFilterSelected = onSectionSelected,
@@ -336,8 +346,21 @@ fun ManageWatchlistsDialog(repository: WatchlistRepository, lists: List<Watchlis
 }
 
 @Composable
-private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit, onAdd: () -> Unit) {
+private fun WatchlistRows(
+    rows: List<WatchlistItemEntity>, emptyName: String, padding: PaddingValues, onOpen: (String) -> Unit, onRemove: (String) -> Unit, onMove: (String) -> Unit,
+    onAdd: () -> Unit, onTrade: (TradeIntent) -> Unit
+) {
     val quotes = rememberUpstoxQuotes(remember(rows) { rows.map { it.symbol } })
+    val context = LocalContext.current.applicationContext
+    // The customer's open tips and Marksy's live calls, for each row's signal; null (company names instead) until both answer.
+    val tips by produceState<Pair<List<com.marksy.os.market.MyTipDto>, List<com.marksy.os.market.ActivePredictionDto>>?>(null) {
+        val repo = MarksyContainer.marketIntelligence(context)
+        val mine = repo.myTips("ACTIVE")
+        val marksy = repo.activePredictions()
+        fun <T> ok(s: MarketDataState<T>) = s is MarketDataState.Loaded || s is MarketDataState.Empty
+        if (ok(mine) && ok(marksy)) value = (mine as? MarketDataState.Loaded)?.value?.items.orEmpty() to (marksy as? MarketDataState.Loaded)?.value?.items.orEmpty()
+    }
+    val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
     MarksyList(bottom = padding.calculateBottomPadding()) {
         if (rows.isEmpty()) item { EmptyState("Nothing in $emptyName yet", "Add up to ${WatchlistRepository.MAX_STOCKS} stocks below.") }
         items(rows, key = { "w-${it.watchlistId}-${it.symbol}" }) { row ->
@@ -347,7 +370,10 @@ private fun WatchlistRows(rows: List<WatchlistItemEntity>, emptyName: String, pa
                     SwipeTrayAction(Icons.Default.Delete, "Remove ${row.symbol}", MarksyTheme.Negative) { onRemove(row.symbol) },
                     SwipeTrayAction(Icons.Default.SwapHoriz, "Move ${row.symbol} to another list", MarksyTheme.PrimaryEmerald) { onMove(row.symbol) }
                 )
-            ) { WatchRow(row, quotes[row.symbol]) { onOpen(row.symbol) } }
+            ) {
+                val signal = tips?.let { (mine, marksy) -> WatchSignals.of(row.symbol, mine, marksy, quotes[row.symbol]?.lastPrice, today) }
+                WatchRow(row, quotes[row.symbol], signal, onTrade) { onOpen(row.symbol) }
+            }
         }
         // Right under the last stock, where the eye already is; hidden once the list is full.
         if (rows.size < WatchlistRepository.MAX_STOCKS) item(key = "add") { AddStocksButton(rows.size, onAdd) }
@@ -366,12 +392,14 @@ private fun AddStocksButton(count: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, onClick: () -> Unit) {
+private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.UpstoxLtp?, signal: WatchSignal?, onTrade: (TradeIntent) -> Unit, onClick: () -> Unit) {
     MarksyRowCard(onClick = onClick) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(row.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
-                row.name?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                // The tip signal replaces the company name once Marksy answers.
+                if (signal != null) Text(signal.text, color = trackColor(signal.tone), style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else row.name?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             if (quote != null) Column(horizontalAlignment = Alignment.End) {
                 Text(com.marksy.os.MarksyFormat.rupees(quote.lastPrice), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
@@ -379,6 +407,7 @@ private fun WatchRow(row: WatchlistItemEntity, quote: com.marksy.os.upstox.Upsto
                     Text(com.marksy.os.MarksyFormat.percent(pct), color = if (pct < 0) MarksyTheme.Negative else MarksyTheme.Positive, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
                 }
             }
+            signal?.trade?.let { t -> MarksyButton(if (t.side == TradeSide.SELL) "Sell" else "Buy", { onTrade(t) }, Modifier.padding(start = MarksySpace.Gap)) }
         }
     }
 }

@@ -125,29 +125,33 @@ fun CapturedScreen(
     var rejectedOpen by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf<CapturedRow?>(null) }
     val toggle: (String) -> Unit = { key -> expanded = if (key in expanded) expanded - key else expanded + key }
+    val symbols = remember(lanes) {
+        (lanes.needsYou.map { it.row } + (lanes.today + lanes.earlier).flatMap { it.rows } + lanes.rejected).mapNotNull { it.levels?.takeIf(TipLevels::hasLevels)?.symbol }.distinct()
+    }
+    val quotes = rememberUpstoxQuotes(symbols)
 
     MarksyList {
         captureToReview(inbox, now, toReviewOpen) { toReviewOpen = !toReviewOpen }
-        if (lanes.isEmpty && inbox.isEmpty) item { EmptyState("Nothing captured yet", "Calls from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
+        if (lanes.isEmpty && inbox.isEmpty) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
             item { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
             items(lanes.needsYou, key = { "n${it.row.event.id}" }) { NeedCard(it, now, { selected = it.row }, onRetry, onSendNow, onAllowBackground) }
         }
         if (lanes.today.isNotEmpty()) {
             item { SectionLabel("Today", lanes.today.sumOf { it.rows.size }, MarksyTheme.Positive) }
-            items(lanes.today, key = { "t${it.key}" }) { StackCard("t${it.key}", it, now, "t${it.key}" in expanded, toggle) { selected = it } }
+            items(lanes.today, key = { "t${it.key}" }) { StackCard("t${it.key}", it, now, quotes, "t${it.key}" in expanded, toggle) { selected = it } }
         }
         if (lanes.earlier.isNotEmpty()) {
             val count = lanes.earlier.sumOf { it.rows.size }
             item {
-                FoldRow("Earlier", "$count ${if (count == 1) "call" else "calls"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"} · Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
+                FoldRow("Earlier", "$count ${if (count == 1) "tip" else "tips"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"} · Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
             }
-            if (earlierOpen) items(lanes.earlier, key = { "e${it.key}" }) { StackCard("e${it.key}", it, now, "e${it.key}" in expanded, toggle) { selected = it } }
+            if (earlierOpen) items(lanes.earlier, key = { "e${it.key}" }) { StackCard("e${it.key}", it, now, quotes, "e${it.key}" in expanded, toggle) { selected = it } }
         }
         if (lanes.rejected.isNotEmpty()) {
             item { FoldRow("Rejected orders", "${lanes.rejected.size} · Your broker turned these down", rejectedOpen) { rejectedOpen = !rejectedOpen } }
             if (rejectedOpen) items(lanes.rejected, key = { "r${it.event.id}" }) { r ->
-                MarksyRowCard(onClick = { selected = r }) { TipRow(r, now, firstRow = true) }
+                MarksyRowCard(onClick = { selected = r }) { TipRow(r, now, firstRow = true, quotes) }
             }
         }
     }
@@ -180,7 +184,7 @@ private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Lo
         }
         Text(r.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
-            if (failed) noteLabel(r.event.deliveryNote) ?: "Marksy did not receive this call." else "Android is holding the send back; it goes out when the phone allows.",
+            if (failed) noteLabel(r.event.deliveryNote) ?: "Marksy did not receive this tip." else "Android is holding the send back; it goes out when the phone allows.",
             color = MarksyTheme.TextSecondary, style = MarksyType.Small
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
@@ -194,7 +198,7 @@ private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Lo
 }
 
 @Composable
-private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boolean, onToggle: (String) -> Unit, onOpen: (CapturedRow) -> Unit) {
+private fun StackCard(id: String, stack: CapturedStack, now: Long, quotes: Map<String, com.marksy.os.upstox.UpstoxLtp>, expanded: Boolean, onToggle: (String) -> Unit, onOpen: (CapturedRow) -> Unit) {
     val shown = if (expanded) stack.rows else stack.rows.take(SHOWN_PER_STACK)
     val hidden = stack.rows.size - SHOWN_PER_STACK
     MarksyGroupCard {
@@ -204,7 +208,7 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
         )
         shown.forEachIndexed { i, r ->
             MarksyDivider()
-            Column(Modifier.marksyRow(onClick = { onOpen(r) })) { TipRow(r, now, firstRow = i == 0) }
+            Column(Modifier.marksyRow(onClick = { onOpen(r) })) { TipRow(r, now, firstRow = i == 0, quotes) }
         }
         if (hidden > 0) {
             val names = stack.rows.drop(SHOWN_PER_STACK).mapNotNull { it.levels?.symbol }.distinct().take(3).joinToString(", ")
@@ -222,7 +226,7 @@ private fun StackCard(id: String, stack: CapturedStack, now: Long, expanded: Boo
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TipRow(r: CapturedRow, now: Long, firstRow: Boolean) {
+private fun TipRow(r: CapturedRow, now: Long, firstRow: Boolean, quotes: Map<String, com.marksy.os.upstox.UpstoxLtp> = emptyMap()) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(r.headline, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(MarksySpace.Inner))
@@ -239,7 +243,9 @@ private fun TipRow(r: CapturedRow, now: Long, firstRow: Boolean) {
     }
     val lv = r.levels
     if (lv != null && lv.hasLevels) {
-        Text(levelsLine(lv), color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.padding(top = MarksySpace.Tight))
+        // The shared price track; its block shows the entry, so the levels line is not repeated.
+        val track = TipTrack.of(lv, lv.symbol?.let { quotes[it]?.lastPrice }, open = r.event.lifecycleState != "RESOLVED")
+        PriceTrackView(track, Modifier.padding(top = MarksySpace.Inner))
     } else if (firstRow || r.keptLocal) {
         Text(r.event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = if (firstRow) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight))
     }
@@ -268,7 +274,7 @@ internal fun noteLabel(note: String?): String? = when (note) {
     "own-order", "own-account" -> "Your own orders and holdings never leave this phone."
     "one-to-one-chat" -> "Only group chats are sent; this was a one-to-one chat."
     "outside-capture-set", "sms-not-sender-id" -> "This source is not on your capture list."
-    "not-a-candidate" -> "Not a call, so nothing was sent."
+    "not-a-candidate" -> "Not a tip, so nothing was sent."
     else -> "Kept on this phone ($note)."
 }
 

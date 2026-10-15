@@ -27,9 +27,9 @@ class MarketOverviewScreenTest {
     fun loadedStateShowsIndexAndMarketStatus() {
         compose.setContent { MarketOverviewScreen(state = MarketDataState.Loaded(summary()), padding = androidx.compose.foundation.layout.PaddingValues()) }
 
-        // Open/live status moved to the page title; the raw API enum must never leak into the page.
+        // Open/live status moved to the page title; the raw API enum must never leak into the page. Indices sit in Home's Market Pulse card, folded here.
         compose.onNodeWithText("MARKET_HOURS").assertDoesNotExist()
-        compose.onNodeWithText("NIFTY 50").assertExists()
+        compose.onNodeWithText("Market Pulse").assertExists()
     }
 
     @Test

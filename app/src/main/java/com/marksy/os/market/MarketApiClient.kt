@@ -42,6 +42,7 @@ interface MarketApiClient {
     suspend fun scorecard(entity: String, id: Int, filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
     suspend fun scorecardDetail(entity: String, id: Int, filter: String): ScorecardDetailDto = throw MarketApiException("Scorecards are not supported")
     suspend fun tipDetail(tipId: String): TipDetailDto = throw MarketApiException("Tip detail is not supported")
+    suspend fun tipProgress(tipId: String): List<ProgressPointDto> = throw MarketApiException("Tip progress is not supported")
     /** Follows live on the server (`/me/follows`); the app never keeps its own list. */
     suspend fun follows(): FollowListDto = FollowListDto(emptyList(), 0)
     suspend fun follow(key: FollowKey): FollowDto = throw MarketApiException("Follows are not supported")
@@ -159,6 +160,8 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
         ScorecardDetailDto.parse(getData("$base/scorecards/${encode(entity)}/$id/detail" + query(filter)))
 
     override suspend fun tipDetail(tipId: String): TipDetailDto = TipDetailDto.parse(getData("$base/tips/${encode(tipId)}"))
+
+    override suspend fun tipProgress(tipId: String): List<ProgressPointDto> = ProgressPointDto.parseList(getEnvelope("$base/tips/${encode(tipId)}/progress"))
 
     override suspend fun follows(): FollowListDto = FollowListDto.parse(getData("$base/me/follows"))
 

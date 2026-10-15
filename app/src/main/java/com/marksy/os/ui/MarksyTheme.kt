@@ -99,6 +99,8 @@ object MarksyType {
     /** Section and lane labels; callers uppercase the text. */
     val Label = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
     val Caption = TextStyle(fontSize = 10.sp)
+    /** Caps beside a price (RECOMMENDED, ENTRY): small enough that a six-digit price fits beside it on a 360dp phone. */
+    val PriceLabel = TextStyle(fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
     /** The MARKSY OS name on Home. */
     val Wordmark = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
     /** Initials inside a round avatar of [size]. */
