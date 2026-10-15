@@ -1,14 +1,14 @@
 # EPIC-039 — Historical source reliability as a shadow prediction feature
 
-**Status:** READY FOR AUTONOMOUS EXECUTION AFTER EPIC-036–038  
+**Status:** IMPLEMENTED 2026-10-15 as marksy-api `SRS-001` (shadow-only); real-data run pending owner approval  
 **Priority:** P2  
 **Owner:** marksy-api (experiment); marksy-os coordinates the execution plan  
 **Authoritative backend checklist:** [marksy-api EPIC-855](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)  
-**Spec:** [Trust and Prediction Score design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
+**Spec:** [Trust Score and Target Progress design](../superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md)
 
 ## Goal
 
-Test whether historical source/channel/caller reliability adds predictive value for future Marksy stock predictions. This is an experiment, not a production scoring change.
+Test whether historical source/channel/caller reliability adds predictive value for future Marksy stock predictions. This is an experiment, not a production scoring change, and it does not create a Prediction Score or change Target Progress.
 
 ## Stories (5)
 

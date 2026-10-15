@@ -25,18 +25,20 @@ The static reference artifact `marksy_ml_admin_control_plane.html` was created e
 
 **Non-negotiable boundary:** Admin App → supported ML services/API → `marksy_ml`. No direct database access or ad-hoc UI API calls. Production eligibility and publication remain controlled by SPG-001. First implementation step is to locate the actual Admin App repository and audit the existing service contracts; missing capabilities must be recorded as dependencies, not faked or bypassed.
 
-## Trust & Prediction Score workstream (2026-10-15)
+## Trust Score & Target Progress workstream (2026-10-15)
 
-This is a reuse-first cross-repository workstream. It is implementation-ready but has **not been executed**. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+This is a reuse-first cross-repository workstream. Implemented 2026-10-15 on `feat/trust-target-progress` in both repos (not merged or deployed); the EPIC-039 real-data shadow run awaits owner approval. Backend calculations and contracts belong to `marksy-api`; Android consumes the API and presents the results.
+
+**Numbering note:** EPIC-036 to EPIC-039 here are the score epics in `docs/epics/`. The same numbers, plus EPIC-040, also name the earlier play-safe capture epics (sections below, `docs/CAPTURE-ARCHITECTURE.md` and code comments). EPIC-040 also names the ML admin shell above. Nothing is renumbered, so cite these as "score EPIC-03x", "capture EPIC-03x" or "ML admin EPIC-040".
 
 - **EPIC-036 — Audit and freeze semantics:** [epic](epics/EPIC-036-score-semantics-audit.md)
-- **EPIC-037 — Per-open-tip Prediction Score API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
+- **EPIC-037 — Per-open-tip Target Progress API:** [OS coordination epic](epics/EPIC-037-open-tip-prediction-score-api.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-854-open-tip-prediction-score-api.md)
 - **EPIC-038 — Marksy OS integration:** [epic](epics/EPIC-038-marksy-os-score-integration.md)
 - **EPIC-039 — Historical source-reliability shadow evaluation:** [OS coordination epic](epics/EPIC-039-source-reliability-shadow-evaluation.md) · [authoritative API epic](https://github.com/indoulia/marksy-api/blob/main/docs/epics/EPIC-855-source-reliability-shadow-evaluation.md)
 
-**Design:** [Trust and Prediction Score engine](superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md) · **Execution plan:** [ordered cross-repo plan](superpowers/plans/2026-10-15-trust-and-prediction-score-engine.md).
+**Design:** [Trust Score and Target Progress](superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md) · **Execution plan:** [ordered cross-repo plan](superpowers/plans/2026-10-15-trust-and-prediction-score-engine.md).
 
-Audit found that the existing API already implements the `SCR-001` Wilson-lower-bound Trust Score, canonical tip scorecards, and the API/OS already contain Trust and Predictions screens. Therefore this work must extend only demonstrated gaps: do not create a second Trust Score, do not confuse `app/prediction_trust_score.py` with an individual tip score, and do not redesign existing screens. Historical source reliability remains shadow-only until a separate evidence-based decision approves any production use.
+Audit found that the existing API already implements the `SCR-001` Wilson-lower-bound Trust Score, canonical tip scorecards, and the API/OS already contain Trust and Predictions screens. Therefore this work must extend only demonstrated gaps: do not create a second Trust Score, do not confuse `app/prediction_trust_score.py` with an individual tip metric, and do not redesign existing screens. The per-tip 0–100 metric is **Target Progress** (position between stop-loss and target, not a probability); "Prediction Score" is reserved for a future calibrated estimate and is not built here. Historical source reliability remains shadow-only until a separate evidence-based decision approves any production use.
 
 ## Status (2026-09-27)
 

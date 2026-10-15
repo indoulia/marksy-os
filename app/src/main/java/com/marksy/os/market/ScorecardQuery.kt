@@ -2,6 +2,8 @@ package com.marksy.os.market
 
 import com.marksy.os.MarksyFormat
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 
 /** §8.3 presets; the server resolves each to IST dates, so the phone never computes a window. */
 enum class ScorecardPeriod(val label: String) {
@@ -70,6 +72,10 @@ data class ScorecardQuery(
 /** Words for §8 numbers exactly as the server sent them; nothing here recomputes a metric. */
 object ScorecardText {
     fun date(d: LocalDate): String = MarksyFormat.day(d)
+
+    /** The server's `asOf` echo in IST: a Trust Score counts only tips resolved by then. */
+    fun asOf(iso: String): String? =
+        runCatching { "as of " + MarksyFormat.dayTime(OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.of("Asia/Kolkata"))) }.getOrNull()
 
     fun trust(t: ScorecardTrustDto): String = t.trustScore?.let { "Trust $it" } ?: "Trust —"
 

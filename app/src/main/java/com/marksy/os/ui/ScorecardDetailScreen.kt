@@ -137,7 +137,7 @@ private fun Hero(d: ScorecardDetailDto, name: String, following: Boolean, onTogg
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Column {
                 Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Display, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(ScorecardSources.kind(d), since).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(ScorecardSources.kind(d), since, ScorecardText.asOf(d.card.filter.asOf)).joinToString(" · "), color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             HitRateBandBar(d.trustBand, d.card.body.performance.hitRatePct, d.card.body.trust)
             FollowPill(following, onToggleFollow)

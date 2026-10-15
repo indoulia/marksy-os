@@ -32,6 +32,10 @@ import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PerformanceSummaryDto
 import com.marksy.os.market.PicksBasis
+import com.marksy.os.upstox.FeedFreshness
+import com.marksy.os.upstox.UpstoxLtp
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** A cursor-paged list that grows as its last row scrolls into view. */
 @Stable
@@ -69,6 +73,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
     // Withdrawn or unpriced calls still sit in the active feed; they never count or rank as open.
     val ended = remember(open.items) { open.items.filterNot(LedgerCalls::isLive) }
     val quotes = rememberUpstoxQuotes(remember(ended) { ended.map { it.symbol }.distinct() })
+    val feed = rememberFeedFreshness()
     val paged = if (showEnded) open else closed
     val endedHint = "Calls withdrawn, invalidated or left without market data before closing appear here."
 
@@ -89,7 +94,7 @@ internal fun PredictionsView(repository: MarketIntelligenceRepository, bottomPad
                 if (!showEnded) items(closed.items, key = { "c-${it.id}" }) { ClosedCallRow(it) { onOpenStock(it.symbol) } }
                 else {
                     if (ended.isEmpty() && !open.hasMore) item { EmptyState("No ended calls", endedHint) }
-                    items(ended, key = { "e-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
+                    items(ended, key = { "e-${it.predictionId}" }) { p -> OpenCallRow(p, quotes[p.symbol], feed, note = LedgerCalls.endedLine(p)) { onOpenStock(p.symbol) } }
                 }
                 if (paged.hasMore) item(key = "more-$showEnded-${paged.items.size}") {
                     LaunchedEffect(Unit) { paged.more() }
@@ -135,8 +140,9 @@ private fun Stat(label: String, value: String?, tint: Color) {
 }
 
 @Composable
-internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: String? = null, onClick: () -> Unit) {
-    val price = livePrice ?: p.price
+internal fun OpenCallRow(p: ActivePredictionDto, quote: UpstoxLtp?, feed: FeedFreshness, note: String? = null, onClick: () -> Unit) {
+    val bar = CallPrice.of(quote, feed, p.price, p.lastPriceAt, LocalDate.now(ZoneId.of("Asia/Kolkata")))
+    val price = bar.price
     val buy = p.targetPrice >= p.entryPrice
     MarksyRowCard(
         Modifier.animateContentSize(), border = if (p.isActionableNow) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, onClick = onClick
@@ -145,13 +151,25 @@ internal fun OpenCallRow(p: ActivePredictionDto, livePrice: Double?, note: Strin
             Text(p.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             MarksyBadge(if (buy) "BUY" else "SELL", if (buy) MarksyTheme.Positive else MarksyTheme.Negative, MarksyTheme.SurfaceRaised, Modifier.padding(start = MarksySpace.Inner))
             Text(p.companyName.orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = MarksySpace.Inner))
-            price?.let { Text(callRupees(it), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold) }
+            price?.let {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(callRupees(it), color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold)
+                    bar.label?.let { l -> Text(l, color = if (bar.live) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1) }
+                }
+            }
         }
         CallRange(p.stopLoss, p.entryPrice, p.targetPrice, price, Modifier.fillMaxWidth().padding(vertical = MarksySpace.Inner).height(8.dp))
         Row {
             Text("SL ${callRupees(p.stopLoss)}", color = MarksyTheme.Negative, style = MarksyType.Caption)
             Text("Entry ${callRupees(p.entryPrice)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f).padding(horizontal = MarksySpace.Inner), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text("Target ${callRupees(p.targetPrice)}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Caption)
+        }
+        // Server-computed (TPR-001) and only on a live call, so an ended or closed one never shows a live value.
+        p.ledger?.takeIf { LedgerCalls.isLive(p) }?.let { t ->
+            LedgerCalls.targetProgressLine(t)?.let {
+                Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight))
+            }
+            if (t.targetProgress?.status == LedgerCalls.TARGET_PROGRESS_AVAILABLE) Text(LedgerCalls.targetProgressNote(bar.live), color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
         Text(
             listOfNotNull(

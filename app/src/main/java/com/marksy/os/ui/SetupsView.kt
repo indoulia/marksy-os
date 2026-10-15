@@ -7,14 +7,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
-import com.marksy.os.MarksyFormat
 import com.marksy.os.market.ActivePredictionDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.PicksBasis
-import java.time.OffsetDateTime
-import java.time.ZoneId
 
 /** Today's setups: Marksy's live calls, best first. Reports' setups are parsed by the server and land in My tips. */
 @Composable
@@ -28,6 +25,7 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             .sortedWith(compareByDescending<ActivePredictionDto> { it.isActionableNow }.thenByDescending { it.compositeOpportunityScore ?: -1.0 })
     }
     val quotes = rememberUpstoxQuotes(remember(live) { live.map { it.symbol }.distinct() })
+    val feed = rememberFeedFreshness()
     val scan by MarketIntelligenceRepository.latestScan.collectAsState()
 
     MarksyList(bottom = bottomPadding) {
@@ -44,10 +42,8 @@ internal fun SetupsView(repository: MarketIntelligenceRepository?, bottomPadding
             }
         }
         items(live, key = { "m-${it.predictionId}" }) { p ->
-            val basis = PicksBasis.label(p) ?: p.lastPriceAt?.let { "as of ${asOf(it)}" }
-            OpenCallRow(p, quotes[p.symbol]?.lastPrice, note = basis) { onOpenStock(p.symbol) }
+            val basis = PicksBasis.label(p) ?: CallPrice.storedSession(p.lastPriceAt)
+            OpenCallRow(p, quotes[p.symbol], feed, note = basis) { onOpenStock(p.symbol) }
         }
     }
 }
-
-private fun asOf(iso: String) = runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).let(MarksyFormat::dayTime) }.getOrDefault(iso.take(16).replace('T', ' '))

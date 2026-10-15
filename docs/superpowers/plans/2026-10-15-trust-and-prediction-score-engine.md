@@ -1,8 +1,8 @@
-# Trust Score and Prediction Score — implementation plan
+# Trust Score and Target Progress — implementation plan
 
 > Execution mode: autonomous after the user starts Claude. Inspect both repositories first; make only the changes supported by the current implementation and this spec.
 
-**Goal:** Close only the gaps between the existing canonical tip scorecards/Trust Score and the per-open-tip Prediction Score contract, then wire the results into existing Marksy OS screens.
+**Goal:** Close only the gaps between the existing canonical tip scorecards/Trust Score and the per-open-tip Target Progress contract (terminology decision 2026-10-15: the 0–100 per-tip metric is Target Progress; "Prediction Score" is reserved for a future calibrated estimate and is not built here), then wire the results into existing Marksy OS screens.
 
 **Spec:** `docs/superpowers/specs/2026-10-15-trust-and-prediction-score-engine-design.md`
 
@@ -16,15 +16,15 @@
 
 ### EPIC-036 — Audit and freeze score semantics
 1. Read the spec and current implementation in both repositories, including routes, DTOs, models, tests, migrations, and the existing central tip-ledger design/plan.
-2. Produce a concise gap matrix: already correct / missing / defective, with exact file paths and existing tests. Confirm Trust Score uses the existing `SCR-001` Wilson lower-bound implementation and identify all current meanings of "prediction score", "rating", "confidence", and "prediction trust".
+2. Produce a concise gap matrix: already correct / missing / defective, with exact file paths and existing tests. Confirm Trust Score uses the existing `SCR-001` Wilson lower-bound implementation and identify all current meanings of "prediction score" (including `POS-001` prediction opportunity score and `OPR-001` composite score in `docs/api/SCORE-METRICS.md`), "rating", "confidence", and "prediction trust", so Target Progress collides with none of them.
 3. Freeze the response contract and scoring semantics. If a required change conflicts with an existing contract, record the conflict and select the least-invasive compatible behavior; do not stop for routine design choices.
 4. Add/adjust golden tests for metric separation, as-of semantics, duplicate exclusion and insufficient sample behavior before production code changes.
 
 **Exit gate:** no duplicate scoring engine proposed; API contract and acceptance cases are documented.
 
-### EPIC-037 — Per-tip Prediction Score in marksy-api
+### EPIC-037 — Per-tip Target Progress in marksy-api
 1. Execute the implementation checklist in API EPIC-854; reuse the canonical tip ledger and tracker.
-2. Implement the progress score only when valid geometry and fresh current price exist; return explicit unavailability reasons otherwise.
+2. Implement Target Progress only when valid geometry and fresh current price exist; return explicit unavailability reasons otherwise.
 3. Preserve existing fields/routes and add response fields only where needed.
 4. Test BUY/SELL geometry, entry/target/stop boundaries, stale/missing prices, invalid terms, duplicate/invalidated/closed tips, and idempotent repeated reads/evaluations.
 5. Run the backend regression suite and PostgreSQL integration tests for any changed transaction/locking guarantees; SQLite tests alone do not prove row-lock behavior.
@@ -34,11 +34,11 @@
 ### EPIC-038 — Marksy OS integration
 1. Extend existing scorecard/prediction DTOs and repository parsing; preserve old payload compatibility.
 2. Update the existing Trust screen only if the audit finds a missing field/state. Do not redesign the screen.
-3. Update the existing Predictions screen to show the per-tip Prediction Score and a short explanation that it is progress between stop and target, not probability. Keep live return separate.
-4. Represent insufficient history, unavailable score, stale price, loading, API failure and closed tip without placeholder numbers.
+3. Update the existing Predictions screen to show per-tip Target Progress, labelled "Target progress", with a short explanation that it is the price's position between stop-loss and target, not a probability, and that a new tip starts at its entry's position. Keep live return and risk–reward separate.
+4. Represent insufficient history, unavailable Target Progress, stale price, loading, API failure and closed tip without placeholder numbers.
 5. Run unit tests and assemble the Android debug build; run device verification if a device is available and report if not.
 
-**Exit gate:** existing screens show the correct score for the correct subject, with no client-side formula.
+**Exit gate:** existing screens show the correct metric for the correct subject, with no client-side formula and no "Prediction Score" label.
 
 ### EPIC-039 — Historical source reliability, shadow-only
 1. Execute API EPIC-855; export point-in-time Trust Score/sample-size features from the existing canonical ledger only.
@@ -53,6 +53,7 @@
 
 - Maximum five implementation stories per EPIC.
 - Inspect before modifying. Do not recreate working features or duplicate the existing Trust Score.
+- Do not implement or display a probability-based Prediction Score; that needs a separate spec and approval.
 - Keep API and OS changes backward compatible; no breaking endpoint or schema changes.
 - No production data on laptop; use the established safe environment and existing fixtures.
 - No secrets in commits, logs, examples or reports.
