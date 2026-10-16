@@ -2,7 +2,6 @@ package com.marksy.os.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -210,18 +209,14 @@ internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier
     }
 }
 
+/** The Trust rows' bar colours: hit, stop and expired. */
 @Composable
 internal fun OutcomeLegend() {
-    Row(Modifier.padding(horizontal = MarksySpace.Hair), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Section), verticalAlignment = Alignment.CenterVertically) {
-        listOf("Hit" to MarksyTheme.PrimaryEmerald, "Stop" to MarksyTheme.Negative, "Expired" to MarksyTheme.TextMuted, "Open" to null).forEach { (label, color) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(MarksySize.Dot).clip(CircleShape).then(
-                        if (color != null) Modifier.background(color) else Modifier.border(1.5.dp, MarksyTheme.SecondaryCyan, CircleShape)
-                    )
-                )
-                Spacer(Modifier.width(MarksySpace.Inner))
-                Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
+    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
+        listOf("hit" to MarksyTheme.PrimaryEmerald, "stop" to MarksyTheme.Negative, "expired" to MarksyTheme.TextMuted).forEach { (label, color) ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
+                Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(color))
+                Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1)
             }
         }
     }
