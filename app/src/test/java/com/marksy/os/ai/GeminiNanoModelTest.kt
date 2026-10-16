@@ -111,7 +111,7 @@ class GeminiNanoModelTest {
     @Test
     fun malformedOutputTimeoutAndErrorsFallBackToDeterministic() = runBlocking {
         val zone = ZoneOffset.UTC
-        suspend fun interpret(b: FakeBackend, text: String = "bills"): AskMarksy.Query? {
+        suspend fun interpret(b: FakeBackend, text: String = "did the bank take anything today"): AskMarksy.Query? {
             val m = model(b); m.refresh()
             return ModelQueryInterpreter(IntelligenceService(listOf(m), timeoutMs = 50)).interpret(text, null, now, zone)
         }
@@ -121,8 +121,8 @@ class GeminiNanoModelTest {
         assertNull(interpret(FakeBackend(reply = { throw IOException("runtime died") })))
         assertNull(interpret(FakeBackend(PromptBackend.Availability.UNAVAILABLE)))
         // Valid output is used for wording the rules cannot place (if the words support it), never against explicit keywords ("bills").
-        assertNull(interpret(FakeBackend()))
-        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend(), "did the bank take anything today")?.intent)
+        assertNull(interpret(FakeBackend(), "bills"))
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend())?.intent)
     }
 
     @Test

@@ -94,7 +94,7 @@ class AskMarksyGroundingTest {
     @Test
     fun modelCannotInjectASubjectTheUserNeverTyped() {
         val reply = """{"intent":"PAYMENTS","range":"this_week","subject":"rahul","direction":null,"confidence":0.9}"""
-        val a = ask(store, "payments this week", modelChain(reply))
+        val a = ask(store, "any cashback this week", modelChain(reply))
         assertEquals("on-device-model", a.interpretedBy)
         assertNull(a.query.subject)
         assertEquals(listOf(amazonSep.id), a.derivedFromEventIds)

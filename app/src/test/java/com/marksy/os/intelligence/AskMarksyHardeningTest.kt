@@ -137,7 +137,7 @@ class AskMarksyHardeningTest {
     fun inventedTransactionsAmountsAndAnswersInModelOutputAreIgnored() {
         val reply = """{"intent":"PAYMENTS","range":"default","subject":"amazon","direction":"DEBIT","confidence":0.95,
             "transactions":[{"merchant":"Flipkart","amount":99999,"date":"2026-09-23"}],"answer":"You spent ₹99999 at Flipkart","amount":99999}"""
-        val a = ask("how much did I spend at amazon", modelChain(reply))
+        val a = ask("what did amazon charge me", modelChain(reply))
         assertEquals("on-device-model", a.interpretedBy)
         assertEquals(listOf(amazonSep20.id), a.derivedFromEventIds)
         assertFalse(a.headline.contains("99999") || a.headline.contains("Flipkart", ignoreCase = true))

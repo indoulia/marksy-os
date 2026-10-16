@@ -5,6 +5,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.AskMarksy.Intent
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
@@ -79,6 +80,14 @@ class AskMarksyTest {
         assertEquals("rahul", follow.query.subject)
         assertEquals("yesterday", follow.query.range.label)
         assertEquals(listOf(old.id), follow.derivedFromEventIds)
+    }
+
+    @Test
+    fun aNewQuestionStartsWithoutThePreviousNameFilter() {
+        val first = AskMarksy.parse("payments to zomato this week", null, now, zone)
+        assertEquals("zomato", first.subject)
+        assertNull(AskMarksy.parse("how much did I spend today", first, now, zone).subject)
+        assertEquals("zomato", AskMarksy.parse("and today?", first, now, zone).subject)
     }
 
     @Test

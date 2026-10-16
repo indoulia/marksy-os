@@ -105,6 +105,8 @@ object AskMarksy {
         }
 
         val shown = SHOW_VERB.find(t)?.groupValues?.get(1)?.takeIf { pageAction(it) != null } ?: t.takeIf { pageAction(it) != null }
+        // A follow-up continues the previous question; a full new question ("how much did I spend today") starts afresh.
+        var followUp = previous != null && (t.startsWith("and ") || t.startsWith("what about") || t.startsWith("how about"))
         val intent = when {
             page != null -> Intent.NAVIGATE
             has(t, "what can you do", "what can i ask", "how do i use", "what do you do") || t == "help" -> Intent.HELP
@@ -126,7 +128,7 @@ object AskMarksy {
             // "show market news", "calls": a page name with no data question behind it.
             shown != null -> Intent.NAVIGATE
             // Short follow-ups ("and yesterday?", "what about Amit?") keep the previous intent.
-            previous != null && (t.startsWith("and ") || t.startsWith("what about") || t.startsWith("how about") || t.split(' ').size <= 3) -> previous.intent
+            previous != null && (followUp || t.split(' ').size <= 3) -> { followUp = true; previous.intent }
             else -> Intent.SEARCH
         }
 
@@ -139,13 +141,13 @@ object AskMarksy {
         }
         val inherit = previous != null && intent == previous.intent
         val direction = when {
-            has(t, "received", "credited", "got paid", "refund", "refunds", "get any money", "got any money", "get money", "got money", "salary") -> EventExtractor.Direction.CREDIT
+            has(t, "received", "credited", "got paid", "get paid", "refund", "refunds", "get any money", "got any money", "get money", "got money", "salary") -> EventExtractor.Direction.CREDIT
             has(t, "paid", "spent", "spend", "debited", "sent money", "i make", "i made", "did i pay") -> EventExtractor.Direction.DEBIT
             inherit -> previous!!.direction
             else -> null
         }
         val subject = when (intent) {
-            Intent.PAYMENTS -> counterpartyFor(t) ?: residualSubject(t) ?: if (inherit) previous!!.subject else null
+            Intent.PAYMENTS -> counterpartyFor(t) ?: residualSubject(t) ?: if (inherit && followUp) previous!!.subject else null
             Intent.FROM_PERSON -> person ?: if (inherit) previous!!.subject else null
             Intent.SOURCE -> bare.split(' ').filterNot { it in STOP_WORDS || it in SOURCE_FILLER || it in CHANNEL_WORDS || it.length < 3 }.joinToString(" ").ifBlank { null }
             Intent.SEARCH -> searchTerm(t)
@@ -572,7 +574,7 @@ object AskMarksy {
     private val FILTER_VOCAB = setOf("bill", "bills", "due", "dues", "pay", "owe", "owed", "anyone", "money", "reminder", "reminders", "birthday",
         "birthdays", "upcoming", "coming", "when", "next", "list", "todo", "task", "tasks", "pending", "need", "delivery", "deliveries", "package",
         "packages", "parcel", "parcels", "order", "orders", "shipment", "shipments", "arriving", "arrive", "where", "expected", "anything", "any",
-        "soon", "tomorrow", "open", "still", "card", "payment", "payments", "remind", "track", "tracking", "status", "where's")
+        "soon", "tomorrow", "open", "still", "card", "credit", "will", "payment", "payments", "remind", "track", "tracking", "status", "where's")
     private val NAV_VERB = Regex("^(?:please )?(?:open|go to|goto|take me to|navigate to|switch to|jump to)(?: the| my)? (.+)$")
     private val STOCK_PATTERNS = listOf(
         Regex("\\b(?:price|quote|chart|ltp) (?:of|for) (.+)$"),
@@ -659,7 +661,7 @@ object AskMarksy {
     }
     private val COUNTERPARTY_STOP = setOf("last", "this", "today", "yesterday", "tomorrow", "week", "month", "in", "on", "for", "during", "since", "and", "or")
     private val PAYMENT_WORDS = setOf("payment", "payments", "paid", "pay", "spent", "spend", "spending", "debited", "credited", "received", "transaction",
-        "transactions", "money", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
+        "transactions", "money", "salary", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
     private val ARTICLES = setOf("a", "an", "the")
     private val MONTHS = mapOf("jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12)
     private const val MONTH_RX = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"

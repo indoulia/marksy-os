@@ -58,6 +58,7 @@ object Ambiguity {
     const val MISSING_STOP_LOSS = "missing-stop-loss"
     const val CONFLICTING_SIDE = "conflicting-side"
     const val LOW_OCR_CONFIDENCE = "low-ocr-confidence"
+    const val OPTION_CONTRACT = "option-contract"
 }
 
 object CaptureLifecycle {

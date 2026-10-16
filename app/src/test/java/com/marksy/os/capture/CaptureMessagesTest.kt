@@ -40,7 +40,7 @@ class CaptureMessagesTest {
     fun everyAmbiguityCodeHasAMessage() {
         listOf(
             Ambiguity.AMBIGUOUS_SYMBOL, Ambiguity.MALFORMED_PRICE, Ambiguity.MISSING_TARGET, Ambiguity.MISSING_STOP_LOSS,
-            Ambiguity.CONFLICTING_SIDE, Ambiguity.LOW_OCR_CONFIDENCE
+            Ambiguity.CONFLICTING_SIDE, Ambiguity.LOW_OCR_CONFIDENCE, Ambiguity.OPTION_CONTRACT
         ).forEach { assertFalse(CaptureMessages.ambiguity(it).isNullOrBlank()) }
     }
 }

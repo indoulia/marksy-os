@@ -83,8 +83,21 @@ class IntelligenceServiceTest {
     }
 
     @Test
+    fun modelRunsOnlyForQuestionsTheRulesCannotRead() = runBlocking {
+        val model = FakeModel({ good })
+        val interpreter = ModelQueryInterpreter(service(model))
+        // The rules read these, so their answer stands and the model is never run.
+        assertNull(interpreter.interpret("money in yesterday", null, now, zone))
+        assertNull(interpreter.interpret("and today?", AskMarksy.parse("payments this week", null, now, zone), now, zone))
+        assertEquals(0, model.calls)
+        // No rule matches "cashback", so the model is asked, and the wording supports its intent.
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpreter.interpret("any cashback yesterday", null, now, zone)?.intent)
+        assertEquals(1, model.calls)
+    }
+
+    @Test
     fun modelInterpreterOnlyChoosesQueryAndDefersWhenNoModel() = runBlocking {
-        val q = ModelQueryInterpreter(service(FakeModel({ good }))).interpret("money in yesterday", null, now, zone)!!
+        val q = ModelQueryInterpreter(service(FakeModel({ good }))).interpret("any cashback yesterday", null, now, zone)!!
         assertEquals(AskMarksy.Intent.PAYMENTS, q.intent)
         assertEquals("yesterday", q.range.label)
         assertEquals(EventExtractor.Direction.CREDIT, q.direction)
@@ -98,7 +111,7 @@ class IntelligenceServiceTest {
             """{"intent":"bills_due","range":"DEFAULT","subject":null,"confidence":0.8}""",
             """{"intent":"BILLS_DEDU","range":"default","subject":"null","direction":"null","confidence":0.8}"""
         ).forEach { owe ->
-            assertEquals(owe, AskMarksy.Intent.BILLS_DUE, ModelQueryInterpreter(service(FakeModel({ owe }))).interpret("do I owe anyone money", null, now, zone)?.intent)
+            assertEquals(owe, AskMarksy.Intent.BILLS_DUE, ModelQueryInterpreter(service(FakeModel({ owe }))).interpret("any emi left", null, now, zone)?.intent)
         }
         // Seen on device: Gemma said HELP for "catch me up", PAYMENTS for "should I buy anything"; an intent with no word
         // supporting it in the question is not trusted, while a plausible one is.
