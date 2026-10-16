@@ -45,8 +45,11 @@ class AskMarksyGroundingTest {
         override suspend fun modelName() = "nano"
         override suspend fun download() {}
         override suspend fun warmup() {}
-        override suspend fun generate(prompt: String) = reply
+        override suspend fun generate(prompt: String) = reply.also { generations++ }
     }
+
+    private var generations = 0
+    private fun rules(text: String) = AskMarksy.parse(text, null, now, zone).intent
 
     /** The production chain: Gemini Nano adapter -> IntelligenceService -> ModelQueryInterpreter, with a scripted runtime. */
     private fun modelChain(reply: String) = listOf(ModelQueryInterpreter(IntelligenceService(listOf(GeminiNanoModel(backend(reply))))))
@@ -84,7 +87,9 @@ class AskMarksyGroundingTest {
     @Test
     fun localModelInterpretsNaturalLanguageButRetrievalStaysAuthoritative() {
         val reply = """{"intent":"PAYMENTS","range":"last_month","subject":"amazon","direction":"DEBIT","confidence":0.92}"""
+        assertEquals(Intent.SEARCH, rules("how much did amazon take from me in the previous month"))
         val a = ask(store, "how much did amazon take from me in the previous month", modelChain(reply))
+        assertEquals(1, generations)
         assertEquals("on-device-model", a.interpretedBy)
         assertEquals(Intent.PAYMENTS, a.query.intent)
         assertEquals(listOf(amazonAug.id), a.derivedFromEventIds)
@@ -94,7 +99,9 @@ class AskMarksyGroundingTest {
     @Test
     fun modelCannotInjectASubjectTheUserNeverTyped() {
         val reply = """{"intent":"PAYMENTS","range":"this_week","subject":"rahul","direction":null,"confidence":0.9}"""
+        assertEquals(Intent.SEARCH, rules("any upi transfer this week"))
         val a = ask(store, "any upi transfer this week", modelChain(reply))
+        assertEquals(1, generations)
         assertEquals("on-device-model", a.interpretedBy)
         assertNull(a.query.subject)
         assertEquals(listOf(amazonSep.id), a.derivedFromEventIds)
@@ -109,6 +116,8 @@ class AskMarksyGroundingTest {
         assertTrue(a.headline.startsWith("Nothing from \"priya\""))
         // Whatever the model says, answers can only reference ids that exist in the store.
         assertTrue(store.rows.map { it.id }.containsAll(a.derivedFromEventIds))
+        // The rules read "from priya", so the model never ran.
+        assertEquals(Intent.FROM_PERSON to 0, rules("anything from priya") to generations)
     }
 
     @Test
@@ -117,7 +126,12 @@ class AskMarksyGroundingTest {
             val a = ask(store, "What payments did I make to Amazon last month?", modelChain(reply))
             assertEquals("deterministic", a.interpretedBy)
             assertEquals(listOf(amazonAug.id), a.derivedFromEventIds)
+            // The rules read that question, so the model never ran; one they cannot read gets the bad reply and drops it.
+            val before = generations
+            assertEquals(reply, "deterministic", ask(store, "any upi transfer this week", modelChain(reply)).interpretedBy)
+            assertEquals(reply, before + 1, generations)
         }
+        assertEquals(Intent.PAYMENTS, rules("What payments did I make to Amazon last month?"))
     }
 
     @Test
