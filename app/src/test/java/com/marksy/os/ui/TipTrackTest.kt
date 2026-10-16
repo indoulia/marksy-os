@@ -7,6 +7,7 @@ import com.marksy.os.market.ChannelRefDto
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MarksyViewDto
 import com.marksy.os.market.MyTipDto
+import com.marksy.os.market.PredictionScoreDto
 import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.ScorecardSource
 import org.junit.Assert.assertEquals
@@ -24,14 +25,15 @@ class TipTrackTest {
         status: String = "ACTIVE", entryStatus: String? = "ENTERED", direction: String = "BUY", low: Double? = 4460.0, high: Double? = 4460.0,
         stop: Double? = 4310.0, target: Double? = 4780.0, exit: Double? = null, closedAt: String? = null, buyBy: String? = null,
         horizonEndsOn: String? = null, sessionsElapsed: Int? = null, entered: Double? = null, recommended: Double? = null,
-        marksy: Double? = null, repeats: Int? = null, alsoBy: List<AlsoTippedDto> = emptyList(), actual: Double? = null
+        marksy: Double? = null, repeats: Int? = null, alsoBy: List<AlsoTippedDto> = emptyList(), actual: Double? = null,
+        score: PredictionScoreDto? = null
     ) = LedgerTipDto(
         tipId = "t1", symbol = "HAL", direction = direction, entryLow = low, entryHigh = high, entryBasis = "STATED", target = target, stopLoss = stop,
         horizonSessions = 15, horizonBasis = "STATED", firstSeenAt = "2026-10-13T05:12:00Z", status = status, entryStatus = entryStatus, outcome = null,
         reason = null, enteredSession = null, closedSession = null, closedAt = closedAt, exitPrice = exit, promisedReturn = null, actualReturn = actual,
         predictionId = null, channel = channel, caller = CallerRefDto(9, "Rahul K."), latestProgress = null,
         recommendedPrice = recommended, enteredPrice = entered, buyBy = buyBy, horizonEndsOn = horizonEndsOn, sessionsElapsed = sessionsElapsed,
-        marksyView = marksy?.let { MarksyViewDto(it, "AGREES", null) }, repeats = repeats, alsoBy = alsoBy
+        marksyView = marksy?.let { MarksyViewDto(it, "AGREES", null) }, predictionScore = score, repeats = repeats, alsoBy = alsoBy
     )
 
     private fun also(channelId: Int, callerId: Int? = null) = AlsoTippedDto(
@@ -102,16 +104,13 @@ class TipTrackTest {
         assertEquals(TrackTone.WARNING, TipTrack.statusTone(tip(entryStatus = "WAITING")))
     }
 
-    // Score bands: 65+ positive, 45+ warning, else negative; Marksy's score is its probability × 100 and absent without a view.
+    // Score bands: 65+ positive, 45+ warning, else negative (Trust only).
     @Test
     fun scoreChipsMapToBands() {
         assertEquals(TrackTone.POSITIVE, TipTrack.band(65))
         assertEquals(TrackTone.WARNING, TipTrack.band(64))
         assertEquals(TrackTone.WARNING, TipTrack.band(45))
         assertEquals(TrackTone.NEGATIVE, TipTrack.band(44))
-        assertEquals(72, TipTrack.marksyScore(tip(marksy = 0.724)))
-        assertNull(TipTrack.marksyScore(tip()))
-        assertNull(TipTrack.marksyChip(tip(), null))
 
         val headline = { trust: Int? -> ScorecardHeadlineDto(10, 0, 10, 4, 6, 0, 0, null, 40.0, null, trust) }
         val item = { channelTrust: Int?, callerTrust: Int? -> MyTipDto(tip(), headline(channelTrust), headline(callerTrust), emptyList(), 0) }
@@ -151,5 +150,19 @@ class TipTrackTest {
         assertTrue(TipTrack.buyable(call("WATCHING", false, tip(entryStatus = "WAITING")), today))
         assertFalse(TipTrack.buyable(call("INVALIDATED", true, null), today))
         assertFalse(TipTrack.buyable(call("ACTIONABLE_NOW", true, tip()), today))
+    }
+
+    // PSC-001: Marksy's per-tip score is only a VALIDATED Prediction Score, in a neutral tone; the legacy unvalidated probability never shows.
+    @Test
+    fun marksyShowsOnlyAValidatedPredictionScore() {
+        val validated = PredictionScoreDto("PSC-001", "VALIDATED", 37, null, "2026-10-13T05:12:00Z", "PROSPECTIVE")
+        assertNull(TipTrack.marksyScore(tip(marksy = 0.724)))
+        assertNull(TipTrack.marksyChip(tip(marksy = 0.724), null))
+        assertNull(TipTrack.marksyScore(tip(score = validated.copy(status = "NOT_VALIDATED"))))
+        assertNull(TipTrack.marksyScore(tip(score = validated.copy(status = "UNAVAILABLE", value = null, reason = "NO_TARGET"))))
+        assertEquals(37, TipTrack.marksyScore(tip(marksy = 0.9, score = validated)))
+        assertEquals(ScoreChip("Marksy", 37, TrackTone.NEUTRAL, null), TipTrack.marksyChip(tip(score = validated), null))
+        assertEquals("Prediction score", TipTrack.marksyNote(tip(score = validated)))
+        assertEquals("Prediction score · reconstructed", TipTrack.marksyNote(tip(score = validated.copy(provenance = "RECONSTRUCTED"))))
     }
 }

@@ -146,6 +146,11 @@ class LedgerModelsTest {
         assertEquals(3, tip.repeats)
         assertEquals(0.724, tip.marksyView!!.probability!!, 1e-9)
         assertEquals("AGREES", tip.marksyView!!.verdict)
+        assertNull(old.predictionScore)
+        val scored = LedgerTipDto.parse(JSONObject("""{${ledgerTip()}, "predictionScore": {"version": "PSC-001", "status": "NOT_VALIDATED",
+            "value": null, "reason": null, "evaluatedAt": "2026-10-13T05:12:00Z", "provenance": "PROSPECTIVE"}}""")).predictionScore!!
+        assertEquals(PredictionScoreDto("PSC-001", "NOT_VALIDATED", null, null, "2026-10-13T05:12:00Z", "PROSPECTIVE"), scored)
+        assertEquals(37, PredictionScoreDto.parse(JSONObject("""{"version": "PSC-001", "status": "VALIDATED", "value": 37}""")).value)
         val also = tip.alsoBy.single()
         assertEquals("uuid-2", also.tipId)
         assertEquals("Options Desk", also.channel!!.name)

@@ -7,6 +7,7 @@ import com.marksy.os.market.ClosedPredictionDto
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MyTipDto
+import com.marksy.os.market.PredictionScoreDto
 import com.marksy.os.market.ProgressPointDto
 import com.marksy.os.market.ScorecardEntity
 import com.marksy.os.market.ScorecardHeadlineDto
@@ -16,7 +17,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 enum class TrackTone { POSITIVE, NEGATIVE, WARNING, NEUTRAL, MUTED }
 
@@ -203,10 +203,16 @@ internal object TipTrack {
         else -> TrackTone.NEGATIVE
     }
 
-    /** round(probability × 100); null when Marksy has no view on the tip. */
-    fun marksyScore(t: LedgerTipDto?): Int? = t?.marksyView?.probability?.let { (it * 100).roundToInt().coerceIn(0, 100) }
+    /** A VALIDATED PSC-001 Prediction Score only; never the legacy unvalidated `marksyView.probability`. */
+    fun marksyScore(t: LedgerTipDto?): Int? =
+        t?.predictionScore?.takeIf { it.status == PredictionScoreDto.VALIDATED }?.value?.coerceIn(0, 100)
 
-    fun marksyChip(t: LedgerTipDto?, engine: ScorecardSource?): ScoreChip? = marksyScore(t)?.let { ScoreChip("Marksy", it, band(it), engine) }
+    // Neutral tone: a success chance is not a grade without the tip's risk-reward.
+    fun marksyChip(t: LedgerTipDto?, engine: ScorecardSource?): ScoreChip? = marksyScore(t)?.let { ScoreChip("Marksy", it, TrackTone.NEUTRAL, engine) }
+
+    fun marksyNote(t: LedgerTipDto?): String? = t?.predictionScore?.takeIf { marksyScore(t) != null }?.let {
+        if (it.provenance == PredictionScoreDto.RECONSTRUCTED) "Prediction score · reconstructed" else "Prediction score"
+    }
 
     fun trustChip(score: Int?, source: ScorecardSource?): ScoreChip? = score?.let { ScoreChip("Trust", it, band(it), source) }
 

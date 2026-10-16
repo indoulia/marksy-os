@@ -37,7 +37,7 @@ This is a gap-closure project, not a rewrite of the central tip ledger, scorecar
 |---|---|---|---|
 | **Trust Score** | Source, channel, caller or FinFluencer | Historical reliability from resolved canonical tips (`SCR-001`) | Reuse unchanged |
 | **Target Progress** (0–100) | One open canonical tip | Current price's position between the tip's stop-loss (0) and target (100) | Implement |
-| **Prediction Score** | — | Reserved for a future evidence-calibrated predictive estimate | Do not implement or display; needs its own spec and approval |
+| **Prediction Score** | One call | Specified 2026-10-16 as `PSC-001` (marksy-api methodology spec): at-issue chance of target before stop | Shadow-only; shown only once a version passes its validation gate (EPIC-045 addendum) |
 | **Risk–reward ratio** | One tip's terms | Reward distance ÷ risk distance from entry | Separate metric; Target Progress does not account for it |
 
 Target Progress is a progress indicator. It is **not** a probability, a confidence estimate or a likelihood of winning, and a higher value does not mean a better call.

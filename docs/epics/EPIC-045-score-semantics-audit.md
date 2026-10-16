@@ -73,3 +73,14 @@ The full field contract lives with the backend in `marksy-api/docs/api/SCORE-MET
 - Trust Score is unchanged.
 
 **Golden tests:** `marksy-api/tests/test_score_semantics.py` covers subject separation, open tips excluded from Trust Score at any count, fewer than 10 completed tips, duplicates and later closes. Target Progress goldens are written red-first under EPIC-046/854 S1.
+
+## Addendum 2026-10-16 — Prediction Score (`PSC-001`)
+
+The reserved name now has its own spec: [`marksy-api` PSC-001 methodology](https://github.com/indoulia/marksy-api/blob/main/docs/superpowers/specs/2026-10-16-prediction-score-psc-001-methodology.md). It is Marksy's at-issue estimate of one call's chance to touch its target before its stop within its horizon. It is built from the call's own terms and earlier closes only, never from its source.
+
+- **Shadow-only.** Rows are stored for ledger tips and SHADOW predictions. `LedgerTipView.predictionScore` carries `status` and `version`, and a `value` only for a VALIDATED version. None is validated.
+- **Defect fixed.** The app showed the legacy, unvalidated `marksyView.probability` as a "Marksy NN" chip and as "MARKSY · THIS TIP".
+  - The API now always sends it as null.
+  - marksy-os renders that chip and sheet score only from a VALIDATED Prediction Score, in a neutral tone (`TipTrack.marksyScore`, `marksyChip`, `marksyNote`).
+- **Trust Score `SCR-001` is unchanged.** The Prediction Score never reads it and never feeds it.
+

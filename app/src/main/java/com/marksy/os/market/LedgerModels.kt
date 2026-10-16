@@ -61,7 +61,7 @@ data class ProgressPointDto(
     }
 }
 
-/** Marksy's own read of a tip; `probability` is 0–1. */
+/** Marksy's legacy comparison of a tip; `probability` is never shown (unvalidated, and null from the backend since PSC-001). */
 data class MarksyViewDto(val probability: Double?, val verdict: String?, val comparedAt: String?) {
     companion object {
         fun parse(json: JSONObject) = MarksyViewDto(json.doubleOrNull("probability"), json.textOrNull("verdict"), json.textOrNull("comparedAt"))
@@ -130,6 +130,26 @@ data class TargetProgressDto(
     }
 }
 
+/** `PSC-001` Prediction Score: `value` (0–100) is present only when `status` is VALIDATED. */
+data class PredictionScoreDto(
+    val version: String,
+    val status: String,
+    val value: Int?,
+    val reason: String?,
+    val evaluatedAt: String?,
+    val provenance: String?
+) {
+    companion object {
+        const val VALIDATED = "VALIDATED"
+        const val RECONSTRUCTED = "RECONSTRUCTED"
+
+        fun parse(json: JSONObject) = PredictionScoreDto(
+            json.textOrNull("version") ?: "", json.textOrNull("status") ?: "", json.intOrNull("value"), json.textOrNull("reason"),
+            json.textOrNull("evaluatedAt"), json.textOrNull("provenance")
+        )
+    }
+}
+
 /** The canonical call (spec §4): terms, lifecycle and latest progress; `channel` and `caller` are canonical. */
 data class LedgerTipDto(
     val tipId: String,
@@ -167,6 +187,7 @@ data class LedgerTipDto(
     val horizonEndsOn: String? = null,
     val sessionsElapsed: Int? = null,
     val marksyView: MarksyViewDto? = null,
+    val predictionScore: PredictionScoreDto? = null,
     val repeats: Int? = null,
     val alsoBy: List<AlsoTippedDto> = emptyList()
 ) {
@@ -205,6 +226,7 @@ data class LedgerTipDto(
             horizonEndsOn = json.textOrNull("horizonEndsOn"),
             sessionsElapsed = json.intOrNull("sessionsElapsed"),
             marksyView = json.optJSONObject("marksyView")?.let(MarksyViewDto::parse),
+            predictionScore = json.optJSONObject("predictionScore")?.let(PredictionScoreDto::parse),
             repeats = json.intOrNull("repeats"),
             alsoBy = json.optJSONArray("alsoBy").ledgerObjects().map(AlsoTippedDto::parse)
         )
