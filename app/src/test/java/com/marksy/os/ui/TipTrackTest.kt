@@ -155,6 +155,20 @@ class TipTrackTest {
         )
     }
 
+    // All counts a tip once even when it is both mine and followed (17 = Mine 8 + Following 5 + Marksy 4 in the canvas).
+    @Test
+    fun allIsMineFollowingAndMarksyCountingEachTipOnce() {
+        val today = LocalDate.of(2026, 10, 16)
+        val card = { id: String -> TipCards.mine(MyTipDto(tip().copy(tipId = id), null, null, emptyList(), 0), null, today) }
+        val lists = TradingLists(
+            mineOpen = listOf(card("a")), marksyOpen = listOf(card("m")), setups = emptyList(), mineHistory = listOf(card("h")), marksyHistory = emptyList(),
+            mineVoided = emptyList(), marksyVoided = emptyList(), followingOpen = listOf(card("a"), card("f"), card("m")), followingHistory = listOf(card("h"), card("g"))
+        )
+        assertEquals(listOf("tip-a", "tip-m", "tip-f"), lists.open(OpenScope.ALL).map { it.key })
+        assertEquals(setOf("tip-h", "tip-g"), lists.history(HistoryScope.ALL).map { it.key }.toSet())
+        assertEquals(2, lists.history(HistoryScope.ALL).size)
+    }
+
     @Test
     fun sourcesChipCountsOtherSourcesOrRepeats() {
         assertNull(TipTrack.sourcesChip(tip()))

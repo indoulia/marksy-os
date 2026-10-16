@@ -131,7 +131,11 @@ internal data class TradingLists(
     val followingHistory: List<TipCardModel> = emptyList(),
     val followingVoided: List<TipCardModel> = emptyList()
 ) {
-    val open: List<TipCardModel> get() = mineOpen + marksyOpen
+    /** One card per tip across lists: a tip that is mine, followed and Marksy's is still one tip. */
+    private fun union(vararg lists: List<TipCardModel>): List<TipCardModel> =
+        lists.flatMap { it }.distinctBy { it.ledger?.tipId?.takeIf(String::isNotEmpty) ?: it.key }
+
+    val open: List<TipCardModel> get() = union(mineOpen, marksyOpen, followingOpen)
 
     fun open(scope: OpenScope): List<TipCardModel> = when (scope) { OpenScope.MINE -> mineOpen; OpenScope.FOLLOWING -> followingOpen; OpenScope.MARKSY -> marksyOpen; OpenScope.ALL -> open }
 
@@ -139,11 +143,11 @@ internal data class TradingLists(
         HistoryScope.MINE -> mineHistory
         HistoryScope.FOLLOWING -> followingHistory
         HistoryScope.MARKSY -> marksyHistory
-        HistoryScope.ALL -> (mineHistory + marksyHistory).sortedByDescending { it.at }
+        HistoryScope.ALL -> union(mineHistory, marksyHistory, followingHistory).sortedByDescending { it.at }
     }
 
     fun voided(scope: HistoryScope): List<TipCardModel> = when (scope) {
-        HistoryScope.MINE -> mineVoided; HistoryScope.FOLLOWING -> followingVoided; HistoryScope.MARKSY -> marksyVoided; HistoryScope.ALL -> mineVoided + marksyVoided
+        HistoryScope.MINE -> mineVoided; HistoryScope.FOLLOWING -> followingVoided; HistoryScope.MARKSY -> marksyVoided; HistoryScope.ALL -> union(mineVoided, marksyVoided, followingVoided)
     }
 
     /** The latest scan's setups are Today's; setups from earlier sessions are This week's. */

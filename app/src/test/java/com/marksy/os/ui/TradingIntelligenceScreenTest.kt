@@ -281,10 +281,10 @@ class TradingIntelligenceScreenTest {
         )
 
         assertEquals(listOf("BEL"), lists.open(OpenScope.FOLLOWING).map { it.symbol })
-        assertEquals(listOf("HAL"), lists.open(OpenScope.ALL).map { it.symbol })
+        assertEquals(listOf("HAL", "BEL"), lists.open(OpenScope.ALL).map { it.symbol })
         assertEquals(listOf("TCS"), lists.history(HistoryScope.FOLLOWING).map { it.symbol })
         assertEquals(listOf("VOID"), lists.voided(HistoryScope.FOLLOWING).map { it.symbol })
-        assertEquals(emptyList<String>(), lists.history(HistoryScope.ALL).map { it.symbol })
+        assertEquals(listOf("TCS"), lists.history(HistoryScope.ALL).map { it.symbol })
         assertEquals("History · Following", tradingTitleNote("History", null, historyScope = HistoryScope.FOLLOWING))
     }
 
