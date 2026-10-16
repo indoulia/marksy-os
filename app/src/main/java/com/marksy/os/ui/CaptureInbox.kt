@@ -72,7 +72,9 @@ class CaptureInbox(
     val onReview: (Long) -> Unit = {},
     val onAddScreenshot: () -> Unit = {},
     /** Approved option calls, kept on this phone: Marksy tracks no options yet. */
-    val keptOptions: List<TipCandidateEntity> = emptyList()
+    val keptOptions: List<TipCandidateEntity> = emptyList(),
+    /** The user's confirmed Remove of a kept option call. */
+    val onRemoveOption: (Long) -> Unit = {}
 ) {
     val count: Int get() = candidates.size + workflows.size
     val isEmpty: Boolean get() = count == 0
@@ -92,10 +94,12 @@ fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     val shown = if (session is CaptureSessionState.Idle || session is CaptureSessionState.Finished) TEASER_STATES + ORPHANED_STATES else TEASER_STATES
     var reviewing by rememberSaveable { mutableStateOf<Long?>(null) }
     val pick = rememberScreenshotPicker()
+    val scope = rememberCoroutineScope()
     reviewing?.let { CaptureReviewHost(it) { reviewing = null } }
     return CaptureInbox(
         candidates, workflows.filter { it.state in shown }, { registry.resolve(it)?.displayName ?: "an app" },
-        { registry.resolve(it)?.offersScreenCapture == true }, actions, { reviewing = it }, pick, keptOptions
+        { registry.resolve(it)?.offersScreenCapture == true }, actions, { reviewing = it }, pick, keptOptions,
+        { id -> scope.launch { dao.removeKeptOption(id) } }
     )
 }
 
@@ -116,12 +120,22 @@ fun LazyListScope.captureToReview(inbox: CaptureInbox, now: Long, expanded: Bool
 
 /** Approved option calls: they stay on this phone and are never shown as sent. */
 fun LazyListScope.captureKeptOptions(inbox: CaptureInbox, now: Long) {
-    items(inbox.keptOptions, key = { "o${it.id}" }) { KeptOptionCard(it, now) }
+    items(inbox.keptOptions, key = { "o${it.id}" }) { KeptOptionCard(it, now) { inbox.onRemoveOption(it.id) } }
 }
 
 @Composable
-private fun KeptOptionCard(c: TipCandidateEntity, now: Long) {
+private fun KeptOptionCard(c: TipCandidateEntity, now: Long, onRemove: () -> Unit) {
     val f = c.fields
+    var confirming by remember(c.id) { mutableStateOf(false) }
+    if (confirming) {
+        MarksyDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Remove this option tip?") },
+            text = { Text("It's deleted from this phone. Marksy never received it, so it can't be recovered.") },
+            confirmButton = { MarksyButton("Remove", { confirming = false; onRemove() }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative) },
+            dismissButton = { MarksyButton("Cancel", { confirming = false }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextPrimary) }
+        )
+    }
     MarksyCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(listOfNotNull(f.symbol, f.side?.name).joinToString(" · ").ifEmpty { "Option call" }, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -130,6 +144,7 @@ private fun KeptOptionCard(c: TipCandidateEntity, now: Long) {
         }
         MarksyBadge("Approved — option tracking unsupported", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
         Text("Kept on this phone. Not sent to Marksy.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        Pill("Remove") { confirming = true }
     }
 }
 

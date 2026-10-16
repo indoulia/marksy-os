@@ -202,12 +202,35 @@ interface CaptureDao {
     @Query("DELETE FROM capture_workflows WHERE createdAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
     suspend fun deleteOldWorkflows(cutoff: Long, accepted: Boolean): Int
 
+    // A kept option keeps its reviewed fields and status until the user removes it; its recognized text goes at 30 days.
+    @Query(
+        "UPDATE tip_candidates SET extractedText = NULL WHERE capturedAt < :cutoff AND extractedText IS NOT NULL " +
+            "AND state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%'"
+    )
+    suspend fun clearOldKeptOptionText(cutoff: Long): Int
+
+    @Query("DELETE FROM tip_candidates WHERE id = :id AND state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%'")
+    suspend fun deleteKeptOption(id: Long): Int
+
+    @Query("DELETE FROM capture_evidence WHERE id = :evidenceId AND id NOT IN (SELECT evidenceId FROM tip_candidates)")
+    suspend fun deleteEvidenceIfUnused(evidenceId: Long): Int
+
+    /** The user's confirmed Remove: an approved option call and its screenshot hash; anything else is left alone. */
+    @Transaction
+    suspend fun removeKeptOption(id: Long): Boolean {
+        val evidenceId = candidate(id)?.evidenceId ?: return false
+        if (deleteKeptOption(id) == 0) return false
+        deleteEvidenceIfUnused(evidenceId)
+        return true
+    }
+
     @Transaction
     suspend fun pruneExpired(nowMillis: Long) {
         val short = RetentionPolicy.captureCutoff(accepted = false, nowMillis = nowMillis)
         val long = RetentionPolicy.captureCutoff(accepted = true, nowMillis = nowMillis)
         deleteOldCandidates(short, accepted = false)
         deleteOldCandidates(long, accepted = true)
+        clearOldKeptOptionText(long)
         deleteOldOrphanEvidence(short)
         deleteOldWorkflows(short, accepted = false)
         deleteOldWorkflows(long, accepted = true)

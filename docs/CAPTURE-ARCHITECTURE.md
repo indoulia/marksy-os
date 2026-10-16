@@ -83,7 +83,7 @@ Added by this branch: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PROJECTION
 | Logs | logcat | n/a | Ids, enum names and fixed codes only; no text, symbol, price, URI or file name |
 | ML Kit usage metrics | Google (see section 6) | Per Google | Possibly; never image content |
 
-An approved option call (flag `option-contract`) is the exception to the 30-day rule: Marksy tracks no options yet, so it is never sent and its candidate row, OCR text and evidence hash stay on the phone with no age limit. App backup is off (`allowBackup="false"`), so the row is lost with the app's data.
+An approved option call (flag `option-contract`) is the exception to the 30-day rule: Marksy tracks no options yet, so it is never sent. Its reviewed fields, status and evidence hash stay on the phone until the user removes it (Remove on its Captured card, after a confirmation, deletes the row and the hash); its OCR text is cleared after 30 days. App backup is off (`allowBackup="false"`), so the row is lost with the app's data.
 
 Unreviewed candidates expire after 3 days. Duplicate detection: same hash within 24 h, or workflow already reviewed. Retention runs in `RetentionWorker` with `CaptureGateway.sweep` (expires workflows past TTL, fails sessions stuck over 10 min as `stale-session`).
 
