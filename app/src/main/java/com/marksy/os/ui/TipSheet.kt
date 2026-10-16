@@ -66,8 +66,8 @@ internal fun TipSheet(
     // A darker scrim, a raised sheet and a slim handle, so the sheet stands off the list behind it.
     ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MarksyTheme.SurfaceRaised, scrimColor = Color.Black.copy(alpha = 0.86f),
-        dragHandle = { Box(Modifier.padding(top = 8.dp, bottom = 2.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(MarksyTheme.TextMuted)) }
+        containerColor = MarksyTheme.SurfaceRaised, scrimColor = MarksyTheme.Scrim,
+        dragHandle = { Box(Modifier.padding(top = MarksySpace.Gap, bottom = MarksySpace.Hair).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(MarksyTheme.TextMuted)) }
     ) {
         TipSheetContent(m, progress, onTrade, onOpenStock, onScore, impliedStatus) { daily = it }
     }
