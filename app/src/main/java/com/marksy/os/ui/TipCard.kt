@@ -76,27 +76,26 @@ internal object TipCards {
         ).joinToString(" · ")
     }
 
-    // No Prediction Score is validated yet (PSC-001 is paused), so the slot never shows a number; marksyView's
-    // probability is an unvalidated model output and is never shown as one.
-    private val PREDICTION = SheetScore("PREDICTION", null, null, "not validated yet", null)
+    /** Marksy's Prediction line, only for a score that passed validation and was approved for display (none has: PSC-RR-001). */
+    fun prediction(validatedScore: Int?): SheetScore? = validatedScore?.let { SheetScore("PREDICTION", it, null, "/ 100", null) }
 
     /** A source's Trust, or why it has none yet; its hit rate lives on the record the value opens. */
     private fun trust(name: String, score: Int?, completed: Int?, source: ScorecardSource?) =
         SheetScore("TRUST", score, name.ifBlank { null }, if (score == null) completed?.let { "$it closed, too few" } else null, source)
 
-    /** Trust for each source the tip names (channel, then finfluencer), then Marksy's Prediction slot. */
-    fun scores(item: MyTipDto): List<SheetScore> {
+    /** Trust for each source the tip names (channel, then finfluencer), then Marksy's Prediction line once one is validated. */
+    fun scores(item: MyTipDto, validatedPrediction: Int? = null): List<SheetScore> {
         val t = item.tip
         return listOfNotNull(
             t.channel?.let { c -> trust(c.name, item.channelHeadline?.trustScore, item.channelHeadline?.completed, ScorecardSource("channel", c.channelId, c.name)) },
             t.caller?.let { c -> trust(c.name, item.callerHeadline?.trustScore, item.callerHeadline?.completed, ScorecardSource("caller", c.callerId, c.name)) },
-            PREDICTION
+            prediction(validatedPrediction)
         )
     }
 
-    private fun engineScores(engine: EntityScorecardDto?, source: ScorecardSource?): List<SheetScore> = listOfNotNull(
+    private fun engineScores(engine: EntityScorecardDto?, source: ScorecardSource?, validatedPrediction: Int? = null): List<SheetScore> = listOfNotNull(
         source?.let { trust(it.name, engine?.body?.trust?.trustScore, engine?.body?.counts?.completed, it) },
-        PREDICTION
+        prediction(validatedPrediction)
     )
 
     fun mine(item: MyTipDto, live: Double?, today: LocalDate): TipCardModel {
