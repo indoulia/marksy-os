@@ -63,7 +63,8 @@ class TradingIntelligenceScreenTest {
         ScorecardHeadlineDto(14, 3, 11, 6, 4, 1, 1, 54.5, 57.0, 0.012, 62), null, emptyList(), 0
     )
 
-    private val requested = mutableListOf<String?>()
+    // The feed reads its lists concurrently on Dispatchers.IO, so a plain list can lose a write.
+    private val requested = java.util.concurrent.CopyOnWriteArrayList<String?>()
     private var closedCalls: List<ClosedPredictionDto> = emptyList()
 
     private fun closedCall(id: Int, symbol: String, tipId: String?, status: String = "STOP_LOSS_HIT", reason: String? = null) = ClosedPredictionDto(
@@ -269,6 +270,22 @@ class TradingIntelligenceScreenTest {
         compose.onAllNodesWithText("Voided before buy")[0].performClick()
         compose.waitForIdle()
         compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
+    }
+
+    // Following lists its own feed's tips: open in Open, closed in History with voided-before-buy folded apart; All stays mine + Marksy.
+    @Test
+    fun followingScopeListsTheFollowingFeedsTips() {
+        val lists = TradingLists.build(
+            listOf(tip("HAL", "ACTIVE")), emptyList(), emptyList(), emptyList(), null, emptyMap(), java.time.LocalDate.of(2026, 10, 16),
+            followingOpen = listOf(tip("BEL", "ACTIVE")), followingClosed = listOf(tip("TCS", "TARGET_HIT", "SUCCESS"), tip("VOID", "INVALIDATED"))
+        )
+
+        assertEquals(listOf("BEL"), lists.open(OpenScope.FOLLOWING).map { it.symbol })
+        assertEquals(listOf("HAL", "BEL"), lists.open(OpenScope.ALL).map { it.symbol })
+        assertEquals(listOf("TCS"), lists.history(HistoryScope.FOLLOWING).map { it.symbol })
+        assertEquals(listOf("VOID"), lists.voided(HistoryScope.FOLLOWING).map { it.symbol })
+        assertEquals(listOf("TCS"), lists.history(HistoryScope.ALL).map { it.symbol })
+        assertEquals("History · Following", tradingTitleNote("History", null, historyScope = HistoryScope.FOLLOWING))
     }
 
     @Test

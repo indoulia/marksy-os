@@ -32,6 +32,8 @@ object MarksyTheme {
     val Background = Color(0xFF0A0F0D)
     val Surface = Color(0xFF111815)
     val SurfaceRaised = Color(0xFF16221C)
+    /** A cell on a raised surface (the tip sheet), one step lighter than it. */
+    val SurfaceHigh = Color(0xFF1C2925)
     val BorderGlow = Color(0xFF1E3B2E)
 
     val PrimaryEmerald = Color(0xFF00E676)

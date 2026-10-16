@@ -52,6 +52,15 @@ class TipTrackTest {
         assertEquals(ExitSlot("VOIDED", "30 Sep", exited = false), TipTrack.slot(tip(status = "INVALIDATED", entryStatus = "WAITING", closedAt = "2026-09-30T09:00:00Z"), today))
     }
 
+    // The sheet's RECOMMENDED cell dates the tip, so its header doesn't say "recommended …" again; without the cell it must.
+    @Test
+    fun sheetMetaLeavesTheRecommendedDayToItsCell() {
+        val meta = "5paisa · recommended 13 Oct, 14:40"
+        assertEquals("5paisa", TipTrack.sheetMeta(meta, recommendedCell = true))
+        assertEquals(meta, TipTrack.sheetMeta(meta, recommendedCell = false))
+        assertEquals("Marksy · 5-day · closed 7 Oct", TipTrack.sheetMeta("Marksy · 5-day · recommended 30 Sep · closed 7 Oct", recommendedCell = true))
+    }
+
     // A 240-session tip read on 16 Oct 2026 showed "EXITS BY 16 Sep", which reads as last month.
     @Test
     fun slotDatesMoreThanSixMonthsAwayCarryTheYear() {
@@ -116,22 +125,48 @@ class TipTrackTest {
         assertEquals(TrackTone.WARNING, TipTrack.statusTone(tip(entryStatus = "WAITING")))
     }
 
-    // Score bands: 65+ positive, 45+ warning, else negative; Marksy's score is its probability × 100 and absent without a view.
+    // Score bands: 65+ positive, 45+ warning, else negative. marksyView's probability is an unvalidated model number (PSC-RR-001), never a chip.
     @Test
     fun scoreChipsMapToBands() {
         assertEquals(TrackTone.POSITIVE, TipTrack.band(65))
         assertEquals(TrackTone.WARNING, TipTrack.band(64))
         assertEquals(TrackTone.WARNING, TipTrack.band(45))
         assertEquals(TrackTone.NEGATIVE, TipTrack.band(44))
-        assertEquals(72, TipTrack.marksyScore(tip(marksy = 0.724)))
-        assertNull(TipTrack.marksyScore(tip()))
-        assertNull(TipTrack.marksyChip(tip(), null))
+        assertNull(TipCards.mine(MyTipDto(tip(marksy = 0.724), null, null, emptyList(), 0), null, LocalDate.of(2026, 10, 16)).marksy)
 
         val headline = { trust: Int? -> ScorecardHeadlineDto(10, 0, 10, 4, 6, 0, 0, null, 40.0, null, trust) }
         val item = { channelTrust: Int?, callerTrust: Int? -> MyTipDto(tip(), headline(channelTrust), headline(callerTrust), emptyList(), 0) }
         assertEquals(ScoreChip("Trust", 58, TrackTone.WARNING, ScorecardSource("channel", 4, "Swing Picks")), TipTrack.trustChip(item(58, 64)))
         assertEquals(ScorecardSource("caller", 9, "Rahul K."), TipTrack.trustChip(item(null, 64))!!.source)
         assertNull(TipTrack.trustChip(item(null, null)))
+    }
+
+    // The sheet's two score lines: Trust per named source, then Marksy's Prediction; a value without a number says why.
+    @Test
+    fun sheetScoresShowTrustPerSourceAndAPredictionSlot() {
+        val headline = { completed: Int, trust: Int? -> ScorecardHeadlineDto(completed, 0, completed, 2, 2, 0, 0, null, 42.0, null, trust) }
+        assertEquals(
+            listOf(
+                SheetScore("TRUST", null, "Swing Picks", "4 closed, too few", ScorecardSource("channel", 4, "Swing Picks")),
+                SheetScore("TRUST", 64, "Rahul K.", null, ScorecardSource("caller", 9, "Rahul K.")),
+                SheetScore("PREDICTION", null, null, "not validated yet", null)
+            ),
+            TipCards.scores(MyTipDto(tip(marksy = 0.724), headline(4, null), headline(30, 64), emptyList(), 0))
+        )
+    }
+
+    // All counts a tip once even when it is both mine and followed (17 = Mine 8 + Following 5 + Marksy 4 in the canvas).
+    @Test
+    fun allIsMineFollowingAndMarksyCountingEachTipOnce() {
+        val today = LocalDate.of(2026, 10, 16)
+        val card = { id: String -> TipCards.mine(MyTipDto(tip().copy(tipId = id), null, null, emptyList(), 0), null, today) }
+        val lists = TradingLists(
+            mineOpen = listOf(card("a")), marksyOpen = listOf(card("m")), setups = emptyList(), mineHistory = listOf(card("h")), marksyHistory = emptyList(),
+            mineVoided = emptyList(), marksyVoided = emptyList(), followingOpen = listOf(card("a"), card("f"), card("m")), followingHistory = listOf(card("h"), card("g"))
+        )
+        assertEquals(listOf("tip-a", "tip-m", "tip-f"), lists.open(OpenScope.ALL).map { it.key })
+        assertEquals(setOf("tip-h", "tip-g"), lists.history(HistoryScope.ALL).map { it.key }.toSet())
+        assertEquals(2, lists.history(HistoryScope.ALL).size)
     }
 
     @Test

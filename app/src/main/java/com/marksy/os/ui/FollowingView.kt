@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -63,14 +64,17 @@ internal fun rememberFollowToggle(repository: MarketIntelligenceRepository): (Fo
     }
 }
 
-/** Trading › Open · Following: tip alerts (new tips from followed channels, callers and engines; entries; closes), then who is followed. */
+/** Trading › Following: the followed sources' tip [cards], then (with [alerts]) the tip alerts the app shows nowhere else, then who is followed. */
 @Composable
 internal fun FollowingView(
     repository: MarketIntelligenceRepository, bottomPadding: Dp, onOpenStock: (String) -> Unit,
-    onTrade: (TradeIntent) -> Unit = {}, onScore: (com.marksy.os.market.ScorecardSource) -> Unit = {}
+    onTrade: (TradeIntent) -> Unit = {}, onScore: (com.marksy.os.market.ScorecardSource) -> Unit = {},
+    alerts: Boolean = true, cards: LazyListScope.() -> Unit = {}
 ) {
     val follows by produceState<MarketDataState<FollowListDto>>(MarketDataState.Loading) { value = repository.follows() }
-    val alerts by produceState<MarketDataState<List<TipAlertDto>>>(MarketDataState.Loading) { value = repository.tipAlerts() }
+    val alertList by produceState<MarketDataState<List<TipAlertDto>>>(MarketDataState.Loading, alerts) {
+        value = if (alerts) repository.tipAlerts() else MarketDataState.Empty
+    }
     val followed by MarketIntelligenceRepository.followed.collectAsState()
     val toggle = rememberFollowToggle(repository)
     val scope = rememberCoroutineScope()
@@ -81,7 +85,8 @@ internal fun FollowingView(
     }
 
     MarksyList(bottom = bottomPadding) {
-        (alerts as? MarketDataState.Loaded)?.value?.let { list ->
+        cards()
+        (alertList as? MarketDataState.Loaded)?.value?.let { list ->
             items(list, key = { "alert-${it.id}" }) { a ->
                 TipAlertRow(a, unread = a.unread && a.id !in read) {
                     a.tipId?.let { open = it }

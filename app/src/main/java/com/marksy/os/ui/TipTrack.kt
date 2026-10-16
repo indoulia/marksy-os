@@ -9,14 +9,12 @@ import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MyTipDto
 import com.marksy.os.market.ProgressPointDto
 import com.marksy.os.market.ScorecardEntity
-import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.ScorecardSource
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 enum class TrackTone { POSITIVE, NEGATIVE, WARNING, NEUTRAL, MUTED }
 
@@ -94,6 +92,10 @@ internal object TipTrack {
     private val WORDS = mapOf("TARGET_HIT" to "Target hit", "STOP_LOSS_HIT" to "Stop-loss hit", "HORIZON_EXPIRED" to "Expired", LedgerCalls.STATUS_INVALIDATED to "Voided before buy")
 
     fun price(v: Double): String = MarksyFormat.rupees(v)
+
+    /** A card's meta for the sheet header, without the "recommended …" day its RECOMMENDED cell already shows. */
+    fun sheetMeta(meta: String, recommendedCell: Boolean): String =
+        if (!recommendedCell) meta else meta.split(" · ").filterNot { it.startsWith("recommended ") }.joinToString(" · ")
 
     /** "₹410–418" (no paise when both ends are whole), or one price when the zone is a single level. */
     fun zone(low: Double?, high: Double?): String? {
@@ -205,11 +207,6 @@ internal object TipTrack {
         else -> TrackTone.NEGATIVE
     }
 
-    /** round(probability × 100); null when Marksy has no view on the tip. */
-    fun marksyScore(t: LedgerTipDto?): Int? = t?.marksyView?.probability?.let { (it * 100).roundToInt().coerceIn(0, 100) }
-
-    fun marksyChip(t: LedgerTipDto?, engine: ScorecardSource?): ScoreChip? = marksyScore(t)?.let { ScoreChip("Marksy", it, band(it), engine) }
-
     fun trustChip(score: Int?, source: ScorecardSource?): ScoreChip? = score?.let { ScoreChip("Trust", it, band(it), source) }
 
     /** The channel's Trust, else the caller's, as the tip's own scorecards report them. */
@@ -274,7 +271,6 @@ internal object TipTrack {
     fun dayTime(iso: String): String? = runCatching { MarksyFormat.dayTime(OffsetDateTime.parse(iso).atZoneSameInstant(IST)) }.getOrNull()
 }
 
-internal fun ScorecardHeadlineDto.hitText(): String? = hitRatePct?.let { MarksyFormat.percent(it, 0, signed = false) + " hit" }
 
 /** A watchlist row's one-line read on the stock's tips; [trade] while an entry is still buyable. */
 internal data class WatchSignal(val text: String, val tone: TrackTone, val trade: TradeIntent?)

@@ -38,7 +38,8 @@ import com.marksy.os.market.ScorecardSource
 import java.time.LocalDate
 
 /** A score in the tip sheet's SCORES block. */
-internal data class SheetScore(val caption: String, val score: Int, val note: String?, val source: ScorecardSource?)
+/** One value on the sheet's TRUST or PREDICTION line; [score] is null until there is one, and [note] then says why. */
+internal data class SheetScore(val caption: String, val score: Int?, val name: String?, val note: String?, val source: ScorecardSource?)
 
 /** Everything one tip card (and its sheet) shows; built once from whichever feed the tip came from. */
 internal data class TipCardModel(
@@ -75,23 +76,37 @@ internal object TipCards {
         ).joinToString(" · ")
     }
 
-    fun scores(item: MyTipDto, engine: ScorecardSource?): List<SheetScore> {
+    // No Prediction Score is validated yet (PSC-001 is paused), so the slot never shows a number; marksyView's
+    // probability is an unvalidated model output and is never shown as one.
+    private val PREDICTION = SheetScore("PREDICTION", null, null, "not validated yet", null)
+
+    /** A source's Trust, or why it has none yet; its hit rate lives on the record the value opens. */
+    private fun trust(name: String, score: Int?, completed: Int?, source: ScorecardSource?) =
+        SheetScore("TRUST", score, name.ifBlank { null }, if (score == null) completed?.let { "$it closed, too few" } else null, source)
+
+    /** Trust for each source the tip names (channel, then finfluencer), then Marksy's Prediction slot. */
+    fun scores(item: MyTipDto): List<SheetScore> {
         val t = item.tip
         return listOfNotNull(
-            TipTrack.marksyScore(t)?.let { SheetScore("MARKSY · THIS TIP", it, t.marksyView?.verdict?.lowercase()?.replace('_', ' '), engine) },
-            t.caller?.let { c -> item.callerHeadline?.trustScore?.let { SheetScore("FINFLUENCER", it, listOfNotNull(c.name.ifBlank { null }, item.callerHeadline.hitText()).joinToString(" · "), ScorecardSource("caller", c.callerId, c.name)) } },
-            t.channel?.let { c -> item.channelHeadline?.trustScore?.let { SheetScore("CHANNEL", it, listOfNotNull(c.name.ifBlank { null }, item.channelHeadline.hitText()).joinToString(" · "), ScorecardSource("channel", c.channelId, c.name)) } }
+            t.channel?.let { c -> trust(c.name, item.channelHeadline?.trustScore, item.channelHeadline?.completed, ScorecardSource("channel", c.channelId, c.name)) },
+            t.caller?.let { c -> trust(c.name, item.callerHeadline?.trustScore, item.callerHeadline?.completed, ScorecardSource("caller", c.callerId, c.name)) },
+            PREDICTION
         )
     }
 
-    fun mine(item: MyTipDto, live: Double?, today: LocalDate, engine: ScorecardSource? = null): TipCardModel {
+    private fun engineScores(engine: EntityScorecardDto?, source: ScorecardSource?): List<SheetScore> = listOfNotNull(
+        source?.let { trust(it.name, engine?.body?.trust?.trustScore, engine?.body?.counts?.completed, it) },
+        PREDICTION
+    )
+
+    fun mine(item: MyTipDto, live: Double?, today: LocalDate): TipCardModel {
         val t = item.tip
         val track = TipTrack.of(t, live)
         return TipCardModel(
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
             meta = meta(t), returnFraction = track.returnFraction, track = track,
-            marksy = TipTrack.marksyChip(t, engine), trust = TipTrack.trustChip(item), sources = TipTrack.sourcesChip(t),
-            trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t, scores = scores(item, engine),
+            trust = TipTrack.trustChip(item), sources = TipTrack.sourcesChip(t),
+            trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t, scores = scores(item),
             voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
@@ -101,9 +116,9 @@ internal object TipCards {
         val track = TipTrack.of(t, live)
         return TipCardModel(
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
-            meta = meta(t), returnFraction = track.returnFraction, track = track, marksy = TipTrack.marksyChip(t, null), sources = TipTrack.sourcesChip(t),
+            meta = meta(t), returnFraction = track.returnFraction, track = track, sources = TipTrack.sourcesChip(t),
             trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t,
-            scores = listOfNotNull(TipTrack.marksyScore(t)?.let { SheetScore("MARKSY · THIS TIP", it, t.marksyView?.verdict?.lowercase()?.replace('_', ' '), null) }),
+            scores = scores(MyTipDto(t, null, null, emptyList(), 0)),
             voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
@@ -132,9 +147,9 @@ internal object TipCards {
             key = "m-${p.predictionId}", symbol = p.symbol, sell = track.sell, status = status,
             statusTone = when { t != null && !(ended && LedgerCalls.isActive(t)) -> TipTrack.statusTone(t); ended -> TrackTone.MUTED; else -> TrackTone.WARNING },
             meta = meta, returnFraction = track.returnFraction, track = track,
-            marksy = TipTrack.marksyChip(t, engineSource), trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
+            trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), trade = TipTrack.trade(p.symbol, track).takeIf { TipTrack.buyable(p, today) }, ledger = t,
-            scores = listOfNotNull(TipTrack.marksyScore(t)?.let { SheetScore("MARKSY · THIS TIP", it, t?.marksyView?.verdict?.lowercase()?.replace('_', ' '), engineSource) }),
+            scores = engineScores(engine, engineSource),
             voided = (t?.let(TipTrack::voided) ?: (p.lifecycleState == LedgerCalls.STATUS_INVALIDATED)) && ended,
             at = t?.closedAt ?: t?.firstSeenAt ?: p.publishedAt.orEmpty()
         )
@@ -157,9 +172,9 @@ internal object TipCards {
                 row.excludedReason?.let { "not scored" }, "${c.predictions} predictions".takeIf { c.predictions > 1 }
             ).joinToString(" · "),
             returnFraction = LedgerCalls.closedReturn(row), track = track,
-            marksy = TipTrack.marksyChip(t, engineSource), trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
+            trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), ledger = t,
-            scores = listOfNotNull(TipTrack.marksyScore(t)?.let { SheetScore("MARKSY · THIS TIP", it, t?.marksyView?.verdict?.lowercase()?.replace('_', ' '), engineSource) }),
+            scores = engineScores(engine, engineSource),
             voided = t?.let(TipTrack::voided) == true, at = t?.closedAt ?: row.asOf.orEmpty()
         )
     }
