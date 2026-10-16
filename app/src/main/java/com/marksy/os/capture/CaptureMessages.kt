@@ -38,7 +38,7 @@ object CaptureMessages {
         Ambiguity.MISSING_STOP_LOSS -> "No stop loss found."
         Ambiguity.CONFLICTING_SIDE -> "Both buy and sell appear; choose one."
         Ambiguity.LOW_OCR_CONFIDENCE -> "The text was hard to read; check every field."
-        Ambiguity.OPTION_CONTRACT -> "An option call: the levels are the option's price; check the contract."
+        Ambiguity.OPTION_CONTRACT -> "An option call: the levels are the option's price. Marksy can't track options yet, so this tip stays on this phone."
         else -> null
     }
 

@@ -70,6 +70,27 @@ class MarksyTipsApiClientRecordedReceiptTest {
         assertEquals("TIP", insight.action)
     }
 
+    private fun clientReplying(accepted: JSONObject, tip: () -> JSONObject) = object : MarksyTipsApiClient(authRepository()) {
+        override suspend fun execute(method: String, url: String, payload: JSONObject?): JSONObject = when {
+            method == "POST" -> JSONObject().put("data", accepted.put("tipId", "tip-1").put("kind", "TIP")).put("meta", JSONObject())
+            url.endsWith("/tips/tip-1") -> tip()
+            else -> throw IllegalStateException("Unexpected call: $method $url")
+        }
+    }
+
+    // Without the tip's details, the accepted reply's own status is shown; tracking is never promised.
+    @Test
+    fun missingTipDetailsFallBackToTheAcceptedStatus() = runBlocking {
+        val option = JSONObject().put("status", "DATA_UNRESOLVED").put("reason", "OPTION_UNSUPPORTED")
+        val failedFetch = clientReplying(JSONObject(option.toString())) { throw httpFailure(404) }.capture(1L, message).getOrThrow()
+        val noLedger = clientReplying(JSONObject(option.toString())) { JSONObject().put("data", JSONObject()).put("meta", JSONObject()) }.capture(1L, message).getOrThrow()
+        assertEquals("Option tracking unsupported · not tracked or scored", failedFetch.summary)
+        assertEquals("Option tracking unsupported · not tracked or scored", noLedger.summary)
+
+        val olderServer = clientReplying(JSONObject()) { throw httpFailure(404) }.capture(1L, message).getOrThrow()
+        assertEquals("Recorded by Marksy", olderServer.summary)
+    }
+
     // The POST itself failing is unchanged: the row is not recorded server-side, so it must still fail/retry.
     @Test
     fun aFailedPostStillFails() = runBlocking {

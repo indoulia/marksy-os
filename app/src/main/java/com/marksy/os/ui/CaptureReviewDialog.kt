@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
+import com.marksy.os.capture.Ambiguity
 import com.marksy.os.capture.CandidateDeliveryPolicy
 import com.marksy.os.capture.CaptureMessages
 import com.marksy.os.capture.CaptureMethod
@@ -159,7 +160,7 @@ fun CaptureReviewDialog(
                 MarksyCard {
                     Text(
                         if (canSend) "Send to Marksy sends only: ${line.orEmpty()}, from $sourceName. Nothing else leaves your phone."
-                        else sendBlocked(candidate.sourceVerified, line, source),
+                        else sendBlocked(candidate.sourceVerified, line, source, Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes),
                         color = MarksyTheme.TextPrimary, style = MarksyType.Small
                     )
                     Text("Keep on phone sends nothing.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -186,7 +187,8 @@ private val FieldHeight = 40.dp
 
 private fun level(v: Double?): String = v?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
 
-private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?): String = when {
+private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?, option: Boolean): String = when {
+    option -> "Marksy can't track options yet, so this tip stays on this phone."
     !verified -> "Tips with a source you picked yourself stay on this phone."
     line == null -> "To send, add a symbol, buy or sell, and at least two of entry, target and stop loss."
     else -> "${source?.displayName ?: "This source"} tips can't be sent to Marksy, so this one stays on your phone."

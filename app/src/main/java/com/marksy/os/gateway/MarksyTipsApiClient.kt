@@ -20,14 +20,15 @@ open class MarksyTipsApiClient(
         val data = execute("POST", "$apiBaseUrl/tips/ingest-text", message.toJson()).getJSONObject("data")
         val kind = data.str("kind").ifBlank { "RECORDED" }.boundedText(MAX_STATUS_CHARS)
         val tipId = data.str("tipId").trim()
+        val accepted = acceptedSummary(data.str("status"), data.str("reason"))
         val insight = if (tipId.isBlank()) recordedOnly(eventId, kind) else try {
-            fetchTip(tipId, eventId, kind)
+            fetchTip(tipId, eventId, kind, accepted)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (fetchError: Throwable) {
             // Finding M5: the POST already recorded the tip server-side; a failed comparison fetch
-            // (a 4xx such as 404, or an IO error) must not fail the row -- it stays a recorded receipt.
-            recordedOnly(eventId, kind)
+            // (a 4xx such as 404, or an IO error) must not fail the row -- it shows what the accepted reply said.
+            MarksyInsight(eventId = eventId, summary = accepted, action = kind)
         }
         Result.success(insight)
     } catch (cancellation: CancellationException) {
@@ -54,8 +55,8 @@ open class MarksyTipsApiClient(
         action = kind
     )
 
-    private suspend fun fetchTip(tipId: String, eventId: Long, kind: String): MarksyInsight =
-        ledgerInsight(eventId, kind, tipId, execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data"))
+    private suspend fun fetchTip(tipId: String, eventId: Long, kind: String, accepted: String): MarksyInsight =
+        ledgerInsight(eventId, kind, tipId, execute("GET", "$apiBaseUrl/tips/$tipId").getJSONObject("data"), accepted)
 
     // internal open: a test seam so a fake HTTP layer can be substituted without a real (HTTPS-only) server.
     internal open suspend fun execute(method: String, url: String, payload: JSONObject? = null): JSONObject {
@@ -113,12 +114,16 @@ open class MarksyTipsApiClient(
 
 }
 
+/** The accepted reply's own status when the tip's details are missing; with none (an older server), nothing about tracking. */
+internal fun acceptedSummary(status: String, reason: String): String =
+    if (status.isBlank()) "Recorded by Marksy" else LedgerCalls.state(status.trim(), reason.trim().ifBlank { null })
+
 /** The tip as the ledger tracks it (spec §9 `GET /tips/{id}`); Marksy's EPIC-803 comparison is no longer read. */
-internal fun ledgerInsight(eventId: Long, kind: String, tipId: String, data: JSONObject): MarksyInsight {
+internal fun ledgerInsight(eventId: Long, kind: String, tipId: String, data: JSONObject, accepted: String = acceptedSummary("", "")): MarksyInsight {
     val ledger = data.optJSONObject("ledger")
     val summary = ledger?.let(LedgerTipDto::parse)?.let { tip ->
         listOfNotNull(LedgerCalls.state(tip), LedgerCalls.progressText(tip)).joinToString(" · ")
-    } ?: "Recorded by Marksy; tracking starts with the next session"
+    } ?: accepted
     return MarksyInsight(
         eventId = eventId,
         summary = summary.boundedText(MAX_SUMMARY_CHARS),

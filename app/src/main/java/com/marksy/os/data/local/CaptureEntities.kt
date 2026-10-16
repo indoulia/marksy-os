@@ -129,6 +129,10 @@ interface CaptureDao {
     @Query("SELECT * FROM tip_candidates WHERE state IN ('EXTRACTED', 'REVIEW_REQUIRED') ORDER BY capturedAt DESC")
     fun observeToReview(): Flow<List<TipCandidateEntity>>
 
+    // Approved option calls: kept on the phone because Marksy tracks no options yet.
+    @Query("SELECT * FROM tip_candidates WHERE state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%' ORDER BY capturedAt DESC")
+    fun observeKeptOptions(): Flow<List<TipCandidateEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWorkflow(workflow: CaptureWorkflowEntity): Long
 

@@ -3,6 +3,7 @@ package com.marksy.os.data.local
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -97,6 +98,18 @@ class CaptureDaoTest {
         assertEquals(failed, dao.evidence(failed)?.id)
         assertEquals(keptWorkflow, dao.workflow(keptWorkflow)?.id)
         assertNull(dao.workflow(oldWorkflow))
+    }
+
+    @Test
+    fun keptOptionsAreOnlyApprovedOptionCalls() = runBlocking {
+        suspend fun add(hash: String, state: String, ambiguities: String) =
+            dao.insertCandidate(candidate(dao.insertEvidence(evidence(hash))).copy(state = state, ambiguities = ambiguities))
+        val kept = add("o1", "ACCEPTED", "missing-target,option-contract")
+        add("o2", "ACCEPTED", "")
+        add("o3", "REVIEW_REQUIRED", "option-contract")
+        add("o4", "REJECTED", "option-contract")
+
+        assertEquals(listOf(kept), dao.observeKeptOptions().first().map { it.id })
     }
 
     @Test

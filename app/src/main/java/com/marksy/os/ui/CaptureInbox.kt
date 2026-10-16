@@ -70,7 +70,9 @@ class CaptureInbox(
     val canCapture: (String) -> Boolean = { false },
     val actions: CaptureActions = CaptureActions(),
     val onReview: (Long) -> Unit = {},
-    val onAddScreenshot: () -> Unit = {}
+    val onAddScreenshot: () -> Unit = {},
+    /** Approved option calls, kept on this phone: Marksy tracks no options yet. */
+    val keptOptions: List<TipCandidateEntity> = emptyList()
 ) {
     val count: Int get() = candidates.size + workflows.size
     val isEmpty: Boolean get() = count == 0
@@ -83,6 +85,7 @@ fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     val dao = remember { MarksyContainer.database(context).captureDao() }
     val registry = remember { MarksyContainer.captureSources(context) }
     val candidates by dao.observeToReview().collectAsStateWithLifecycle(emptyList())
+    val keptOptions by dao.observeKeptOptions().collectAsStateWithLifecycle(emptyList())
     val workflows by dao.observeOpenWorkflows().collectAsStateWithLifecycle(emptyList())
     val session by CaptureSessionController.shared.state.collectAsStateWithLifecycle()
     // No live session in this process: a mid-capture workflow was orphaned and must stay retryable.
@@ -92,7 +95,7 @@ fun rememberCaptureInbox(actions: CaptureActions): CaptureInbox {
     reviewing?.let { CaptureReviewHost(it) { reviewing = null } }
     return CaptureInbox(
         candidates, workflows.filter { it.state in shown }, { registry.resolve(it)?.displayName ?: "an app" },
-        { registry.resolve(it)?.offersScreenCapture == true }, actions, { reviewing = it }, pick
+        { registry.resolve(it)?.offersScreenCapture == true }, actions, { reviewing = it }, pick, keptOptions
     )
 }
 
@@ -109,6 +112,25 @@ fun LazyListScope.captureToReview(inbox: CaptureInbox, now: Long, expanded: Bool
     item(key = "to-review") { SectionLabel("To review", inbox.count, MarksyTheme.Warning) }
     items(inbox.workflows, key = { "w${it.id}" }) { TeaserCard(it, inbox, now) }
     if (inbox.candidates.isNotEmpty()) item(key = "to-review-candidates") { CandidateGroup(inbox, now, expanded, onToggle) }
+}
+
+/** Approved option calls: they stay on this phone and are never shown as sent. */
+fun LazyListScope.captureKeptOptions(inbox: CaptureInbox, now: Long) {
+    items(inbox.keptOptions, key = { "o${it.id}" }) { KeptOptionCard(it, now) }
+}
+
+@Composable
+private fun KeptOptionCard(c: TipCandidateEntity, now: Long) {
+    val f = c.fields
+    MarksyCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(listOfNotNull(f.symbol, f.side?.name).joinToString(" · ").ifEmpty { "Option call" }, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(MarksySpace.Inner))
+            Text(compactTime(c.capturedAt, now) ?: "", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        }
+        MarksyBadge("Approved — option tracking unsupported", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
+        Text("Kept on this phone. Not sent to Marksy.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

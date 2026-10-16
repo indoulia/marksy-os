@@ -45,6 +45,7 @@ object TipExtractor {
     // CE after a number is always a call; PE after 4+ digits is a strike, as no P/E ratio is that large.
     private val optionMarker = Regex("""\d\s*CE\b|\d{4,}\s*PE\b|\d{1,3}(?:,\d{3})+\s*PE\b""", RegexOption.IGNORE_CASE)
     private val bareNumberPe = Regex("""\d\s*PE\b""", RegexOption.IGNORE_CASE)
+    private val callLevel = Regex("""\b(?:targets?|tgt|tp\d?|t[12]|stop[\s-]*loss|stoploss|s\s*/\s*l|sl|stop)\b""", RegexOption.IGNORE_CASE)
     // P/E valuations ("trades at 18 PE", "18x PE", "18 PE ratio") are blanked before any option is looked for.
     private val peRatio = Regex(
         """\b(?:(?:at|of|trades?|trading|valued|forward|fwd|trailing|ttm)\s+(?:at\s+)?\d{1,3}(?:\.\d+)?\s*(?:x|times)?|\d{1,3}(?:\.\d+)?\s*(?:x|times))\s*PE\b""" +
@@ -83,7 +84,11 @@ object TipExtractor {
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
         // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
-        val scan = peRatio.replace(flat) { " ".repeat(it.value.length) }
+        // Only the first call names the instrument: up to its target or stop and never past the next BUY/SELL, so a later
+        // call or a hedge note ("| BUY NIFTY 24500 CE") never turns a stock call into an option.
+        val callStart = sideHits.firstOrNull()?.first?.range?.last?.plus(1) ?: 0
+        val callEnd = listOfNotNull(sideHits.getOrNull(1)?.first?.range?.first, callLevel.find(flat, callStart)?.range?.first).minOrNull() ?: flat.length
+        val scan = peRatio.replace(flat.substring(0, callEnd)) { " ".repeat(it.value.length) }
         val found = symbols.singleOrNull()
         val contract = found?.let { optionContract(scan, sideHits.first().first, it) }
             ?: optionAnywhere.findAll(scan).firstOrNull(::isContract)?.let { contractName(it.groupValues[1], it, 2) }
