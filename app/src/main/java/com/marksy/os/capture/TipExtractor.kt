@@ -35,14 +35,22 @@ object TipExtractor {
     private val timestamp = Regex("""(?:$DATE)(?:,?\s+(?:$TIME))?|$TIME""", RegexOption.IGNORE_CASE)
     private val exchangePrefix = Regex("""\b(?:nse|bse)\s*:\s*""", RegexOption.IGNORE_CASE)
     private val tickerShape = Regex("""[A-Za-z][A-Za-z0-9&.-]{1,24}""")
-    // Expiry, strike, CE/PE: "24 OCT", "24OCT", "OCT", "24 OCT 2026", "28-OCT-2026" or "28/10/2026", then "24500 CE".
-    private const val CONTRACT_TAIL = """((?:(?:\d{1,2}[\s-]?)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s-]?\d{2,4})?|""" +
-        """\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b"""
+    // Expiry, strike, CE/PE: "24 OCT", "24TH OCT", "OCT", "24 OCT 2026", "28-OCT-2026", "28/10" or "28/10/2026", then "24500 CE".
+    private const val CONTRACT_TAIL = """((?:(?:\d{1,2}(?:st|nd|rd|th)?[\s-]?)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s-]?\d{2,4})?|""" +
+        """\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b"""
     private val optionAfterSymbol = Regex("""^\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
-    // A contract named away from the side word ("NIFTY 24500 CE: BUY above 182").
-    private val optionAnywhere = Regex("""\b(?!(?:buy|sell|long|short|accumulate|kharido|becho)\b)([A-Za-z][A-Za-z0-9&.-]*)\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
-    // Any strike followed by CE/PE, even fused to its underlying ("NIFTY24500CE").
-    private val optionMarker = Regex("""\d\s*(?:CE|PE)\b""", RegexOption.IGNORE_CASE)
+    // A contract named away from the side word ("NIFTY 24500 CE: BUY above 182"); isContract decides.
+    private val optionAnywhere = Regex("""\b([A-Za-z][A-Za-z0-9&.-]*)\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
+    private val optionFused = Regex("""\b[A-Za-z][A-Za-z&-]*\d[\d.]*(?:CE|PE)\b""", RegexOption.IGNORE_CASE)
+    // CE after a number is always a call; PE after 4+ digits is a strike, as no P/E ratio is that large.
+    private val optionMarker = Regex("""\d\s*CE\b|\d{4,}\s*PE\b|\d{1,3}(?:,\d{3})+\s*PE\b""", RegexOption.IGNORE_CASE)
+    private val bareNumberPe = Regex("""\d\s*PE\b""", RegexOption.IGNORE_CASE)
+    // P/E valuations ("trades at 18 PE", "18x PE", "18 PE ratio") are blanked before any option is looked for.
+    private val peRatio = Regex(
+        """\b(?:(?:at|of|trades?|trading|valued|forward|fwd|trailing|ttm)\s+(?:at\s+)?\d{1,3}(?:\.\d+)?\s*(?:x|times)?|\d{1,3}(?:\.\d+)?\s*(?:x|times))\s*PE\b""" +
+            """|\b\d{1,3}(?:\.\d+)?\s*PE\s+(?:ratio|multiple|valuation)\b""",
+        RegexOption.IGNORE_CASE
+    )
     private val levelWords = setOf("target", "targets", "tgt", "tp", "sl", "stop", "stoploss", "entry", "cmp", "ltp", "at", "above", "below", "around", "near", "between", "rs", "inr")
     private val fillerWords = setOf(
         "stock", "stocks", "share", "shares", "scrip", "equity", "eq", "cash", "call", "calls", "idea", "tip", "now", "today", "tomorrow",
@@ -51,6 +59,7 @@ object TipExtractor {
         "recommendation", "signal", "alert", "strong", "buy", "sell", "qty", "quantity", "lot", "lots", "fut", "futures", "zone", "range",
         "level", "levels", "dip", "dips", "rise", "if", "when", "upto", "up", "to"
     )
+    private val notUnderlying = levelWords + fillerWords + setOf("accumulate", "kharido", "becho", "ce", "pe", "ratio", "trades", "trading", "valued")
 
     private enum class Kind { TARGET, STOP, ENTRY, LOOSE_ENTRY }
 
@@ -74,9 +83,14 @@ object TipExtractor {
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
         // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
+        val scan = peRatio.replace(flat) { " ".repeat(it.value.length) }
         val found = symbols.singleOrNull()
-        val contract = found?.let { optionContract(flat, sideHits.first().first, it) } ?: optionAnywhere.find(flat)?.let { contractName(it.groupValues[1], it, 2) }
-        if (contract != null || optionMarker.containsMatchIn(flat)) ambiguities += Ambiguity.OPTION_CONTRACT
+        val contract = found?.let { optionContract(scan, sideHits.first().first, it) }
+            ?: optionAnywhere.findAll(scan).firstOrNull(::isContract)?.let { contractName(it.groupValues[1], it, 2) }
+        val option = contract != null || optionFused.containsMatchIn(scan) || optionMarker.containsMatchIn(scan)
+        if (option) ambiguities += Ambiguity.OPTION_CONTRACT
+        // A bare "18 PE" may be a P/E ratio or a put: reviewed with its symbol kept, never flagged as an option.
+        val unsure = !option && bareNumberPe.containsMatchIn(scan)
         val symbol = contract ?: found
         if (symbols.size > 1) ambiguities += Ambiguity.AMBIGUOUS_SYMBOL
 
@@ -96,7 +110,7 @@ object TipExtractor {
         val completeness = (if (symbol != null) .3 else 0.0) + (if (side != null) .25 else 0.0) +
             listOfNotNull(entry, target, stopLoss).size * .15
         val confidence = Math.round((completeness * (ocrConfidence?.toDouble() ?: 1.0)).coerceIn(0.0, 1.0) * 100) / 100.0
-        val extracted = symbol != null && side != null && target != null && stopLoss != null && ambiguities.isEmpty() && confidence >= EXTRACTED_MIN_CONFIDENCE
+        val extracted = symbol != null && side != null && target != null && stopLoss != null && ambiguities.isEmpty() && !unsure && confidence >= EXTRACTED_MIN_CONFIDENCE
         return ExtractionResult.Candidate(
             TipCandidate(
                 provenance, text.trim().take(MAX_TEXT), confidence, fields,
@@ -134,6 +148,13 @@ object TipExtractor {
         val at = flat.indexOf(symbol, side.range.last + 1, ignoreCase = true).takeIf { it >= 0 } ?: return null
         val m = optionAfterSymbol.find(flat.substring(at + symbol.length)) ?: return null
         return contractName(symbol, m, 1)
+    }
+
+    // Away from the side word a put needs an expiry or a 3+ digit strike: "TCS 18 PE" may be a P/E ratio.
+    private fun isContract(m: MatchResult): Boolean {
+        if (m.groupValues[1].lowercase(Locale.ROOT) in notUnderlying) return false
+        return m.groupValues[4].equals("CE", ignoreCase = true) || m.groupValues[2].isNotBlank() ||
+            m.groupValues[3].substringBefore('.').count(Char::isDigit) >= 3
     }
 
     /** Underlying, expiry, strike and CE/PE from [m], whose expiry is group [first] (strike and type follow it). */

@@ -1,6 +1,7 @@
 package com.marksy.os.capture
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -109,6 +110,11 @@ class TipExtractorTest {
             "BUY NIFTY 24 OCT 2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 24 OCT 2026 24500 CE",
             "BUY NIFTY 28-OCT-2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 28-OCT-2026 24500 CE",
             "NIFTY 24500 CE: BUY above 182 target 220 SL 160" to "NIFTY 24500 CE",
+            "Nifty 24500 CE: buy above 182 target 220 SL 160" to "NIFTY 24500 CE",
+            "Buy BankNifty 52000 pe above 300 target 360 sl 280" to "BANKNIFTY 52000 PE",
+            "BUY BANKNIFTY 24TH OCT 52000 PE @ 310 TGT 360 SL 280" to "BANKNIFTY 24TH OCT 52000 PE",
+            "BUY BANKNIFTY 24/10 52000 PE @ 310 TGT 360 SL 280" to "BANKNIFTY 24/10 52000 PE",
+            "Buy BANKNIFTY at 52000 PE above 300 target 360 SL 280" to "BANKNIFTY",
             "BUY NIFTY24500CE @ 120 TGT 180 SL 90" to "NIFTY24500CE"
         ).forEach { (text, symbol) ->
             val tip = candidate(text)
@@ -116,6 +122,27 @@ class TipExtractorTest {
             assertEquals(text, CaptureState.REVIEW_REQUIRED, tip.state)
             assertTrue(text, Ambiguity.OPTION_CONTRACT in tip.ambiguities)
         }
+    }
+
+    @Test
+    fun aPeRatioNeverTurnsAStockTipIntoAnOption() {
+        listOf("trades at 18 PE", "trades at 18PE", "trading at 18 pe", "18 P/E", "18 p / e", "P/E 18", "PE ratio 18", "18 PE ratio", "18x PE").forEach { pe ->
+            val text = "BUY TCS @ 3500, target 3600, stop 3400; $pe"
+            val tip = candidate(text)
+            assertEquals(text, TipFields("TCS", TipSide.BUY, 3500.0, 3600.0, 3400.0), tip.fields)
+            assertEquals(text, CaptureState.EXTRACTED, tip.state)
+            assertEquals(text, emptySet<String>(), tip.ambiguities)
+            assertEquals(text, "BUY TCS @ 3500 Target 3600 SL 3400", CandidateDeliveryPolicy.canonicalLine(tip.fields))
+        }
+    }
+
+    @Test
+    fun aBarePeThatMayBeARatioGoesToReviewWithItsSymbolKept() {
+        val tip = candidate("BUY TCS @ 3500, target 3600, stop 3400 (18 PE)")
+        assertEquals("TCS", tip.fields.symbol)
+        assertEquals(CaptureState.REVIEW_REQUIRED, tip.state)
+        assertFalse(Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        assertEquals("BUY TCS @ 3500 Target 3600 SL 3400", CandidateDeliveryPolicy.canonicalLine(tip.fields))
     }
 
     @Test
