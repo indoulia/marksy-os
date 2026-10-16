@@ -141,18 +141,17 @@ class TipTrackTest {
         assertNull(TipTrack.trustChip(item(null, null)))
     }
 
-    // The sheet's two score lines: Trust per named source, then Marksy's Prediction; a value without a number says why.
+    // Trust per named source always shows; the Prediction line stays out until an approved, validated score is passed in.
     @Test
-    fun sheetScoresShowTrustPerSourceAndAPredictionSlot() {
+    fun predictionLineAppearsOnlyForAValidatedScore() {
         val headline = { completed: Int, trust: Int? -> ScorecardHeadlineDto(completed, 0, completed, 2, 2, 0, 0, null, 42.0, null, trust) }
-        assertEquals(
-            listOf(
-                SheetScore("TRUST", null, "Swing Picks", "4 closed, too few", ScorecardSource("channel", 4, "Swing Picks")),
-                SheetScore("TRUST", 64, "Rahul K.", null, ScorecardSource("caller", 9, "Rahul K.")),
-                SheetScore("PREDICTION", null, null, "not validated yet", null)
-            ),
-            TipCards.scores(MyTipDto(tip(marksy = 0.724), headline(4, null), headline(30, 64), emptyList(), 0))
+        val item = MyTipDto(tip(marksy = 0.724), headline(4, null), headline(30, 64), emptyList(), 0)
+        val trust = listOf(
+            SheetScore("TRUST", null, "Swing Picks", "4 closed, too few", ScorecardSource("channel", 4, "Swing Picks")),
+            SheetScore("TRUST", 64, "Rahul K.", null, ScorecardSource("caller", 9, "Rahul K."))
         )
+        assertEquals(trust, TipCards.scores(item))
+        assertEquals(trust + SheetScore("PREDICTION", 72, null, "/ 100", null), TipCards.scores(item, validatedPrediction = 72))
     }
 
     // All counts a tip once even when it is both mine and followed (17 = Mine 8 + Following 5 + Marksy 4 in the canvas).
