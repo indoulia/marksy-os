@@ -21,7 +21,7 @@ import kotlin.math.roundToInt
 enum class TrackTone { POSITIVE, NEGATIVE, WARNING, NEUTRAL, MUTED }
 
 /** The price block's fourth slot: how the tip ended, or the date it is waiting on. */
-internal data class ExitSlot(val caption: String, val text: String, val exited: Boolean, val note: String? = null)
+internal data class ExitSlot(val caption: String, val text: String, val exited: Boolean, val note: String? = null, val compact: String? = null)
 
 /** One tip's prices for the shared track and its 2×2 block; a missing price is left out, never guessed. */
 internal data class PriceTrack(
@@ -143,15 +143,17 @@ internal object TipTrack {
     fun fromEntry(entry: Double, now: Double, sell: Boolean): Double? =
         if (entry == 0.0) null else (if (sell) entry - now else now - entry) / entry
 
-    fun slot(t: LedgerTipDto): ExitSlot? {
-        t.exitPrice?.let { return ExitSlot(if (t.status in HORIZON) "HORIZON END" else "EXIT", price(it), exited = true, note = t.closedAt?.let(::date)?.let(MarksyFormat::day)) }
-        if (voided(t)) return t.closedAt?.let(::date)?.let { ExitSlot("VOIDED", MarksyFormat.day(it), exited = false) }
+    fun slot(t: LedgerTipDto, today: LocalDate = LocalDate.now(IST)): ExitSlot? {
+        // "16 Sep" read in October looks like last month; within six months the year adds nothing.
+        fun day(d: LocalDate) = if (abs(ChronoUnit.DAYS.between(today, d)) <= 182) MarksyFormat.day(d) else MarksyFormat.fullDay(d)
+        t.exitPrice?.let { return ExitSlot(if (t.status in HORIZON) "HORIZON END" else "EXIT", price(it), exited = true, note = t.closedAt?.let(::date)?.let(::day)) }
+        if (voided(t)) return t.closedAt?.let(::date)?.let { ExitSlot("VOIDED", day(it), exited = false) }
         if (!LedgerCalls.isActive(t)) return null
-        if (t.entryStatus == WAITING) return t.buyBy?.let(::date)?.let { ExitSlot("BUY BY", MarksyFormat.day(it), exited = false) }
+        if (t.entryStatus == WAITING) return t.buyBy?.let(::date)?.let { ExitSlot("BUY BY", day(it), exited = false) }
         val by = t.horizonEndsOn?.let(::date) ?: return null
-        val day = t.sessionsElapsed?.let { e -> t.horizonSessions?.let { n -> "day $e/$n" } }
-        return ExitSlot("EXITS BY", listOfNotNull(MarksyFormat.day(by), day).joinToString(" · "), exited = false,
-            note = t.sessionsElapsed?.let { e -> t.horizonSessions?.let { n -> "day $e of $n" } })
+        val count = t.sessionsElapsed?.let { e -> t.horizonSessions?.let { n -> "day $e/$n" } }
+        return ExitSlot("EXITS BY", listOfNotNull(day(by), count).joinToString(" · "), exited = false,
+            note = t.sessionsElapsed?.let { e -> t.horizonSessions?.let { n -> "day $e of $n" } }, compact = day(by))
     }
 
     fun of(t: LedgerTipDto, live: Double? = null, fallbackCurrent: Double? = null): PriceTrack {

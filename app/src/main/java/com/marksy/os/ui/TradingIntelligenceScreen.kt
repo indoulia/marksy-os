@@ -84,11 +84,12 @@ private fun TradingViews(
     val lists = remember(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today) {
         TradingLists.build(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today)
     }
-    val openReady = !feed.myOpen.loading && !feed.marksyActive.loading
-    val historyReady = !feed.myClosed.loading && !feed.marksyClosed.loading && !feed.marksyActive.loading
+    // Counts wait for every up-front page: a first page alone once showed History 19 before it settled at 79.
+    val openReady = feed.myOpen.settled && feed.marksyActive.settled
+    val historyReady = feed.myClosed.settled && feed.marksyClosed.settled && feed.marksyActive.settled
     val counts = mapOf(
         TAB_OPEN to lists.open.size.takeIf { openReady },
-        TAB_PICKS to lists.setups.size.takeIf { !feed.marksyActive.loading },
+        TAB_PICKS to lists.setups.size.takeIf { feed.marksyActive.settled },
         TAB_HISTORY to lists.history(HistoryScope.ALL).size.takeIf { historyReady }
     )
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
@@ -112,7 +113,7 @@ private fun TradingViews(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 when (view) {
                     TAB_PICKS -> SetupsScope.entries.forEach { s ->
-                        ScopePill(s.label, lists.setups(s, scan).size.takeIf { !feed.marksyActive.loading }, s == setupsScope) { setupsScope = s }
+                        ScopePill(s.label, lists.setups(s, scan).size.takeIf { feed.marksyActive.settled }, s == setupsScope) { setupsScope = s }
                     }
                     TAB_HISTORY -> HistoryScope.entries.forEach { s ->
                         ScopePill(s.label, lists.history(s).size.takeIf { historyReady }, s == historyScope) { onHistoryScope(s) }
@@ -165,15 +166,15 @@ private fun TradingList(
         items(cards, key = { it.key }) { m ->
             TipCard(
                 m, expanded = m.key in expanded, onToggleSources = { onToggle(m.key) }, onOpen = { onOpen(m) }, onTrade = onTrade, onScore = onScore,
-                onSourceRow = { o -> m.ledger?.let { onSourceRow(it, o) } }
+                onSourceRow = { o -> m.ledger?.let { onSourceRow(it, o) } }, impliedStatus = impliedStatus(view)
             )
         }
         if (cards.isEmpty()) item(key = "empty") { if (loading) MarksyLoader("Loading tips…") else TradingEmpty(view, openScope, feed, lists, scan) }
         if (voided.isNotEmpty()) {
             val n = voided.size
-            item(key = "voided-fold") { FoldRow("Voided before buy", "$n tip${if (n == 1) "" else "s"} · voided before anyone could buy · not scored", voidedOpen, onToggleVoided) }
+            item(key = "voided-fold") { FoldRow(VOIDED, "$n tip${if (n == 1) "" else "s"} · voided before anyone could buy · not scored", voidedOpen, onToggleVoided) }
             if (voidedOpen) items(voided, key = { "v-" + it.key }) { m ->
-                TipCard(m, expanded = false, onToggleSources = {}, onOpen = { onOpen(m) }, onTrade = onTrade, onScore = onScore, onSourceRow = {})
+                TipCard(m, expanded = false, onToggleSources = {}, onOpen = { onOpen(m) }, onTrade = onTrade, onScore = onScore, onSourceRow = {}, impliedStatus = VOIDED)
             }
         }
     }
@@ -198,6 +199,15 @@ private fun TradingEmpty(view: String, scope: OpenScope, feed: TradingFeed, list
         scope == OpenScope.MARKSY -> EmptyState("No open Marksy tips", "Marksy's setups move here once they are bought.")
         else -> EmptyState("No open tips", error?.message ?: "Tips from your broker apps, allow-listed groups and SMS senders appear here once Marksy records them.")
     }
+}
+
+private const val VOIDED = "Voided before buy"
+
+/** The card status every row of a view shares, which the view's own name already says. */
+private fun impliedStatus(view: String): String? = when (view) {
+    TAB_OPEN -> "Active"
+    TAB_PICKS -> "Waiting to buy"
+    else -> null
 }
 
 private const val TAB_OPEN = "Open"

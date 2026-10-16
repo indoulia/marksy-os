@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,8 +31,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,11 +88,12 @@ internal fun PriceBlock(track: PriceTrack, modifier: Modifier = Modifier) {
         track.currentText?.let { Triple("CURRENT", it, if (track.live && track.returnFraction != null) toneColor else MarksyTheme.TextPrimary) },
         track.slot?.let { Triple(it.caption, it.text, if (it.exited) toneColor else MarksyTheme.TextSecondary) }
     )
+    val compact = track.slot?.compact
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
         cells.chunked(2).filter { row -> row.any { it != null } }.forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)) {
                 row.forEach { cell ->
-                    Box(Modifier.weight(1f)) { cell?.let { (caption, value, color) -> PriceCell(caption, value, color) } }
+                    Box(Modifier.weight(1f)) { cell?.let { (caption, value, color) -> PriceCell(caption, value, color, compact.takeIf { cell === cells[3] }) } }
                 }
             }
         }
@@ -97,11 +101,19 @@ internal fun PriceBlock(track: PriceTrack, modifier: Modifier = Modifier) {
 }
 
 // The value is measured first (the caption takes what is left), so a six-digit price never wraps or clips.
+// A long exit value ("16 Sep 2027 · day 120/240") falls back to its date alone rather than clip the caption.
 @Composable
-private fun PriceCell(caption: String, value: String, color: Color) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
-        Text(caption, color = MarksyTheme.TextMuted, style = MarksyType.PriceLabel, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
-        Text(value, color = color, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+private fun PriceCell(caption: String, value: String, color: Color, compact: String? = null) {
+    val measurer = rememberTextMeasurer()
+    val gap = with(LocalDensity.current) { MarksySpace.Tight.roundToPx() }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val valueStyle = MarksyType.Small.copy(fontWeight = FontWeight.SemiBold)
+        val shown = if (compact != null && measurer.measure(caption, MarksyType.PriceLabel, maxLines = 1).size.width + gap +
+            measurer.measure(value, valueStyle, maxLines = 1).size.width > constraints.maxWidth) compact else value
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
+            Text(caption, color = MarksyTheme.TextMuted, style = MarksyType.PriceLabel, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+            Text(shown, color = color, style = valueStyle, maxLines = 1, softWrap = false)
+        }
     }
 }
 
