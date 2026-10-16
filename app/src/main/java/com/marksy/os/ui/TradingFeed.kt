@@ -92,14 +92,16 @@ enum class OpenScope(val label: String) { ALL("All"), MINE("Mine"), FOLLOWING("F
 /** Setups by Marksy scan: the latest session's, or earlier sessions' still buyable. */
 enum class SetupsScope(val label: String) { ALL("All"), TODAY("Today"), WEEK("This week") }
 
-/** History's lists: everything closed, the customer's own tips, or Marksy's. */
-enum class HistoryScope(val label: String) { ALL("All"), MINE("My tips"), MARKSY("Marksy") }
+/** History's lists: everything closed, the customer's own tips, the Following feed's, or Marksy's. */
+enum class HistoryScope(val label: String) { ALL("All"), MINE("My tips"), FOLLOWING("Following"), MARKSY("Marksy") }
 
 /** Every Trading list, read once up front so the views and scopes can show their counts. */
 @Stable
 internal class TradingFeed(private val repo: MarketIntelligenceRepository) {
     val myOpen = Paged<MyTipDto>({ it.tip.tipId }) { c -> repo.myTips("ACTIVE", c).map { it.items to it.nextCursor } }
     val myClosed = Paged<MyTipDto>({ it.tip.tipId }) { c -> repo.myTips("CLOSED", c).map { it.items to it.nextCursor } }
+    val followingOpen = Paged<MyTipDto>({ it.tip.tipId }) { c -> repo.followingTips("ACTIVE", c).map { it.items to it.nextCursor } }
+    val followingClosed = Paged<MyTipDto>({ it.tip.tipId }) { c -> repo.followingTips("CLOSED", c).map { it.items to it.nextCursor } }
     // Keyset-paged on a re-rankable score: a re-rank between pages can repeat a call (kept once) or skip one (open marksy-api follow-up).
     val marksyActive = Paged<ActivePredictionDto>({ it.predictionId }) { c -> repo.activePredictions(c).map { it.items to it.nextCursor } }
     val marksyClosed = Paged<ClosedPredictionDto> { c -> repo.closedPredictions(c).map { it.items to it.nextCursor } }
@@ -108,7 +110,7 @@ internal class TradingFeed(private val repo: MarketIntelligenceRepository) {
     var myRecord by mutableStateOf<ScorecardBodyDto?>(null)
 
     suspend fun load() = coroutineScope {
-        listOf(myOpen, marksyActive, myClosed, marksyClosed).forEach { p -> launch { var pages = 0; while (p.hasMore && pages++ < MAX_PAGES) p.more() } }
+        listOf(myOpen, marksyActive, myClosed, marksyClosed, followingOpen, followingClosed).forEach { p -> launch { var pages = 0; while (p.hasMore && pages++ < MAX_PAGES) p.more() } }
         launch { engine = (repo.scorecards(ScorecardEntity.ENGINE, TrackRecordQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard) }
         launch { myRecord = (repo.myScorecard(MyRecordQuery) as? MarketDataState.Loaded)?.value?.body }
     }
@@ -122,19 +124,25 @@ internal data class TradingLists(
     val mineHistory: List<TipCardModel>,
     val marksyHistory: List<TipCardModel>,
     val mineVoided: List<TipCardModel>,
-    val marksyVoided: List<TipCardModel>
+    val marksyVoided: List<TipCardModel>,
+    val followingOpen: List<TipCardModel> = emptyList(),
+    val followingHistory: List<TipCardModel> = emptyList(),
+    val followingVoided: List<TipCardModel> = emptyList()
 ) {
     val open: List<TipCardModel> get() = mineOpen + marksyOpen
 
-    fun open(scope: OpenScope): List<TipCardModel> = when (scope) { OpenScope.MINE -> mineOpen; OpenScope.MARKSY -> marksyOpen; else -> open }
+    fun open(scope: OpenScope): List<TipCardModel> = when (scope) { OpenScope.MINE -> mineOpen; OpenScope.FOLLOWING -> followingOpen; OpenScope.MARKSY -> marksyOpen; OpenScope.ALL -> open }
 
     fun history(scope: HistoryScope): List<TipCardModel> = when (scope) {
         HistoryScope.MINE -> mineHistory
+        HistoryScope.FOLLOWING -> followingHistory
         HistoryScope.MARKSY -> marksyHistory
         HistoryScope.ALL -> (mineHistory + marksyHistory).sortedByDescending { it.at }
     }
 
-    fun voided(scope: HistoryScope): List<TipCardModel> = when (scope) { HistoryScope.MINE -> mineVoided; HistoryScope.MARKSY -> marksyVoided; HistoryScope.ALL -> mineVoided + marksyVoided }
+    fun voided(scope: HistoryScope): List<TipCardModel> = when (scope) {
+        HistoryScope.MINE -> mineVoided; HistoryScope.FOLLOWING -> followingVoided; HistoryScope.MARKSY -> marksyVoided; HistoryScope.ALL -> mineVoided + marksyVoided
+    }
 
     /** The latest scan's setups are Today's; setups from earlier sessions are This week's. */
     fun setups(scope: SetupsScope, scan: LatestScanDto?): List<TipCardModel> {
@@ -151,7 +159,8 @@ internal data class TradingLists(
     companion object {
         fun build(
             myOpen: List<MyTipDto>, myClosed: List<MyTipDto>, active: List<ActivePredictionDto>, closed: List<ClosedPredictionDto>,
-            engine: EntityScorecardDto?, quotes: Map<String, UpstoxLtp>, today: LocalDate
+            engine: EntityScorecardDto?, quotes: Map<String, UpstoxLtp>, today: LocalDate,
+            followingOpen: List<MyTipDto> = emptyList(), followingClosed: List<MyTipDto> = emptyList()
         ): TradingLists {
             val engineSource = engine?.let(ScorecardSource::of)
             fun now(symbol: String) = quotes[symbol]?.lastPrice
@@ -164,6 +173,7 @@ internal data class TradingLists(
             val endedCards = ended.filter { p -> p.ledger?.tipId?.takeIf(String::isNotEmpty)?.let { it !in closedTips } ?: true }
                 .map { TipCards.marksy(it, now(it.symbol), today, engine) }
             val mineClosed = myClosed.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) }
+            val followedClosed = followingClosed.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) }
             return TradingLists(
                 mineOpen = myOpen.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) },
                 marksyOpen = bought.map { TipCards.marksy(it, now(it.symbol), today, engine) },
@@ -172,7 +182,10 @@ internal data class TradingLists(
                 mineHistory = mineClosed.filterNot { it.voided },
                 marksyHistory = sections.shown.map { TipCards.closed(it, now(it.row.symbol), engine) } + endedCards.filterNot { it.voided },
                 mineVoided = mineClosed.filter { it.voided },
-                marksyVoided = sections.invalidated.map { TipCards.closed(it, now(it.row.symbol), engine) } + endedCards.filter { it.voided }
+                marksyVoided = sections.invalidated.map { TipCards.closed(it, now(it.row.symbol), engine) } + endedCards.filter { it.voided },
+                followingOpen = followingOpen.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) },
+                followingHistory = followedClosed.filterNot { it.voided },
+                followingVoided = followedClosed.filter { it.voided }
             )
         }
 

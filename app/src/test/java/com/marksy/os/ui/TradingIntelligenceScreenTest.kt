@@ -238,6 +238,22 @@ class TradingIntelligenceScreenTest {
         compose.onAllNodesWithText("WEWIN").assertCountEquals(0)
     }
 
+    // Following lists its own feed's tips: open in Open, closed in History with voided-before-buy folded apart; All stays mine + Marksy.
+    @Test
+    fun followingScopeListsTheFollowingFeedsTips() {
+        val lists = TradingLists.build(
+            listOf(tip("HAL", "ACTIVE")), emptyList(), emptyList(), emptyList(), null, emptyMap(), java.time.LocalDate.of(2026, 10, 16),
+            followingOpen = listOf(tip("BEL", "ACTIVE")), followingClosed = listOf(tip("TCS", "TARGET_HIT", "SUCCESS"), tip("VOID", "INVALIDATED"))
+        )
+
+        assertEquals(listOf("BEL"), lists.open(OpenScope.FOLLOWING).map { it.symbol })
+        assertEquals(listOf("HAL"), lists.open(OpenScope.ALL).map { it.symbol })
+        assertEquals(listOf("TCS"), lists.history(HistoryScope.FOLLOWING).map { it.symbol })
+        assertEquals(listOf("VOID"), lists.voided(HistoryScope.FOLLOWING).map { it.symbol })
+        assertEquals(emptyList<String>(), lists.history(HistoryScope.ALL).map { it.symbol })
+        assertEquals("History · Following", tradingTitleNote("History", null, historyScope = HistoryScope.FOLLOWING))
+    }
+
     @Test
     fun askAndLegacyArgsOpenTheRightView() {
         assertEquals(listOf("Open", "Setups", "History"), TradingFilters)

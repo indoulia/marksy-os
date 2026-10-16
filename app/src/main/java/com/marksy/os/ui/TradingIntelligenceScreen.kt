@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -73,16 +74,16 @@ private fun TradingViews(
     LaunchedEffect(feed) { feed.load() }
     var setupsScope by rememberSaveable { mutableStateOf(SetupsScope.ALL) }
     val scan by com.marksy.os.market.MarketIntelligenceRepository.latestScan.collectAsState()
-    val symbols = remember(feed.myOpen.items, feed.marksyActive.items, feed.myClosed.items, feed.marksyClosed.items, view) {
+    val symbols = remember(feed.myOpen.items, feed.marksyActive.items, feed.myClosed.items, feed.marksyClosed.items, feed.followingOpen.items, feed.followingClosed.items, view) {
         when (view) {
-            TAB_HISTORY -> feed.myClosed.items.map { it.tip.symbol } + feed.marksyClosed.items.map { it.symbol }
-            else -> feed.myOpen.items.map { it.tip.symbol } + feed.marksyActive.items.map { it.symbol }
+            TAB_HISTORY -> feed.myClosed.items.map { it.tip.symbol } + feed.marksyClosed.items.map { it.symbol } + feed.followingClosed.items.map { it.tip.symbol }
+            else -> feed.myOpen.items.map { it.tip.symbol } + feed.marksyActive.items.map { it.symbol } + feed.followingOpen.items.map { it.tip.symbol }
         }.distinct()
     }
     val quotes = rememberUpstoxQuotes(symbols)
     val today = LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
-    val lists = remember(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today) {
-        TradingLists.build(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today)
+    val lists = remember(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.followingOpen.items, feed.followingClosed.items, feed.engine, quotes, today) {
+        TradingLists.build(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today, feed.followingOpen.items, feed.followingClosed.items)
     }
     val openReady = !feed.myOpen.loading && !feed.marksyActive.loading
     val historyReady = !feed.myClosed.loading && !feed.marksyClosed.loading && !feed.marksyActive.loading
@@ -115,24 +116,22 @@ private fun TradingViews(
                         ScopePill(s.label, lists.setups(s, scan).size.takeIf { !feed.marksyActive.loading }, s == setupsScope) { setupsScope = s }
                     }
                     TAB_HISTORY -> HistoryScope.entries.forEach { s ->
-                        ScopePill(s.label, lists.history(s).size.takeIf { historyReady }, s == historyScope) { onHistoryScope(s) }
+                        val ready = if (s == HistoryScope.FOLLOWING) !feed.followingClosed.loading else historyReady
+                        ScopePill(s.label, lists.history(s).size.takeIf { ready }, s == historyScope) { onHistoryScope(s) }
                     }
                     else -> OpenScope.entries.forEach { s ->
-                        // Following lists alerts and follows, not tips, so it has no tip count.
-                        ScopePill(s.label, lists.open(s).size.takeIf { openReady && s != OpenScope.FOLLOWING }, s == openScope) { onOpenScope(s) }
+                        val ready = if (s == OpenScope.FOLLOWING) !feed.followingOpen.loading else openReady
+                        ScopePill(s.label, lists.open(s).size.takeIf { ready }, s == openScope) { onOpenScope(s) }
                     }
                 }
             }
         }
         MarksyDivider()
         Box(Modifier.weight(1f)) {
-            if (view == TAB_OPEN && openScope == OpenScope.FOLLOWING) {
-                FollowingView(repository, MarksySpace.Wide, onOpenStock, onTrade = { ticket = it }, onScore = onScore)
-            } else {
-                TradingList(view, openScope, setupsScope, historyScope, feed, lists, scan, voidedOpen, { voidedOpen = !voidedOpen }, expanded,
-                    onToggle = { k -> expanded = if (k in expanded) expanded - k else expanded + k },
-                    onOpen = { sheet = it }, onTrade = { ticket = it }, onScore = onScore, onSourceRow = { t, o -> daily = t to o })
-            }
+            TradingList(view, openScope, setupsScope, historyScope, feed, lists, scan, voidedOpen, { voidedOpen = !voidedOpen }, expanded,
+                onToggle = { k -> expanded = if (k in expanded) expanded - k else expanded + k },
+                onOpen = { sheet = it }, onTrade = { ticket = it }, onScore = onScore, onSourceRow = { t, o -> daily = t to o },
+                repository = repository, onOpenStock = onOpenStock)
         }
     }
 }
@@ -142,25 +141,28 @@ private fun TradingList(
     view: String, openScope: OpenScope, setupsScope: SetupsScope, historyScope: HistoryScope, feed: TradingFeed, lists: TradingLists,
     scan: com.marksy.os.market.LatestScanDto?, voidedOpen: Boolean, onToggleVoided: () -> Unit, expanded: Set<String>, onToggle: (String) -> Unit,
     onOpen: (TipCardModel) -> Unit, onTrade: (TradeIntent) -> Unit, onScore: (com.marksy.os.market.ScorecardSource) -> Unit,
-    onSourceRow: (com.marksy.os.market.LedgerTipDto, com.marksy.os.market.AlsoTippedDto) -> Unit
+    onSourceRow: (com.marksy.os.market.LedgerTipDto, com.marksy.os.market.AlsoTippedDto) -> Unit,
+    repository: com.marksy.os.market.MarketIntelligenceRepository, onOpenStock: (String) -> Unit
 ) {
+    val following = (view == TAB_OPEN && openScope == OpenScope.FOLLOWING) || (view == TAB_HISTORY && historyScope == HistoryScope.FOLLOWING)
     val cards = when (view) {
         TAB_PICKS -> lists.setups(setupsScope, scan)
         TAB_HISTORY -> lists.history(historyScope)
         else -> lists.open(openScope)
     }
     val voided = if (view == TAB_HISTORY) lists.voided(historyScope) else emptyList()
-    val loading = when (view) {
-        TAB_PICKS -> feed.marksyActive.loading
-        TAB_HISTORY -> feed.myClosed.loading || feed.marksyClosed.loading || feed.marksyActive.loading
+    val loading = when {
+        view == TAB_PICKS -> feed.marksyActive.loading
+        following -> (if (view == TAB_HISTORY) feed.followingClosed else feed.followingOpen).loading
+        view == TAB_HISTORY -> feed.myClosed.loading || feed.marksyClosed.loading || feed.marksyActive.loading
         else -> feed.myOpen.loading || feed.marksyActive.loading
     }
     val summary = when (view) {
         TAB_PICKS -> TradingLists.setupsSummary(cards.size, scan).takeIf { cards.isNotEmpty() }
-        TAB_HISTORY -> TradingLists.historySummary(if (historyScope == HistoryScope.MINE) feed.myRecord else feed.engine?.body)
+        TAB_HISTORY -> TradingLists.historySummary(when (historyScope) { HistoryScope.MINE -> feed.myRecord; HistoryScope.FOLLOWING -> null; else -> feed.engine?.body })
         else -> TradingLists.openSummary(cards).takeIf { cards.isNotEmpty() }
     }
-    MarksyList(bottom = MarksySpace.Wide) {
+    val rows: LazyListScope.() -> Unit = {
         summary?.let { s -> item(key = "summary") { SummaryStrip(s) } }
         items(cards, key = { it.key }) { m ->
             TipCard(
@@ -168,7 +170,7 @@ private fun TradingList(
                 onSourceRow = { o -> m.ledger?.let { onSourceRow(it, o) } }
             )
         }
-        if (cards.isEmpty()) item(key = "empty") { if (loading) MarksyLoader("Loading tips…") else TradingEmpty(view, openScope, feed, lists, scan) }
+        if (cards.isEmpty()) item(key = "empty") { if (loading) MarksyLoader("Loading tips…") else TradingEmpty(view, openScope, feed, lists, scan, following) }
         if (voided.isNotEmpty()) {
             val n = voided.size
             item(key = "voided-fold") { FoldRow("Voided before buy", "$n tip${if (n == 1) "" else "s"} · voided before anyone could buy · not scored", voidedOpen, onToggleVoided) }
@@ -177,6 +179,8 @@ private fun TradingList(
             }
         }
     }
+    if (following) FollowingView(repository, MarksySpace.Wide, onOpenStock, onTrade = onTrade, onScore = onScore, alerts = view == TAB_OPEN, cards = rows)
+    else MarksyList(bottom = MarksySpace.Wide, content = rows)
 }
 
 @Composable
@@ -184,10 +188,14 @@ private fun ScopePill(label: String, count: Int?, selected: Boolean, onClick: ()
     Pill(label + (count?.let { " $it" } ?: ""), selected = selected, onClick = onClick)
 
 @Composable
-private fun TradingEmpty(view: String, scope: OpenScope, feed: TradingFeed, lists: TradingLists, scan: com.marksy.os.market.LatestScanDto?) {
+private fun TradingEmpty(view: String, scope: OpenScope, feed: TradingFeed, lists: TradingLists, scan: com.marksy.os.market.LatestScanDto?, following: Boolean) {
     val sources = listOf(feed.myOpen, feed.marksyActive, feed.myClosed, feed.marksyClosed)
     val error = sources.firstNotNullOfOrNull { it.state as? MarketDataState.Error }
     when {
+        following -> InlineEmpty(
+            ((if (view == TAB_HISTORY) feed.followingClosed else feed.followingOpen).state as? MarketDataState.Error)?.message
+                ?: if (view == TAB_HISTORY) "No closed tips from who you follow yet" else "No open tips from who you follow"
+        )
         sources.all { it.state is MarketDataState.Unavailable } -> EmptyState("Marksy is not connected", "Sign in to your Marksy account in More.")
         view == TAB_PICKS -> EmptyState(
             "No live Marksy setups right now",
