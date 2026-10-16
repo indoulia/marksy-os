@@ -91,6 +91,23 @@ class AskMarksyTest {
     }
 
     @Test
+    fun aNewQuestionDoesNotInheritThePreviousDirectionRangeOrApp() {
+        val swiggy = AskMarksy.parse("show payments to swiggy", AskMarksy.parse("payments received this week", null, now, zone), now, zone)
+        assertEquals(Triple("swiggy", null, "the last 7 days"), Triple(swiggy.subject, swiggy.direction, swiggy.range.label))
+        val whatsapp = AskMarksy.parse("how many whatsapp messages today", null, now, zone)
+        assertNull(AskMarksy.parse("how many notifications today", whatsapp, now, zone).channel)
+    }
+
+    @Test
+    fun aFollowUpKeepsThePreviousDirectionRangeAndApp() {
+        val yesterday = AskMarksy.parse("and yesterday?", AskMarksy.parse("payments received this week", null, now, zone), now, zone)
+        assertEquals(Triple(Intent.PAYMENTS, EventExtractor.Direction.CREDIT, "yesterday"), Triple(yesterday.intent, yesterday.direction, yesterday.range.label))
+        val swiggy = AskMarksy.parse("what about swiggy?", AskMarksy.parse("payments to zomato last month", null, now, zone), now, zone)
+        assertEquals(Triple(Intent.PAYMENTS, "swiggy", "last month"), Triple(swiggy.intent, swiggy.subject, swiggy.range.label))
+        assertEquals("whatsapp", AskMarksy.parse("and yesterday?", AskMarksy.parse("how many whatsapp messages today", null, now, zone), now, zone).channel)
+    }
+
+    @Test
     fun billsDueImportantMissedAndNoResultHandling() {
         val bill = event("BILLS", "Electricity bill due", "Rs 1,200 due on 30 Sep", now - 5 * 24 * hour)
         val paid = event("BILLS", "Water bill", "Bill paid", now - 5 * 24 * hour, state = "RESOLVED")

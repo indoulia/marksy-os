@@ -189,7 +189,14 @@ class AskMarksyEvalTest {
         Case("did I get paid today", Intent.PAYMENTS, all(ids(salary), says("credit ₹12000"))),
         Case("salary today", Intent.PAYMENTS, ids(salary)),
         Case("is my credit card bill due", Intent.BILLS_DUE, says("ICICI Bank card bill")),
-        Case("when will my flipkart order arrive", Intent.DELIVERIES, ids(flipkartParcel))
+        Case("when will my flipkart order arrive", Intent.DELIVERIES, ids(flipkartParcel)),
+        // Round 6: refunds, EMIs and junk name filters from the same audit
+        Case("any refund from flipkart", Intent.PAYMENTS),
+        Case("any cashback or refunds", Intent.PAYMENTS, ids(salary)),
+        Case("what EMIs are pending", Intent.BILLS_DUE, says("2 open bills")),
+        Case("my emi due", Intent.BILLS_DUE, says("2 open bills")),
+        Case("has any money come in today", Intent.PAYMENTS, ids(debit, salary)),
+        Case("did the bank take any money from me", Intent.PAYMENTS, ids(debit, salary, amazonPay))
     )
 
     @Test

@@ -111,8 +111,9 @@ object AskMarksy {
             page != null -> Intent.NAVIGATE
             has(t, "what can you do", "what can i ask", "how do i use", "what do you do") || t == "help" -> Intent.HELP
             has(t, "bill", "bills", "due", "dues", "invoice", "recharge", "owe", "owed", "have to pay", "need to pay", "pending payment", "pending payments",
-                "settle", "outstanding", "payment reminder", "payment reminders") -> Intent.BILLS_DUE
-            has(t, "payment", "payments", "paid", "pay", "spent", "spend", "debited", "credited", "received money", "transactions", "transaction", "money", "salary") -> Intent.PAYMENTS
+                "settle", "outstanding", "payment reminder", "payment reminders", "emi", "emis") -> Intent.BILLS_DUE
+            has(t, "payment", "payments", "paid", "pay", "spent", "spend", "debited", "credited", "received money", "transactions", "transaction", "money", "salary",
+                "refund", "refunds", "cashback") -> Intent.PAYMENTS
             has(t, "delivery", "deliveries", "package", "packages", "parcel", "parcels", "shipment", "shipments", "order", "orders", "arriving") -> Intent.DELIVERIES
             planKind != null -> Intent.PLAN
             stock != null -> Intent.STOCK
@@ -123,6 +124,8 @@ object AskMarksy {
             // "what's new on outlook" is about Outlook, so these catch-alls only apply when no app is named.
             channel == null && has(t, "catch me up", "catch up", "should know", "what's new", "whats new", "brief me", "anything new") -> Intent.IMPORTANT
             opened != null -> Intent.STOCK
+            // "what about swiggy?" after a payments question asks about Swiggy's payments, not messages from Swiggy.
+            followUp && previous!!.intent != Intent.FROM_PERSON && previous.intent != Intent.SOURCE -> previous.intent
             person != null -> Intent.FROM_PERSON
             channel != null || has(t, "how many", "count", "number of", "which app", "most notifications") -> Intent.SOURCE
             // "show market news", "calls": a page name with no data question behind it.
@@ -143,7 +146,7 @@ object AskMarksy {
         val direction = when {
             has(t, "received", "credited", "got paid", "get paid", "refund", "refunds", "get any money", "got any money", "get money", "got money", "salary") -> EventExtractor.Direction.CREDIT
             has(t, "paid", "spent", "spend", "debited", "sent money", "i make", "i made", "did i pay") -> EventExtractor.Direction.DEBIT
-            inherit -> previous!!.direction
+            inherit && followUp -> previous!!.direction
             else -> null
         }
         val subject = when (intent) {
@@ -162,8 +165,8 @@ object AskMarksy {
                 .filter { it.length >= 3 && it !in STOP_WORDS && it !in FILTER_VOCAB }.joinToString(" ").ifBlank { null }
             else -> null
         }
-        return Query(intent, explicitRange ?: if (inherit) previous!!.range else defaultRange, subject, direction, text.trim(),
-            channel = channel ?: if (inherit) previous!!.channel else null, target = target)
+        return Query(intent, explicitRange ?: if (inherit && followUp) previous!!.range else defaultRange, subject, direction, text.trim(),
+            channel = channel ?: if (inherit && followUp) previous!!.channel else null, target = target)
     }
 
     /** What a sitemap word opens, e.g. "ipos" -> Market · IPOs. */
@@ -574,7 +577,8 @@ object AskMarksy {
     private val FILTER_VOCAB = setOf("bill", "bills", "due", "dues", "pay", "owe", "owed", "anyone", "money", "reminder", "reminders", "birthday",
         "birthdays", "upcoming", "coming", "when", "next", "list", "todo", "task", "tasks", "pending", "need", "delivery", "deliveries", "package",
         "packages", "parcel", "parcels", "order", "orders", "shipment", "shipments", "arriving", "arrive", "where", "expected", "anything", "any",
-        "soon", "tomorrow", "open", "still", "card", "credit", "will", "payment", "payments", "remind", "track", "tracking", "status", "where's")
+        "soon", "tomorrow", "open", "still", "card", "credit", "will", "payment", "payments", "remind", "track", "tracking", "status", "where's",
+        "emi", "emis")
     private val NAV_VERB = Regex("^(?:please )?(?:open|go to|goto|take me to|navigate to|switch to|jump to)(?: the| my)? (.+)$")
     private val STOCK_PATTERNS = listOf(
         Regex("\\b(?:price|quote|chart|ltp) (?:of|for) (.+)$"),
@@ -661,7 +665,8 @@ object AskMarksy {
     }
     private val COUNTERPARTY_STOP = setOf("last", "this", "today", "yesterday", "tomorrow", "week", "month", "in", "on", "for", "during", "since", "and", "or")
     private val PAYMENT_WORDS = setOf("payment", "payments", "paid", "pay", "spent", "spend", "spending", "debited", "credited", "received", "transaction",
-        "transactions", "money", "salary", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've")
+        "transactions", "money", "salary", "much", "many", "total", "make", "made", "recent", "list", "see", "give", "amount", "debit", "credit", "upi", "card", "i've",
+        "refund", "refunds", "cashback", "come", "came", "coming", "bank", "take", "took")
     private val ARTICLES = setOf("a", "an", "the")
     private val MONTHS = mapOf("jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12)
     private const val MONTH_RX = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
