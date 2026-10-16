@@ -58,6 +58,9 @@ class MarketIntelligenceRepository(private val client: MarketApiClient?) {
     suspend fun myTips(status: String?, cursor: String? = null): MarketDataState<MyTipPageDto> =
         fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { it.myTips(status, cursor) }
 
+    suspend fun followingTips(status: String?, cursor: String? = null): MarketDataState<MyTipPageDto> =
+        fetch(emptyCheck = { it.items.isEmpty() }, ledger = true) { it.followingTips(status, cursor) }
+
     suspend fun myScorecard(query: ScorecardQuery): MarketDataState<ScorecardDto> =
         query.filterParams()?.let { f -> fetch(ledger = true) { it.myScorecard(f) } } ?: incompleteRange
 

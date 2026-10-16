@@ -36,6 +36,8 @@ interface MarketApiClient {
     suspend fun setIpoTracking(id: String, tracking: Boolean): IpoTrackingStateDto = throw MarketApiException("IPO watching is not supported")
     /** Tip ledger (spec §9) under the bearer session; `filter` is a §8.3 query string from `ScorecardQuery.filterParams`. */
     suspend fun myTips(status: String?, cursor: String?): MyTipPageDto = MyTipPageDto(emptyList(), null)
+    /** Tips from the channels, callers and engines the customer follows; same item shape as [myTips]. */
+    suspend fun followingTips(status: String?, cursor: String?): MyTipPageDto = MyTipPageDto(emptyList(), null)
     suspend fun myScorecard(filter: String): ScorecardDto = throw MarketApiException("Scorecards are not supported")
     suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto = throw MarketApiException("Scorecards are not supported")
     suspend fun scorecardSummary(filter: String): ScorecardSummaryDto = throw MarketApiException("Scorecards are not supported")
@@ -143,6 +145,11 @@ class RealMarketApiClient(private val authRepository: com.marksy.os.gateway.Auth
     override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
         val params = listOfNotNull("pageSize=$MY_TIPS_PAGE_SIZE", status?.let { "status=${encode(it)}" }, cursor?.let { "cursor=${encode(it)}" })
         return MyTipPageDto.parse(getEnvelope("$base/me/tips?" + params.joinToString("&")))
+    }
+
+    override suspend fun followingTips(status: String?, cursor: String?): MyTipPageDto {
+        val params = listOfNotNull("pageSize=$MY_TIPS_PAGE_SIZE", status?.let { "status=${encode(it)}" }, cursor?.let { "cursor=${encode(it)}" })
+        return MyTipPageDto.parse(getEnvelope("$base/me/following/tips?" + params.joinToString("&")))
     }
 
     override suspend fun myScorecard(filter: String): ScorecardDto = ScorecardDto.parse(getData("$base/me/scorecard" + query(filter)))
