@@ -56,7 +56,8 @@ class TradingIntelligenceScreenTest {
         ScorecardHeadlineDto(14, 3, 11, 6, 4, 1, 1, 54.5, 57.0, 0.012, 62), null, emptyList(), 0
     )
 
-    private val requested = mutableListOf<String?>()
+    // The feed reads its lists concurrently on Dispatchers.IO, so a plain list can lose a write.
+    private val requested = java.util.concurrent.CopyOnWriteArrayList<String?>()
     private var closedCalls: List<ClosedPredictionDto> = emptyList()
 
     private fun closedCall(id: Int, symbol: String, tipId: String?, status: String = "STOP_LOSS_HIT", reason: String? = null) = ClosedPredictionDto(
