@@ -7,6 +7,7 @@ import com.marksy.os.market.ChannelRefDto
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MarksyViewDto
 import com.marksy.os.market.MyTipDto
+import com.marksy.os.market.PredictionScoreDto
 import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.ScorecardSource
 import org.junit.Assert.assertEquals
@@ -24,14 +25,15 @@ class TipTrackTest {
         status: String = "ACTIVE", entryStatus: String? = "ENTERED", direction: String = "BUY", low: Double? = 4460.0, high: Double? = 4460.0,
         stop: Double? = 4310.0, target: Double? = 4780.0, exit: Double? = null, closedAt: String? = null, buyBy: String? = null,
         horizonEndsOn: String? = null, sessionsElapsed: Int? = null, entered: Double? = null, recommended: Double? = null,
-        marksy: Double? = null, repeats: Int? = null, alsoBy: List<AlsoTippedDto> = emptyList(), actual: Double? = null
+        marksy: Double? = null, repeats: Int? = null, alsoBy: List<AlsoTippedDto> = emptyList(), actual: Double? = null,
+        score: PredictionScoreDto? = null
     ) = LedgerTipDto(
         tipId = "t1", symbol = "HAL", direction = direction, entryLow = low, entryHigh = high, entryBasis = "STATED", target = target, stopLoss = stop,
         horizonSessions = 15, horizonBasis = "STATED", firstSeenAt = "2026-10-13T05:12:00Z", status = status, entryStatus = entryStatus, outcome = null,
         reason = null, enteredSession = null, closedSession = null, closedAt = closedAt, exitPrice = exit, promisedReturn = null, actualReturn = actual,
         predictionId = null, channel = channel, caller = CallerRefDto(9, "Rahul K."), latestProgress = null,
         recommendedPrice = recommended, enteredPrice = entered, buyBy = buyBy, horizonEndsOn = horizonEndsOn, sessionsElapsed = sessionsElapsed,
-        marksyView = marksy?.let { MarksyViewDto(it, "AGREES", null) }, repeats = repeats, alsoBy = alsoBy
+        marksyView = marksy?.let { MarksyViewDto(it, "AGREES", null) }, predictionScore = score, repeats = repeats, alsoBy = alsoBy
     )
 
     private fun also(channelId: Int, callerId: Int? = null) = AlsoTippedDto(
@@ -200,4 +202,21 @@ class TipTrackTest {
         assertFalse(TipTrack.buyable(call("INVALIDATED", true, null), today))
         assertFalse(TipTrack.buyable(call("ACTIONABLE_NOW", true, tip()), today))
     }
+
+    // MSV-001: the Prediction line shows the backend's value only while it reports VALIDATED; the legacy probability never shows.
+    @Test
+    fun predictionLineFollowsTheBackendsValidatedScoreOnly() {
+        val validated = PredictionScoreDto("MSV-001", "VALIDATED", 72, null, "2026-10-13T05:12:00Z", "PROSPECTIVE")
+        val line = SheetScore("PREDICTION", 72, null, "/ 100", null)
+        val mine = { score: PredictionScoreDto? -> TipCards.mine(MyTipDto(tip(marksy = 0.9, score = score), null, null, emptyList(), 0), null, today).scores }
+
+        assertTrue(line in mine(validated))
+        assertTrue(line in TipCards.ledger(tip(score = validated), null, today).scores)
+        assertEquals(72, TipCards.validatedPrediction(tip(score = validated)))
+        for (hidden in listOf(null, validated.copy(status = "NOT_VALIDATED"), validated.copy(status = "UNAVAILABLE", value = null, reason = "NO_STOCK"))) {
+            assertTrue(mine(hidden).none { it.caption == "PREDICTION" })
+            assertNull(TipCards.validatedPrediction(tip(score = hidden)))
+        }
+    }
 }
+
