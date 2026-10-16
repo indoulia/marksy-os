@@ -59,11 +59,6 @@ import java.time.ZoneOffset
 internal val ScorecardQuerySaver = Saver<ScorecardQuery, String>(save = { it.encode() }, restore = { ScorecardQuery.decode(it) })
 internal val ScorecardTrailSaver = Saver<List<ScorecardSource>, String>(save = { ScorecardNav.encode(it) }, restore = { ScorecardNav.decode(it) })
 
-private val PeriodChips = listOf(
-    ScorecardPeriod.LIFETIME to "Lifetime", ScorecardPeriod.LAST_30_DAYS to "30 days", ScorecardPeriod.LAST_7_DAYS to "7 days",
-    ScorecardPeriod.THIS_MONTH to "This month", ScorecardPeriod.CUSTOM to "Custom"
-)
-
 private val OutcomeBarWidth = 110.dp
 
 /** Trust: Marksy vs external, then channels, finfluencers or engines by trust under one §8.3 filter; a row opens in place, its record a tap further. */
@@ -110,7 +105,7 @@ internal fun ScorecardsView(
                 ScorecardEntity.entries.map { it.name }, query.entity.name, { onQueryChange(query.copy(entity = ScorecardEntity.valueOf(it))) }, Modifier.fillMaxWidth(),
                 label = { TrustModel.tabLabel(ScorecardEntity.valueOf(it)) }, count = { TrustModel.count(ScorecardEntity.valueOf(it), channels, callers) }
             )
-            val chips = PeriodChips.toMutableList().apply { if (none { it.first == query.period }) add(1, query.period to query.period.label) }
+            val chips = TrustModel.periodPills(query)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 chips.forEach { (p, label) ->
                     Pill(label, selected = query.period == p) {

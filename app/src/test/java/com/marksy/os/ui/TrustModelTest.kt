@@ -10,6 +10,9 @@ import com.marksy.os.market.ScorecardEntity
 import com.marksy.os.market.ScorecardFilterEchoDto
 import com.marksy.os.market.ScorecardPerformanceDto
 import com.marksy.os.market.ScorecardTrustDto
+import com.marksy.os.market.ScorecardPeriod
+import com.marksy.os.market.ScorecardQuery
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -117,6 +120,16 @@ class TrustModelTest {
         assertEquals(0, TrustModel.count(ScorecardEntity.CALLER, channels, MarketDataState.Empty))
         assertEquals(listOf("Rahul"), TrustModel.members(ScorecardEntity.CALLER, callers.value.items).map { it.name })
         assertEquals(listOf("Prediction engine"), TrustModel.members(ScorecardEntity.ENGINE, callers.value.items).map { it.name })
+    }
+
+    // The four periods fit one row; a custom range is a pill only while chosen (set from the filter), and the title names the page.
+    @Test
+    fun periodPillsFitOneRowAndTheTitleNamesTrust() {
+        val q = ScorecardQuery()
+        assertEquals(listOf("Lifetime", "30 days", "7 days", "This month"), TrustModel.periodPills(q).map { it.second })
+        val custom = q.copy(period = ScorecardPeriod.CUSTOM, startDate = LocalDate.of(2026, 10, 1), endDate = LocalDate.of(2026, 10, 16))
+        assertEquals(ScorecardPeriod.CUSTOM to "1 Oct – 16 Oct", TrustModel.periodPills(custom).last())
+        assertEquals("Trust · Lifetime", trustTitleNote(q))
     }
 
     @Test
