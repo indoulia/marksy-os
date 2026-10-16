@@ -96,7 +96,7 @@ private fun TradingViews(
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
     var sheet by remember { mutableStateOf<TipCardModel?>(null) }
     sheet?.let { m ->
-        TipSheet(m, repository, onDismiss = { sheet = null }, onTrade = { sheet = null; ticket = it }, onOpenStock = { sheet = null; onOpenStock(it) }, onScore = { sheet = null; onScore(it) })
+        TipSheet(m, repository, onDismiss = { sheet = null }, onTrade = { sheet = null; ticket = it }, onOpenStock = { sheet = null; onOpenStock(it) }, onScore = { sheet = null; onScore(it) }, impliedStatus = impliedStatus(view))
     }
     var daily by remember { mutableStateOf<Pair<com.marksy.os.market.LedgerTipDto, com.marksy.os.market.AlsoTippedDto>?>(null) }
     daily?.let { (t, o) -> DayByDayDialog(repository, t, o) { daily = null } }

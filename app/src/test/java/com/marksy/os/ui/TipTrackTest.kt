@@ -52,6 +52,15 @@ class TipTrackTest {
         assertEquals(ExitSlot("VOIDED", "30 Sep", exited = false), TipTrack.slot(tip(status = "INVALIDATED", entryStatus = "WAITING", closedAt = "2026-09-30T09:00:00Z"), today))
     }
 
+    // The sheet's RECOMMENDED cell dates the tip, so its header doesn't say "recommended …" again; without the cell it must.
+    @Test
+    fun sheetMetaLeavesTheRecommendedDayToItsCell() {
+        val meta = "5paisa · recommended 13 Oct, 14:40"
+        assertEquals("5paisa", TipTrack.sheetMeta(meta, recommendedCell = true))
+        assertEquals(meta, TipTrack.sheetMeta(meta, recommendedCell = false))
+        assertEquals("Marksy · 5-day · closed 7 Oct", TipTrack.sheetMeta("Marksy · 5-day · recommended 30 Sep · closed 7 Oct", recommendedCell = true))
+    }
+
     // A 240-session tip read on 16 Oct 2026 showed "EXITS BY 16 Sep", which reads as last month.
     @Test
     fun slotDatesMoreThanSixMonthsAwayCarryTheYear() {

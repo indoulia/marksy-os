@@ -95,6 +95,10 @@ internal object TipTrack {
 
     fun price(v: Double): String = MarksyFormat.rupees(v)
 
+    /** A card's meta for the sheet header, without the "recommended …" day its RECOMMENDED cell already shows. */
+    fun sheetMeta(meta: String, recommendedCell: Boolean): String =
+        if (!recommendedCell) meta else meta.split(" · ").filterNot { it.startsWith("recommended ") }.joinToString(" · ")
+
     /** "₹410–418" (no paise when both ends are whole), or one price when the zone is a single level. */
     fun zone(low: Double?, high: Double?): String? {
         val l = low ?: high ?: return null

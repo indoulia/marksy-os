@@ -53,7 +53,7 @@ import java.time.ZoneId
 @Composable
 internal fun TipSheet(
     m: TipCardModel, repository: MarketIntelligenceRepository?, onDismiss: () -> Unit, onTrade: (TradeIntent) -> Unit,
-    onOpenStock: (String) -> Unit, onScore: (ScorecardSource) -> Unit
+    onOpenStock: (String) -> Unit, onScore: (ScorecardSource) -> Unit, impliedStatus: String? = null
 ) {
     val t = m.ledger
     val progress by produceState<List<ProgressPointDto>>(emptyList(), t?.tipId) {
@@ -62,27 +62,26 @@ internal fun TipSheet(
     var daily by remember { mutableStateOf<AlsoTippedDto?>(null) }
     if (t != null && repository != null) daily?.let { o -> DayByDayDialog(repository, t, o) { daily = null } }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MarksyTheme.Surface) {
-        TipSheetContent(m, progress, onTrade, onOpenStock, onScore) { daily = it }
+        TipSheetContent(m, progress, onTrade, onOpenStock, onScore, impliedStatus) { daily = it }
     }
 }
 
 @Composable
 internal fun TipSheetContent(
     m: TipCardModel, progress: List<ProgressPointDto>, onTrade: (TradeIntent) -> Unit, onOpenStock: (String) -> Unit, onScore: (ScorecardSource) -> Unit,
-    onSourceRow: (AlsoTippedDto) -> Unit
+    impliedStatus: String? = null, onSourceRow: (AlsoTippedDto) -> Unit
 ) {
     val t = m.ledger
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = MarksySpace.Wide).padding(bottom = MarksySpace.Wide),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
     ) {
-        SheetHeader(m)
+        SheetHeader(m, impliedStatus)
         m.track?.let { PriceTrackView(it, backdrop = MarksyTheme.Surface, large = true, block = false) }
         m.track?.let { PriceChart(it, progress) }
         SheetPrices(m, progress)
         if (m.scores.isNotEmpty()) SheetScores(m.scores, onScore)
         if (t != null && t.alsoBy.isNotEmpty()) AlsoTippedBy(t, onRow = onSourceRow)
-        t?.let { Timeline(it) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             (m.trade ?: m.track?.takeIf { it.live }?.let { TipTrack.trade(m.symbol, it) })?.let { trade -> MarksyButton("${if (trade.side == TradeSide.SELL) "Sell" else "Buy"} ${m.symbol}", { onTrade(trade) }, Modifier.weight(1f)) }
             MarksyButton("View stock", { onOpenStock(m.symbol) }, Modifier.weight(1f), style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
@@ -120,15 +119,16 @@ internal fun TipSheetFor(
 }
 
 @Composable
-private fun SheetHeader(m: TipCardModel) {
+private fun SheetHeader(m: TipCardModel, impliedStatus: String?) {
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Text(m.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Title, maxLines = 1)
                 SideBadge(m.sell)
-                Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (m.status != impliedStatus) Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (m.meta.isNotEmpty()) Text(m.meta, color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val meta = TipTrack.sheetMeta(m.meta, recommendedCell = m.track?.recommendedText != null)
+            if (meta.isNotEmpty()) Text(meta, color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         m.returnFraction?.let { r ->
             Column(horizontalAlignment = Alignment.End) {
@@ -170,8 +170,8 @@ private fun PriceChart(track: PriceTrack, progress: List<ProgressPointDto>) {
                 drawCircle(line, r, end)
             }
             // The labels sit on the chart's fill so the dashed lines pass behind them.
-            track.target?.let { Text("T ${MarksyFormat.number(it)}", color = MarksyTheme.Positive, style = MarksyType.Caption, modifier = Modifier.align(Alignment.TopStart).background(MarksyTheme.Background).padding(end = MarksySpace.Tight)) }
-            track.stop?.let { Text("SL ${MarksyFormat.number(it)}", color = MarksyTheme.Negative, style = MarksyType.Caption, modifier = Modifier.align(Alignment.BottomStart).background(MarksyTheme.Background).padding(end = MarksySpace.Tight)) }
+            track.target?.let { Text("T", color = MarksyTheme.Positive, style = MarksyType.Caption, modifier = Modifier.align(Alignment.TopStart).background(MarksyTheme.Background).padding(end = MarksySpace.Tight)) }
+            track.stop?.let { Text("SL", color = MarksyTheme.Negative, style = MarksyType.Caption, modifier = Modifier.align(Alignment.BottomStart).background(MarksyTheme.Background).padding(end = MarksySpace.Tight)) }
         }
         val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
         val days = points.map { (d, _) -> TipTrack.date(d) }
@@ -259,28 +259,3 @@ private fun AlsoTippedBy(t: com.marksy.os.market.LedgerTipDto, onRow: (AlsoTippe
     }
 }
 
-/** Recommended → bought → exit, each with its day when the ledger has one. */
-@Composable
-private fun Timeline(t: com.marksy.os.market.LedgerTipDto) {
-    val closed = t.closedAt?.let(TipTrack::date)?.let(MarksyFormat::day)
-    val steps = listOfNotNull(
-        Triple("Recommended " + LedgerCalls.day(t.firstSeenAt), true, MarksyTheme.TextPrimary).takeIf { t.firstSeenAt.isNotBlank() },
-        when {
-            TipTrack.voided(t) -> null
-            TipTrack.waiting(t) -> Triple("Waiting to buy", false, MarksyTheme.Warning)
-            else -> Triple(listOfNotNull("Bought", t.enteredOn?.let(TipTrack::date)?.let(MarksyFormat::day)).joinToString(" "), true, MarksyTheme.Positive)
-        },
-        when {
-            TipTrack.voided(t) -> Triple(listOfNotNull("Voided", closed).joinToString(" "), true, MarksyTheme.TextMuted)
-            LedgerCalls.isActive(t) -> Triple("Exit pending", false, MarksyTheme.TextMuted)
-            else -> Triple(listOfNotNull("Exited", closed).joinToString(" "), true, MarksyTheme.TextSecondary)
-        }
-    )
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-        steps.forEachIndexed { i, (label, done, color) ->
-            if (i > 0) MarksyDivider(Modifier.weight(1f))
-            Box(Modifier.size(8.dp).clip(CircleShape).then(if (done) Modifier.background(color) else Modifier.border(MarksySpace.Border, color, CircleShape)))
-            Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
-        }
-    }
-}
