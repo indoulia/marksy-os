@@ -104,6 +104,21 @@ class TipExtractorTest {
     }
 
     @Test
+    fun anOptionContractAnywhereInTheTextIsFlagged() {
+        listOf(
+            "BUY NIFTY 24 OCT 2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 24 OCT 2026 24500 CE",
+            "BUY NIFTY 28-OCT-2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 28-OCT-2026 24500 CE",
+            "NIFTY 24500 CE: BUY above 182 target 220 SL 160" to "NIFTY 24500 CE",
+            "BUY NIFTY24500CE @ 120 TGT 180 SL 90" to "NIFTY24500CE"
+        ).forEach { (text, symbol) ->
+            val tip = candidate(text)
+            assertEquals(text, symbol, tip.fields.symbol)
+            assertEquals(text, CaptureState.REVIEW_REQUIRED, tip.state)
+            assertTrue(text, Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        }
+    }
+
+    @Test
     fun oneTimeCodeDropsTheWholeCapture() {
         assertEquals(ExtractionResult.OneTimeCode, TipExtractor.extract("Your OTP for login is 482913. Do not share it.", provenance, null))
         assertEquals(ExtractionResult.OneTimeCode, TipExtractor.extract("BUY ABC @ 500 Target 650 SL 470\nTPIN 4829", provenance, null))

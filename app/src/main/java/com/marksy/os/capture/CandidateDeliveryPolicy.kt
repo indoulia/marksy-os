@@ -25,6 +25,7 @@ object CandidateDeliveryPolicy {
     const val UNVERIFIED_SOURCE = "unverified-source"
     const val CHAT_SOURCE = "chat-source"
     const val UNSUPPORTED_SOURCE = CaptureFailure.UNSUPPORTED_SOURCE
+    const val OPTION_UNSUPPORTED = "option-unsupported"
 
     private val ticker = Regex("""(?=[A-Z0-9&._-]*[A-Z])[A-Z0-9][A-Z0-9&._-]{0,29}""")
 
@@ -78,6 +79,8 @@ object CandidateDeliveryPolicy {
         return when {
             candidate.state != CaptureState.ACCEPTED.name -> NOT_ACCEPTED
             !candidate.userChoseSend -> KEPT_ON_PHONE
+            // Marksy tracks no option contracts yet; sent as a stock line, its premium levels would read as the underlying's.
+            Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes -> OPTION_UNSUPPORTED
             // A hand-picked source could forge another channel's record; only Android package identity may send.
             !candidate.sourceVerified -> UNVERIFIED_SOURCE
             canonicalLine(candidate.fields) == null -> CaptureGate.NOT_A_CANDIDATE

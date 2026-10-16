@@ -84,6 +84,14 @@ class CandidateDeliveryPolicyTest {
     }
 
     @Test
+    fun approvedOptionCallStaysOnThePhoneAsUnsupported() {
+        // Even a ticker-shaped contract ("NIFTY24500CE") is never sent while the server cannot track options.
+        val option = accepted().copy(symbol = "NIFTY24500CE", ambiguities = Ambiguity.OPTION_CONTRACT)
+        assertEquals(CandidateDeliveryPolicy.OPTION_UNSUPPORTED, keep(option))
+        assertFalse(CandidateDeliveryPolicy.mayQueue(option, registry))
+    }
+
+    @Test
     fun userPickedSourceNeverSends() {
         val picked = accepted(verified = false)
         assertEquals(CandidateDeliveryPolicy.UNVERIFIED_SOURCE, keep(picked))

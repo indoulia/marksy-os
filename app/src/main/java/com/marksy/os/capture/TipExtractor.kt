@@ -35,9 +35,14 @@ object TipExtractor {
     private val timestamp = Regex("""(?:$DATE)(?:,?\s+(?:$TIME))?|$TIME""", RegexOption.IGNORE_CASE)
     private val exchangePrefix = Regex("""\b(?:nse|bse)\s*:\s*""", RegexOption.IGNORE_CASE)
     private val tickerShape = Regex("""[A-Za-z][A-Za-z0-9&.-]{1,24}""")
-    private val optionAfterSymbol = Regex(
-        """^\s+((?:\d{1,2}\s*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b""", RegexOption.IGNORE_CASE
-    )
+    // Expiry, strike, CE/PE: "24 OCT", "24OCT", "OCT", "24 OCT 2026", "28-OCT-2026" or "28/10/2026", then "24500 CE".
+    private const val CONTRACT_TAIL = """((?:(?:\d{1,2}[\s-]?)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s-]?\d{2,4})?|""" +
+        """\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b"""
+    private val optionAfterSymbol = Regex("""^\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
+    // A contract named away from the side word ("NIFTY 24500 CE: BUY above 182").
+    private val optionAnywhere = Regex("""\b(?!(?:buy|sell|long|short|accumulate|kharido|becho)\b)([A-Za-z][A-Za-z0-9&.-]*)\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
+    // Any strike followed by CE/PE, even fused to its underlying ("NIFTY24500CE").
+    private val optionMarker = Regex("""\d\s*(?:CE|PE)\b""", RegexOption.IGNORE_CASE)
     private val levelWords = setOf("target", "targets", "tgt", "tp", "sl", "stop", "stoploss", "entry", "cmp", "ltp", "at", "above", "below", "around", "near", "between", "rs", "inr")
     private val fillerWords = setOf(
         "stock", "stocks", "share", "shares", "scrip", "equity", "eq", "cash", "call", "calls", "idea", "tip", "now", "today", "tomorrow",
@@ -69,7 +74,10 @@ object TipExtractor {
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
         // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
-        val symbol = symbols.singleOrNull()?.let { s -> optionContract(flat, sideHits.first().first, s)?.also { ambiguities += Ambiguity.OPTION_CONTRACT } ?: s }
+        val found = symbols.singleOrNull()
+        val contract = found?.let { optionContract(flat, sideHits.first().first, it) } ?: optionAnywhere.find(flat)?.let { contractName(it.groupValues[1], it, 2) }
+        if (contract != null || optionMarker.containsMatchIn(flat)) ambiguities += Ambiguity.OPTION_CONTRACT
+        val symbol = contract ?: found
         if (symbols.size > 1) ambiguities += Ambiguity.AMBIGUOUS_SYMBOL
 
         fun first(vararg kinds: Kind): Double? {
@@ -125,8 +133,14 @@ object TipExtractor {
     private fun optionContract(flat: String, side: MatchResult, symbol: String): String? {
         val at = flat.indexOf(symbol, side.range.last + 1, ignoreCase = true).takeIf { it >= 0 } ?: return null
         val m = optionAfterSymbol.find(flat.substring(at + symbol.length)) ?: return null
-        val expiry = m.groupValues[1].trim().replace(Regex("""\s+"""), " ").ifEmpty { null }?.uppercase(Locale.ROOT)
-        return listOfNotNull(symbol, expiry, m.groupValues[2].replace(",", ""), m.groupValues[3].uppercase(Locale.ROOT)).joinToString(" ")
+        return contractName(symbol, m, 1)
+    }
+
+    /** Underlying, expiry, strike and CE/PE from [m], whose expiry is group [first] (strike and type follow it). */
+    private fun contractName(underlying: String, m: MatchResult, first: Int): String {
+        val expiry = m.groupValues[first].trim().replace(Regex("""\s+"""), " ").ifEmpty { null }?.uppercase(Locale.ROOT)
+        return listOfNotNull(underlying.uppercase(Locale.ROOT), expiry, m.groupValues[first + 1].replace(",", ""), m.groupValues[first + 2].uppercase(Locale.ROOT))
+            .joinToString(" ")
     }
 
     // The ticker sits right after the side word; failing that, an all-caps word right before it ("ABC: BUY @ 500").
