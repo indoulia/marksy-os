@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,7 +19,10 @@ import com.marksy.os.market.ScorecardPeriod
 import com.marksy.os.market.ScorecardQuery
 import com.marksy.os.market.ScorecardSource
 
-/** Trust tab: who has been right. Scorecards for channels, callers and Marksy engines; a row opens its source. */
+/** Which parts of the filter a dialog asks for: only those the page has no pills for. */
+private data class TrustFilter(val query: ScorecardQuery, val periods: Boolean, val horizon: Boolean)
+
+/** Trust tab: who has been right. Scorecards for channels, finfluencers and Marksy engines; a row opens its source. */
 @Composable
 fun TrustScreen(
     repository: MarketIntelligenceRepository,
@@ -33,30 +33,24 @@ fun TrustScreen(
     onTrailChange: (List<ScorecardSource>) -> Unit,
     onOpenStock: (String) -> Unit
 ) {
-    var filtering by remember { mutableStateOf<ScorecardQuery?>(null) }
-    filtering?.let { initial -> ScorecardFilterDialog(initial, onApply = { onQueryChange(it); filtering = null }) { filtering = null } }
-    val followed by MarketIntelligenceRepository.followed.collectAsState()
-    val toggleFollow = rememberFollowToggle(repository)
-    val openSource = trail.lastOrNull()
-    val actions = listOfNotNull(
-        openSource?.let { s -> followed?.let { set ->
-            val on = s.followKey in set
-            FloatingAction(if (on) Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, if (on) "Unfollow ${s.name}" else "Follow ${s.name}") { toggleFollow(s.followKey, s.name, !on) }
-        } },
-        FloatingAction(
-            Icons.Default.FilterList, if (openSource != null) "Period and horizon" else "Filter scorecards",
-            active = query.period != ScorecardPeriod.LIFETIME || query.horizon != null
-        ) { filtering = query }
-    )
+    var filtering by remember { mutableStateOf<TrustFilter?>(null) }
+    filtering?.let { f -> ScorecardFilterDialog(f.query, onApply = { onQueryChange(it); filtering = null }, periods = f.periods, horizon = f.horizon) { filtering = null } }
+    // The list's tabs and period pills sit on the page, so its filter button asks only for the horizon.
+    val action = if (trail.isNotEmpty()) {
+        FloatingAction(Icons.Default.FilterList, "Period and horizon", active = query.period != ScorecardPeriod.LIFETIME || query.horizon != null) {
+            filtering = TrustFilter(query, periods = true, horizon = true)
+        }
+    } else {
+        FloatingAction(Icons.Default.FilterList, "Filter by horizon", active = query.horizon != null) { filtering = TrustFilter(query, periods = false, horizon = true) }
+    }
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
         ScorecardsView(
-            repository, query, oneHandStackBottomPadding(actions.size), onQueryChange, onEditFilter = { filtering = it },
+            repository, query, oneHandStackBottomPadding(1), onQueryChange, onEditFilter = { filtering = TrustFilter(it, periods = false, horizon = false) },
             trail = trail, onTrailChange = onTrailChange, onOpenStock = onOpenStock
         )
-        OneHandControls(filters = emptyList(), selectedFilter = "", onFilterSelected = {}, actions = actions)
+        OneHandControls(filters = emptyList(), selectedFilter = "", onFilterSelected = {}, actions = listOf(action))
     }
 }
 
-/** Title superscript: the scorecard filter; the list name drops while a source is open. */
-fun trustTitleNote(query: ScorecardQuery, sourceOpen: Boolean): String =
-    if (sourceOpen) query.label() else "${query.entity.label} · ${query.label()}"
+/** Title superscript: the scorecard period and horizon; the tabs already name the list. */
+fun trustTitleNote(query: ScorecardQuery): String = query.label()

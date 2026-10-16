@@ -443,7 +443,7 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 -> MarketTab.entries.firstOrNull { it.name == marketTabName }?.label
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, openScope, historyScope)
             selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter -> capturedNote
-            selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, sourceOpen = scorecardTrail.isNotEmpty())
+            selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery)
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
             else -> null
         }

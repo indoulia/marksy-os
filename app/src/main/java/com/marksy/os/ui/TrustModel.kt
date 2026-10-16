@@ -10,7 +10,6 @@ import com.marksy.os.market.ScorecardBodyDto
 import com.marksy.os.market.ScorecardEntity
 import com.marksy.os.market.ScorecardSources
 import com.marksy.os.market.ScorecardTrustDto
-import java.util.Locale
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -57,7 +56,7 @@ internal object TrustModel {
         if (t.trustScore == null) return null
         val wilson = t.wilsonLowerBound ?: return null
         val quality = t.returnQuality ?: return null
-        return "${whole(wilson)}% $floor × ${String.format(Locale.US, "%.2f", returnFactor(quality))} return factor"
+        return "${whole(wilson)}% $floor × ${MarksyFormat.number(returnFactor(quality), 2)} return factor"
     }
 
     fun scoreWhy(t: ScorecardTrustDto): String = factors(t, "hit-rate floor")
