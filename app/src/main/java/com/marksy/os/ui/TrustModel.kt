@@ -8,6 +8,8 @@ import com.marksy.os.market.HorizonHitDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.ScorecardBodyDto
 import com.marksy.os.market.ScorecardEntity
+import com.marksy.os.market.ScorecardPeriod
+import com.marksy.os.market.ScorecardQuery
 import com.marksy.os.market.ScorecardSources
 import com.marksy.os.market.ScorecardTrustDto
 import kotlin.math.min
@@ -119,4 +121,13 @@ internal object TrustModel {
 
     fun marksyChannel(channels: List<EntityScorecardDto>): EntityScorecardDto? =
         channels.firstOrNull { it.entity == ScorecardEntity.CHANNEL.param && ScorecardSources.chip(it) == "Engine" }
+
+    private val PERIODS = listOf(
+        ScorecardPeriod.LIFETIME to "Lifetime", ScorecardPeriod.LAST_30_DAYS to "30 days", ScorecardPeriod.LAST_7_DAYS to "7 days",
+        ScorecardPeriod.THIS_MONTH to "This month"
+    )
+
+    /** The four periods on one row, plus the chosen custom range (set from the filter button) while it is chosen. */
+    fun periodPills(query: ScorecardQuery): List<Pair<ScorecardPeriod, String>> =
+        if (PERIODS.any { it.first == query.period }) PERIODS else PERIODS + (query.period to query.copy(horizon = null).label())
 }

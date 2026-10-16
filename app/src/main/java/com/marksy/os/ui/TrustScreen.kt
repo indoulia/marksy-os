@@ -35,13 +35,15 @@ fun TrustScreen(
 ) {
     var filtering by remember { mutableStateOf<TrustFilter?>(null) }
     filtering?.let { f -> ScorecardFilterDialog(f.query, onApply = { onQueryChange(it); filtering = null }, periods = f.periods, horizon = f.horizon) { filtering = null } }
-    // The list's tabs and period pills sit on the page, so its filter button asks only for the horizon.
+    // The page shows the tabs and the four period pills; the filter button holds the custom range and the horizon.
     val action = if (trail.isNotEmpty()) {
         FloatingAction(Icons.Default.FilterList, "Period and horizon", active = query.period != ScorecardPeriod.LIFETIME || query.horizon != null) {
             filtering = TrustFilter(query, periods = true, horizon = true)
         }
     } else {
-        FloatingAction(Icons.Default.FilterList, "Filter by horizon", active = query.horizon != null) { filtering = TrustFilter(query, periods = false, horizon = true) }
+        FloatingAction(Icons.Default.FilterList, "Period and horizon", active = query.period == ScorecardPeriod.CUSTOM || query.horizon != null) {
+            filtering = TrustFilter(query, periods = true, horizon = true)
+        }
     }
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
         ScorecardsView(
@@ -52,5 +54,5 @@ fun TrustScreen(
     }
 }
 
-/** Title superscript: the scorecard period and horizon; the tabs already name the list. */
-fun trustTitleNote(query: ScorecardQuery): String = query.label()
+/** The page title: Trust, then the scorecard period and horizon (the tabs name the list). */
+fun trustTitleNote(query: ScorecardQuery): String = "Trust · " + query.label()
