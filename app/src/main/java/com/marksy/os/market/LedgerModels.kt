@@ -130,7 +130,7 @@ data class TargetProgressDto(
     }
 }
 
-/** The tip's Prediction Score (MSV-001): `value` (0–100) is present only when `status` is VALIDATED. */
+/** Marksy's view of the tip's stock (MSV-001, basis STOCK_VIEW), not the tip's chance: `value` (0–100) only when VALIDATED. */
 data class PredictionScoreDto(
     val version: String,
     val status: String,

@@ -153,7 +153,7 @@ class TipTrackTest {
             SheetScore("TRUST", 64, "Rahul K.", null, ScorecardSource("caller", 9, "Rahul K."))
         )
         assertEquals(trust, TipCards.scores(item))
-        assertEquals(trust + SheetScore("PREDICTION", 72, null, "/ 100", null), TipCards.scores(item, validatedPrediction = 72))
+        assertEquals(trust + SheetScore("PREDICTION", 72, null, TipCards.PREDICTION_NOTE, null), TipCards.scores(item, validatedPrediction = 72))
     }
 
     // All counts a tip once even when it is both mine and followed (17 = Mine 8 + Following 5 + Marksy 4 in the canvas).
@@ -207,7 +207,7 @@ class TipTrackTest {
     @Test
     fun predictionLineFollowsTheBackendsValidatedScoreOnly() {
         val validated = PredictionScoreDto("MSV-001", "VALIDATED", 72, null, "2026-10-13T05:12:00Z", "PROSPECTIVE")
-        val line = SheetScore("PREDICTION", 72, null, "/ 100", null)
+        val line = SheetScore("PREDICTION", 72, null, TipCards.PREDICTION_NOTE, null)
         val mine = { score: PredictionScoreDto? -> TipCards.mine(MyTipDto(tip(marksy = 0.9, score = score), null, null, emptyList(), 0), null, today).scores }
 
         assertTrue(line in mine(validated))
@@ -217,6 +217,14 @@ class TipTrackTest {
             assertTrue(mine(hidden).none { it.caption == "PREDICTION" })
             assertNull(TipCards.validatedPrediction(tip(score = hidden)))
         }
+    }
+
+    // MSV-001 is Marksy's view of the stock, never the tip's chance: the line reads "72 / 100 · Marksy's view of the stock".
+    @Test
+    fun predictionLineSaysItIsMarksysViewOfTheStock() {
+        assertEquals("/ 100 · Marksy's view of the stock", TipCards.PREDICTION_NOTE)
+        assertEquals(TipCards.PREDICTION_NOTE, TipCards.prediction(72)!!.note)
+        for (word in listOf("chance", "probability", "hit", "target")) assertFalse(word, TipCards.PREDICTION_NOTE.lowercase().contains(word))
     }
 }
 

@@ -77,8 +77,11 @@ internal object TipCards {
         ).joinToString(" · ")
     }
 
-    /** Marksy's Prediction line, only for a score that passed validation (MSV-001 activation; none has yet). */
-    fun prediction(validatedScore: Int?): SheetScore? = validatedScore?.let { SheetScore("PREDICTION", it, null, "/ 100", null) }
+    /** Says what MSV-001 is: a view of the stock, never this tip's chance of reaching its target. */
+    const val PREDICTION_NOTE = "/ 100 · Marksy's view of the stock"
+
+    /** Marksy's Prediction line, only once the backend has activated MSV-001 (validated and calibrated; none has yet). */
+    fun prediction(validatedScore: Int?): SheetScore? = validatedScore?.let { SheetScore("PREDICTION", it, null, PREDICTION_NOTE, null) }
 
     /** The backend's Prediction Score value, only while it reports VALIDATED. */
     fun validatedPrediction(t: LedgerTipDto?): Int? =
