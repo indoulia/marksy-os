@@ -99,9 +99,9 @@ internal object TrustModel {
         .maxWithOrNull(compareBy<HorizonHitDto> { it.hitRatePct }.thenBy { it.completed })
         ?.let { "${horizonLabel(it.horizon)} · ${pct(it.hitRatePct!!)}" }
 
-    /** One callers read serves two tabs: engines, and everyone else as finfluencers. */
+    /** One callers read serves two tabs: engines, and everyone else as finfluencers; Marksy's channel lives in the compare strip. */
     fun members(entity: ScorecardEntity, items: List<EntityScorecardDto>): List<EntityScorecardDto> = when (entity) {
-        ScorecardEntity.CHANNEL -> items
+        ScorecardEntity.CHANNEL -> items.filterNot { it == marksyChannel(items) }
         ScorecardEntity.CALLER -> items.filterNot(ScorecardSources::isEngine)
         ScorecardEntity.ENGINE -> items.filter(ScorecardSources::isEngine)
     }

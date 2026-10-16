@@ -124,5 +124,7 @@ class TrustModelTest {
         val marksy = card("Marksy", body(), type = "MARKSY")
         assertEquals(marksy, TrustModel.marksyChannel(listOf(card("Swing", body(), type = "TELEGRAM_CHANNEL"), marksy)))
         assertNull(TrustModel.marksyChannel(listOf(card("Swing", body()))))
+        // Its compare card already shows Marksy, so the Channels list doesn't repeat it.
+        assertEquals(listOf("Swing"), TrustModel.members(ScorecardEntity.CHANNEL, listOf(card("Swing", body(), type = "TELEGRAM_CHANNEL"), marksy)).map { it.name })
     }
 }
