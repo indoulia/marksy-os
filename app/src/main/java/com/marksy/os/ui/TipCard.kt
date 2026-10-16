@@ -32,6 +32,7 @@ import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketIntelligenceRepository
 import com.marksy.os.market.MyTipDto
+import com.marksy.os.market.PredictionScoreDto
 import com.marksy.os.market.PicksBasis
 import com.marksy.os.market.ProgressPointDto
 import com.marksy.os.market.ScorecardSource
@@ -76,8 +77,12 @@ internal object TipCards {
         ).joinToString(" · ")
     }
 
-    /** Marksy's Prediction line, only for a score that passed validation and was approved for display (none has: PSC-RR-001). */
+    /** Marksy's Prediction line, only for a score that passed validation (MSV-001 activation; none has yet). */
     fun prediction(validatedScore: Int?): SheetScore? = validatedScore?.let { SheetScore("PREDICTION", it, null, "/ 100", null) }
+
+    /** The backend's Prediction Score value, only while it reports VALIDATED. */
+    fun validatedPrediction(t: LedgerTipDto?): Int? =
+        t?.predictionScore?.takeIf { it.status == PredictionScoreDto.VALIDATED }?.value?.coerceIn(0, 100)
 
     /** A source's Trust, or why it has none yet; its hit rate lives on the record the value opens. */
     private fun trust(name: String, score: Int?, completed: Int?, source: ScorecardSource?) =
@@ -105,7 +110,8 @@ internal object TipCards {
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
             meta = meta(t), returnFraction = track.returnFraction, track = track,
             trust = TipTrack.trustChip(item), sources = TipTrack.sourcesChip(t),
-            trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t, scores = scores(item),
+            trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t,
+            scores = scores(item, validatedPrediction(t)),
             voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
@@ -117,7 +123,7 @@ internal object TipCards {
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
             meta = meta(t), returnFraction = track.returnFraction, track = track, sources = TipTrack.sourcesChip(t),
             trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t,
-            scores = scores(MyTipDto(t, null, null, emptyList(), 0)),
+            scores = scores(MyTipDto(t, null, null, emptyList(), 0), validatedPrediction(t)),
             voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
@@ -148,7 +154,7 @@ internal object TipCards {
             meta = meta, returnFraction = track.returnFraction, track = track,
             trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), trade = TipTrack.trade(p.symbol, track).takeIf { TipTrack.buyable(p, today) }, ledger = t,
-            scores = engineScores(engine, engineSource),
+            scores = engineScores(engine, engineSource, validatedPrediction(t)),
             voided = (t?.let(TipTrack::voided) ?: (p.lifecycleState == LedgerCalls.STATUS_INVALIDATED)) && ended,
             at = t?.closedAt ?: t?.firstSeenAt ?: p.publishedAt.orEmpty()
         )
@@ -173,7 +179,7 @@ internal object TipCards {
             returnFraction = LedgerCalls.closedReturn(row), track = track,
             trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), ledger = t,
-            scores = engineScores(engine, engineSource),
+            scores = engineScores(engine, engineSource, validatedPrediction(t)),
             voided = t?.let(TipTrack::voided) == true, at = t?.closedAt ?: row.asOf.orEmpty()
         )
     }

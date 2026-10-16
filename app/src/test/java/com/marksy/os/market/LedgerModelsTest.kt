@@ -129,6 +129,11 @@ class LedgerModelsTest {
         val old = LedgerTipDto.parse(JSONObject("{${ledgerTip()}}"))
         assertNull(old.recommendedPrice)
         assertNull(old.marksyView)
+        assertNull(old.predictionScore)
+        val scored = LedgerTipDto.parse(JSONObject("""{${ledgerTip()}, "predictionScore": {"version": "MSV-001", "status": "VALIDATED",
+            "value": 72, "reason": null, "evaluatedAt": "2026-10-13T05:12:00Z", "provenance": "RECONSTRUCTED"}}""")).predictionScore!!
+        assertEquals(PredictionScoreDto("MSV-001", "VALIDATED", 72, null, "2026-10-13T05:12:00Z", "RECONSTRUCTED"), scored)
+        assertNull(PredictionScoreDto.parse(JSONObject("""{"version": "MSV-001", "status": "NOT_VALIDATED", "value": null}""")).value)
         assertNull(old.repeats)
         assertEquals(emptyList<AlsoTippedDto>(), old.alsoBy)
         assertNull(ProgressPointDto.parse(JSONObject(progress)).close)
