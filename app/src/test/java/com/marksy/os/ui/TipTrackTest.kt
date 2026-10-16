@@ -125,22 +125,34 @@ class TipTrackTest {
         assertEquals(TrackTone.WARNING, TipTrack.statusTone(tip(entryStatus = "WAITING")))
     }
 
-    // Score bands: 65+ positive, 45+ warning, else negative; Marksy's score is its probability × 100 and absent without a view.
+    // Score bands: 65+ positive, 45+ warning, else negative. marksyView's probability is an unvalidated model number (PSC-RR-001), never a chip.
     @Test
     fun scoreChipsMapToBands() {
         assertEquals(TrackTone.POSITIVE, TipTrack.band(65))
         assertEquals(TrackTone.WARNING, TipTrack.band(64))
         assertEquals(TrackTone.WARNING, TipTrack.band(45))
         assertEquals(TrackTone.NEGATIVE, TipTrack.band(44))
-        assertEquals(72, TipTrack.marksyScore(tip(marksy = 0.724)))
-        assertNull(TipTrack.marksyScore(tip()))
-        assertNull(TipTrack.marksyChip(tip(), null))
+        assertNull(TipCards.mine(MyTipDto(tip(marksy = 0.724), null, null, emptyList(), 0), null, LocalDate.of(2026, 10, 16)).marksy)
 
         val headline = { trust: Int? -> ScorecardHeadlineDto(10, 0, 10, 4, 6, 0, 0, null, 40.0, null, trust) }
         val item = { channelTrust: Int?, callerTrust: Int? -> MyTipDto(tip(), headline(channelTrust), headline(callerTrust), emptyList(), 0) }
         assertEquals(ScoreChip("Trust", 58, TrackTone.WARNING, ScorecardSource("channel", 4, "Swing Picks")), TipTrack.trustChip(item(58, 64)))
         assertEquals(ScorecardSource("caller", 9, "Rahul K."), TipTrack.trustChip(item(null, 64))!!.source)
         assertNull(TipTrack.trustChip(item(null, null)))
+    }
+
+    // The sheet's two score lines: Trust per named source, then Marksy's Prediction; a value without a number says why.
+    @Test
+    fun sheetScoresShowTrustPerSourceAndAPredictionSlot() {
+        val headline = { completed: Int, trust: Int? -> ScorecardHeadlineDto(completed, 0, completed, 2, 2, 0, 0, null, 42.0, null, trust) }
+        assertEquals(
+            listOf(
+                SheetScore("TRUST", null, "Swing Picks", "4 closed, too few", ScorecardSource("channel", 4, "Swing Picks")),
+                SheetScore("TRUST", 64, "Rahul K.", null, ScorecardSource("caller", 9, "Rahul K.")),
+                SheetScore("PREDICTION", null, null, "not validated yet", null)
+            ),
+            TipCards.scores(MyTipDto(tip(marksy = 0.724), headline(4, null), headline(30, 64), emptyList(), 0))
+        )
     }
 
     @Test

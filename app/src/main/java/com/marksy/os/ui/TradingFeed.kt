@@ -165,9 +165,9 @@ internal data class TradingLists(
             // An ended call the closed list already has is shown once, from the closed list.
             val endedCards = ended.filter { p -> p.ledger?.tipId?.takeIf(String::isNotEmpty)?.let { it !in closedTips } ?: true }
                 .map { TipCards.marksy(it, now(it.symbol), today, engine) }
-            val mineClosed = myClosed.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) }
+            val mineClosed = myClosed.map { TipCards.mine(it, now(it.tip.symbol), today) }
             return TradingLists(
-                mineOpen = myOpen.map { TipCards.mine(it, now(it.tip.symbol), today, engineSource) },
+                mineOpen = myOpen.map { TipCards.mine(it, now(it.tip.symbol), today) },
                 marksyOpen = bought.map { TipCards.marksy(it, now(it.symbol), today, engine) },
                 setups = waiting.sortedWith(compareByDescending<ActivePredictionDto> { it.isActionableNow }.thenByDescending { it.compositeOpportunityScore ?: -1.0 })
                     .map { TipCards.marksy(it, now(it.symbol), today, engine) to it },

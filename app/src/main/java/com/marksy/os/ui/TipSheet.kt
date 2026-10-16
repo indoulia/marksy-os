@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -61,7 +63,12 @@ internal fun TipSheet(
     }
     var daily by remember { mutableStateOf<AlsoTippedDto?>(null) }
     if (t != null && repository != null) daily?.let { o -> DayByDayDialog(repository, t, o) { daily = null } }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MarksyTheme.Surface) {
+    // A darker scrim, a raised sheet and a slim handle, so the sheet stands off the list behind it.
+    ModalBottomSheet(
+        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MarksyTheme.SurfaceRaised, scrimColor = Color.Black.copy(alpha = 0.86f),
+        dragHandle = { Box(Modifier.padding(top = 8.dp, bottom = 2.dp).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(MarksyTheme.TextMuted)) }
+    ) {
         TipSheetContent(m, progress, onTrade, onOpenStock, onScore, impliedStatus) { daily = it }
     }
 }
@@ -77,10 +84,10 @@ internal fun TipSheetContent(
         verticalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding)
     ) {
         SheetHeader(m, impliedStatus)
-        m.track?.let { PriceTrackView(it, backdrop = MarksyTheme.Surface, large = true, block = false) }
+        if (m.scores.isNotEmpty()) ScoreLines(m.scores, onScore)
+        m.track?.let { PriceTrackView(it, backdrop = MarksyTheme.SurfaceRaised, large = true, block = false) }
         m.track?.let { PriceChart(it, progress) }
         SheetPrices(m, progress)
-        if (m.scores.isNotEmpty()) SheetScores(m.scores, onScore)
         if (t != null && t.alsoBy.isNotEmpty()) AlsoTippedBy(t, onRow = onSourceRow)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             (m.trade ?: m.track?.takeIf { it.live }?.let { TipTrack.trade(m.symbol, it) })?.let { trade -> MarksyButton("${if (trade.side == TradeSide.SELL) "Sell" else "Buy"} ${m.symbol}", { onTrade(trade) }, Modifier.weight(1f)) }
@@ -219,7 +226,7 @@ private fun CellGrid(cells: List<@Composable () -> Unit>) {
 @Composable
 private fun CellBox(caption: String, value: String, color: Color, note: String?, onClick: (() -> Unit)? = null, suffix: String? = null) {
     Column(
-        Modifier.fillMaxWidth().clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised)
+        Modifier.fillMaxWidth().clip(MarksyShape.Chip).background(MarksyTheme.SurfaceHigh)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Gap),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
     ) {
@@ -232,13 +239,34 @@ private fun CellBox(caption: String, value: String, color: Color, note: String?,
     }
 }
 
+/** TRUST and PREDICTION as two label-left lines right under the header; each Trust value opens its source's record. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SheetScores(scores: List<SheetScore>, onScore: (ScorecardSource) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-        Text("SCORES", color = MarksyTheme.TextMuted, style = MarksyType.PriceLabel)
-        CellGrid(scores.map { s ->
-            { CellBox(s.caption, "${s.score}", trackColor(TipTrack.band(s.score)), s.note, s.source?.let { src -> { onScore(src) } }, suffix = " / 100".takeIf { s.caption.startsWith("MARKSY") }) }
-        })
+private fun ScoreLines(scores: List<SheetScore>, onScore: (ScorecardSource) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
+        MarksyDivider()
+        scores.groupBy { it.caption }.forEach { (caption, values) ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(caption, color = MarksyTheme.TextMuted, style = MarksyType.PriceLabel, maxLines = 1)
+                FlowRow(Modifier.padding(start = MarksySpace.Gap), horizontalArrangement = Arrangement.spacedBy(MarksySpace.CardPadding, Alignment.End)) {
+                    values.forEach { s -> ScoreValue(s, s.source?.let { src -> { onScore(src) } }) }
+                }
+            }
+        }
+        MarksyDivider()
+    }
+}
+
+@Composable
+private fun ScoreValue(s: SheetScore, onClick: (() -> Unit)?) {
+    Row(
+        (if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = MarksySpace.Hair),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        s.name?.let { Text("$it ", color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1) }
+        Text(s.score?.toString() ?: "—", color = s.score?.let { trackColor(TipTrack.band(it)) } ?: MarksyTheme.TextMuted, style = MarksyType.Body, fontWeight = FontWeight.Bold, maxLines = 1)
+        s.note?.let { Text((if (s.name != null) " · " else " ") + it, color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 1) }
+        if (onClick != null) Text(" ›", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
     }
 }
 
