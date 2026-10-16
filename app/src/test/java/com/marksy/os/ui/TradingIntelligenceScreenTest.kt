@@ -29,6 +29,13 @@ import com.marksy.os.market.ScorecardFilterEchoDto
 import com.marksy.os.market.ScorecardPerformanceDto
 import com.marksy.os.market.ScorecardTrustDto
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,6 +94,8 @@ class TradingIntelligenceScreenTest {
         engine = true
     )
 
+    private var closedPage: suspend (String?) -> ClosedPredictionPageDto = { ClosedPredictionPageDto(closedCalls, null) }
+
     private fun repository(vararg calls: ActivePredictionDto, laterPage: List<ActivePredictionDto>? = null) = MarketIntelligenceRepository(object : MarketApiClient {
         override suspend fun myTips(status: String?, cursor: String?): MyTipPageDto {
             requested += status
@@ -98,7 +107,7 @@ class TradingIntelligenceScreenTest {
                 listOf(engineCard(3, "Rating engine"), engineCard(2, "Prediction engine")))
         }
         override suspend fun performanceSummary(range: String): PerformanceSummaryDto? { summaryReads++; return null }
-        override suspend fun closedPredictions(cursor: String?) = ClosedPredictionPageDto(closedCalls, null)
+        override suspend fun closedPredictions(cursor: String?) = closedPage(cursor)
         override suspend fun marketSummary() = throw NotImplementedError()
         override suspend fun liveQuotes(symbols: List<String>?) = throw NotImplementedError()
         override suspend fun liveFeedHealth() = throw NotImplementedError()
@@ -115,6 +124,24 @@ class TradingIntelligenceScreenTest {
         override suspend fun ipoHistory(id: String) = throw NotImplementedError()
     })
 
+    // Regression: History's count read 19 while later pages were still loading, then jumped to 79.
+    @Test
+    fun aListSettlesOnlyOnceItsUpFrontPagesAreRead() = runBlocking {
+        val lastPage = CompletableDeferred<Unit>()
+        closedPage = { c ->
+            if (c == null) ClosedPredictionPageDto(listOf(closedCall(1, "TCS", "t1")), "p2")
+            else { lastPage.await(); ClosedPredictionPageDto(listOf(closedCall(2, "INFY", "t2")), null) }
+        }
+        val feed = TradingFeed(repository())
+        val loading = launch { feed.load() }
+        withTimeout(10_000) { while (feed.marksyClosed.items.isEmpty()) delay(10) }
+        assertFalse(feed.marksyClosed.settled)
+        lastPage.complete(Unit)
+        loading.join()
+        assertTrue(feed.marksyClosed.settled)
+        assertEquals(2, feed.marksyClosed.items.size)
+    }
+
     // Regression: two Marksy calls for the same symbol crashed the list ("Key pick-NTPCGREEN was already used").
     // Invalidated calls must not be offered as setups.
     @Test
@@ -126,6 +153,9 @@ class TradingIntelligenceScreenTest {
         compose.waitForIdle()
 
         compose.onAllNodesWithText("NTPCGREEN", substring = true).assertCountEquals(2)
+        // Every setup is still to buy, so the tab already says what "Waiting to buy" and "Marksy setup" would.
+        compose.onAllNodesWithText("Waiting to buy").assertCountEquals(0)
+        compose.onAllNodesWithText("Marksy setup", substring = true).assertCountEquals(0)
     }
 
     // Regression: the active feed is keyset-paged on a re-rankable score, so a later page can repeat a call; Ended crashed on the repeated key.
@@ -153,6 +183,8 @@ class TradingIntelligenceScreenTest {
         compose.onNodeWithText("5paisa", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Trust 62 ›").assertIsDisplayed()
         compose.onAllNodesWithText("TCS").assertCountEquals(0)
+        // Open lists live tips only, so "Active" on each card repeats the tab.
+        compose.onAllNodesWithText("Active").assertCountEquals(0)
 
         view.value = "History"
         awaitText("Target hit")
@@ -231,7 +263,8 @@ class TradingIntelligenceScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("WEWIN").assertIsDisplayed()
         compose.onNodeWithText("VISACHROME").assertIsDisplayed()
-        compose.onAllNodesWithText("Voided before buy").assertCountEquals(3)
+        // Only the fold names the state; its cards don't repeat it.
+        compose.onAllNodesWithText("Voided before buy").assertCountEquals(1)
 
         compose.onAllNodesWithText("Voided before buy")[0].performClick()
         compose.waitForIdle()

@@ -33,6 +33,8 @@ internal class Paged<T>(private val key: ((T) -> Any)? = null, private val fetch
     var hasMore by mutableStateOf(true)
     /** A later page failed, so the list stopped short of its end. */
     var failed by mutableStateOf(false)
+    /** The up-front page reads ended, so a count of [items] is final rather than a first page. */
+    var settled by mutableStateOf(false)
     private var cursor: String? = null
     private var busy = false
 
@@ -93,7 +95,7 @@ enum class OpenScope(val label: String) { ALL("All"), MINE("Mine"), FOLLOWING("F
 enum class SetupsScope(val label: String) { ALL("All"), TODAY("Today"), WEEK("This week") }
 
 /** History's lists: everything closed, the customer's own tips, or Marksy's. */
-enum class HistoryScope(val label: String) { ALL("All"), MINE("My tips"), MARKSY("Marksy") }
+enum class HistoryScope(val label: String) { ALL("All"), MINE("Mine"), MARKSY("Marksy") }
 
 /** Every Trading list, read once up front so the views and scopes can show their counts. */
 @Stable
@@ -108,7 +110,7 @@ internal class TradingFeed(private val repo: MarketIntelligenceRepository) {
     var myRecord by mutableStateOf<ScorecardBodyDto?>(null)
 
     suspend fun load() = coroutineScope {
-        listOf(myOpen, marksyActive, myClosed, marksyClosed).forEach { p -> launch { var pages = 0; while (p.hasMore && pages++ < MAX_PAGES) p.more() } }
+        listOf(myOpen, marksyActive, myClosed, marksyClosed).forEach { p -> launch { var pages = 0; while (p.hasMore && pages++ < MAX_PAGES) p.more(); p.settled = true } }
         launch { engine = (repo.scorecards(ScorecardEntity.ENGINE, TrackRecordQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard) }
         launch { myRecord = (repo.myScorecard(MyRecordQuery) as? MarketDataState.Loaded)?.value?.body }
     }
@@ -184,16 +186,15 @@ internal data class TradingLists(
             val waiting = cards.count { it.ledger?.let(TipTrack::waiting) == true }
             val avg = returns.takeIf { it.isNotEmpty() }?.average()
             return TradingSummary(
-                "OPEN TIPS · LIVE · FROM ENTRY",
+                "LIVE · FROM ENTRY",
                 listOfNotNull("${returns.count { it > 0 }} up", "${returns.count { it < 0 }} down", "$waiting waiting to buy".takeIf { waiting > 0 }).joinToString(" · "),
                 avg?.let { MarksyFormat.percent(it * 100, 1) }, tone(avg)
             )
         }
 
+        /** The tab already counts the setups, so the strip only says where they come from. */
         fun setupsSummary(count: Int, scan: LatestScanDto?): TradingSummary = TradingSummary(
-            "MARKSY SETUPS · STILL BUYABLE",
-            listOfNotNull("$count setup" + if (count == 1) "" else "s", scan?.let(PicksBasis::label)?.let { "from $it" }).joinToString(" · "),
-            "$count", TrackTone.NEUTRAL
+            "MARKSY · STILL BUYABLE", scan?.let(PicksBasis::label)?.let { "from $it" } ?: "from the latest scan", null, TrackTone.NEUTRAL
         )
 
         /** History: the server's last-30-days record, never one recomputed on the phone. */

@@ -123,9 +123,10 @@ internal object TipCards {
             else -> "Waiting to buy"
         }
         val meta = when {
-            ended -> listOfNotNull("Marksy", horizon, t?.closedAt?.let(LedgerCalls::day) ?: PicksBasis.day(p.scanSessionDate))
-            t == null || TipTrack.waiting(t) -> listOf("Marksy setup", horizon, "confidence ${confidence(p.confidence)}")
-            else -> listOf("Marksy", "$horizon tip")
+            ended -> listOfNotNull("Marksy", horizon, PicksBasis.day(p.scanSessionDate)?.let { "recommended $it" },
+                t?.closedAt?.takeIf { !TipTrack.voided(t) }?.let { "closed ${LedgerCalls.day(it)}" })
+            t == null || TipTrack.waiting(t) -> listOf("Marksy", horizon, "confidence ${confidence(p.confidence)}")
+            else -> listOfNotNull("Marksy", horizon, p.publishedAt?.let(TipTrack::dayTime)?.let { "recommended $it" })
         }.joinToString(" · ")
         return TipCardModel(
             key = "m-${p.predictionId}", symbol = p.symbol, sell = track.sell, status = status,
@@ -151,7 +152,8 @@ internal object TipCards {
             status = t?.let(TipTrack::status) ?: row.outcome?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() } ?: "Closed",
             statusTone = t?.let(TipTrack::statusTone) ?: when { "TARGET" in o || "SUCCESS" in o -> TrackTone.POSITIVE; "STOP" in o || "FAIL" in o -> TrackTone.NEGATIVE; else -> TrackTone.NEUTRAL },
             meta = listOfNotNull(
-                "Marksy", "${row.horizonDays}-day", row.asOf?.let { TipTrack.date(it) }?.let(MarksyFormat::day),
+                "Marksy", "${row.horizonDays}-day", row.asOf?.let { TipTrack.date(it) }?.let { "recommended ${MarksyFormat.day(it)}" },
+                t?.closedAt?.takeIf { !TipTrack.voided(t) }?.let { "closed ${LedgerCalls.day(it)}" },
                 row.excludedReason?.let { "not scored" }, "${c.predictions} predictions".takeIf { c.predictions > 1 }
             ).joinToString(" · "),
             returnFraction = LedgerCalls.closedReturn(row), track = track,
@@ -195,11 +197,11 @@ internal fun ScorePill(chip: ScoreChip, onOpen: (ScorecardSource) -> Unit) =
 @Composable
 internal fun TipCard(
     m: TipCardModel, expanded: Boolean, onToggleSources: () -> Unit, onOpen: () -> Unit, onTrade: (TradeIntent) -> Unit,
-    onScore: (ScorecardSource) -> Unit, onSourceRow: (AlsoTippedDto) -> Unit
+    onScore: (ScorecardSource) -> Unit, onSourceRow: (AlsoTippedDto) -> Unit, impliedStatus: String? = null
 ) {
     MarksyRowCard(onClick = onOpen, onClickLabel = "Open ${m.symbol} tip") {
         Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-            TipHeader(m, onTrade)
+            TipHeader(m, onTrade, impliedStatus)
             val chips = m.marksy != null || m.trust != null || m.sources != null
             if (chips) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
                 m.marksy?.let { ScorePill(it, onScore) }
@@ -216,13 +218,14 @@ internal fun TipCard(
 }
 
 @Composable
-internal fun TipHeader(m: TipCardModel, onTrade: (TradeIntent) -> Unit) {
+internal fun TipHeader(m: TipCardModel, onTrade: (TradeIntent) -> Unit, impliedStatus: String? = null) {
     Row(verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Text(m.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
                 SideBadge(m.sell)
-                Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A status the list already states (Open's "Active", a fold's own name) is left off the card.
+                if (m.status != impliedStatus) Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (m.meta.isNotEmpty()) Text(m.meta, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

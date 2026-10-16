@@ -144,7 +144,8 @@ internal object TipTrack {
         if (entry == 0.0) null else (if (sell) entry - now else now - entry) / entry
 
     fun slot(t: LedgerTipDto, today: LocalDate = LocalDate.now(IST)): ExitSlot? {
-        fun day(d: LocalDate) = if (d.year == today.year) MarksyFormat.day(d) else MarksyFormat.fullDay(d)
+        // "16 Sep" read in October looks like last month; within six months the year adds nothing.
+        fun day(d: LocalDate) = if (abs(ChronoUnit.DAYS.between(today, d)) <= 182) MarksyFormat.day(d) else MarksyFormat.fullDay(d)
         t.exitPrice?.let { return ExitSlot(if (t.status in HORIZON) "HORIZON END" else "EXIT", price(it), exited = true, note = t.closedAt?.let(::date)?.let(::day)) }
         if (voided(t)) return t.closedAt?.let(::date)?.let { ExitSlot("VOIDED", day(it), exited = false) }
         if (!LedgerCalls.isActive(t)) return null

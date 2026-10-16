@@ -52,14 +52,16 @@ class TipTrackTest {
         assertEquals(ExitSlot("VOIDED", "30 Sep", exited = false), TipTrack.slot(tip(status = "INVALIDATED", entryStatus = "WAITING", closedAt = "2026-09-30T09:00:00Z"), today))
     }
 
-    // A 240-session tip read on 16 Oct 2026 showed "EXITS BY 16 Sep", which reads as a past date.
+    // A 240-session tip read on 16 Oct 2026 showed "EXITS BY 16 Sep", which reads as last month.
     @Test
-    fun slotDatesOutsideThisYearCarryTheYear() {
+    fun slotDatesMoreThanSixMonthsAwayCarryTheYear() {
         val today = LocalDate.of(2026, 10, 16)
         val exits = TipTrack.slot(tip(horizonEndsOn = "2027-09-16", sessionsElapsed = 3), today)!!
         assertEquals("16 Sep 2027 · day 3/15", exits.text)
         assertEquals("16 Sep 2027", exits.compact)
         assertEquals("30 Oct", TipTrack.slot(tip(horizonEndsOn = "2026-10-30", sessionsElapsed = 3), today)!!.compact)
+        // Within six months a date reads unambiguously without its year, so the day count keeps its room.
+        assertEquals("8 Jan · day 3/15", TipTrack.slot(tip(horizonEndsOn = "2027-01-08", sessionsElapsed = 3), today)!!.text)
         assertEquals("30 Dec 2025", TipTrack.slot(tip(status = "INVALIDATED", entryStatus = "WAITING", closedAt = "2025-12-30T09:00:00Z"), today)!!.text)
     }
 
