@@ -100,6 +100,30 @@ class CaptureDaoTest {
         assertNull(dao.workflow(oldWorkflow))
     }
 
+    // Nothing went to Marksy, so an approved option call is the only copy: it outlives the 30-day capture cleanup.
+    @Test
+    fun anApprovedOptionCallOutlivesTheCaptureCleanup() = runBlocking {
+        val day = 24 * 60 * 60 * 1000L
+        val now = t0 + 400 * day
+        suspend fun capture(hash: String, state: String, age: Long, ambiguities: String = ""): Pair<Long, Long> {
+            val evidenceId = dao.insertEvidence(evidence(hash = hash, at = now - age * day))
+            return evidenceId to dao.insertCandidate(candidate(evidenceId, at = now - age * day).copy(state = state, ambiguities = ambiguities))
+        }
+        val option = capture("opt", "ACCEPTED", 365, "missing-target,option-contract")
+        val stock = capture("stk", "ACCEPTED", 31)
+        val rejectedOption = capture("rej", "REJECTED", 8, "option-contract")
+
+        dao.pruneExpired(now)
+
+        assertEquals(option.second, dao.candidate(option.second)?.id)
+        assertEquals(option.first, dao.evidence(option.first)?.id)
+        assertEquals(listOf(option.second), dao.observeKeptOptions().first().map { it.id })
+        listOf(stock, rejectedOption).forEach { (evidenceId, candidateId) ->
+            assertNull(dao.candidate(candidateId))
+            assertNull(dao.evidence(evidenceId))
+        }
+    }
+
     @Test
     fun keptOptionsAreOnlyApprovedOptionCalls() = runBlocking {
         suspend fun add(hash: String, state: String, ambiguities: String) =

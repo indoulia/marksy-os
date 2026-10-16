@@ -188,7 +188,11 @@ interface CaptureDao {
         return expireUnreviewedCandidates(cutoff, now)
     }
 
-    @Query("DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
+    // An approved option call is never sent to Marksy, so this row is its only copy: the age cleanup leaves it.
+    @Query(
+        "DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted " +
+            "AND NOT (state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%')"
+    )
     suspend fun deleteOldCandidates(cutoff: Long, accepted: Boolean): Int
 
     // Evidence goes with its candidate; evidence without one (failures, not a tip) keeps the short window.
