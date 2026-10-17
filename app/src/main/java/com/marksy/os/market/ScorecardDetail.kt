@@ -106,8 +106,8 @@ object ScorecardSources {
         val type = d.card.channelType ?: d.recent.firstNotNullOfOrNull { it.channel }?.type
         val engine = d.card.engine ?: (type == MARKSY_TYPE || d.card.channelName.equals(MARKSY_CHANNEL, ignoreCase = true))
         return when {
-            d.entity == ScorecardEntity.CHANNEL.param -> if (engine) "Engines" else typeLabel(type) ?: "Channel"
-            engine -> "Marksy · Engine"
+            engine -> "Prediction engine · Marksy's own tips"
+            d.entity == ScorecardEntity.CHANNEL.param -> listOfNotNull("Channel", typeLabel(type)).joinToString(" · ")
             else -> listOfNotNull(d.card.channelName, typeLabel(type)).joinToString(" · ").ifEmpty { "Caller" }
         }
     }

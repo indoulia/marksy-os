@@ -41,6 +41,12 @@ class TipTrackTest {
         "2026-10-11T04:00:00Z", 4398.0, "ACTIVE", "ENTERED", 0.0301, null
     )
 
+    @Test
+    fun cardMetaNamesTheChannelAndItsTypeNotTheCaller() {
+        assertTrue(TipCards.meta(tip()).startsWith("Swing Picks · Telegram · recommended"))
+        assertEquals("Rahul K.", TipCards.meta(tip().copy(channel = null)).substringBefore(" · recommended"))
+    }
+
     // The 2×2 block's fourth slot follows the tip's state; a date the backend does not send leaves the slot out.
     @Test
     fun priceBlockFourthSlotFollowsTheTipState() {

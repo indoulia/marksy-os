@@ -51,7 +51,7 @@ class ScorecardDetailTest {
         assertEquals(0.031, d.topSymbols[1].avgActualReturn!!, 1e-9)
         assertEquals(ScorecardSource("caller", 11, "Ravi"), ScorecardSource.caller(d.callers!!.single()))
         assertNull(d.callers.single().scorecard.trustScore)
-        assertEquals("WhatsApp group", ScorecardSources.kind(d))
+        assertEquals("Channel · WhatsApp group", ScorecardSources.kind(d))
     }
 
     @Test
@@ -104,7 +104,8 @@ class ScorecardDetailTest {
         val card = ScorecardDetailDto.parse(detail("channel", "null").apply { getJSONObject("card").put("channelType", "TELEGRAM_CHANNEL").put("engine", false) })
         assertEquals("TELEGRAM_CHANNEL", card.card.channelType)
         assertEquals(false, card.card.engine)
-        assertEquals("Telegram", ScorecardSources.kind(card))
+        assertEquals("Channel · Telegram", ScorecardSources.kind(card))
+        assertEquals("Prediction engine · Marksy's own tips", ScorecardSources.kind(card.copy(card = card.card.copy(engine = true))))
     }
 
     @Test

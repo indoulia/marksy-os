@@ -186,7 +186,7 @@ fun SmartInboxScreen(
     if (actionThread != null) {
         // "Mark read" here must hold the thread's lane just like opening it does.
         val dialogActions = actions.copy(markSeen = { ids -> holdPlace(actionThread); actions.markSeen(ids) })
-        ThreadActionsDialog(actionThread, dialogActions, onDismiss = { actionThreadKey = null })
+        ThreadActionsDialog(actionThread, dialogActions, learningProfile, onDismiss = { actionThreadKey = null })
     }
 }
 
@@ -548,6 +548,7 @@ private fun InboxFooter(snoozed: Int, onOpenHistory: () -> Unit) {
 private fun ThreadActionsDialog(
     thread: SmartInboxModel.InboxThread,
     actions: InboxActions,
+    learningProfile: PersonalLearning.Profile,
     onDismiss: () -> Unit
 ) {
     fun run(block: () -> Unit) { block(); onDismiss() }
@@ -573,7 +574,11 @@ private fun ThreadActionsDialog(
                 PersonalLearning.subjectsOf(thread.latest)
                     .filter { it.type != PersonalLearning.SubjectType.CATEGORY }
                     .forEach { subject ->
-                        MarksyButton("Always important: ${subject.label}", onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }, style = MarksyButtonStyle.Text)
+                        if (learningProfile.of(subject.type, subject.key)?.override == PersonalLearning.Preference.ALWAYS_IMPORTANT) {
+                            MarksyButton("Stop marking ${subject.label} important", onClick = { run { actions.prefer(subject, null) } }, style = MarksyButtonStyle.Text)
+                        } else {
+                            MarksyButton("Always important: ${subject.label}", onClick = { run { actions.prefer(subject, PersonalLearning.Preference.ALWAYS_IMPORTANT) } }, style = MarksyButtonStyle.Text)
+                        }
                         MarksyButton("Less from ${subject.label}", onClick = { run { actions.prefer(subject, PersonalLearning.Preference.LESS_IMPORTANT) } }, style = MarksyButtonStyle.Text)
                     }
             }

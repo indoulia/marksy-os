@@ -169,7 +169,7 @@ private fun ScoreCard(d: ScorecardDetailDto) {
                 modifier = Modifier.weight(1f).alignByBaseline(), textAlign = TextAlign.End
             )
         }
-        Text(TrustModel.scoreWhy(b.trust), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
+        Text(TrustModel.scoreWhy(b.trust, engine = d.card.engine == true), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         HitRateBand(d)
     }
 }

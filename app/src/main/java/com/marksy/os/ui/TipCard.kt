@@ -71,7 +71,8 @@ internal object TipCards {
     fun meta(t: LedgerTipDto): String {
         val open = LedgerCalls.isActive(t)
         return listOfNotNull(
-            t.channel?.name?.ifBlank { null }, t.caller?.name?.ifBlank { null }?.takeIf { it != t.channel?.name },
+            t.channel?.name?.ifBlank { null } ?: t.caller?.name?.ifBlank { null },
+            t.channel?.type?.let(LedgerCalls::channelType)?.replaceFirstChar { it.titlecase() },
             t.firstSeenAt.ifBlank { null }?.let { at -> "recommended " + ((if (open) TipTrack.dayTime(at) else null) ?: LedgerCalls.day(at)) },
             t.closedAt?.takeIf { !open && !TipTrack.voided(t) }?.let { "closed ${LedgerCalls.day(it)}" }
         ).joinToString(" · ")
