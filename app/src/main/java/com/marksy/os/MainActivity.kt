@@ -791,7 +791,8 @@ class MainActivity : ComponentActivity() {
                     onAllowBackground = ::openBatterySettings,
                     showHealth = showCaptureHealth,
                     onHealthDismiss = { showCaptureHealth = false },
-                    inbox = com.marksy.os.ui.rememberCaptureInbox(captureActions)
+                    inbox = com.marksy.os.ui.rememberCaptureInbox(captureActions),
+                    fetchTip = { id -> MarksyContainer.marketIntelligence(applicationContext).tipDetail(id) }
                 )
                 selectedTab == 1 -> SmartInboxScreen(
                     events = inboxEvents.filterNot { it.id in inboxHidden },
