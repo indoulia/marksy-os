@@ -157,7 +157,11 @@ class OptionRouteCompositionTest {
             screenshot("RELIANCE 1400 PE", ambiguities = corrected),
             screenshot("BUY INFY @ 45 TGT 60 SL 35 (1800 CALL)", ambiguities = corrected, attempts = 3),
             screenshot("BUY INFY @ 45 TGT 60 SL 35 (1800 PUT)", ambiguities = corrected, state = DeliveryState.IN_FLIGHT, attempts = 1),
-            screenshot("BUY NIFTY @ 180 TGT 220 SL 150 (BANKNIFTY 52000 PUT)", ambiguities = corrected)
+            screenshot("BUY NIFTY @ 180 TGT 220 SL 150 (BANKNIFTY 52000 PUT)", ambiguities = corrected),
+            // A short strike right after the symbol is a contract to the extractor, so no correction either.
+            screenshot("BUY YESBANK 20 PE @ 1.5 TGT 3 SL 1", ambiguities = corrected).copy(symbol = "YESBANK", entry = 1.5, target = 3.0, stopLoss = 1.0),
+            // Stored text is cut at 4,000 characters; a flagged call whose wording may be past the cut takes no correction.
+            screenshot((line + "\nMarket wrap.".repeat(400)).take(4_000), ambiguities = "option-contract,option-ambiguous,stock-confirmed")
         ).map { captureDao.insertCandidate(it) }
         captureDao.recoverStaleInFlight(Long.MAX_VALUE)
         assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture).drain())

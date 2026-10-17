@@ -108,12 +108,18 @@ object CandidateDeliveryPolicy {
         val text = candidate.extractedText
         val codes = candidate.ambiguityCodes
         if (text.isNullOrBlank()) return RECOGNIZED_TEXT_MISSING
-        return when (OptionGate.classify(text).signal) {
-            OptionGate.Signal.NONE -> null
-            // Only a maybe-option ("18 PE": a put or a P/E ratio) takes the reviewer's stock correction; written option wording never does.
-            OptionGate.Signal.AMBIGUOUS -> OPTION_UNSUPPORTED.takeUnless { Ambiguity.OPTION_CONTRACT in codes && Ambiguity.STOCK_CONFIRMED in codes }
-            OptionGate.Signal.OPTION -> OPTION_UNSUPPORTED
-        }
+        if (writtenOption(candidate) != null) return OPTION_UNSUPPORTED
+        // Only a maybe-option ("18 PE": a put or a P/E ratio) takes the reviewer's stock correction.
+        val corrected = Ambiguity.OPTION_CONTRACT in codes && Ambiguity.STOCK_CONFIRMED in codes
+        return OPTION_UNSUPPORTED.takeIf { OptionGate.classify(text).signal == OptionGate.Signal.AMBIGUOUS && !corrected }
+    }
+
+    /** Why no correction can make this screenshot a stock tip: written option wording, by either rule set, or a flagged text cut at the stored limit. */
+    fun writtenOption(candidate: TipCandidateEntity): OptionGate.Reading? {
+        val text = candidate.extractedText ?: return null
+        // The extractor also reads a short strike right after the symbol ("BUY IDEA 15 PE") as a contract.
+        listOf(OptionGate.classify(text), TipExtractor.captureOption(text)).firstOrNull { it.signal == OptionGate.Signal.OPTION }?.let { return it }
+        return OptionGate.Reading(OptionGate.Signal.OPTION).takeIf { Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes && text.length >= TipExtractor.MAX_TEXT }
     }
 }
 

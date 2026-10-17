@@ -100,7 +100,7 @@ fun CaptureReviewDialog(
     val reading = remember(key) { TipExtractor.captureOption(candidate.extractedText.orEmpty()) }
     val index = flagged && OptionGate.isOptionIndex(symbol)
     // Written option wording ("3500 CE") is never corrected to a stock tip; only a maybe-option ("18 PE") is (mockup 1d).
-    val written = remember(key) { OptionGate.classify(candidate.extractedText.orEmpty()) }.takeIf { it.signal == OptionGate.Signal.OPTION }
+    val written = remember(key) { CandidateDeliveryPolicy.writtenOption(candidate) }
     val confirming = stock && !index && written == null
 
     val fields = TipFields(

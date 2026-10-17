@@ -13,7 +13,7 @@ sealed interface ExtractionResult {
 object TipExtractor {
     const val EXTRACTED_MIN_CONFIDENCE = 0.8
     const val LOW_OCR_CONFIDENCE = 0.6f
-    private const val MAX_TEXT = 4_000
+    internal const val MAX_TEXT = 4_000
     private const val SYMBOL_WINDOW = 5
 
     // Side and level vocabulary follows CaptureGate's call rule; long/short count only beside a priced level ("short video").
