@@ -150,8 +150,8 @@ fun CaptureReviewDialog(
                         symbol, { symbol = it }, Modifier.weight(1f), label = "Symbol",
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
                     )
-                    // The field's height, so the side pills centre on the symbol field.
-                    Row(Modifier.height(MarksySize.Field), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+                    // Pills and field share the control height, so bottom alignment lines them up.
+                    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
                         TipSide.entries.forEach { s -> Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s) { side = s } }
                     }
                 }

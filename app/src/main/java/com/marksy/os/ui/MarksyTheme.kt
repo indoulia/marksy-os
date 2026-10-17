@@ -74,6 +74,9 @@ object MarksyTheme {
 
     val DialogTitle = TextStyle(color = TextPrimary, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold)
     val DialogBody = TextStyle(color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+
+    /** A card border tinted to flag the card (a warning, a lane, a source); one strength everywhere. */
+    fun flagBorder(color: Color) = color.copy(alpha = .5f)
 }
 
 /** One colour pair per message source (avatar, tile, chip): the accent drawn on its dark badge background. */
@@ -121,6 +124,9 @@ object MarksyShape {
     val Dialog = RoundedCornerShape(20.dp)
     /** Top of a bar in a bar chart. */
     val BarTop = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+    /** Ask Marksy's chat bubbles: the corner nearest the speaker is tight. */
+    val BubbleOut = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+    val BubbleIn = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
 }
 
 /** The spacing scale; every padding and gap is one of these. */
@@ -137,22 +143,96 @@ object MarksySpace {
     val Wide = 16.dp
     /** Page side margin. */
     val Gutter = 18.dp
+    /** Inside every control (pill, button, field, select) from its edge to its text. */
+    val Control = 12.dp
+    /** The same for a compact pill. */
+    val ControlCompact = 8.dp
     val Border = 1.dp
+    /** The emerald ring on floating controls and today's date. */
+    val BorderAccent = 1.5.dp
+    /** A ring that separates a mark from what it sits on (the filter dot, the Ask orb). */
+    val BorderRing = 2.dp
 }
 
 object MarksySize {
+    val IconTiny = 11.dp
     val IconSmall = 14.dp
     val Icon = 18.dp
+    /** Icons on the floating buttons. */
+    val IconFloating = 22.dp
     val IconLarge = 24.dp
     val Dot = 6.dp
+    /** The dot on a step in a timeline (IPO dates). */
+    val StepDot = 10.dp
+    /** The yellow dot on a floating button with a filter or search applied. */
+    val ActiveDot = 16.dp
     val Avatar = 32.dp
-    val Button = 32.dp
+    /** A round icon tile beside a card title (profile, holdings, reminders). */
+    val AvatarLarge = 40.dp
+    /** Every button, non-compact pill, text and search field, select, segmented control and stepper. */
+    val Control = 32.dp
+    /** A compact pill. */
+    val ControlCompact = 18.dp
+    /** An icon button inside a line of text (a card header, a quote). */
+    val ControlInline = 24.dp
     /** Round icon buttons in the top bar. */
     val HeaderButton = 36.dp
     /** Round floating buttons. */
     val Touch = 44.dp
-    /** Every text field, search field and dropdown or picker trigger. */
-    val Field = 36.dp
+    /** Widest a floating filter panel's extra sections grow. */
+    val MenuWidth = 260.dp
+    /** Widest a chat bubble grows. */
+    val BubbleWidth = 280.dp
+    /** A Plan board column. */
+    val BoardColumn = 272.dp
+    /** Tallest a scrolling picker list in a popup grows. */
+    val PickerList = 360.dp
+    /** Label and value columns in a bar row, so bars line up down a card. */
+    val ColumnNarrow = 44.dp
+    val ColumnValue = 56.dp
+    val ColumnLabel = 84.dp
+    /** Thickness of a progress or split bar. */
+    val Bar = 6.dp
+    val BarThin = 4.dp
+    val BarThick = 10.dp
+    /** Height of a chart, a sparkline and a small range strip. */
+    val Chart = 200.dp
+    val ChartTall = 224.dp
+    val ChartSmall = 120.dp
+    val Sparkline = 52.dp
+    val Strip = 14.dp
+    /** The bottom sheet's drag handle. */
+    val Handle = 36.dp
+}
+
+/** Shadow depth: floating buttons and the search field, and the panels that open over a page. */
+object MarksyElevation {
+    val Floating = 6.dp
+    val Menu = 10.dp
+}
+
+/** Canvas geometry shared by every chart: line weights, marker radii and dash lengths. */
+object MarksyDraw {
+    val Hairline = 1.dp
+    val Fine = 1.5.dp
+    val Line = 2.dp
+    val Track = 4.dp
+    /** Radius of a highlighted point (the crosshair, the price on a range). */
+    val Marker = 5.dp
+    /** Radius of the last point on a line. */
+    val Point = 3.dp
+    val Dash = 4.dp
+    val DashGap = 3.dp
+}
+
+/** How far a finger must travel before a swipe counts. */
+object MarksyGesture {
+    val Nudge = 8.dp
+    val SwipeOpen = 64.dp
+    /** Per second. */
+    val Fling = 1200.dp
+    /** A sideways swipe that turns the calendar month. */
+    val PageSwipe = 56.dp
 }
 
 /** Marksy colours for every Material component (chips, checkboxes, pickers, snackbars) so none fall back to the stock light palette. */
@@ -192,14 +272,14 @@ fun MarksyDialog(
 ) {
     BasicAlertDialog(onDismissRequest = onDismissRequest, modifier = modifier) {
         Surface(shape = MarksyShape.Dialog, color = MarksyTheme.Surface, border = BorderStroke(MarksySpace.Border, MarksyTheme.BorderGlow)) {
-            Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 6.dp)) {
+            Column(Modifier.padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Wide, bottom = MarksySpace.Inner)) {
                 title?.let {
                     ProvideTextStyle(MarksyTheme.DialogTitle) { it() }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(MarksySpace.ListGap))
                 }
                 // Bounded so long content scrolls (or shrinks) inside and the buttons stay on screen.
                 text?.let { Box(Modifier.weight(1f, fill = false)) { ProvideTextStyle(MarksyTheme.DialogBody) { it() } } }
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Inner), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     dismissButton?.invoke()
                     confirmButton()
                 }

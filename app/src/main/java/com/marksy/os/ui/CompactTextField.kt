@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,12 +28,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 
 /** Single-line field sized to its content; M3 OutlinedTextField can't go below 56dp without clipping its text. */
 @Composable
@@ -45,8 +43,6 @@ fun CompactTextField(
     placeholder: String = "",
     leadingIcon: ImageVector? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
-    height: Dp = MarksySize.Field,
-    shape: Shape = MarksyShape.Field,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     trailing: (@Composable () -> Unit)? = null,
@@ -71,8 +67,8 @@ fun CompactTextField(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .fieldBox(height, shape, focused)
-                        .padding(start = MarksySpace.CardPadding, end = if (trailing != null) MarksySpace.Tight else MarksySpace.CardPadding),
+                        .fieldBox(focused)
+                        .padding(start = MarksySpace.Control, end = if (trailing != null) MarksySpace.Tight else MarksySpace.Control),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (leadingIcon != null) {
@@ -109,9 +105,9 @@ fun SelectField(
         Box(
             fieldModifier
                 .fillMaxWidth()
-                .fieldBox(MarksySize.Field, MarksyShape.Field, focused = false)
+                .fieldBox(focused = false)
                 .clickable(onClick = onClick)
-                .padding(start = MarksySpace.CardPadding, end = MarksySpace.Gap),
+                .padding(start = MarksySpace.Control, end = MarksySpace.Gap),
             contentAlignment = Alignment.CenterStart
         ) {
             // End padding keeps a long value clear of the chevron.
@@ -134,8 +130,9 @@ fun SelectField(
 private fun FieldLabel(label: String) =
     Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(start = MarksySpace.Tight, bottom = MarksySpace.Tight))
 
-private fun Modifier.fieldBox(height: Dp, shape: Shape, focused: Boolean) = this
-    .height(height)
-    .clip(shape)
+// Min height, not fixed, so large font scales grow the field instead of clipping its text.
+private fun Modifier.fieldBox(focused: Boolean) = this
+    .heightIn(min = MarksySize.Control)
+    .clip(MarksyShape.Field)
     .background(MarksyTheme.Surface)
-    .border(MarksySpace.Border, if (focused) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
+    .border(MarksySpace.Border, if (focused) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, MarksyShape.Field)

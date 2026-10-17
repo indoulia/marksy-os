@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 
 /**
  * Pull-to-refresh trigger for remote-backed screens. Use [key] as a `produceState` key: its
@@ -69,12 +68,12 @@ fun MarksyRefreshBox(state: RefreshState, modifier: Modifier = Modifier, content
 @Composable
 fun MarksyLoader(label: String, modifier: Modifier = Modifier) {
     Row(
-        modifier.fillMaxWidth().padding(vertical = 20.dp),
+        modifier.fillMaxWidth().padding(vertical = MarksySpace.Gutter),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        CircularProgressIndicator(Modifier.size(18.dp), color = MarksyTheme.PrimaryEmerald, strokeWidth = 2.dp)
-        Spacer(Modifier.width(10.dp))
+        CircularProgressIndicator(Modifier.size(MarksySize.Icon), color = MarksyTheme.PrimaryEmerald, strokeWidth = MarksyDraw.Line)
+        Spacer(Modifier.width(MarksySpace.ListGap))
         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Body)
     }
 }
@@ -83,8 +82,8 @@ fun MarksyLoader(label: String, modifier: Modifier = Modifier) {
 @Composable
 fun MarksyInlineLoader(label: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(14.dp), color = MarksyTheme.PrimaryEmerald, strokeWidth = 2.dp)
-        Spacer(Modifier.width(8.dp))
+        CircularProgressIndicator(Modifier.size(MarksySize.IconSmall), color = MarksyTheme.PrimaryEmerald, strokeWidth = MarksyDraw.Line)
+        Spacer(Modifier.width(MarksySpace.Gap))
         Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Body)
     }
 }

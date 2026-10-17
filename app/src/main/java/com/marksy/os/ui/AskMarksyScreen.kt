@@ -210,9 +210,7 @@ fun AskMarksyScreen(
                 onSubmit = { ask(input) }, lifted = false, autoFocus = false,
                 trailing = if (input.isNotBlank()) {
                     {
-                        IconButton(onClick = { ask(input) }, modifier = Modifier.size(MarksySize.Button)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-                        }
+                        MarksyIconButton(Icons.AutoMirrored.Filled.Send, "Send", { ask(input) })
                     }
                 } else null
             )
