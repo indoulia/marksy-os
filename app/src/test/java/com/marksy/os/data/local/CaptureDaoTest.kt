@@ -113,6 +113,7 @@ class CaptureDaoTest {
         val recentOption = capture("new", "ACCEPTED", 10, "option-contract")
         val stock = capture("stk", "ACCEPTED", 31)
         val rejectedOption = capture("rej", "REJECTED", 8, "option-contract")
+        val confirmedStock = capture("cfm", "ACCEPTED", 31, "option-contract,stock-confirmed")
 
         dao.pruneExpired(now)
 
@@ -124,7 +125,7 @@ class CaptureDaoTest {
         assertEquals("x", dao.candidate(recentOption.second)?.extractedText)
         assertEquals(option.first, dao.evidence(option.first)?.id)
         assertEquals(listOf(recentOption.second, option.second), dao.observeKeptOptions().first().map { it.id })
-        listOf(stock, rejectedOption).forEach { (evidenceId, candidateId) ->
+        listOf(stock, rejectedOption, confirmedStock).forEach { (evidenceId, candidateId) ->
             assertNull(dao.candidate(candidateId))
             assertNull(dao.evidence(evidenceId))
         }
@@ -159,8 +160,12 @@ class CaptureDaoTest {
         add("o2", "ACCEPTED", "")
         add("o3", "REVIEW_REQUIRED", "option-contract")
         add("o4", "REJECTED", "option-contract")
+        // Confirmed as a stock tip in review: an ordinary capture, not a kept option.
+        val confirmed = add("o5", "ACCEPTED", "option-contract,stock-confirmed")
 
         assertEquals(listOf(kept), dao.observeKeptOptions().first().map { it.id })
+        assertEquals(false, dao.removeKeptOption(confirmed))
+        assertEquals(confirmed, dao.candidate(confirmed)?.id)
     }
 
     @Test

@@ -12,6 +12,9 @@ import androidx.room.Update
 import com.marksy.os.data.RetentionPolicy
 import kotlinx.coroutines.flow.Flow
 
+// An approved option call never sent to Marksy; one the reviewer confirmed as a stock tip is an ordinary capture.
+private const val KEPT_OPTION = "state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%' AND (',' || ambiguities || ',') NOT LIKE '%,stock-confirmed,%'"
+
 /** Candidates in one [state] (Health). */
 data class CaptureStateCount(val state: String, val n: Int)
 
@@ -130,7 +133,7 @@ interface CaptureDao {
     fun observeToReview(): Flow<List<TipCandidateEntity>>
 
     // Approved option calls: kept on the phone because Marksy tracks no options yet.
-    @Query("SELECT * FROM tip_candidates WHERE state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%' ORDER BY capturedAt DESC")
+    @Query("SELECT * FROM tip_candidates WHERE $KEPT_OPTION ORDER BY capturedAt DESC")
     fun observeKeptOptions(): Flow<List<TipCandidateEntity>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -191,7 +194,7 @@ interface CaptureDao {
     // An approved option call is never sent to Marksy, so this row is its only copy: the age cleanup leaves it.
     @Query(
         "DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted " +
-            "AND NOT (state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%')"
+            "AND NOT ($KEPT_OPTION)"
     )
     suspend fun deleteOldCandidates(cutoff: Long, accepted: Boolean): Int
 
@@ -205,11 +208,11 @@ interface CaptureDao {
     // A kept option keeps its reviewed fields and status until the user removes it; its recognized text goes at 30 days.
     @Query(
         "UPDATE tip_candidates SET extractedText = NULL WHERE capturedAt < :cutoff AND extractedText IS NOT NULL " +
-            "AND state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%'"
+            "AND $KEPT_OPTION"
     )
     suspend fun clearOldKeptOptionText(cutoff: Long): Int
 
-    @Query("DELETE FROM tip_candidates WHERE id = :id AND state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%'")
+    @Query("DELETE FROM tip_candidates WHERE id = :id AND $KEPT_OPTION")
     suspend fun deleteKeptOption(id: Long): Int
 
     @Query("DELETE FROM capture_evidence WHERE id = :evidenceId AND id NOT IN (SELECT evidenceId FROM tip_candidates)")

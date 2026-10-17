@@ -5,9 +5,14 @@ import com.marksy.os.data.Metric
 import com.marksy.os.data.MetricsRecorder
 import com.marksy.os.data.RuleRunner
 import com.marksy.os.data.local.MarksyDatabase
+import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.gateway.CaptureContext
 import com.marksy.os.gateway.CaptureDecision
 import com.marksy.os.gateway.CaptureGate
+import com.marksy.os.gateway.CapturedMessage
+import com.marksy.os.gateway.MarksyGatewayClient
+import com.marksy.os.gateway.MarksyInsight
+import com.marksy.os.gateway.TradingDeliveryRun
 import com.marksy.os.intelligence.EventIntelligencePipeline
 import com.marksy.os.intelligence.RuleEngine
 import kotlinx.coroutines.Dispatchers
@@ -173,6 +178,45 @@ class IngestionPipelineTest {
         assertTrue(pipeline.ingest(oneToOne.copy(body = "hi\nBUY IDEA CMP 9.5 SL 8.9 TGT 11")) is IngestionPipeline.Result.Updated)
         assertEquals("NOT_APPLICABLE", dao.getById(direct)!!.deliveryState)
         assertEquals(3, trading)
+    }
+
+    // Option-tip safety B: appended lines, a classifier re-queue and the accessibility path all reach the delivery gate, and no request.
+    @Test
+    fun optionCallsFromEveryIngestionPathNeverReachTheClient() = runBlocking {
+        val dao = db.notificationEventDao()
+        val option = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150"
+        val group = raw("org.telegram.messenger", "g1", "Tips Group", "Good morning").copy(groupConversation = true)
+        pipeline.ingest(group)
+        pipeline.ingest(group.copy(body = "Good morning\n$option"))
+        pipeline.ingest(group.copy(body = "Good morning\n$option\nSELL @ 200 TGT 150 SL 220"))
+        val stock = raw("org.telegram.messenger", "g2", "Tips Group", "Good evening").copy(groupConversation = true)
+        pipeline.ingest(stock)
+        pipeline.ingest(stock.copy(body = "Good evening\nBUY IDEA CMP 9.5 SL 8.9 TGT 11"))
+        pipeline.ingest(raw("com.whatsapp", "wa1", "Tips Group", option, ConnectorRegistry.WHATSAPP_ACCESSIBILITY))
+        pipeline.ingest(raw("com.whatsapp", "wa2", "Tips Group", "SELL NIFTY 24500 PE below 120 TGT 90 SL 140", ConnectorRegistry.WHATSAPP_ACCESSIBILITY).copy(groupConversation = true))
+        val requeued = dao.insert(
+            NotificationEventEntity(
+                sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = "r1", eventFingerprint = "r1", title = "Idea", body = option,
+                postedAt = t0, category = "MARKET", priority = 10, confidence = .5f, isTrading = false, deliveryState = "NOT_APPLICABLE"
+            )
+        )
+        dao.updateClassification(requeued, "TRADING", 100, .96f, isTrading = true, queue = true)
+        assertEquals("PENDING", dao.getById(requeued)!!.deliveryState)
+
+        val sent = mutableListOf<String>()
+        val client = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val context = CaptureContext(capturePackages = setOf("com.fivepaisa.trade"), chatAllowList = setOf("tips group"), chatSenders = emptySet(), username = "user-1", deviceSalt = "salt")
+        TradingDeliveryRun(dao, client, context).drain()
+
+        assertEquals(listOf("BUY IDEA CMP 9.5 SL 8.9 TGT 11"), sent)
+        assertEquals(0, dao.findPendingCapture(50).size)
+        assertEquals(CaptureGate.OPTION_UNSUPPORTED, dao.getById(requeued)!!.deliveryNote)
     }
 
     // 4b review I2: a local group row that gains a call sends only the new line, with no sender name, recorded or not.

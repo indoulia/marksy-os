@@ -137,11 +137,13 @@ class TipExtractorTest {
     }
 
     @Test
-    fun aBarePeThatMayBeARatioGoesToReviewWithItsSymbolKept() {
+    fun aBarePeThatMayBeARatioStaysLocalUntilReviewedWithItsSymbolKept() {
         val tip = candidate("BUY TCS (18 PE) @ 3500, target 3600, stop 3400")
         assertEquals("TCS", tip.fields.symbol)
         assertEquals(CaptureState.REVIEW_REQUIRED, tip.state)
-        assertFalse(Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        // Option-tip safety B: a maybe-option is treated as an option until the reviewer confirms a stock tip.
+        assertTrue(Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        assertTrue(Ambiguity.OPTION_AMBIGUOUS in tip.ambiguities)
         assertEquals("BUY TCS @ 3500 Target 3600 SL 3400", CandidateDeliveryPolicy.canonicalLine(tip.fields))
     }
 

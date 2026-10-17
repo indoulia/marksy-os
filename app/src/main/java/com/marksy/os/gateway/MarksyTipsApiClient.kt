@@ -1,5 +1,6 @@
 package com.marksy.os.gateway
 
+import com.marksy.os.capture.OptionGate
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
 import kotlinx.coroutines.CancellationException
@@ -17,6 +18,8 @@ open class MarksyTipsApiClient(
     private val apiBaseUrl = normalizeBaseUrl(baseUrl)
 
     override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> = try {
+        // The last stop before the network, whichever route built the message.
+        if (OptionGate.blocks(message.text)) throw OptionTipBlocked()
         val data = execute("POST", "$apiBaseUrl/tips/ingest-text", message.toJson()).getJSONObject("data")
         val kind = data.str("kind").ifBlank { "RECORDED" }.boundedText(MAX_STATUS_CHARS)
         val tipId = data.str("tipId").trim()
@@ -144,6 +147,9 @@ private const val MAX_SUMMARY_CHARS = 2_000
 private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
 class MarksyTerminalException(message: String) : IOException(message)
+
+/** An option or maybe-option call the client refused to send: kept on the phone, never retried. */
+class OptionTipBlocked : Exception(CaptureGate.OPTION_UNSUPPORTED)
 
 internal fun httpFailure(code: Int, detail: String = ""): IOException {
     val message = "Marksy Tips API returned HTTP $code$detail"

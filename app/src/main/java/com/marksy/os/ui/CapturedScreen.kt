@@ -276,6 +276,7 @@ internal fun noteLabel(note: String?): String? = when (note) {
     "one-to-one-chat" -> "Only group chats are sent; this was a one-to-one chat."
     "outside-capture-set", "sms-not-sender-id" -> "This source is not on your capture list."
     "not-a-candidate" -> "Not a tip, so nothing was sent."
+    "option-unsupported" -> "Option call: option tracking unsupported, not sent to Marksy."
     else -> "Kept on this phone ($note)."
 }
 

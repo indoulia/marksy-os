@@ -159,6 +159,66 @@ class TradingDeliveryRunTest {
         assertEquals(DeliveryState.DELIVERED.name, captureDao.candidate(id)!!.deliveryState)
     }
 
+    // Option-tip safety B: the first run, an offline retry, the user's Retry, Send now and a stale-row reset never hand an option to the client.
+    @Test
+    fun optionAndMaybeOptionCallsNeverReachTheClientOnAnyAttempt() = runBlocking {
+        val sent = mutableListOf<String>()
+        var online = false
+        val recording = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return if (online) Result.success(MarksyInsight(eventId, "ok")) else Result.failure(java.io.IOException("offline"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val ctx = capture.copy(capturePackages = setOf("com.fivepaisa.trade", "com.google.android.gm"))
+        val stale = System.currentTimeMillis() - TradingDeliveryPolicy.STALE_IN_FLIGHT_MS - 60_000L
+        val option = dao.insert(row("o", 1L).copy(body = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150"))
+        val maybe = dao.insert(row("m", 2L).copy(body = "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400"))
+        val connector = dao.insert(row("g", 3L).copy(sourcePackage = "com.google.android.gm", sourceName = "Gmail", body = "BUY BANKNIFTY 52000 PE @ 310 TGT 380 SL 280"))
+        val failedBefore = dao.insert(row("f", 4L).copy(body = "SELL NIFTY24500CE below 120 TGT 90 SL 140", deliveryState = DeliveryState.FAILED.name))
+        val stuck = dao.insert(row("i", 5L).copy(body = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150", deliveryState = DeliveryState.IN_FLIGHT.name, lastDeliveryAttemptAt = stale))
+        val stock = dao.insert(row("s", 6L).copy(body = "BUY TCS @ 3500 TGT 3600 SL 3400, trades at 18 PE"))
+        val run = TradingDeliveryRun(dao, recording, ctx)
+
+        assertTrue(run.drain())
+        assertEquals(DeliveryState.PENDING.name, dao.findById(stock)!!.deliveryState)
+        assertEquals(1, dao.requeueFailed(failedBefore))
+        assertEquals(1, dao.recoverStaleInFlight(System.currentTimeMillis() - TradingDeliveryPolicy.STALE_IN_FLIGHT_MS))
+        online = true
+        assertFalse(run.drain())
+
+        assertEquals(listOf("Call s\nBUY TCS @ 3500 TGT 3600 SL 3400, trades at 18 PE"), sent.distinct())
+        listOf(option, maybe, connector, failedBefore, stuck).forEach { id ->
+            val row = dao.findById(id)!!
+            assertEquals("$id", DeliveryState.NOT_APPLICABLE.name to CaptureGate.OPTION_UNSUPPORTED, row.deliveryState to row.deliveryNote)
+        }
+    }
+
+    // The client's own block is kept on the phone with its reason, never failed or retried, for calls and reviewed captures alike.
+    @Test
+    fun aCallTheClientRefusesAsAnOptionIsKeptNotFailed() = runBlocking {
+        val blocking = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> = Result.failure(OptionTipBlocked())
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val id = dao.insert(row("k1", 1L))
+        assertFalse(TradingDeliveryRun(dao, blocking, capture).drain())
+        assertEquals(DeliveryState.NOT_APPLICABLE.name to CaptureGate.OPTION_UNSUPPORTED, dao.findById(id)!!.let { it.deliveryState to it.deliveryNote })
+
+        val captureDao = db.captureDao()
+        val candidate = captureDao.insertCandidate(
+            TipCandidateEntity(
+                evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = true,
+                capturedAt = 1L, evidenceRef = "sha256:ab", extractedText = "BUY RENUKA @ 23 Target 26 SL 22", confidence = .9,
+                symbol = "RENUKA", side = "BUY", entry = 23.0, target = 26.0, stopLoss = 22.0, horizon = null, visibleTimestamp = null,
+                ambiguities = "", state = "ACCEPTED", userChoseSend = true, deliveryState = DeliveryState.PENDING.name, updatedAt = 1L
+            )
+        )
+        assertFalse(CandidateDeliveryRun(captureDao, blocking, capture).drain())
+        assertEquals(DeliveryState.NOT_APPLICABLE.name to CaptureGate.OPTION_UNSUPPORTED, captureDao.candidate(candidate)!!.let { it.deliveryState to it.deliveryNote })
+    }
+
     private fun row(key: String, postedAt: Long) = NotificationEventEntity(
         sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = key, eventFingerprint = "f-$key",
         title = "Call $key", body = "BUY RENUKA CMP 23 SL 22", postedAt = postedAt, category = "TRADING", priority = 10,

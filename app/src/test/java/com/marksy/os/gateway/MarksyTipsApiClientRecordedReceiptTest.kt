@@ -91,6 +91,25 @@ class MarksyTipsApiClientRecordedReceiptTest {
         assertEquals("Recorded by Marksy", olderServer.summary)
     }
 
+    // Option-tip safety B: the last stop before the network. No request at all, and the refusal is not a transport failure.
+    @Test
+    fun anOptionOrMaybeOptionCallIsNeverRequested() = runBlocking {
+        val requests = mutableListOf<String>()
+        val client = object : MarksyTipsApiClient(authRepository()) {
+            override suspend fun execute(method: String, url: String, payload: JSONObject?): JSONObject {
+                requests += "$method $url"
+                return JSONObject().put("data", JSONObject().put("kind", "TIP")).put("meta", JSONObject())
+            }
+        }
+        listOf("BUY NIFTY 24500 CE @ 180 TGT 220 SL 150", "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400").forEach { text ->
+            assertTrue(text, client.capture(1L, message.copy(text = text)).exceptionOrNull() is OptionTipBlocked)
+        }
+        assertEquals(emptyList<String>(), requests)
+
+        assertTrue(client.capture(1L, message.copy(text = "BUY TCS @ 3500 TGT 3600 SL 3400, trades at 18 PE")).isSuccess)
+        assertEquals(1, requests.size)
+    }
+
     // The POST itself failing is unchanged: the row is not recorded server-side, so it must still fail/retry.
     @Test
     fun aFailedPostStillFails() = runBlocking {
