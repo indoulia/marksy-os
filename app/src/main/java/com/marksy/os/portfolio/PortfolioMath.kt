@@ -1,6 +1,8 @@
 package com.marksy.os.portfolio
 
+import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.Candle
+import java.time.LocalDate
 import kotlin.math.abs
 
 enum class PortfolioPeriod(val label: String, val title: String, val days: Long) {
@@ -108,6 +110,14 @@ object PortfolioMath {
             }
         }
     }
+
+    /** Sparkline end labels: the period's start day and "today"; one day runs 9:15 am to "now", or 3:30 pm once the market is closed. */
+    fun sparkEnds(period: PortfolioPeriod, today: LocalDate, closed: Boolean): Pair<String, String> =
+        if (period == PortfolioPeriod.D1) "9:15 am" to (if (closed) "3:30 pm" else "now")
+        else MarksyFormat.day(today.minusDays(period.days)) to "today"
+
+    /** Holdings per type, for the Show options. */
+    fun typeCounts(holdings: List<Holding>): Map<HoldingType, Int> = holdings.groupingBy { it.type }.eachCount()
 
     /** The daily candles inside [period], ending at the latest one. */
     fun window(daily: List<Candle>, period: PortfolioPeriod): List<Candle> {
