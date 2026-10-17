@@ -30,7 +30,7 @@ Column key: Det = detection implemented, Gate = gate enforced, NoReq = no-outbou
 | Screenshot text re-read, any flags (follow-up) | Yes | Yes (review, queue, decide, pre-request) | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | PARTIAL (shared, picked) |
 | Option index or written option wording: no stock correction (follow-up) | Yes | Yes | Yes | n/a | Unchanged | Yes | Yes | Yes | BLOCKED | PASS (shared, picked) |
 | Client-level hard block (every route) | Yes | Yes | Yes | n/a | n/a | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
-| Server backstop (`/tips/ingest-text`) | Yes | Yes | n/a | n/a | Unchanged | Yes | Yes | Yes | BLOCKED | n/a |
+| Server backstop (`/tips/ingest-text`) | Yes | Yes | n/a | n/a | Unchanged | Yes | Yes | Yes | Yes (`c709e00`, 2026-10-17) | n/a |
 
 Evidence (tests):
 - Every automatic channel × CE option, maybe-option, later hedge, CALL wording, P/E ratio; option while the capture list is unknown: `CaptureGateTest.optionAndMaybeOptionCallsStayOnThePhoneOnEveryRoute`.
@@ -58,4 +58,4 @@ Retention: automatic messages unchanged (7 days, 30 trading). Screenshot option 
 
 Known over-blocks (stay on the phone, by design): a message mixing a stock call with any option words; a screenshot with written option wording anywhere, even a hedge note, which no correction can send; a screenshot from an older app with no recognized text; "<3+ digit number> calls/puts" in prose ("1000 calls hit target"); "@ 1450 put SL 1420" without punctuation. A screenshot from an older app with option text and no flag is kept and never sent, but gets no kept card or Remove; it goes with accepted rows at 30 days. Not covered: a 1–2 digit PE strike neither rule set ties to a contract (away from the symbol, or after a word the extractor doesn't take as one: "BUY IDEA 15 PE") reads AMBIGUOUS like a P/E ratio, so a reviewer's correction that meets every stock rule could still send it.
 
-Open: approval-path positive send BLOCKED — awaiting a legitimate tip from a teaser alert ("tap to view"), whose exact payload the owner approves before Send; a full-tip broker alert is delivered automatically, so an automatic send is recorded only as ingestion evidence, never as approval-path evidence. Screen capture, notification, connector, offline and retry routes NOT VERIFIED on the phone; API deploy (`c709e00`) and app release build BLOCKED (approval).
+Open: approval-path positive send BLOCKED — awaiting a legitimate tip from a teaser alert ("tap to view"), whose exact payload the owner approves before Send; a full-tip broker alert is delivered automatically, so an automatic send is recorded only as ingestion evidence, never as approval-path evidence. Screen capture, notification, connector, offline and retry routes NOT VERIFIED on the phone; API DEPLOYED (`c709e00`, 2026-10-17 11:49 UTC); app release build BLOCKED (approval).
