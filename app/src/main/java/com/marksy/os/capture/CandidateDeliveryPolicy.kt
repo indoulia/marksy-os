@@ -87,7 +87,9 @@ object CandidateDeliveryPolicy {
             candidate.state != CaptureState.ACCEPTED.name -> NOT_ACCEPTED
             !candidate.userChoseSend -> KEPT_ON_PHONE
             // Marksy tracks no option contracts yet; sent as a stock line, its premium levels would read as the underlying's.
-            Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes && Ambiguity.STOCK_CONFIRMED !in candidate.ambiguityCodes -> OPTION_UNSUPPORTED
+            // User decision 2026-10-17: an index read as an option is never corrected to a stock tip.
+            Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes &&
+                (Ambiguity.STOCK_CONFIRMED !in candidate.ambiguityCodes || OptionGate.isOptionIndex(candidate.symbol)) -> OPTION_UNSUPPORTED
             OptionGate.looksLikeContract(candidate.symbol) -> OPTION_UNSUPPORTED
             // A hand-picked source could forge another channel's record; only Android package identity may send.
             !candidate.sourceVerified -> UNVERIFIED_SOURCE

@@ -1,5 +1,7 @@
 package com.marksy.os.capture
 
+import java.util.Locale
+
 /** Whether text reads as an option call. One rule set for every intake route: Marksy tracks no options yet. */
 object OptionGate {
     /** AMBIGUOUS is a bare "18 PE": a put or a P/E ratio. Both it and OPTION stay on the phone. */
@@ -15,4 +17,9 @@ object OptionGate {
 
     /** A reviewed symbol such as "NIFTY24500CE" or "NIFTY 24500 CE" is still a contract, whatever the review says. */
     fun looksLikeContract(symbol: String?): Boolean = !symbol.isNullOrBlank() && blocks(symbol)
+
+    // Indices with traded options: a tip naming one that reads as an option may carry a premium, so review can't make it a stock tip.
+    private val optionIndices = setOf("NIFTY", "NIFTY50", "BANKNIFTY", "NIFTYBANK", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "SENSEX", "BANKEX")
+
+    fun isOptionIndex(symbol: String?): Boolean = symbol?.replace(Regex("""\s+"""), "")?.uppercase(Locale.ROOT) in optionIndices
 }

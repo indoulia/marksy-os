@@ -98,6 +98,8 @@ fun CaptureReviewDialog(
     var stock by remember(key) { mutableStateOf(false) }
     val flagged = Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes
     val reading = remember(key) { TipExtractor.captureOption(candidate.extractedText.orEmpty()) }
+    val index = flagged && OptionGate.isOptionIndex(symbol)
+    val confirming = stock && !index
 
     val fields = TipFields(
         symbol.trim().uppercase().ifEmpty { null }, side, entry.toDoubleOrNull(), target.toDoubleOrNull(), stopLoss.toDoubleOrNull(),
@@ -110,17 +112,17 @@ fun CaptureReviewDialog(
         state = CaptureState.ACCEPTED.name, userChoseSend = true, symbol = fields.symbol, side = side?.name, entry = fields.entry,
         target = fields.target, stopLoss = fields.stopLoss, sourcePackage = source?.packageName
     )
-    val canSend = CandidateDeliveryPolicy.mayQueue(if (stock) CandidateDeliveryPolicy.confirmedAsStock(reviewed) else reviewed, registry)
+    val canSend = CandidateDeliveryPolicy.mayQueue(if (confirming) CandidateDeliveryPolicy.confirmedAsStock(reviewed) else reviewed, registry)
     val sourceName = source?.displayName ?: candidate.sourceName
 
     MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Review tip") },
-        confirmButton = { MarksyButton("Send to Marksy", { onDecision(fields, sourcePackage, ReviewDecision.SEND, stock) }, enabled = canSend) },
+        confirmButton = { MarksyButton("Send to Marksy", { onDecision(fields, sourcePackage, ReviewDecision.SEND, confirming) }, enabled = canSend) },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
-                MarksyButton("Reject", { onDecision(fields, sourcePackage, ReviewDecision.REJECT, stock) }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
-                MarksyButton("Keep on phone", { onDecision(fields, sourcePackage, ReviewDecision.KEEP, stock) }, style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
+                MarksyButton("Reject", { onDecision(fields, sourcePackage, ReviewDecision.REJECT, confirming) }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
+                MarksyButton("Keep on phone", { onDecision(fields, sourcePackage, ReviewDecision.KEEP, confirming) }, style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
             }
         },
         text = {
@@ -139,7 +141,7 @@ fun CaptureReviewDialog(
                     .forEach { Text(it, color = MarksyTheme.Warning, style = MarksyType.Small) }
                 if (flagged) {
                     Text(optionReason(reading), color = MarksyTheme.Warning, style = MarksyType.Small)
-                    Pill("It's a stock tip, not an option call", selected = stock) { stock = !stock }
+                    if (!index) Pill("It's a stock tip, not an option call", selected = stock) { stock = !stock }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
@@ -169,7 +171,7 @@ fun CaptureReviewDialog(
                 MarksyCard {
                     Text(
                         if (canSend) "Send to Marksy sends only: ${line.orEmpty()}, from $sourceName. Nothing else leaves your phone."
-                        else sendBlocked(candidate.sourceVerified, line, source, flagged && !stock, OptionGate.looksLikeContract(fields.symbol)),
+                        else sendBlocked(candidate.sourceVerified, line, source, flagged && !confirming, OptionGate.looksLikeContract(fields.symbol), fields.symbol.takeIf { index }),
                         color = MarksyTheme.TextPrimary, style = MarksyType.Small
                     )
                     Text("Keep on phone sends nothing.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -202,7 +204,8 @@ private fun optionReason(reading: OptionGate.Reading): String = when {
     else -> "Read as an option call because of “${reading.evidence}”: its levels would be the option's price."
 }
 
-private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?, option: Boolean, contract: Boolean): String = when {
+private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?, option: Boolean, contract: Boolean, index: String?): String = when {
+    index != null -> "$index is an index, so a tip read as an option stays on this phone."
     option -> "Marksy can't track options yet, so this tip stays on this phone."
     contract -> "It still looks like an option contract, so it stays on this phone."
     !verified -> "Tips with a source you picked yourself stay on this phone."
