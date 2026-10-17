@@ -222,6 +222,21 @@ class CaptureGatewayTest {
     }
 
     @Test
+    fun aReviewedScreenshotWhoseTextReadsAsAnOptionIsNotQueuedWhateverItsFlags() = runBlocking {
+        val fields = TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0)
+        val legacy = submit(hash = "a", text = tip, method = CaptureMethod.USER_SHARED_IMAGE, hint = "com.research.app", verified = true) as CaptureOutcome.Candidate
+        val clean = submit(hash = "b", text = tip, method = CaptureMethod.USER_SHARED_IMAGE, hint = "com.research.app", verified = true) as CaptureOutcome.Candidate
+        // An older app's row: option words in the recognized text, no option flag.
+        dao.updateCandidate(dao.candidate(legacy.id)!!.copy(extractedText = "$tip (ABC 500 CE)", ambiguities = ""))
+
+        listOf(legacy.id, clean.id).forEach { gateway.review(it, fields, null, ReviewDecision.SEND) }
+
+        assertEquals(1, queued)
+        assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(legacy.id)!!.deliveryState)
+        assertEquals(DeliveryState.PENDING.name, dao.candidate(clean.id)!!.deliveryState)
+    }
+
+    @Test
     fun notificationToCapture() = runBlocking {
         assertNull(gateway.onNotificationStored(teaser(key = "complete", body = tip)))
         val id = gateway.onNotificationStored(teaser())!!

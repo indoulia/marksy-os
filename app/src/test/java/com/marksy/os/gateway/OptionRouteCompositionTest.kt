@@ -3,6 +3,7 @@ package com.marksy.os.gateway
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.marksy.os.capture.CandidateDeliveryPolicy
 import com.marksy.os.capture.CandidateDeliveryRun
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
@@ -121,5 +122,55 @@ class OptionRouteCompositionTest {
 
         assertEquals(1, requests.size)
         assertTrue(requests.single(), "RENUKA" in requests.single())
+    }
+
+    private val line = "BUY RENUKA @ 180 Target 220 SL 150"
+
+    private fun screenshot(text: String?, ambiguities: String = "", state: DeliveryState = DeliveryState.PENDING, attempts: Int = 0) = TipCandidateEntity(
+        evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = true,
+        capturedAt = 1L, evidenceRef = "sha256:ab", extractedText = text, confidence = .9,
+        symbol = "RENUKA", side = "BUY", entry = 180.0, target = 220.0, stopLoss = 150.0, horizon = null, visibleTimestamp = null,
+        ambiguities = ambiguities, state = "ACCEPTED", userChoseSend = true, deliveryState = state.name, deliveryAttempts = attempts,
+        lastDeliveryAttemptAt = 1L, updatedAt = 1L
+    )
+
+    // An older app's row, or one saved without the flag: the recognized text decides, and no text means no send.
+    @Test
+    fun theRealClientGetsNoRequestForAScreenshotWhoseTextReadsAsAnOptionWhateverItsFlags() = runBlocking {
+        val captureDao = db.captureDao()
+        val kept = listOf(
+            screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150"),
+            screenshot("BUY BANKNIFTY 52000 PUT @ 180 Target 220 SL 150"),
+            screenshot("BUY NIFTY 24500 CALL @ 180 Target 220 SL 150"),
+            screenshot("$line\nHedge: NIFTY 24500 PE"),
+            screenshot("BUY RENUKA (18 PE) @ 180 Target 220 SL 150"),
+            screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150", ambiguities = "low-ocr-confidence"),
+            screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150", attempts = 3),
+            screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150", state = DeliveryState.IN_FLIGHT, attempts = 1),
+            screenshot(null),
+            screenshot("  "),
+            screenshot(null, ambiguities = "option-contract,stock-confirmed")
+        ).map { captureDao.insertCandidate(it) }
+        captureDao.recoverStaleInFlight(Long.MAX_VALUE)
+        assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture).drain())
+        assertEquals(emptyList<String>(), requests)
+        kept.forEach { assertEquals(DeliveryState.NOT_APPLICABLE.name, captureDao.candidate(it)!!.deliveryState) }
+
+        captureDao.insertCandidate(screenshot(line))
+        captureDao.insertCandidate(screenshot("$line (24500 CE)", ambiguities = "option-contract,stock-confirmed"))
+        assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture).drain())
+        assertEquals(listOf("POST $line", "POST $line"), requests)
+    }
+
+    @Test
+    fun aDecisionThatSkipsThePolicyStillSendsNoOptionScreenshot() = runBlocking {
+        val captureDao = db.captureDao()
+        val ids = listOf(screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150"), screenshot(null)).map { captureDao.insertCandidate(it) }
+        val blind = { c: TipCandidateEntity, ctx: CaptureContext -> CandidateDeliveryPolicy.decide(c.copy(extractedText = line), ctx) }
+
+        assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture, decide = blind).drain())
+
+        assertEquals(emptyList<String>(), requests)
+        ids.forEach { assertEquals(DeliveryState.NOT_APPLICABLE.name, captureDao.candidate(it)!!.deliveryState) }
     }
 }
