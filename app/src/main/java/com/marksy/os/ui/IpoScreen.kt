@@ -151,7 +151,7 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
     }
     val holidays by produceState(emptyMap<java.time.LocalDate, String>()) { value = com.marksy.os.upstox.UpstoxHolidays.load(context, java.time.LocalDate.now(IpoLifecycle.IST)) }
     val opened = openedId?.let { id -> items.firstOrNull { it.id == id } }
-    val note = opened?.let { IpoLifecycle.detailNote(it, now) } ?: IpoLifecycle.homeNote(items, shownStage, board, query, now, details)
+    val note = opened?.let { IpoLifecycle.detailNote(it, now, details[it.id]) } ?: IpoLifecycle.homeNote(items, shownStage, board, query, now, details)
     LaunchedEffect(note) { onTitleNote(note) }
     DisposableEffect(Unit) { onDispose { onTitleNote(null) } }
 
@@ -160,7 +160,8 @@ fun IpoScreen(repository: MarketIntelligenceRepository, padding: PaddingValues, 
             BackHandler { openedId = null; remindersOpen = false }
             IpoDetailScreen(
                 repository, opened, padding, now, reminders, onReminder = { e, on -> setReminder(opened, e, on) },
-                remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }, holidays = holidays
+                remindersOpen = remindersOpen, onRemindersClose = { remindersOpen = false }, holidays = holidays,
+                onLoaded = { d -> details = details + (opened.id to d) }
             )
         } else {
             MarksyRefreshBox(refresh) {

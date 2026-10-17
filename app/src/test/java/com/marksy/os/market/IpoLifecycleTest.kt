@@ -202,4 +202,23 @@ class IpoLifecycleTest {
     @Test fun holidaysOnAWeekendAreNotSkippedDates() {
         assertNull(IpoLifecycle.holidayNote(mapOf(LocalDate.of(2026, 10, 3) to "Saturday holiday"), LocalDate.of(2026, 9, 29), LocalDate.of(2026, 10, 7)))
     }
+
+    @Test fun detailNoteReadsAllotmentAndListingFromTheDetail() {
+        assertEquals("Co allot · allotment · lists 7 Oct", IpoLifecycle.detailNote(book[2], now))
+        assertEquals("Co allot · allotment tonight", IpoLifecycle.detailNote(book[2], now, detail(book[2], "2026-10-01")))
+        assertEquals("Co allot · allotment out", IpoLifecycle.detailNote(book[2], now.withHour(18).withMinute(5), detail(book[2], "2026-10-01")))
+        assertEquals("Co allot · allotment 5 Oct", IpoLifecycle.detailNote(book[2], now, detail(book[2], "2026-10-05")))
+        assertEquals("Co listed · listed 28 Sep", IpoLifecycle.detailNote(book[5], now))
+        assertEquals("Co listed · listed +11.8%", IpoLifecycle.detailNote(book[5], now, detail(book[5], outcome = IpoOutcomeDto(570.0, 637.0, 11.75, 9.5))))
+    }
+
+    @Test fun businessDaysSkipWeekendsAndHolidays() {
+        val holidays = mapOf(LocalDate.of(2026, 10, 2) to "Gandhi Jayanti")
+        // Thu 1 Oct to Tue 6 Oct: Thu, (Fri holiday), (Sat, Sun), Mon, Tue
+        assertEquals(3, IpoLifecycle.businessDays(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 6), holidays))
+        assertEquals(4, IpoLifecycle.businessDays(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 6), emptyMap()))
+        assertEquals("day 2 of 3", IpoLifecycle.openDayText(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 5), holidays))
+        assertNull(IpoLifecycle.openDayText(LocalDate.of(2026, 10, 1), null, LocalDate.of(2026, 10, 5), holidays))
+        assertNull(IpoLifecycle.openDayText(LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 5), holidays))
+    }
 }
