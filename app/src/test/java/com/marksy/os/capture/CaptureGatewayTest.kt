@@ -148,10 +148,10 @@ class CaptureGatewayTest {
         assertTrue(dao.candidate(local)!!.userChoseSend)
     }
 
-    // Option-tip safety A: the confirmation is stored beside the original flag, never in its place, and only on approval.
+    // Option-tip safety A: the confirmation is stored beside the original flag, never in its place, and only on approval (a maybe-option).
     @Test
     fun confirmingAStockTipKeepsTheOptionFlag() = runBlocking {
-        val option = "BUY ABC 24 OCT 500 CE @ 500 Target 650 SL 470"
+        val option = "BUY ABC (18 PE) @ 500 Target 650 SL 470"
         suspend fun flagged(hash: String) = candidateId(submit(hash = hash, text = option, hint = "com.research.app", verified = true))
         val fields = TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0)
 
@@ -234,6 +234,28 @@ class CaptureGatewayTest {
         assertEquals(1, queued)
         assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(legacy.id)!!.deliveryState)
         assertEquals(DeliveryState.PENDING.name, dao.candidate(clean.id)!!.deliveryState)
+    }
+
+    // A stock correction never overrides written option wording; the original flag stays and no confirmation is stored.
+    @Test
+    fun aStockCorrectionNeverQueuesAScreenshotWithWrittenOptionWording() = runBlocking {
+        val written = mapOf(
+            "BUY TCS @ 45 TGT 60 SL 35 (3500 CE)" to "TCS", "BUY TCS @ 45 TGT 60 SL 35 (3500 PE)" to "TCS", "BUY RELIANCE 1400 PE @ 45 TGT 60 SL 35" to "RELIANCE",
+            "BUY INFY @ 45 TGT 60 SL 35 (1800 CALL)" to "INFY", "BUY INFY @ 45 TGT 60 SL 35 (1800 PUT)" to "INFY"
+        )
+        val ids = written.entries.mapIndexed { i, (text, symbol) ->
+            candidateId(submit(hash = "w$i", text = text, hint = "com.research.app", verified = true)).also {
+                gateway.review(it, TipFields(symbol, TipSide.BUY, 45.0, 60.0, 35.0), null, ReviewDecision.SEND, stockConfirmed = true)
+            }
+        }
+
+        assertEquals(0, queued)
+        ids.forEach {
+            val kept = dao.candidate(it)!!
+            assertEquals(DeliveryState.NOT_APPLICABLE.name, kept.deliveryState)
+            assertTrue(Ambiguity.OPTION_CONTRACT in kept.ambiguityCodes)
+            assertFalse(Ambiguity.STOCK_CONFIRMED in kept.ambiguityCodes)
+        }
     }
 
     @Test

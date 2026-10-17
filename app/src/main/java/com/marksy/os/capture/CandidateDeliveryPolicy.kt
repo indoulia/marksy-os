@@ -107,11 +107,12 @@ object CandidateDeliveryPolicy {
     fun recognizedTextKeep(candidate: TipCandidateEntity): String? {
         val text = candidate.extractedText
         val codes = candidate.ambiguityCodes
-        return when {
-            text.isNullOrBlank() -> RECOGNIZED_TEXT_MISSING
-            Ambiguity.OPTION_CONTRACT in codes && Ambiguity.STOCK_CONFIRMED in codes -> null
-            OptionGate.blocks(text) -> OPTION_UNSUPPORTED
-            else -> null
+        if (text.isNullOrBlank()) return RECOGNIZED_TEXT_MISSING
+        return when (OptionGate.classify(text).signal) {
+            OptionGate.Signal.NONE -> null
+            // Only a maybe-option ("18 PE": a put or a P/E ratio) takes the reviewer's stock correction; written option wording never does.
+            OptionGate.Signal.AMBIGUOUS -> OPTION_UNSUPPORTED.takeUnless { Ambiguity.OPTION_CONTRACT in codes && Ambiguity.STOCK_CONFIRMED in codes }
+            OptionGate.Signal.OPTION -> OPTION_UNSUPPORTED
         }
     }
 }

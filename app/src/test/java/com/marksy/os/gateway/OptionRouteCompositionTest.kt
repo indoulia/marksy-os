@@ -125,6 +125,7 @@ class OptionRouteCompositionTest {
     }
 
     private val line = "BUY RENUKA @ 180 Target 220 SL 150"
+    private val corrected = "option-contract,stock-confirmed"
 
     private fun screenshot(text: String?, ambiguities: String = "", state: DeliveryState = DeliveryState.PENDING, attempts: Int = 0) = TipCandidateEntity(
         evidenceId = 1, method = "USER_SHARED_IMAGE", sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceVerified = true,
@@ -149,7 +150,14 @@ class OptionRouteCompositionTest {
             screenshot("BUY NIFTY 24500 CE @ 180 Target 220 SL 150", state = DeliveryState.IN_FLIGHT, attempts = 1),
             screenshot(null),
             screenshot("  "),
-            screenshot(null, ambiguities = "option-contract,stock-confirmed")
+            screenshot(null, ambiguities = corrected),
+            // A stock correction never overrides written option wording, a share's or an index's, on any attempt.
+            screenshot("BUY TCS @ 45 TGT 60 SL 35 (3500 CE)", ambiguities = corrected),
+            screenshot("BUY TCS @ 45 TGT 60 SL 35 (3500 PE)", ambiguities = corrected),
+            screenshot("RELIANCE 1400 PE", ambiguities = corrected),
+            screenshot("BUY INFY @ 45 TGT 60 SL 35 (1800 CALL)", ambiguities = corrected, attempts = 3),
+            screenshot("BUY INFY @ 45 TGT 60 SL 35 (1800 PUT)", ambiguities = corrected, state = DeliveryState.IN_FLIGHT, attempts = 1),
+            screenshot("BUY NIFTY @ 180 TGT 220 SL 150 (BANKNIFTY 52000 PUT)", ambiguities = corrected)
         ).map { captureDao.insertCandidate(it) }
         captureDao.recoverStaleInFlight(Long.MAX_VALUE)
         assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture).drain())
@@ -157,9 +165,10 @@ class OptionRouteCompositionTest {
         kept.forEach { assertEquals(DeliveryState.NOT_APPLICABLE.name, captureDao.candidate(it)!!.deliveryState) }
 
         captureDao.insertCandidate(screenshot(line))
-        captureDao.insertCandidate(screenshot("$line (24500 CE)", ambiguities = "option-contract,stock-confirmed"))
+        captureDao.insertCandidate(screenshot("$line\nTrades at 18 PE"))
+        captureDao.insertCandidate(screenshot("BUY RENUKA (18 PE) @ 180 Target 220 SL 150", ambiguities = "option-contract,option-ambiguous,stock-confirmed"))
         assertFalse(CandidateDeliveryRun(captureDao, realClient(), capture).drain())
-        assertEquals(listOf("POST $line", "POST $line"), requests)
+        assertEquals(listOf("POST $line", "POST $line", "POST $line"), requests)
     }
 
     @Test
