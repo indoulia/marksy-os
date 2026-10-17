@@ -2,7 +2,11 @@ package com.marksy.os.ui
 
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.intelligence.EventExpiry
+import com.marksy.os.market.LedgerCalls
+import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.notification.CaptureMedium
+import org.json.JSONObject
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -17,13 +21,13 @@ enum class StatusTone { POSITIVE, NEGATIVE, NEUTRAL }
 
 data class TipLevels(
     val side: String?, val symbol: String?, val entry: Double?, val target: Double?, val stopLoss: Double?,
-    val status: String?, val tone: StatusTone = StatusTone.NEUTRAL
+    val status: String?, val tone: StatusTone = StatusTone.NEUTRAL, val entryHigh: Double? = null
 ) { val hasLevels: Boolean get() = entry != null || target != null || stopLoss != null }
 
-/** [folded] counts forwarded copies merged into this row; [alsoIn] names where they appeared. */
+/** [folded] counts forwarded copies merged into this row; [alsoIn] names where they appeared; [ledger] is the tip as stored at delivery. */
 data class CapturedRow(
     val event: NotificationEventEntity, val insight: TradingInsight, val levels: TipLevels?, val headline: String,
-    val folded: Int = 0, val alsoIn: List<String> = emptyList()
+    val folded: Int = 0, val alsoIn: List<String> = emptyList(), val ledger: LedgerTipDto? = null
 ) {
     /** Kept on the phone by design (own orders, holdings): never sent to Marksy. */
     val keptLocal: Boolean get() = event.deliveryState == DeliveryState.NOT_APPLICABLE.name
@@ -65,11 +69,14 @@ object CapturedModel {
         now: Long,
         stackBy: StackBy = StackBy.SOURCE,
         show: ShowOnly = ShowOnly.ALL,
+        query: String = "",
         symbolOf: (String) -> String? = { null }
     ): CapturedLanes {
         val boundary = todayBoundary(now)
-        val rows = events.mapNotNull { e -> e.toTradingInsight()?.let { buildRow(e, it, symbolOf) } }
-        val health = health(rows, boundary)
+        val all = events.mapNotNull { e -> e.toTradingInsight()?.let { buildRow(e, it, symbolOf) } }
+        val health = health(all, boundary)
+        val q = query.trim()
+        val rows = if (q.isEmpty()) all else all.filter { matches(it, q) }
         val active = rows.filter { it.event.lifecycleState != "RESOLVED" }
 
         val needs = active.mapNotNull { r ->
@@ -95,28 +102,50 @@ object CapturedModel {
         )
     }
 
-    private fun isRejected(r: CapturedRow) = r.keptLocal && r.event.title.contains("rejected", ignoreCase = true)
+    private fun isRejected(r: CapturedRow) =
+        r.keptLocal && (r.event.title.contains("rejected", ignoreCase = true) || r.event.body.contains("rejected", ignoreCase = true))
+
+    private fun matches(r: CapturedRow, q: String): Boolean =
+        listOfNotNull(r.event.sourceName, r.event.title, r.event.body, r.levels?.symbol).any { it.contains(q, ignoreCase = true) }
+
+    /** Why a retired row left Today, without the "Retired: " prefix. */
+    internal fun retiredReason(e: NotificationEventEntity): String? = e.lifecycleReason?.takeIf { e.lifecycleState == "RESOLVED" }
+        ?.removePrefix(EventExpiry.REASON_PREFIX)?.replaceFirstChar { it.uppercase() }
 
     private fun buildRow(e: NotificationEventEntity, insight: TradingInsight, symbolOf: (String) -> String?): CapturedRow {
-        val symbol = symbolOf("${e.title} ${e.body}")
         if (e.deliveryState == DeliveryState.NOT_APPLICABLE.name) {
+            val symbol = symbolOf("${e.title} ${e.body}")
             val generic = insight.headline == "Trading event detected"
             val first = e.body.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: insight.headline
             return CapturedRow(e, insight, null, if (generic) first else insight.headline + (symbol?.let { " · $it" } ?: ""))
         }
-        val side = insight.marksyRecommendation?.let { SIDE.find(it)?.value }
-            ?: SIDE.find(e.body)?.value ?: SIDE.find(e.title)?.value
-        val tone = statusTone(insight.marksyLevelState)
-        val levels = TipLevels(
-            side?.uppercase(Locale.ROOT), symbol, insight.marksyEntryPrice, insight.marksyTargetPrice, insight.marksyStopLoss,
-            insight.marksyLevelState?.let(::humanise), tone
+        val tip = ledgerTip(e.marksyResponseJson)
+        val symbol = tip?.symbol?.takeIf { it.isNotBlank() } ?: symbolOf("${e.title} ${e.body}")
+        val side = (tip?.direction ?: insight.marksyRecommendation?.let { SIDE.find(it)?.value }
+            ?: SIDE.find(e.body)?.value ?: SIDE.find(e.title)?.value)?.uppercase(Locale.ROOT)
+        val levels = if (tip != null) TipLevels(
+            side, symbol, tip.entryLow ?: tip.entryHigh, tip.target, tip.stopLoss, LedgerCalls.state(tip), ledgerTone(tip), tip.entryHigh ?: tip.entryLow
+        ) else TipLevels(
+            side, symbol, insight.marksyEntryPrice, insight.marksyTargetPrice, insight.marksyStopLoss,
+            insight.marksyLevelState?.let(::humanise), statusTone(insight.marksyLevelState)
         )
         val headline = when {
             levels.side != null && symbol != null -> "${levels.side} $symbol"
             symbol != null -> symbol
             else -> e.body.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.take(60) ?: insight.headline
         }
-        return CapturedRow(e, insight, levels, headline)
+        return CapturedRow(e, insight, levels, headline, ledger = tip)
+    }
+
+    // CAP-1: delivery stores the ledger tip since 181f982; older rows hold Marksy's comparison reply.
+    private fun ledgerTip(raw: String?): LedgerTipDto? = raw?.let {
+        runCatching { JSONObject(it).takeIf { j -> !j.has("comparison") && j.has("status") && j.has("symbol") }?.let(LedgerTipDto::parse) }.getOrNull()
+    }
+
+    private fun ledgerTone(t: LedgerTipDto): StatusTone = when (LedgerCalls.tone(t)) {
+        LedgerCalls.Tone.POSITIVE -> StatusTone.POSITIVE
+        LedgerCalls.Tone.NEGATIVE -> StatusTone.NEGATIVE
+        else -> StatusTone.NEUTRAL
     }
 
     private fun statusTone(state: String?): StatusTone {

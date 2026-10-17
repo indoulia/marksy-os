@@ -49,7 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.StockMentions
+import com.marksy.os.notification.CaptureMedium
 import java.math.BigDecimal
 
 private const val SHOWN_PER_STACK = 2
@@ -62,12 +64,16 @@ fun CapturedInboxView(
 ) {
     var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
     var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
+    var query by rememberSaveable { mutableStateOf("") }
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
-        CapturedList(events, stackBy, show, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
+        CapturedList(events, stackBy, show, query, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
         OneHandControls(
             filters = inboxFilters,
             selectedFilter = InboxCapturedFilter,
             onFilterSelected = onFilterSelected,
+            searchQuery = query,
+            onSearchChange = { query = it },
+            searchPlaceholder = "Search captured…",
             filterIsView = false,
             actions = listOf(FloatingAction(Icons.Default.AddPhotoAlternate, "Add screenshot", onClick = inbox.onAddScreenshot)),
             extrasActive = show != ShowOnly.ALL,
@@ -94,15 +100,15 @@ private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, s
 /** Capture log lanes; a ticker named in a call opens its stock page. */
 @Composable
 private fun CapturedList(
-    events: List<NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, onOpenStock: (String) -> Unit,
+    events: List<NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, query: String, onOpenStock: (String) -> Unit,
     onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
 ) {
     val isSymbol = rememberSymbolCheck()
     val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
-    val lanes = remember(events, stackBy, show, isSymbol, now) {
-        CapturedModel.lanes(events, now, stackBy, show) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
+    val lanes = remember(events, stackBy, show, query, isSymbol, now) {
+        CapturedModel.lanes(events, now, stackBy, show, query) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
     }
-    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
+    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox, filtered = show != ShowOnly.ALL || query.isNotBlank())
 }
 
 /** Capture log: what the phone caught and whether Marksy got it, in lanes (Needs you, Today, Earlier, Rejected orders). */
@@ -116,7 +122,8 @@ fun CapturedScreen(
     onAllowBackground: () -> Unit,
     showHealth: Boolean,
     onHealthDismiss: () -> Unit,
-    inbox: CaptureInbox = CaptureInbox()
+    inbox: CaptureInbox = CaptureInbox(),
+    filtered: Boolean = false
 ) {
     var toReviewOpen by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -132,7 +139,8 @@ fun CapturedScreen(
     MarksyList {
         captureToReview(inbox, now, toReviewOpen) { toReviewOpen = !toReviewOpen }
         captureKeptOptions(inbox, now)
-        if (lanes.isEmpty && inbox.isEmpty && inbox.keptOptions.isEmpty()) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
+        if (lanes.isEmpty && filtered) item { EmptyState("Nothing matches", "Try another Show option, or clear the search.") }
+        else if (lanes.isEmpty && inbox.isEmpty && inbox.keptOptions.isEmpty()) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
             item { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
             items(lanes.needsYou, key = { "n${it.row.event.id}" }) { NeedCard(it, now, { selected = it.row }, onRetry, onSendNow, onAllowBackground) }
@@ -144,7 +152,7 @@ fun CapturedScreen(
         if (lanes.earlier.isNotEmpty()) {
             val count = lanes.earlier.sumOf { it.rows.size }
             item {
-                FoldRow("Earlier", "$count ${if (count == 1) "tip" else "tips"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"} · Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
+                FoldRow("Earlier", "$count ${if (count == 1) "item" else "items"} from ${lanes.earlier.size} ${if (lanes.earlier.size == 1) "source" else "sources"} · Older than this session, or retired", earlierOpen) { earlierOpen = !earlierOpen }
             }
             if (earlierOpen) items(lanes.earlier, key = { "e${it.key}" }) { StackCard("e${it.key}", it, now, quotes, "e${it.key}" in expanded, toggle) { selected = it } }
         }
@@ -240,11 +248,14 @@ private fun TipRow(r: CapturedRow, now: Long, firstRow: Boolean, quotes: Map<Str
             MarksyBadge(s, if (tone == StatusTone.NEGATIVE) MarksyTheme.RedUrgent else if (tone == StatusTone.POSITIVE) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, if (tone == StatusTone.NEGATIVE) MarksyTheme.BadgeUrgentBg else if (tone == StatusTone.POSITIVE) MarksyTheme.BadgeTradingBg else MarksyTheme.SurfaceRaised)
         }
         if (r.folded > 0) Text("+${r.folded} forwarded", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        CapturedModel.retiredReason(r.event)?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
     val lv = r.levels
     if (lv != null && lv.hasLevels) {
         // The shared price track; its block shows the entry, so the levels line is not repeated.
-        val track = TipTrack.of(lv, lv.symbol?.let { quotes[it]?.lastPrice }, open = r.event.lifecycleState != "RESOLVED")
+        val open = r.event.lifecycleState != "RESOLVED"
+        val live = lv.symbol?.let { quotes[it]?.lastPrice }
+        val track = r.ledger?.let { t -> TipTrack.of(t, live).let { if (open) it else it.copy(live = false) } } ?: TipTrack.of(lv, live, open)
         PriceTrackView(track, Modifier.padding(top = MarksySpace.Inner))
     } else if (firstRow || r.keptLocal) {
         Text(r.event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = if (firstRow) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight))
@@ -264,8 +275,19 @@ private fun sourceOf(r: CapturedRow) = CapturedModel.sourceLabel(r.event)
 private fun price(v: Double): String = BigDecimal(v).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 
 internal fun levelsLine(lv: TipLevels): String = listOfNotNull(
-    lv.entry?.let { "Entry ${price(it)}" }, lv.target?.let { "Target ${price(it)}" }, lv.stopLoss?.let { "SL ${price(it)}" }
+    lv.entry?.let { e -> "Entry ${price(e)}" + (lv.entryHigh?.takeIf { it != e }?.let { "–${price(it)}" } ?: "") },
+    lv.target?.let { "Target ${price(it)}" }, lv.stopLoss?.let { "SL ${price(it)}" }
 ).joinToString(" · ")
+
+/** What CaptureGate's CapturedMessage carries for this row's medium. */
+internal fun sentPayload(e: NotificationEventEntity): String {
+    val parts = when (CaptureMedium.of(e.sourcePackage)) {
+        CaptureMedium.APP_NOTIFICATION -> "the notification's title and text, the app's name and package"
+        CaptureMedium.SMS -> "the message text, the sender id, the SMS app's package"
+        CaptureMedium.WHATSAPP, CaptureMedium.TELEGRAM -> "the message text without sender names, the group name, the app's package"
+    }
+    return "What left the phone: $parts, when it was posted and a one-way key for it. Emails, phone numbers, PAN, long numbers and your user id are masked first."
+}
 
 internal fun noteLabel(note: String?): String? = when (note) {
     null -> null
@@ -294,7 +316,8 @@ private fun RowDialog(r: CapturedRow, onOpenStock: (String) -> Unit, onDismiss: 
                 val lv = r.levels
                 if (lv != null && lv.hasLevels) Text(levelsLine(lv), color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
                 lv?.status?.let { Text("Marksy status: $it", style = MarksyTheme.DialogBody) }
-                r.insight.marksyHorizonDays?.let { Text("Horizon $it days", style = MarksyTheme.DialogBody) }
+                val horizon = if (r.ledger != null) LedgerCalls.horizonText(r.ledger.horizonSessions) else r.insight.marksyHorizonDays?.let { "$it days" }
+                horizon?.let { Text("Horizon $it", style = MarksyTheme.DialogBody) }
                 Text(e.body, color = MarksyTheme.TextPrimary, style = MarksyType.Body, maxLines = 12, overflow = TextOverflow.Ellipsis)
                 Text(
                     when (e.deliveryState) {
@@ -306,8 +329,9 @@ private fun RowDialog(r: CapturedRow, onOpenStock: (String) -> Unit, onDismiss: 
                     },
                     style = MarksyTheme.DialogBody
                 )
+                if (e.deliveryState == DeliveryState.DELIVERED.name) Text(sentPayload(e), color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 if (r.alsoIn.isNotEmpty()) Text("Also posted in ${r.alsoIn.joinToString(", ")}. Each group's copy is its own tip in Marksy's ledger.", style = MarksyTheme.DialogBody)
-                if (e.lifecycleState == "RESOLVED") e.lifecycleReason?.let { Text(it.removePrefix("Retired: ").replaceFirstChar { c -> c.uppercase() } + ".", style = MarksyTheme.DialogBody) }
+                CapturedModel.retiredReason(e)?.let { Text("$it.", style = MarksyTheme.DialogBody) }
                 Text("Captured ${fullTime(e.postedAt)} from ${sourceOf(r)}.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
         }
