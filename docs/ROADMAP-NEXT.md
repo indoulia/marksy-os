@@ -48,7 +48,7 @@ This covers the Android app (this repo) only. Backend work in `marksy-api` is tr
 
 **Done**
 - EPIC-010 to EPIC-015, EPIC-017, EPIC-022: done in tests (#22, #27, #28).
-- EPIC-016 Ask Marksy: verified on device (#34, #35). The eval set passes 85/85, and Gemma on device passes 24/24 (#37).
+- EPIC-016 Ask Marksy: verified on device (#34, #35). The rules' eval set passes 85/85. The earlier "Gemma on device passes 24/24" (#37) measured the rules plus Gemma together, not Gemma; see the 2026-10-16 audit under EPIC-016.
 - EPIC-018 Rules 2.0: nested AND/OR/NOT editor (#27). Done in tests.
 - EPIC-033 Fundamentals & News: Upstox fundamentals, financials, shareholding, corporate actions, peers and news (#44).
 - EPIC-035 Stock Details: items 1–11 (#42–#52). The items under "Parked" stay parked.
@@ -757,6 +757,12 @@ Do not expand the UI unnecessarily. Prefer strengthening the existing V2 surface
 - Sensitive source data is not sent externally unless explicitly configured.
 
 **Status (2026-09-25):** Deterministic Ask is COMPLETE, and model-routed interpretation is wired in. AI interpretation stays PARTIAL until Nano runs on a real device.
+
+**Evaluation audit (2026-10-16, OnePlus 12R, Gemma 3 1B int4, prompt `ask.interpret` v4):** question type (intent) only; small samples, so these are not estimates of general accuracy.
+- The 24-question Gemma set (`GemmaInterpretEval`): rules alone 20/24, Gemma alone 8/24, combined final answers 24/24. Gemma decided 4 of the 24; the rules decided or backed up the other 20.
+- The 10 questions marked "held out" are not independent evidence. Commit `115e45e`, the same commit that reported 24/24, added rules and plausibility words that match five of them ("remind me", "market up", "tell me about", "charge", "how much"), and three of them (or a variant) sit in the rules' own eval set as "device eval misses".
+- 28 new questions written for the audit: rules alone 21/28, combined 21/28, Gemma alone 14/28. Gemma changed no final answer; 4 of its right answers were discarded, and 11 of its 28 replies failed the output schema.
+- From this audit on, the model runs only for questions the rules cannot read, so it can no longer override a rules answer. A clean evaluation needs a new, unseen question set with a frozen answer key.
 
 ---
 

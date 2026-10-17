@@ -54,10 +54,12 @@ class AskMarksyHardeningTest {
         override suspend fun modelName() = "nano"
         override suspend fun download() {}
         override suspend fun warmup() {}
-        override suspend fun generate(prompt: String) = reply
+        override suspend fun generate(prompt: String) = reply.also { generations++ }
     }
 
+    private var generations = 0
     private fun modelChain(reply: String) = listOf(ModelQueryInterpreter(IntelligenceService(listOf(GeminiNanoModel(backend(reply))))))
+    private fun rules(text: String) = AskMarksy.parse(text, null, now, zone).intent
 
     private fun ask(text: String, interpreters: List<AskMarksy.QueryInterpreter> = emptyList()) =
         runBlocking { AskMarksy.ask(text, null, interpreters, store, now, zone) }.also { a ->
@@ -137,7 +139,9 @@ class AskMarksyHardeningTest {
     fun inventedTransactionsAmountsAndAnswersInModelOutputAreIgnored() {
         val reply = """{"intent":"PAYMENTS","range":"default","subject":"amazon","direction":"DEBIT","confidence":0.95,
             "transactions":[{"merchant":"Flipkart","amount":99999,"date":"2026-09-23"}],"answer":"You spent ₹99999 at Flipkart","amount":99999}"""
-        val a = ask("how much did I spend at amazon", modelChain(reply))
+        assertEquals(Intent.SEARCH, rules("what did amazon charge me"))
+        val a = ask("what did amazon charge me", modelChain(reply))
+        assertEquals(1, generations)
         assertEquals("on-device-model", a.interpretedBy)
         assertEquals(listOf(amazonSep20.id), a.derivedFromEventIds)
         assertFalse(a.headline.contains("99999") || a.headline.contains("Flipkart", ignoreCase = true))
@@ -151,6 +155,8 @@ class AskMarksyHardeningTest {
             assertEquals(fake, "amazon", a.query.subject)
             assertEquals(fake, listOf(amazonSep20.id), a.derivedFromEventIds)
         }
+        // The rules read this question, so the model never ran and could not substitute a merchant.
+        assertEquals(Intent.PAYMENTS to 0, rules("how much did I spend at amazon") to generations)
     }
 
     @Test
@@ -160,6 +166,7 @@ class AskMarksyHardeningTest {
         assertEquals("amazon", a.query.subject)
         assertEquals(EventExtractor.Direction.DEBIT, a.query.direction)
         assertEquals(listOf(amazonSep20.id), a.derivedFromEventIds)
+        assertEquals(Intent.PAYMENTS to 0, rules("how much did I spend at amazon") to generations)
     }
 
     @Test
@@ -177,7 +184,13 @@ class AskMarksyHardeningTest {
             val a = ask("What did I spend at Amazon last month?", modelChain(reply))
             assertEquals(reply, "deterministic", a.interpretedBy)
             assertEquals(reply, listOf(amazonAug.id), a.derivedFromEventIds)
+            // The rules read that question, so the model never ran; one they cannot read gets the bad reply and drops it.
+            val before = generations
+            assertEquals(reply, "deterministic", ask("what did amazon charge me", modelChain(reply)).interpretedBy)
+            assertEquals(reply, before + 1, generations)
         }
+        assertEquals(Intent.PAYMENTS, rules("What did I spend at Amazon last month?"))
+        assertEquals(Intent.SEARCH, rules("what did amazon charge me"))
     }
 
     @Test
@@ -187,6 +200,7 @@ class AskMarksyHardeningTest {
         assertEquals("deterministic", a.interpretedBy)
         assertEquals(Intent.PAYMENTS, a.query.intent)
         assertEquals(listOf(amazonSep20.id), a.derivedFromEventIds)
+        assertEquals(Intent.PAYMENTS to 0, rules("How much did I spend at Amazon?") to generations)
     }
 
     @Test
@@ -197,5 +211,6 @@ class AskMarksyHardeningTest {
         val a = ask("show transactions between 1 September and 15 September", modelChain(span))
         assertEquals("1 Sep – 15 Sep", a.query.range.label)
         assertEquals(setOf(amazonSep5.id, swiggySep10.id), a.derivedFromEventIds.toSet())
+        assertEquals(0, generations)
     }
 }

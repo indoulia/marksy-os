@@ -83,9 +83,30 @@ class IntelligenceServiceTest {
     }
 
     @Test
+    fun modelRunsOnlyForQuestionsTheRulesCannotRead() = runBlocking {
+        val model = FakeModel({ good })
+        val interpreter = ModelQueryInterpreter(service(model))
+        // The rules read these, so their answer stands and the model is never run.
+        assertNull(interpreter.interpret("money in yesterday", null, now, zone))
+        assertNull(interpreter.interpret("and today?", AskMarksy.parse("payments this week", null, now, zone), now, zone))
+        assertEquals(0, model.calls)
+        // No rule matches "upi transfer", so the model is asked, and the wording supports its intent.
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpreter.interpret("any upi transfer yesterday", null, now, zone)?.intent)
+        assertEquals(1, model.calls)
+    }
+
+    // A model-path question must stay one the rules cannot read, and the model must really be asked; otherwise these tests prove nothing.
+    private suspend fun askModel(question: String, reply: String): Pair<AskMarksy.Query?, Int> {
+        assertEquals(question, AskMarksy.Intent.SEARCH, AskMarksy.parse(question, null, now, zone).intent)
+        val model = FakeModel({ reply })
+        return ModelQueryInterpreter(service(model)).interpret(question, null, now, zone) to model.calls
+    }
+
+    @Test
     fun modelInterpreterOnlyChoosesQueryAndDefersWhenNoModel() = runBlocking {
-        val q = ModelQueryInterpreter(service(FakeModel({ good }))).interpret("money in yesterday", null, now, zone)!!
-        assertEquals(AskMarksy.Intent.PAYMENTS, q.intent)
+        val (q, calls) = askModel("any upi transfer yesterday", good)
+        assertEquals(1, calls)
+        assertEquals(AskMarksy.Intent.PAYMENTS, q!!.intent)
         assertEquals("yesterday", q.range.label)
         assertEquals(EventExtractor.Direction.CREDIT, q.direction)
         assertNull(ModelQueryInterpreter(service()).interpret("anything", null, now, zone))
@@ -98,18 +119,19 @@ class IntelligenceServiceTest {
             """{"intent":"bills_due","range":"DEFAULT","subject":null,"confidence":0.8}""",
             """{"intent":"BILLS_DEDU","range":"default","subject":"null","direction":"null","confidence":0.8}"""
         ).forEach { owe ->
-            assertEquals(owe, AskMarksy.Intent.BILLS_DUE, ModelQueryInterpreter(service(FakeModel({ owe }))).interpret("do I owe anyone money", null, now, zone)?.intent)
+            assertEquals(owe, AskMarksy.Intent.BILLS_DUE to 1, askModel("is my loan cleared", owe).let { it.first?.intent to it.second })
         }
         // Seen on device: Gemma said HELP for "catch me up", PAYMENTS for "should I buy anything"; an intent with no word
         // supporting it in the question is not trusted, while a plausible one is.
         val payments = """{"intent":"PAYMENTS","range":"default","subject":null,"confidence":0.9}"""
-        assertNull(ModelQueryInterpreter(service(FakeModel({ payments }))).interpret("who wished me", null, now, zone))
-        assertEquals(AskMarksy.Intent.PAYMENTS, ModelQueryInterpreter(service(FakeModel({ payments }))).interpret("did the bank take anything from me", null, now, zone)?.intent)
+        assertEquals(null to 1, askModel("who wished me", payments).let { it.first?.intent to it.second })
+        assertEquals(AskMarksy.Intent.PAYMENTS to 1, askModel("did the bank take anything from me", payments).let { it.first?.intent to it.second })
         val plan = """{"intent":"PLAN","range":"default","subject":"birthday","confidence":0.9}"""
-        assertNull(ModelQueryInterpreter(service(FakeModel({ plan }))).interpret("who wished me happy birthday", null, now, zone))
+        assertEquals(null to 1, askModel("who wished me happy birthday", plan).let { it.first?.intent to it.second })
         val stock = """{"intent":"stock","range":"default","subject":"infosys","confidence":0.9}"""
-        val q = ModelQueryInterpreter(service(FakeModel({ stock }))).interpret("what's up with infosys", null, now, zone)!!
-        assertEquals(AskMarksy.Intent.STOCK, q.intent)
+        val (q, calls) = askModel("what's up with infosys", stock)
+        assertEquals(1, calls)
+        assertEquals(AskMarksy.Intent.STOCK, q!!.intent)
         assertEquals("infosys", q.target)
     }
 }

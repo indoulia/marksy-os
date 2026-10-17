@@ -35,6 +35,9 @@ object TipExtractor {
     private val timestamp = Regex("""(?:$DATE)(?:,?\s+(?:$TIME))?|$TIME""", RegexOption.IGNORE_CASE)
     private val exchangePrefix = Regex("""\b(?:nse|bse)\s*:\s*""", RegexOption.IGNORE_CASE)
     private val tickerShape = Regex("""[A-Za-z][A-Za-z0-9&.-]{1,24}""")
+    private val optionAfterSymbol = Regex(
+        """^\s+((?:\d{1,2}\s*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b""", RegexOption.IGNORE_CASE
+    )
     private val levelWords = setOf("target", "targets", "tgt", "tp", "sl", "stop", "stoploss", "entry", "cmp", "ltp", "at", "above", "below", "around", "near", "between", "rs", "inr")
     private val fillerWords = setOf(
         "stock", "stocks", "share", "shares", "scrip", "equity", "eq", "cash", "call", "calls", "idea", "tip", "now", "today", "tomorrow",
@@ -65,7 +68,8 @@ object TipExtractor {
         val side = sides.singleOrNull()
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
-        val symbol = symbols.singleOrNull()
+        // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
+        val symbol = symbols.singleOrNull()?.let { s -> optionContract(flat, sideHits.first().first, s)?.also { ambiguities += Ambiguity.OPTION_CONTRACT } ?: s }
         if (symbols.size > 1) ambiguities += Ambiguity.AMBIGUOUS_SYMBOL
 
         fun first(vararg kinds: Kind): Double? {
@@ -116,6 +120,14 @@ object TipExtractor {
         }
         Level(kind, if (cleanNumber.matches(token)) token.replace(",", "").toDoubleOrNull() else null)
     }.toList()
+
+    /** "NIFTY 24 OCT 24500 CE" when an optional expiry, a strike and CE/PE follow [symbol] after the side word, else null. */
+    private fun optionContract(flat: String, side: MatchResult, symbol: String): String? {
+        val at = flat.indexOf(symbol, side.range.last + 1, ignoreCase = true).takeIf { it >= 0 } ?: return null
+        val m = optionAfterSymbol.find(flat.substring(at + symbol.length)) ?: return null
+        val expiry = m.groupValues[1].trim().replace(Regex("""\s+"""), " ").ifEmpty { null }?.uppercase(Locale.ROOT)
+        return listOfNotNull(symbol, expiry, m.groupValues[2].replace(",", ""), m.groupValues[3].uppercase(Locale.ROOT)).joinToString(" ")
+    }
 
     // The ticker sits right after the side word; failing that, an all-caps word right before it ("ABC: BUY @ 500").
     private fun symbolsNear(flat: String, side: MatchResult): List<String> {

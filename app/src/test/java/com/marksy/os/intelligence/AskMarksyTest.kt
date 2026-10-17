@@ -5,6 +5,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.AskMarksy.Intent
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
@@ -79,6 +80,31 @@ class AskMarksyTest {
         assertEquals("rahul", follow.query.subject)
         assertEquals("yesterday", follow.query.range.label)
         assertEquals(listOf(old.id), follow.derivedFromEventIds)
+    }
+
+    @Test
+    fun aNewQuestionStartsWithoutThePreviousNameFilter() {
+        val first = AskMarksy.parse("payments to zomato this week", null, now, zone)
+        assertEquals("zomato", first.subject)
+        assertNull(AskMarksy.parse("how much did I spend today", first, now, zone).subject)
+        assertEquals("zomato", AskMarksy.parse("and today?", first, now, zone).subject)
+    }
+
+    @Test
+    fun aNewQuestionDoesNotInheritThePreviousDirectionRangeOrApp() {
+        val swiggy = AskMarksy.parse("show payments to swiggy", AskMarksy.parse("payments received this week", null, now, zone), now, zone)
+        assertEquals(Triple("swiggy", null, "the last 7 days"), Triple(swiggy.subject, swiggy.direction, swiggy.range.label))
+        val whatsapp = AskMarksy.parse("how many whatsapp messages today", null, now, zone)
+        assertNull(AskMarksy.parse("how many notifications today", whatsapp, now, zone).channel)
+    }
+
+    @Test
+    fun aFollowUpKeepsThePreviousDirectionRangeAndApp() {
+        val yesterday = AskMarksy.parse("and yesterday?", AskMarksy.parse("payments received this week", null, now, zone), now, zone)
+        assertEquals(Triple(Intent.PAYMENTS, EventExtractor.Direction.CREDIT, "yesterday"), Triple(yesterday.intent, yesterday.direction, yesterday.range.label))
+        val swiggy = AskMarksy.parse("what about swiggy?", AskMarksy.parse("payments to zomato last month", null, now, zone), now, zone)
+        assertEquals(Triple(Intent.PAYMENTS, "swiggy", "last month"), Triple(swiggy.intent, swiggy.subject, swiggy.range.label))
+        assertEquals("whatsapp", AskMarksy.parse("and yesterday?", AskMarksy.parse("how many whatsapp messages today", null, now, zone), now, zone).channel)
     }
 
     @Test

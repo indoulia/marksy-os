@@ -61,6 +61,12 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
     override val name = "on-device-model"
 
     override suspend fun interpret(text: String, previous: AskMarksy.Query?, nowMillis: Long, zone: ZoneId): AskMarksy.Query? {
+        // Keyword-backed wording is explicit user intent: the rules' answer stands and the model (~1.4 s on Gemma) is not run.
+        val deterministic = AskMarksy.parse(text, previous, nowMillis, zone).intent
+        if (deterministic != AskMarksy.Intent.SEARCH) {
+            DiagLog.i(TAG, "interpret: rules chose $deterministic; model not run")
+            return null
+        }
         if (service.available(AiTask.INTERPRET_QUERY) == null) {
             service.refresh()
             if (service.available(AiTask.INTERPRET_QUERY) == null) {
@@ -75,14 +81,8 @@ class ModelQueryInterpreter(private val service: IntelligenceService) : AskMarks
             fallback = { null }
         )
         val q = outcome.value
-        // Keyword-backed wording is explicit user intent; a model that contradicts it is not trusted.
-        val deterministic = AskMarksy.parse(text, previous, nowMillis, zone).intent
-        if (q != null && deterministic != AskMarksy.Intent.SEARCH && deterministic != q.intent) {
-            DiagLog.i(TAG, "interpret: model intent ${q.intent} contradicts $deterministic; deterministic fallback")
-            return null
-        }
         // Where the rules found nothing, a 1B model often guesses; only an intent the wording supports is used.
-        if (q != null && deterministic == AskMarksy.Intent.SEARCH && !AskMarksy.plausible(q, text)) {
+        if (q != null && !AskMarksy.plausible(q, text)) {
             DiagLog.i(TAG, "interpret: model intent ${q.intent} has no support in the question; deterministic fallback")
             return null
         }

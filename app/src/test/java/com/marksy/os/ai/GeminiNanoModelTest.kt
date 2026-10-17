@@ -20,6 +20,7 @@ class GeminiNanoModelTest {
         var probes = 0
         var downloads = 0
         var warmups = 0
+        var generations = 0
         var failProbe: Exception? = null
         var failDownload: Exception? = null
         override val runtimeVersion = "fake/1"
@@ -27,7 +28,7 @@ class GeminiNanoModelTest {
         override suspend fun modelName() = "nano-test"
         override suspend fun download() { downloads++; failDownload?.let { throw it }; availability = PromptBackend.Availability.AVAILABLE }
         override suspend fun warmup() { warmups++ }
-        override suspend fun generate(prompt: String) = reply(prompt)
+        override suspend fun generate(prompt: String): String? { generations++; return reply(prompt) }
     }
 
     private var now = 1_000L
@@ -111,18 +112,24 @@ class GeminiNanoModelTest {
     @Test
     fun malformedOutputTimeoutAndErrorsFallBackToDeterministic() = runBlocking {
         val zone = ZoneOffset.UTC
-        suspend fun interpret(b: FakeBackend, text: String = "bills"): AskMarksy.Query? {
+        // The model runs exactly for wording the rules cannot read, and only when the runtime is available.
+        suspend fun interpret(b: FakeBackend, text: String = "did the bank take anything today"): AskMarksy.Query? {
             val m = model(b); m.refresh()
-            return ModelQueryInterpreter(IntelligenceService(listOf(m), timeoutMs = 50)).interpret(text, null, now, zone)
+            val q = ModelQueryInterpreter(IntelligenceService(listOf(m), timeoutMs = 50)).interpret(text, null, now, zone)
+            val unread = AskMarksy.parse(text, null, now, zone).intent == AskMarksy.Intent.SEARCH
+            assertEquals(text, if (unread && b.availability == PromptBackend.Availability.AVAILABLE) 1 else 0, b.generations)
+            return q
         }
+        assertEquals(AskMarksy.Intent.SEARCH, AskMarksy.parse("did the bank take anything today", null, now, zone).intent)
+        assertEquals(AskMarksy.Intent.BILLS_DUE, AskMarksy.parse("bills", null, now, zone).intent)
         assertNull(interpret(FakeBackend(reply = { "I think you mean bills" })))
         assertNull(interpret(FakeBackend(reply = { """{"intent":"DELETE_ALL","range":"today","confidence":0.9}""" })))
         assertNull(interpret(FakeBackend(reply = { delay(1_000); "{}" })))
         assertNull(interpret(FakeBackend(reply = { throw IOException("runtime died") })))
         assertNull(interpret(FakeBackend(PromptBackend.Availability.UNAVAILABLE)))
         // Valid output is used for wording the rules cannot place (if the words support it), never against explicit keywords ("bills").
-        assertNull(interpret(FakeBackend()))
-        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend(), "did the bank take anything today")?.intent)
+        assertNull(interpret(FakeBackend(), "bills"))
+        assertEquals(AskMarksy.Intent.PAYMENTS, interpret(FakeBackend())?.intent)
     }
 
     @Test

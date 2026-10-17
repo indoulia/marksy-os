@@ -92,6 +92,18 @@ class TipExtractorTest {
     }
 
     @Test
+    fun optionCallKeepsTheWholeContractAndGoesToReview() {
+        val sell = candidate("SELL NIFTY 24500 CE below 182 target 150 sl 198")
+        assertEquals(TipFields("NIFTY 24500 CE", TipSide.SELL, 182.0, 150.0, 198.0), sell.fields)
+        assertEquals(CaptureState.REVIEW_REQUIRED, sell.state)
+        assertTrue(Ambiguity.OPTION_CONTRACT in sell.ambiguities)
+        // Never forwarded as an index or equity call at the option's premium.
+        assertNull(CandidateDeliveryPolicy.canonicalLine(sell.fields))
+        assertEquals("BANKNIFTY 52000 PE", candidate("Buy BANKNIFTY 52000 PE above 310 target 360 SL 280").fields.symbol)
+        assertEquals("NIFTY 24 OCT 24500 CE", candidate("BUY NIFTY 24 OCT 24500 CE above 120 target 160 SL 100").fields.symbol)
+    }
+
+    @Test
     fun oneTimeCodeDropsTheWholeCapture() {
         assertEquals(ExtractionResult.OneTimeCode, TipExtractor.extract("Your OTP for login is 482913. Do not share it.", provenance, null))
         assertEquals(ExtractionResult.OneTimeCode, TipExtractor.extract("BUY ABC @ 500 Target 650 SL 470\nTPIN 4829", provenance, null))
