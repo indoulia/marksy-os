@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.UpstoxApiClient
@@ -68,7 +67,6 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
             modifier = Modifier.fillMaxWidth(),
             placeholder = if (saved) "Paste a new token to replace it" else "Paste your Upstox Analytics Token",
             visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
-            height = 48.dp,
             trailing = { MarksyButton(if (reveal) "Hide" else "Show", { reveal = !reveal }, style = MarksyButtonStyle.Text) }
         )
         Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {

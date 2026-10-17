@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.ChartRange
@@ -93,8 +92,8 @@ internal fun PriceChart(
     val ticks = remember(bounds) { ChartAxis.priceTicks(bounds.first, bounds.second) }
     val step = if (ticks.size > 1) ticks[1] - ticks[0] else 1.0
     val labelStyle = MarksyType.Caption.copy(color = MarksyTheme.TextMuted)
-    val gutter = 40.dp
-    val axis = 16.dp
+    val gutter = MarksyDraw.AxisGutter
+    val axis = MarksyDraw.AxisBand
     val up = MarksyTheme.Positive
     val down = MarksyTheme.Negative
     Canvas(
@@ -145,14 +144,14 @@ internal fun PriceChart(
             drawRect((if (c.close >= c.open) up else down).copy(alpha = .35f), topLeft = Offset(x(i) - bw / 2, plot - bh), size = Size(bw, bh))
         }
         reference?.let { r ->
-            drawLine(MarksyTheme.TextMuted, Offset(0f, y(r)), Offset(w, y(r)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
+            drawLine(MarksyTheme.TextMuted, Offset(0f, y(r)), Offset(w, y(r)), MarksyDraw.Hairline.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
         }
         levels.forEach { (name, v) ->
             if (v < lo || v > hi) return@forEach
             val tint = when (name) { "Target" -> MarksyTheme.Positive; "Stop" -> MarksyTheme.Negative; else -> MarksyTheme.TextSecondary }
-            drawLine(tint.copy(alpha = .8f), Offset(0f, y(v)), Offset(w, y(v)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
+            drawLine(tint.copy(alpha = .8f), Offset(0f, y(v)), Offset(w, y(v)), MarksyDraw.Hairline.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)))
             val label = measurer.measure("$name ${ChartAxis.price(v, step)}", labelStyle.copy(color = tint))
-            drawText(label, topLeft = Offset(4.dp.toPx(), (y(v) - label.size.height - 1.dp.toPx()).coerceIn(0f, h - label.size.height)))
+            drawText(label, topLeft = Offset(MarksySpace.Tight.toPx(), (y(v) - label.size.height - MarksyDraw.Hairline.toPx()).coerceIn(0f, h - label.size.height)))
         }
         if (candleMode) {
             val body = (slot * .7f).coerceAtLeast(1f)
@@ -166,10 +165,10 @@ internal fun PriceChart(
             val line = Path().apply { closes.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) } }
             val fill = Path().apply { addPath(line); lineTo(w, h); lineTo(0f, h); close() }
             drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = .25f), Color.Transparent), endY = h))
-            drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(line, color, style = Stroke(width = MarksyDraw.Line.toPx(), cap = StrokeCap.Round))
         }
         overlays.forEach { o ->
-            val stroke = if (o.thin) 1.dp.toPx() else 1.5.dp.toPx()
+            val stroke = if (o.thin) MarksyDraw.Hairline.toPx() else MarksyDraw.Fine.toPx()
             if (o.pointColors == null) {
                 val path = Path()
                 var open = false
@@ -186,15 +185,15 @@ internal fun PriceChart(
         }
         ChartAxis.timeTicks(closes.size).forEach { i ->
             val label = measurer.measure(ChartAxis.timeLabel(range, candles[i].time), labelStyle)
-            drawText(label, topLeft = Offset((x(i) - label.size.width / 2f).coerceIn(0f, (w - label.size.width).coerceAtLeast(0f)), plot + 3.dp.toPx()))
+            drawText(label, topLeft = Offset((x(i) - label.size.width / 2f).coerceIn(0f, (w - label.size.width).coerceAtLeast(0f)), plot + MarksyDraw.Inset.toPx()))
         }
         val point = selected?.takeIf { it in closes.indices }
         if (point != null) {
-            drawLine(MarksyTheme.TextSecondary, Offset(x(point), 0f), Offset(x(point), plot), 1.dp.toPx())
-            drawCircle(color, 5.dp.toPx(), Offset(x(point), y(closes[point])))
-            drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(x(point), y(closes[point])), style = Stroke(1.5.dp.toPx()))
+            drawLine(MarksyTheme.TextSecondary, Offset(x(point), 0f), Offset(x(point), plot), MarksyDraw.Hairline.toPx())
+            drawCircle(color, MarksyDraw.Marker.toPx(), Offset(x(point), y(closes[point])))
+            drawCircle(MarksyTheme.TextPrimary, MarksyDraw.Marker.toPx(), Offset(x(point), y(closes[point])), style = Stroke(MarksyDraw.Fine.toPx()))
         } else if (!candleMode) {
-            drawCircle(color, 3.dp.toPx(), Offset(x(closes.lastIndex), y(closes.last())))
+            drawCircle(color, MarksyDraw.Point.toPx(), Offset(x(closes.lastIndex), y(closes.last())))
         }
     }
 }

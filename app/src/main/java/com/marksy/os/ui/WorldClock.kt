@@ -20,11 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -44,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.AppContext
 import com.marksy.os.MarksyFormat
 import com.marksy.os.clock.ClockPrefs
@@ -126,7 +122,7 @@ fun TimeZoneConverterDialog(onDismiss: () -> Unit) {
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("World clock", color = MarksyTheme.TextPrimary, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextSecondary) }
+                MarksyIconButton(Icons.Default.Close, "Close", onDismiss, tint = MarksyTheme.TextSecondary)
             }
         },
         text = {
@@ -141,9 +137,9 @@ fun TimeZoneConverterDialog(onDismiss: () -> Unit) {
                     Pill(if (source in options) "Other…" else ClockZones.abbreviation(from), selected = source !in options) { picking = ZoneSlot.Source }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { date = date.minusDays(1) }) { Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day", tint = MarksyTheme.TextSecondary) }
-                    Pill(MarksyFormat.weekdayDay(date)) { pickingDate = true }
-                    IconButton(onClick = { date = date.plusDays(1) }) { Icon(Icons.Default.ChevronRight, contentDescription = "Next day", tint = MarksyTheme.TextSecondary) }
+                    MarksyIconButton(Icons.Default.ChevronLeft, "Previous day", { date = date.minusDays(1) }, tint = MarksyTheme.TextSecondary)
+                    SelectField(MarksyFormat.weekdayDay(date), { pickingDate = true }, Modifier.weight(1f))
+                    MarksyIconButton(Icons.Default.ChevronRight, "Next day", { date = date.plusDays(1) }, tint = MarksyTheme.TextSecondary)
                 }
                 key(wheelsKey) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -197,16 +193,10 @@ fun TimeZoneConverterDialog(onDismiss: () -> Unit) {
 
     if (pickingDate) {
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
-        DatePickerDialog(
-            onDismissRequest = { pickingDate = false },
-            confirmButton = {
-                MarksyButton("OK", style = MarksyButtonStyle.Text, onClick = {
-                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
-                    pickingDate = false
-                })
-            },
-            dismissButton = { MarksyButton("Cancel", onClick = { pickingDate = false }, style = MarksyButtonStyle.Text) }
-        ) { DatePicker(state) }
+        MarksyDatePickerDialog(state, onDismissRequest = { pickingDate = false }, onConfirm = {
+            state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+            pickingDate = false
+        })
     }
 }
 
@@ -242,7 +232,7 @@ fun ZonePickerDialog(title: String, onPick: (ZoneId) -> Unit, onDismiss: () -> U
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 MarksySearchField(query, { query = it }, "Search city, region or EDT", lifted = false)
-                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+                Column(Modifier.heightIn(max = MarksySize.PickerList).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     if (matches.isEmpty()) InlineEmpty("No matching zone")
                     matches.forEach { entry ->
                         MarksyRowCard(onClick = { onPick(entry.zone) }) {
@@ -263,7 +253,7 @@ fun ZonePickerDialog(title: String, onPick: (ZoneId) -> Unit, onDismiss: () -> U
 }
 
 private const val MINUTE_STEP = 5
-private val WheelItemHeight = 40.dp
+private val WheelItemHeight = MarksySize.WheelRow
 
 /** Scroll-to-pick column that snaps to the middle row; no keyboard needed. */
 @Composable
@@ -279,7 +269,7 @@ private fun Wheel(items: List<String>, initialIndex: Int, onSelected: (Int) -> U
             onSelected(index)
         }
     }
-    Box(Modifier.width(64.dp).height(WheelItemHeight * 3), contentAlignment = Alignment.Center) {
+    Box(Modifier.width(MarksySize.Wheel).height(WheelItemHeight * 3), contentAlignment = Alignment.Center) {
         Box(
             Modifier.fillMaxWidth().height(WheelItemHeight).clip(MarksyShape.Chip)
                 .background(MarksyTheme.BadgeTradingBg).border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Chip)

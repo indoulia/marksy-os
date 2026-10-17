@@ -15,7 +15,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.marksy.os.upstox.Candle
 import com.marksy.os.upstox.PivotMethod
 import com.marksy.os.upstox.Reading
@@ -63,19 +62,19 @@ private fun SignalGroup(title: String, readings: List<Reading>, movingAverages: 
         MarksyDivider()
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Text(title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
-            Column(Modifier.width(130.dp)) {
+            Column(Modifier.width(MarksySize.ProgressWidth)) {
                 Row(Modifier.fillMaxWidth()) {
                     Text("$bull", color = MarksyTheme.Positive, style = MarksyType.Small, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (neutral > 0) Text("$neutral", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                     Text("$bear", color = MarksyTheme.Negative, style = MarksyType.Small, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
                 }
-                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Hair).height(4.dp).clip(MarksyShape.Badge)) {
+                Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Hair).height(MarksySize.BarThin).clip(MarksyShape.Badge)) {
                     listOf(bull to MarksyTheme.Positive, neutral to MarksyTheme.TextMuted, bear to MarksyTheme.Negative).filter { it.first > 0 }.forEach { (n, c) ->
                         Box(Modifier.weight(n.toFloat()).fillMaxHeight().background(c))
                     }
                 }
             }
-            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = MarksySpace.Inner).size(18.dp).rotate(if (open) 180f else 0f))
+            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.padding(start = MarksySpace.Inner).size(MarksySize.Icon).rotate(if (open) 180f else 0f))
         }
         if (open) Column(Modifier.padding(bottom = MarksySpace.Gap)) {
             Row(Modifier.fillMaxWidth().padding(bottom = MarksySpace.Hair)) {
@@ -106,7 +105,7 @@ private fun HistoryGroup(history: List<Pair<Candle, Trend>>) {
         MarksyDivider()
         Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
             Text("Historical rating", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f))
+            Icon(Icons.Default.ExpandMore, contentDescription = if (open) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (open) 180f else 0f))
         }
         if (open) Column(Modifier.padding(bottom = MarksySpace.Gap)) {
             history.forEach { (c, t) ->
@@ -127,7 +126,7 @@ private fun PivotBlock(daily: List<Candle>, lastPrice: Double?) {
     Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Pivot levels", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, modifier = Modifier.weight(1f))
-            MarksySegmented(PivotMethod.entries.map { it.name }, method.name, { method = PivotMethod.valueOf(it) }, Modifier.width(190.dp), label = { it.lowercase().replaceFirstChar { c -> c.uppercase() } })
+            MarksySegmented(PivotMethod.entries.map { it.name }, method.name, { method = PivotMethod.valueOf(it) }, label = { it.lowercase().replaceFirstChar { c -> c.uppercase() } })
         }
         Text("From the ${ChartAxis.readout(com.marksy.os.upstox.ChartRange.Y1, p.from)} session", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         listOf(

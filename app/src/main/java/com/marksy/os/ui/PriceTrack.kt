@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 
 internal fun trackColor(tone: TrackTone): Color = when (tone) {
     TrackTone.POSITIVE -> MarksyTheme.Positive
@@ -55,7 +54,7 @@ internal fun trackColor(tone: TrackTone): Color = when (tone) {
 internal fun PriceTrackView(track: PriceTrack, modifier: Modifier = Modifier, backdrop: Color = MarksyTheme.Surface, large: Boolean = false, block: Boolean = true) {
     Column(modifier.fillMaxWidth().alpha(if (track.muted) 0.6f else 1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
         if (track.hasBar) {
-            TrackBar(track, backdrop, large, Modifier.fillMaxWidth().height(if (large) 22.dp else 16.dp))
+            TrackBar(track, backdrop, large, Modifier.fillMaxWidth().height(if (large) MarksySize.PriceTrackLarge else MarksySize.PriceTrack))
             Row(Modifier.fillMaxWidth()) {
                 Text(stopText(track, large), color = MarksyTheme.Negative, style = if (large) MarksyType.Meta else MarksyType.Caption, maxLines = 1, modifier = Modifier.weight(1f))
                 Text(targetText(track, large), color = MarksyTheme.Positive, style = if (large) MarksyType.Meta else MarksyType.Caption, maxLines = 1)
@@ -139,7 +138,7 @@ internal fun DrawScope.pulseRing(phase: Float, center: Offset, radius: Float, co
     if (phase < 0f) return
     val scale = if (phase == STILL_PULSE) 1.8f else 1f + 1.6f * phase
     val alpha = if (phase == STILL_PULSE) 0.35f else 0.9f * (1f - phase)
-    drawCircle(color.copy(alpha = alpha), radius = radius * scale, center = center, style = Stroke(2.dp.toPx()))
+    drawCircle(color.copy(alpha = alpha), radius = radius * scale, center = center, style = Stroke(MarksyDraw.Line.toPx()))
 }
 
 @Composable
@@ -157,41 +156,42 @@ private fun TrackBar(track: PriceTrack, backdrop: Color, large: Boolean, modifie
         val w = size.width
         val mid = size.height / 2
         val k = if (large) 1.25f else 1f
-        val marker = 12.dp.toPx() * k
+        val marker = MarksyDraw.Ring.toPx() * k
         fun x(v: Double) = (track.at(v) ?: 0f) * w
-        val bar = 4.dp.toPx() * k
+        val bar = MarksyDraw.Track.toPx() * k
         drawRoundRect(MarksyTheme.Track, Offset(0f, mid - bar / 2), Size(w, bar), CornerRadius(bar / 2))
         val entry = track.entryRef
         if (entry == null && track.zoneLow != null && track.zoneHigh != null) {
             val a = x(track.zoneLow); val b = x(track.zoneHigh)
             val left = minOf(a, b); val width = maxOf(kotlin.math.abs(b - a), w * 0.02f)
-            val h = 10.dp.toPx() * k
-            drawRoundRect(MarksyTheme.BadgeImportantBg, Offset(left, mid - h / 2), Size(width, h), CornerRadius(3.dp.toPx()))
-            drawRoundRect(MarksyTheme.Warning, Offset(left, mid - h / 2), Size(width, h), CornerRadius(3.dp.toPx()), style = Stroke(1.dp.toPx()))
+            val h = MarksyDraw.Zone.toPx() * k
+            val corner = CornerRadius(MarksyDraw.Corner.toPx())
+            drawRoundRect(MarksyTheme.BadgeImportantBg, Offset(left, mid - h / 2), Size(width, h), corner)
+            drawRoundRect(MarksyTheme.Warning, Offset(left, mid - h / 2), Size(width, h), corner, style = Stroke(MarksyDraw.Hairline.toPx()))
         }
         if (entry != null) {
             (track.exit ?: track.current)?.let { end ->
                 val e = x(entry); val p = x(end)
                 drawRoundRect(fill, Offset(minOf(e, p), mid - bar / 2), Size(kotlin.math.abs(p - e).coerceAtLeast(2f), bar), CornerRadius(bar / 2))
             }
-            val tickW = 3.dp.toPx(); val tickH = 14.dp.toPx() * k
+            val tickW = MarksyDraw.Tick.toPx(); val tickH = MarksyDraw.TickTall.toPx() * k
             drawRoundRect(MarksyTheme.Warning, Offset(x(entry) - tickW / 2, mid - tickH / 2), Size(tickW, tickH), CornerRadius(tickW / 2))
         }
         track.recommended?.let { r ->
             val c = Offset(x(r), mid)
             drawCircle(backdrop, radius = marker / 2, center = c)
-            drawCircle(MarksyTheme.TextPrimary, radius = marker / 2 - 1.dp.toPx(), center = c, style = Stroke(2.dp.toPx()))
+            drawCircle(MarksyTheme.TextPrimary, radius = marker / 2 - MarksyDraw.Hairline.toPx(), center = c, style = Stroke(MarksyDraw.Line.toPx()))
         }
         track.exit?.let { v ->
-            val side = 11.dp.toPx() * k
+            val side = MarksyDraw.Diamond.toPx() * k
             val c = Offset(x(v), mid)
-            rotate(45f, c) { drawRoundRect(toneColor, Offset(c.x - side / 2, c.y - side / 2), Size(side, side), CornerRadius(2.dp.toPx())) }
+            rotate(45f, c) { drawRoundRect(toneColor, Offset(c.x - side / 2, c.y - side / 2), Size(side, side), CornerRadius(MarksyDraw.Corner.toPx())) }
         }
         track.current?.let { v ->
             val c = Offset(x(v), mid)
             pulseRing(pulse.value, c, marker / 2, nowColor)
             drawCircle(backdrop, radius = marker / 2, center = c)
-            drawCircle(nowColor, radius = marker / 2 - 2.dp.toPx(), center = c)
+            drawCircle(nowColor, radius = marker / 2 - MarksyDraw.Line.toPx(), center = c)
         }
     }
 }

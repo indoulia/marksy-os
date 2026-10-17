@@ -29,7 +29,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -94,6 +93,7 @@ import com.marksy.os.ui.MarksyButton
 import com.marksy.os.ui.MarksyButtonStyle
 import com.marksy.os.ui.MarksyCard
 import com.marksy.os.ui.MarksyCardHeader
+import com.marksy.os.ui.MarksySize
 import com.marksy.os.ui.MarksySpace
 import com.marksy.os.ui.MarksyType
 import com.marksy.os.ui.marksyCard
@@ -627,8 +627,8 @@ class MainActivity : ComponentActivity() {
                                 if (index == 1 && inboxSummary.needsYou > 0) {
                                     BadgedBox(badge = {
                                         Badge(containerColor = MarksyTheme.Negative, contentColor = MarksyTheme.TextPrimary) { Text("${inboxSummary.needsYou}", style = MarksyType.Caption) }
-                                    }) { Icon(icon, contentDescription = "$label, ${inboxSummary.needsYou} need you") }
-                                } else Icon(icon, contentDescription = label)
+                                    }) { Icon(icon, contentDescription = "$label, ${inboxSummary.needsYou} need you", modifier = Modifier.size(MarksySize.IconLarge)) }
+                                } else Icon(icon, contentDescription = label, modifier = Modifier.size(MarksySize.IconLarge))
                             },
                             label = { Text(label, style = MarksyType.Meta, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium) },
                             colors = NavigationBarItemDefaults.colors(
@@ -1008,20 +1008,16 @@ class MainActivity : ComponentActivity() {
             // Profile Banner Card
             MarksyCard(border = MarksyTheme.PrimaryEmerald, onClick = openGatewaySettings) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .background(MarksyTheme.BadgeTradingBg, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = MarksyTheme.PrimaryEmerald)
-                    }
+                    com.marksy.os.ui.MarksyIconDisc(
+                        Icons.Default.Person, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg,
+                        size = MarksySize.AvatarLarge, iconSize = MarksySize.IconLarge
+                    )
                     Spacer(Modifier.width(MarksySpace.CardPadding))
                     Column(Modifier.weight(1f)) {
                         Text(signedInUserId ?: "Not signed in", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold)
                         Text(if (signedInUserId != null) "Signed in" else "Tap to sign in", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small)
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.IconLarge))
                 }
             }
         }
@@ -1033,15 +1029,13 @@ class MainActivity : ComponentActivity() {
                 scope.launch { com.marksy.os.pulse.MarksyPulse.update(context) }
             }
             SettingsCard("Marksy Pulse", if (pulseOn) "ON" else "OFF", "A quiet notification with today's summary and next due item, readable on the lock screen. While locked it shows only counts and the market.", trailing = {
-                androidx.compose.material3.Switch(
+                com.marksy.os.ui.MarksySwitch(
                     checked = pulseOn,
                     onCheckedChange = { on ->
                         pulseOn = on
                         scope.launch { com.marksy.os.pulse.MarksyPulse.setEnabled(context, on) }
                         if (on && android.os.Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    },
-                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedThumbColor = MarksyTheme.OnAccent, checkedTrackColor = MarksyTheme.PrimaryEmerald, uncheckedTrackColor = MarksyTheme.SurfaceRaised),
-                    modifier = Modifier.height(24.dp)
+                    }
                 )
             })
         }

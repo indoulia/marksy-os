@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.CallerScorecardDto
@@ -184,15 +183,15 @@ private fun HitRateBand(d: ScorecardDetailDto) {
     val band = d.trustBand
     val bar = ScorecardGraphics.hitRateBand(band, hit)
     Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
-        Canvas(Modifier.fillMaxWidth().height(14.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(MarksySize.Strip)) {
             val mid = size.height / 2
-            val h = 8.dp.toPx()
+            val h = MarksySize.BarWide.toPx()
             val r = h / 2
             val span = size.width - h
             drawLine(MarksyTheme.SurfaceRaised, Offset(r, mid), Offset(size.width - r, mid), h, StrokeCap.Round)
             if (bar != null) {
                 drawLine(MarksyTheme.Positive.copy(alpha = .35f), Offset(r + span * bar.low, mid), Offset(r + span * bar.high, mid), h, StrokeCap.Round)
-                bar.marker?.let { m -> (r + span * m).let { x -> drawLine(MarksyTheme.TextPrimary, Offset(x, 0f), Offset(x, size.height), 3.dp.toPx(), StrokeCap.Round) } }
+                bar.marker?.let { m -> (r + span * m).let { x -> drawLine(MarksyTheme.TextPrimary, Offset(x, 0f), Offset(x, size.height), MarksyDraw.Tick.toPx(), StrokeCap.Round) } }
             } else if (t.minimumCompleted > 0) {
                 val done = (t.completed.toFloat() / t.minimumCompleted).coerceIn(0f, 1f)
                 if (done > 0f) drawLine(MarksyTheme.TextMuted, Offset(r, mid), Offset(r + span * done, mid), h, StrokeCap.Round)
@@ -229,7 +228,7 @@ private fun Outcomes(d: ScorecardDetailDto) {
             Caption("OUTCOMES", Modifier.weight(1f))
             if (c.invalidated > 0) Text("${c.invalidated} voided before buy · not scored", color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
         }
-        OutcomeBar(c.successful, c.failed, c.expired, c.open, height = 8.dp)
+        OutcomeBar(c.successful, c.failed, c.expired, c.open, height = MarksySize.BarWide)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("Target" to c.successful, "Stop" to c.failed, "Expired" to c.expired, "Open" to c.open).forEach { (label, n) ->
                 Text("$label $n", color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1)
@@ -251,15 +250,15 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
             LegendLine(tint, dashed = false, "delivered")
             LegendLine(MarksyTheme.TextSecondary, dashed = true, "promised")
         }
-        Canvas(Modifier.fillMaxWidth().height(70.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(MarksySize.ChartMini)) {
             val (lo, hi) = ScorecardGraphics.bounds(realised, promised)
-            val pad = 3.dp.toPx()
+            val pad = MarksyDraw.Inset.toPx()
             fun at(p: Pair<Float, Float>) = Offset(p.first * size.width, pad + p.second * (size.height - 2 * pad))
             fun line(pts: List<Offset>) = Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
             val zero = at(0f to ScorecardGraphics.chartPoints(listOf(0.0), lo, hi).first().second).y
-            drawLine(MarksyTheme.Divider, Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx())
-            drawPath(line(ScorecardGraphics.chartPoints(promised, lo, hi).map(::at)), MarksyTheme.TextSecondary, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
-            drawPath(line(ScorecardGraphics.chartPoints(realised, lo, hi).map(::at)), tint, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawLine(MarksyTheme.Divider, Offset(0f, zero), Offset(size.width, zero), MarksyDraw.Hairline.toPx())
+            drawPath(line(ScorecardGraphics.chartPoints(promised, lo, hi).map(::at)), MarksyTheme.TextSecondary, style = Stroke(MarksyDraw.Fine.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(MarksyDraw.Dash.toPx(), MarksyDraw.DashGap.toPx()))))
+            drawPath(line(ScorecardGraphics.chartPoints(realised, lo, hi).map(::at)), tint, style = Stroke(MarksyDraw.Line.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }
@@ -267,10 +266,10 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
 @Composable
 private fun LegendLine(color: Color, dashed: Boolean, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
-        Canvas(Modifier.size(12.dp, 3.dp)) {
+        Canvas(Modifier.size(MarksyDraw.Swatch, MarksyDraw.Tick)) {
             drawLine(
-                color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 2.dp.toPx(),
-                pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx())) else null
+                color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), MarksyDraw.Line.toPx(),
+                pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(MarksyDraw.Dash.toPx(), MarksyDraw.DashGap.toPx())) else null
             )
         }
         Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Caption, maxLines = 1)
@@ -283,12 +282,12 @@ private fun HorizonCard(rows: List<HorizonHitDto>) {
         Caption("TARGET HIT BY HORIZON")
         rows.forEach { h ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                Text(HorizonShort[h.horizon] ?: h.horizon, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, modifier = Modifier.width(72.dp))
+                Text(HorizonShort[h.horizon] ?: h.horizon, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 1, modifier = Modifier.width(MarksySize.ColumnLabel))
                 Box(Modifier.weight(1f).height(MarksySize.Dot).clip(CircleShape).background(MarksyTheme.Track)) {
                     val share = ((h.hitRatePct ?: 0.0) / 100).coerceIn(0.0, 1.0).toFloat()
                     if (share > 0f) Box(Modifier.fillMaxWidth(share).fillMaxHeight().clip(CircleShape).background(MarksyTheme.Positive))
                 }
-                Row(Modifier.width(84.dp), horizontalArrangement = Arrangement.End) {
+                Row(Modifier.width(MarksySize.ColumnLabel), horizontalArrangement = Arrangement.End) {
                     Text(h.hitRatePct?.let { MarksyFormat.percent(it, 0, signed = false) } ?: "—", color = MarksyTheme.TextPrimary, style = MarksyType.Small, maxLines = 1)
                     Text(" · ${h.completed}", color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 1)
                 }
@@ -333,10 +332,7 @@ private fun CallerRow(c: CallerScorecardDto, onClick: () -> Unit) {
 @Composable
 private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
     val ret = s.avgActualReturn
-    Row(
-        Modifier.clip(MarksyShape.Pill).background(MarksyTheme.SurfaceRaised).clickable(role = Role.Button, onClickLabel = "View ${s.symbol}", onClick = onClick)
-            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight)
-    ) {
+    MarksyChip(MarksyTheme.SurfaceRaised, onClick = onClick, onClickLabel = "View ${s.symbol}") {
         Text("${s.symbol} ${s.calls}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
         ret?.let { Text(" · " + MarksyFormat.percent(it * 100, 1), color = ScorecardGraphics.returnTone(it), style = MarksyType.Meta, maxLines = 1) }
     }

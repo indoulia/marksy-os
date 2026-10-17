@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
@@ -106,10 +105,7 @@ private fun TradingViews(
 
     Column(Modifier.fillMaxSize()) {
         // Sticky: the view switch and its scopes stay put while the list scrolls under them.
-        Column(
-            Modifier.fillMaxWidth().background(MarksyTheme.Background).padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
-            verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)
-        ) {
+        MarksyStickyBar {
             MarksySegmented(TradingFilters, view, onView, Modifier.fillMaxWidth(), count = { counts[it] })
             FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 when (view) {
@@ -267,15 +263,7 @@ private fun TradingTickerCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(MarksySize.IconLarge)
-                        .clip(CircleShape)
-                        .background(MarksyTheme.BadgeFinanceBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("📊", style = MarksyType.Small)
-                }
+                MarksyIconDisc(Icons.Default.BarChart, MarksySource.BANK.accent, MarksySource.BANK.background)
                 Spacer(Modifier.width(MarksySpace.Gap))
                 Text(symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             }

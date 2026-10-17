@@ -290,6 +290,7 @@ private fun weatherTint(condition: Weather.Condition): Color = when (condition) 
     else -> MarksyTheme.TextSecondary
 }
 
+/** A message-kind count on Home: the source's disc, then the count. */
 @Composable
 private fun CategoryGridCard(
     title: String,
@@ -298,28 +299,16 @@ private fun CategoryGridCard(
     source: MarksySource,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) {
-    MarksyCard(modifier, onClick = onClick) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(MarksySize.Icon).clip(CircleShape).background(source.background), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = title, tint = source.accent, modifier = Modifier.size(MarksySize.IconSmall))
-            }
-            Spacer(Modifier.width(MarksySpace.Inner))
-            Text("$count", color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
-        }
-    }
-}
+) = Pill(
+    "$count", modifier = modifier, onClick = onClick,
+    leading = { MarksyIconDisc(icon, source.accent, source.background, size = MarksySize.Icon, contentDescription = title) }
+)
 
 @Composable
-private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    MarksyCard(modifier, onClick = onClick) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
-            Spacer(Modifier.width(MarksySpace.Inner))
-            Text(label, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        }
-    }
-}
+private fun QuickAccessButton(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) = Pill(
+    label, modifier = modifier, onClick = onClick,
+    leading = { Icon(icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall)) }
+)
 
 /** The one profile/quick-action icon style used on every screen's header, so it never looks
  * different depending on which tab you're on. */

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.marksy.os.connector.CalendarConnector
 import com.marksy.os.connector.ConnectorDisplay
 import com.marksy.os.connector.connectorDisplay
@@ -90,7 +88,7 @@ internal fun ConnectorSetupCard() {
                     }
                     Text(detail, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 }
-                Switch(
+                MarksySwitch(
                     checked = status.enabled && state != ConnectorState.NOT_CONFIGURED,
                     enabled = state != ConnectorState.NOT_CONFIGURED && state != ConnectorState.NOT_AVAILABLE,
                     onCheckedChange = { on ->

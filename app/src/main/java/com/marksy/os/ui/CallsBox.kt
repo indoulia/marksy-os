@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.FollowKey
@@ -113,12 +112,12 @@ internal fun ProgressBar(stop: Double, entry: Double, target: Double, price: Dou
     if (target == stop) return
     fun at(v: Double) = ((v - stop) / (target - stop)).coerceIn(0.0, 1.0).toFloat()
     Column(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)) {
-        Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(MarksySize.Strip)) {
             val mid = size.height / 2
-            drawLine(MarksyTheme.Negative.copy(alpha = .5f), Offset(0f, mid), Offset(size.width * at(entry), mid), 4.dp.toPx(), StrokeCap.Round)
-            drawLine(MarksyTheme.PrimaryEmerald.copy(alpha = .5f), Offset(size.width * at(entry), mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
-            drawLine(MarksyTheme.TextSecondary, Offset(size.width * at(entry), 0f), Offset(size.width * at(entry), size.height), 1.dp.toPx())
-            price?.let { drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(size.width * at(it), mid)) }
+            drawLine(MarksyTheme.Negative.copy(alpha = .5f), Offset(0f, mid), Offset(size.width * at(entry), mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.PrimaryEmerald.copy(alpha = .5f), Offset(size.width * at(entry), mid), Offset(size.width, mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.TextSecondary, Offset(size.width * at(entry), 0f), Offset(size.width * at(entry), size.height), MarksyDraw.Hairline.toPx())
+            price?.let { drawCircle(MarksyTheme.TextPrimary, MarksyDraw.Marker.toPx(), Offset(size.width * at(it), mid)) }
         }
         Row(Modifier.fillMaxWidth()) {
             Text("Stop", color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.weight(1f))
@@ -174,20 +173,20 @@ private fun Gauge(g: MarksyAnalysis.Gauge) {
         else -> MarksyTheme.Negative
     }
     Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
-        Text(g.label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.width(78.dp))
-        Canvas(Modifier.weight(1f).height(10.dp)) {
+        Text(g.label, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.width(MarksySize.ColumnLabel))
+        Canvas(Modifier.weight(1f).height(MarksySize.BarThick)) {
             val mid = size.height / 2
-            drawLine(MarksyTheme.Track, Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
-            drawLine(tint, Offset(0f, mid), Offset(size.width * g.fraction.coerceIn(.02f, 1f), mid), 4.dp.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.Track, Offset(0f, mid), Offset(size.width, mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
+            drawLine(tint, Offset(0f, mid), Offset(size.width * g.fraction.coerceIn(.02f, 1f), mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
         }
-        Text(g.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+        Text(g.value, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(MarksySize.ColumnNarrow))
     }
-    g.note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(start = MarksySpace.Gutter * 4 + MarksySpace.Inner)) }
+    g.note?.let { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Caption, modifier = Modifier.padding(start = MarksySize.ColumnLabel)) }
 }
 
 @Composable
 private fun FactPill(label: String, value: String) {
-    Row(Modifier.clip(MarksyShape.Chip).background(MarksyTheme.SurfaceRaised).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
+    MarksyChip(MarksyTheme.SurfaceRaised) {
         Text("$label ", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         Text(value, color = if (value.startsWith("+")) MarksyTheme.PrimaryEmerald else if (value.startsWith("-") || value.startsWith(MarksyFormat.MINUS)) MarksyTheme.Negative else MarksyTheme.TextPrimary, style = MarksyType.Meta, fontWeight = FontWeight.SemiBold)
     }

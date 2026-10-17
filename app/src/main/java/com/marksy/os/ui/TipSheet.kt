@@ -19,9 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,7 +37,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.AlsoTippedDto
 import com.marksy.os.market.LedgerCalls
@@ -63,12 +60,7 @@ internal fun TipSheet(
     }
     var daily by remember { mutableStateOf<AlsoTippedDto?>(null) }
     if (t != null && repository != null) daily?.let { o -> DayByDayDialog(repository, t, o) { daily = null } }
-    // A darker scrim, a raised sheet and a slim handle, so the sheet stands off the list behind it.
-    ModalBottomSheet(
-        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MarksyTheme.SurfaceRaised, scrimColor = MarksyTheme.Scrim,
-        dragHandle = { Box(Modifier.padding(top = MarksySpace.Gap, bottom = MarksySpace.Hair).size(width = 36.dp, height = 4.dp).clip(CircleShape).background(MarksyTheme.TextMuted)) }
-    ) {
+    MarksyBottomSheet(onDismissRequest = onDismiss) {
         TipSheetContent(m, progress, onTrade, onOpenStock, onScore, impliedStatus) { daily = it }
     }
 }
@@ -156,21 +148,22 @@ private fun PriceChart(track: PriceTrack, progress: List<ProgressPointDto>) {
     val levels = listOfNotNull(track.stop, track.target, track.recommended, track.entryRef) + points.map { it.second }
     val lo = levels.min(); val hi = levels.max()
     Column(Modifier.fillMaxWidth().clip(MarksyShape.Field).background(MarksyTheme.Background).padding(MarksySpace.ListGap), verticalArrangement = Arrangement.spacedBy(MarksySpace.Tight)) {
-        Box(Modifier.fillMaxWidth().height(120.dp)) {
+        Box(Modifier.fillMaxWidth().height(MarksySize.ChartSmall)) {
             Canvas(Modifier.fillMaxSize()) {
-                val pad = 8.dp.toPx()
+                val pad = MarksySpace.Gap.toPx()
                 fun y(v: Double) = if (hi == lo) size.height / 2 else (pad + (1 - (v - lo) / (hi - lo)) * (size.height - 2 * pad)).toFloat()
                 fun x(i: Int) = size.width * i / (points.size - 1)
-                val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
-                track.target?.let { drawLine(MarksyTheme.Positive, Offset(0f, y(it)), Offset(size.width, y(it)), 1.dp.toPx(), pathEffect = dash) }
-                track.stop?.let { drawLine(MarksyTheme.Negative, Offset(0f, y(it)), Offset(size.width, y(it)), 1.dp.toPx(), pathEffect = dash) }
-                track.entryRef?.let { drawLine(MarksyTheme.TextMuted, Offset(0f, y(it)), Offset(size.width, y(it)), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 4.dp.toPx()))) }
+                val dash = PathEffect.dashPathEffect(floatArrayOf(MarksyDraw.Dash.toPx(), MarksyDraw.DashGap.toPx()))
+                val hairline = MarksyDraw.Hairline.toPx()
+                track.target?.let { drawLine(MarksyTheme.Positive, Offset(0f, y(it)), Offset(size.width, y(it)), hairline, pathEffect = dash) }
+                track.stop?.let { drawLine(MarksyTheme.Negative, Offset(0f, y(it)), Offset(size.width, y(it)), hairline, pathEffect = dash) }
+                track.entryRef?.let { drawLine(MarksyTheme.TextMuted, Offset(0f, y(it)), Offset(size.width, y(it)), hairline, pathEffect = PathEffect.dashPathEffect(floatArrayOf(MarksyDraw.Dot.toPx(), MarksyDraw.Dash.toPx()))) }
                 val path = Path().apply { points.forEachIndexed { i, (_, v) -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) } }
-                drawPath(path, line, style = Stroke(2.dp.toPx(), join = StrokeJoin.Round))
-                val r = 4.5.dp.toPx()
+                drawPath(path, line, style = Stroke(MarksyDraw.Line.toPx(), join = StrokeJoin.Round))
+                val r = MarksyDraw.Marker.toPx()
                 track.recommended?.let { v ->
                     drawCircle(MarksyTheme.Background, r, Offset(r, y(v)))
-                    drawCircle(MarksyTheme.TextPrimary, r, Offset(r, y(v)), style = Stroke(2.dp.toPx()))
+                    drawCircle(MarksyTheme.TextPrimary, r, Offset(r, y(v)), style = Stroke(MarksyDraw.Line.toPx()))
                 }
                 val end = Offset(x(points.size - 1), y(points.last().second))
                 pulseRing(pulse.value, end, r, line)

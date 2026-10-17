@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 
 /** One boxed section, two entries per row: name on top, price and day change beneath. */
@@ -46,7 +45,7 @@ internal fun QuoteGrid(items: List<Triple<String, String, Double?>>, watchable: 
                     Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            if (watchable) WatchlistButton(name, Modifier.size(24.dp))
+                            if (watchable) WatchlistButton(name, small = true)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -78,7 +77,7 @@ internal fun BreadthBar(b: com.marksy.os.market.MarketBreadth, label: String, mo
             Text("${b.declines}", color = MarksyTheme.Negative, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MarksyTheme.Negative, modifier = Modifier.size(MarksySize.Icon))
         }
-        Row(Modifier.fillMaxWidth().padding(top = if (barOnly) MarksySpace.Hair else MarksySpace.Tight).height(5.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
+        Row(Modifier.fillMaxWidth().padding(top = if (barOnly) MarksySpace.Hair else MarksySpace.Tight).height(MarksySize.Bar).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             if (up > 0.01f) Box(Modifier.weight(up).fillMaxHeight().background(MarksyTheme.Positive))
             if (flat > 0.01f) Box(Modifier.weight(flat).fillMaxHeight().background(MarksyTheme.TextMuted))
             if (down > 0.01f) Box(Modifier.weight(down).fillMaxHeight().background(MarksyTheme.Negative))

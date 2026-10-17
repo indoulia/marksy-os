@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.upstox.FinancialPeriod
 import com.marksy.os.upstox.FinancialSeries
@@ -130,7 +129,7 @@ private fun FinancialsCard(f: StockFundamentals) {
                 val series = if (yearly) f.yearly else f.quarterly
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { SeriesChips(series, category) { category = it } }
-                    MarksySegmented(listOf("Quarterly", "Yearly"), if (yearly) "Yearly" else "Quarterly", { yearly = it == "Yearly" }, Modifier.width(170.dp))
+                    MarksySegmented(listOf("Quarterly", "Yearly"), if (yearly) "Yearly" else "Quarterly", { yearly = it == "Yearly" })
                 }
                 (series.firstOrNull { it.category == category } ?: series.firstOrNull())?.let { Bars(it.history) }
             }
@@ -168,7 +167,7 @@ private fun SeriesChips(series: List<FinancialSeries>, selected: String?, onSele
 private fun Bars(history: List<FinancialPeriod>) {
     val periods = history.take(5).reversed()
     val peak = periods.maxOfOrNull { abs(it.value) }?.takeIf { it > 0 } ?: return
-    Row(Modifier.fillMaxWidth().height(150.dp), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
+    Row(Modifier.fillMaxWidth().height(MarksySize.BarChartTall), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
         periods.forEach { p ->
             Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
                 Text(crore(p.value), color = MarksyTheme.TextPrimary, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold, maxLines = 1)
@@ -190,7 +189,7 @@ private fun ShareholdingCard(series: List<FinancialSeries>) {
     val latest = series.mapNotNull { s -> s.history.firstOrNull()?.let { s.category to it } }
     if (latest.isEmpty()) return
     Section("Shareholding", note = "${latest.first().second.period} · Upstox") {
-        Row(Modifier.fillMaxWidth().height(10.dp).clip(MarksyShape.Badge)) {
+        Row(Modifier.fillMaxWidth().height(MarksySize.BarThick).clip(MarksyShape.Badge)) {
             latest.forEachIndexed { i, (_, p) -> if (p.value > 0) Box(Modifier.weight(p.value.toFloat()).fillMaxHeight().background(HOLDER_COLORS[i % HOLDER_COLORS.size])) }
         }
         latest.chunked(2).forEachIndexed { r, row ->

@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.PlanItemEntity
 import com.marksy.os.plan.PlanKind
@@ -117,25 +116,20 @@ private fun PlanRow(item: PlanItemEntity, now: Long, onEdit: (PlanItemEntity) ->
                     Text(it, color = if (critical) MarksyTheme.Negative else MarksyTheme.TextMuted, style = MarksyType.Meta, fontWeight = if (critical) FontWeight.Bold else FontWeight.Normal)
                 }
             }
-            IconButton(onClick = { onStatus(item, if (done) PlanStatus.TODO else PlanStatus.DONE) }) {
-                Icon(
-                    if (done) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                    contentDescription = if (done) "Mark not done" else "Mark done",
-                    tint = if (done) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
-                )
-            }
+            MarksyIconButton(
+                if (done) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, if (done) "Mark not done" else "Mark done",
+                { onStatus(item, if (done) PlanStatus.TODO else PlanStatus.DONE) }, tint = if (done) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+            )
         }
     }
 }
 
 @Composable
 private fun KindBadge(kind: String, critical: Boolean) {
-    Box(
-        Modifier.size(34.dp).clip(CircleShape).background(if (critical) MarksyTheme.Negative else MarksyTheme.SurfaceRaised),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(kindIcon(kind), contentDescription = kindLabel(kind), tint = if (critical) MarksyTheme.TextPrimary else MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-    }
+    MarksyIconDisc(
+        kindIcon(kind), if (critical) MarksyTheme.TextPrimary else MarksyTheme.PrimaryEmerald, if (critical) MarksyTheme.Negative else MarksyTheme.SurfaceRaised,
+        size = MarksySize.Avatar, iconSize = MarksySize.Icon, contentDescription = kindLabel(kind)
+    )
 }
 
 private fun kindIcon(kind: String): ImageVector = when (kind) {
@@ -158,7 +152,7 @@ private fun PlanBoard(items: List<PlanItemEntity>, now: Long, onEdit: (PlanItemE
     ) {
         items(PlanStatus.entries, key = { it.name }) { status ->
             val column = remember(items, status) { PlanModel.column(items, status) }
-            MarksyCard(Modifier.width(272.dp).fillMaxHeight()) {
+            MarksyCard(Modifier.width(MarksySize.BoardColumn).fillMaxHeight()) {
                 MarksyCardHeader(status.label, trailing = { Text("${column.size}", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Meta, fontWeight = FontWeight.Bold) })
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = OneHandListBottomPadding), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                     if (column.isEmpty()) Text("Nothing here", color = MarksyTheme.TextMuted, style = MarksyType.Small)
@@ -186,11 +180,11 @@ private fun BoardCard(item: PlanItemEntity, now: Long, onEdit: (PlanItemEntity) 
             val detail = listOfNotNull(PlanText.dueLabel(item.dueAt, now), PlanText.amount(item.amountMinor)).joinToString(" · ")
             if (detail.isNotEmpty()) Text(detail, color = if (critical) MarksyTheme.Negative else MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        MarksyDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             PlanStatus.entries.filter { it.name != item.status }.forEach { target ->
-                DropdownMenuItem(text = { Text("Move to ${target.label}") }, onClick = { menu = false; onStatus(item, target) })
+                MarksyMenuItem("Move to ${target.label}", onClick = { menu = false; onStatus(item, target) })
             }
-            DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; onEdit(item) })
+            MarksyMenuItem("Edit", onClick = { menu = false; onEdit(item) })
         }
     }
 }
@@ -202,7 +196,7 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
     val upcoming = remember(items) { PlanModel.upcoming(items, 4) }
     MarksyCard(onClick = onOpenPlan) {
         MarksyCardHeader("Upcoming", icon = Icons.Default.EventNote, trailing = {
-            Icon(Icons.Default.Add, contentDescription = "Add reminder", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon).clip(CircleShape).clickable(onClick = onAdd))
+            MarksyIconButton(Icons.Default.Add, "Add reminder", onAdd, small = true)
         })
         if (upcoming.isEmpty()) {
             Text("No bills, EMIs or birthdays coming up", color = MarksyTheme.TextMuted, style = MarksyType.Small)
@@ -265,9 +259,9 @@ fun PlanItemDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
-                MarksyButton(
-                    date?.let { PlanText.dueLabel(PlanRules.atAlertHour(it, zone), System.currentTimeMillis(), zone) } ?: if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date",
-                    onClick = { picking = true }, style = MarksyButtonStyle.Outlined, icon = Icons.Default.Event
+                SelectField(
+                    date?.let { PlanText.dueLabel(PlanRules.atAlertHour(it, zone), System.currentTimeMillis(), zone) }, { picking = true }, Modifier.fillMaxWidth(),
+                    placeholder = if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date", leadingIcon = Icons.Default.Event
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Recurrence.entries.forEach { r -> Pill(r.label, selected = recurrence == r) { recurrence = r } }
@@ -293,15 +287,9 @@ fun PlanItemDialog(
 
     if (picking) {
         val state = rememberDatePickerState(initialSelectedDateMillis = (date ?: LocalDate.now(zone)).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
-        DatePickerDialog(
-            onDismissRequest = { picking = false },
-            confirmButton = {
-                MarksyButton("OK", style = MarksyButtonStyle.Text, onClick = {
-                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate(); dueTime = null }
-                    picking = false
-                })
-            },
-            dismissButton = { MarksyButton("Cancel", onClick = { picking = false }, style = MarksyButtonStyle.Text) }
-        ) { DatePicker(state) }
+        MarksyDatePickerDialog(state, onDismissRequest = { picking = false }, onConfirm = {
+            state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate(); dueTime = null }
+            picking = false
+        })
     }
 }

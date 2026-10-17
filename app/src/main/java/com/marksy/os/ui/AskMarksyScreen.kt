@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
@@ -32,7 +31,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.AskMarksy
 import kotlinx.coroutines.launch
@@ -210,9 +208,7 @@ fun AskMarksyScreen(
                 onSubmit = { ask(input) }, lifted = false, autoFocus = false,
                 trailing = if (input.isNotBlank()) {
                     {
-                        IconButton(onClick = { ask(input) }, modifier = Modifier.size(MarksySize.Button)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-                        }
+                        MarksyIconButton(Icons.AutoMirrored.Filled.Send, "Send", { ask(input) })
                     }
                 } else null
             )
@@ -247,7 +243,7 @@ private fun Greeting(compact: Boolean) {
         animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Reverse),
         label = "OrbScale"
     )
-    val orb = if (compact) 56.dp else 130.dp
+    val orb = if (compact) MarksySize.OrbSmall else MarksySize.Orb
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(orb).scale(orbScale)) {
             Box(
@@ -257,7 +253,7 @@ private fun Greeting(compact: Boolean) {
             Box(
                 Modifier.size(orb * 0.7f).clip(CircleShape)
                     .background(Brush.radialGradient(listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.SecondaryCyan, MarksyTheme.BadgeTradingBg, MarksyTheme.Background)))
-                    .border(2.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                    .border(MarksySpace.BorderRing, MarksyTheme.PrimaryEmerald, CircleShape)
             )
         }
         if (!compact) {
@@ -280,8 +276,6 @@ private fun pickNote(action: AskMarksy.Action?, market: MarketState): String {
         (pick.upsidePct?.let { ", upside ${MarksyFormat.percent(it, 1, signed = false)}" } ?: "") + "."
 }
 
-private val questionShape = MarksyShape.Panel.copy(bottomEnd = CornerSize(4.dp))
-private val answerShape = MarksyShape.Panel.copy(bottomStart = CornerSize(4.dp))
 
 @Composable
 private fun ExchangeView(
@@ -295,17 +289,17 @@ private fun ExchangeView(
             fontWeight = FontWeight.Medium,
             modifier = Modifier
                 .align(Alignment.End)
-                .widthIn(max = 280.dp)
-                .clip(questionShape)
+                .widthIn(max = MarksySize.BubbleWidth)
+                .clip(MarksyShape.BubbleOut)
                 .background(MarksyTheme.PrimaryEmerald)
                 .padding(horizontal = MarksySpace.CardPadding, vertical = MarksySpace.Gap)
         )
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(answerShape)
+                .clip(MarksyShape.BubbleIn)
                 .background(MarksyTheme.Surface)
-                .border(MarksySpace.Border, MarksyTheme.BorderGlow, answerShape)
+                .border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.BubbleIn)
                 .padding(MarksySpace.CardPadding)
         ) {
             Text(exchange.answer.text, color = MarksyTheme.TextPrimary, style = MarksyType.Body)

@@ -1,13 +1,10 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,8 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.marksy.os.intelligence.RuleConditionTree as Tree
 import com.marksy.os.intelligence.RuleEngine.Condition
 import com.marksy.os.intelligence.RuleEngine.Field
@@ -82,20 +76,17 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
             Box {
-                Row(Modifier.clickable { fieldMenu = true }.testTag(tag("field", path)).padding(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-                    Text(Tree.fieldLabel(leaf.field), color = MarksyTheme.TextPrimary, style = MarksyType.Body)
-                    Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
-                }
-                DropdownMenu(expanded = fieldMenu, onDismissRequest = { fieldMenu = false }) {
+                SelectField(Tree.fieldLabel(leaf.field), { fieldMenu = true }, fieldModifier = Modifier.testTag(tag("field", path)))
+                MarksyDropdownMenu(expanded = fieldMenu, onDismissRequest = { fieldMenu = false }) {
                     Field.entries.forEach { f ->
-                        DropdownMenuItem(text = { Text(Tree.fieldLabel(f)) }, onClick = { fieldMenu = false; onChange(Tree.setLeaf(root, path, Tree.withField(leaf, f))) }, modifier = Modifier.testTag(tag("field-${f.name}", path)))
+                        MarksyMenuItem(Tree.fieldLabel(f), onClick = { fieldMenu = false; onChange(Tree.setLeaf(root, path, Tree.withField(leaf, f))) }, modifier = Modifier.testTag(tag("field-${f.name}", path)))
                     }
                 }
             }
             Tree.comparators(leaf.field).forEach { c ->
                 Pill(Tree.cmpLabel(c), selected = leaf.cmp == c, modifier = Modifier.testTag(tag("cmp-${c.name}", path))) { onChange(Tree.setLeaf(root, path, leaf.copy(cmp = c))) }
             }
-            IconButton(onClick = { onChange(Tree.remove(root, path)) }, modifier = Modifier.testTag(tag("remove", path))) { Icon(Icons.Default.Close, contentDescription = "Remove condition", tint = MarksyTheme.Negative, modifier = Modifier.size(MarksySize.Icon)) }
+            MarksyIconButton(Icons.Default.Close, "Remove condition", { onChange(Tree.remove(root, path)) }, Modifier.testTag(tag("remove", path)), tint = MarksyTheme.Negative)
         }
         CompactTextField(
             value = leaf.value,

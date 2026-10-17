@@ -1,7 +1,6 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -40,7 +39,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.marksy.os.data.local.NotificationEventEntity
 import java.time.Instant
 import java.time.LocalDate
@@ -66,7 +64,7 @@ fun CalendarScreen(
     val maxCount = dayCounts.values.maxOrNull() ?: 0
     val firstDay = month.atDay(1).dayOfWeek.value % 7
     fun shiftMonth(by: Int) { monthOffset += by; selectedDay = if (monthOffset == 0) today.dayOfMonth else -1 }
-    val swipePx = with(LocalDensity.current) { 56.dp.toPx() }
+    val swipePx = with(LocalDensity.current) { MarksyGesture.PageSwipe.toPx() }
     val selectedEvents = if (selectedDay > 0) monthEvents.filter {
         Instant.ofEpochMilli(it.postedAt).atZone(zone).dayOfMonth == selectedDay
     }.sortedByDescending { it.postedAt } else emptyList()
@@ -83,8 +81,8 @@ fun CalendarScreen(
         }) {
             Column {
                 MarksyCardHeader(MarksyFormat.monthYear(month), trailing = {
-                    IconButton(onClick = { shiftMonth(-1) }) { Icon(Icons.Default.ChevronLeft, contentDescription = "Previous month", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon)) }
-                    IconButton(onClick = { shiftMonth(1) }) { Icon(Icons.Default.ChevronRight, contentDescription = "Next month", tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon)) }
+                    MarksyIconButton(Icons.Default.ChevronLeft, "Previous month", { shiftMonth(-1) })
+                    MarksyIconButton(Icons.Default.ChevronRight, "Next month", { shiftMonth(1) })
                 })
                 Row(Modifier.fillMaxWidth()) {
                     listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, color = MarksyTheme.TextMuted, style = MarksyType.Meta, textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(bottom = MarksySpace.Hair)) }
@@ -98,17 +96,17 @@ fun CalendarScreen(
                                 val count = dayCounts[day] ?: 0
                                 val isToday = month == YearMonth.from(today) && day == today.dayOfMonth
                                 val isSelected = selectedDay == day
-                                Box(Modifier.weight(1f).height(38.dp).clickable { selectedDay = day }, contentAlignment = Alignment.Center) {
+                                Box(Modifier.weight(1f).height(MarksySize.DayCell).clickable { selectedDay = day }, contentAlignment = Alignment.Center) {
                                     Box(
                                         Modifier.size(MarksySize.Avatar).clip(CircleShape)
                                             .background(if (isSelected) MarksyTheme.PrimaryEmerald else heatColor(count, maxCount))
-                                            .border(if (isToday && !isSelected) 1.5.dp else 0.dp, if (isToday) MarksyTheme.PrimaryEmerald else Color.Transparent, CircleShape),
+                                            .then(if (isToday && !isSelected) Modifier.border(MarksySpace.BorderAccent, MarksyTheme.PrimaryEmerald, CircleShape) else Modifier),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(day.toString(), color = if (isSelected) MarksyTheme.OnAccent else if (isToday) MarksyTheme.PrimaryEmerald else MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal)
                                     }
                                 }
-                            } else Spacer(Modifier.weight(1f).height(38.dp))
+                            } else Spacer(Modifier.weight(1f).height(MarksySize.DayCell))
                         }
                     }
                 }

@@ -30,7 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.MarksyContainer
@@ -307,9 +307,9 @@ private fun ListedFold(count: Int, summary: String?, open: Boolean, onToggle: ()
 }
 
 @Composable
-internal fun IpoAvatar(name: String, size: Int = 32) {
+internal fun IpoAvatar(name: String, size: Dp = MarksySize.Avatar) {
     val initials = name.split(' ').filter { it.firstOrNull()?.isUpperCase() == true }.take(2).joinToString("") { it.take(1) }.ifEmpty { name.take(1) }
-    MarksyAvatar(initials, size.dp)
+    MarksyAvatar(initials, size)
 }
 
 @Composable
@@ -357,7 +357,7 @@ private fun IpoFilterSections(
     items: List<IpoListItemDto>, stage: StageFilter, board: Board, watched: Set<String>, now: ZonedDateTime,
     listedTotal: Int?, listedDone: Boolean, onStage: (StageFilter) -> Unit, onBoard: (Board) -> Unit
 ) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+    Column(Modifier.widthIn(max = MarksySize.MenuWidth).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("STAGE", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             StageFilter.entries.forEach { f ->

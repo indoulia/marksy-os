@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,25 +43,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.unit.dp
 
 /** Bottom padding lists need so their last item clears the floating one-hand buttons. */
-val OneHandListBottomPadding = 120.dp
+val OneHandListBottomPadding = MarksySpace.Section + MarksySize.Touch * 2 + MarksySpace.ListGap + MarksySpace.Gap
 
 private val FloatingButtonSize = MarksySize.Touch
 
-/** Bottom padding that lets a list's last item scroll clear of a stack of [buttons] floating buttons, plus 16dp. */
+/** Bottom padding that lets a list's last item scroll clear of a stack of [buttons] floating buttons, plus a margin. */
 fun oneHandStackBottomPadding(buttons: Int): androidx.compose.ui.unit.Dp =
-    14.dp + FloatingButtonSize * buttons + 10.dp * (buttons - 1).coerceAtLeast(0) + 16.dp
+    MarksySpace.Section + FloatingButtonSize * buttons + MarksySpace.ListGap * (buttons - 1).coerceAtLeast(0) + MarksySpace.Wide
 
-private val FloatingIconSize = 22.dp
+private val FloatingIconSize = MarksySize.IconFloating
 
 /**
  * Thumb-reachable search/filter, bottom-right: filter above search. Search opens the app's one search field along
@@ -116,7 +113,7 @@ fun BoxScope.OneHandControls(
             }
         }
         if (onSearchChange != null) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (searchOpen) {
                     MarksySearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, Modifier.weight(1f), searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } })
                     Spacer(Modifier.width(MarksySpace.ListGap))
@@ -152,12 +149,13 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 @Composable
 private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
     Row(
-        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap),
+        // Pill height and padding, so the action matches the option pills above it.
+        Modifier.heightIn(min = MarksySize.ControlSmall).clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Control),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-        Spacer(Modifier.width(MarksySpace.Gap))
-        Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
+        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
+        Spacer(Modifier.width(MarksySpace.Inner))
+        Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -168,29 +166,16 @@ private fun FloatingMenuPanel(
 ) {
     Column(
         modifier
-            .shadow(10.dp, MarksyShape.Panel)
+            .shadow(MarksyElevation.Menu, MarksyShape.Panel)
             .clip(MarksyShape.Panel)
             .background(MarksyTheme.SurfaceRaised)
             .border(MarksySpace.Border, MarksyTheme.PrimaryEmerald, MarksyShape.Panel)
             .verticalScroll(rememberScrollState())
             .padding(MarksySpace.Inner),
         horizontalAlignment = align,
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
     ) {
-        options.forEach { (key, label) ->
-            val on = key == selected
-            Text(
-                label,
-                color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextPrimary,
-                style = MarksyType.Subhead,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                modifier = Modifier
-                    .clip(MarksyShape.Pill)
-                    .background(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent)
-                    .clickable { onPick(key) }
-                    .padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap)
-            )
-        }
+        options.forEach { (key, label) -> Pill(label, selected = key == selected) { onPick(key) } }
         extras?.invoke()
     }
 }
@@ -211,32 +196,30 @@ internal fun MarksySearchField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = MarksyType.Lead.copy(color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Normal),
+        textStyle = MarksyType.Body.copy(color = MarksyTheme.TextPrimary),
         cursorBrush = SolidColor(MarksyTheme.PrimaryEmerald),
         keyboardOptions = if (symbols) KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Search)
             else KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); onSubmit?.invoke() }),
         modifier = modifier.focusRequester(focus),
         decorationBox = { inner ->
-            // Same height and lift as the round buttons beside it.
+            // Every input's height; OneHandControls centres it on the round buttons beside it.
             Row(
                 Modifier
-                    .height(FloatingButtonSize)
-                    .shadow(if (lifted) 6.dp else 0.dp, CircleShape)
+                    .heightIn(min = MarksySize.Control)
+                    .then(if (lifted) Modifier.shadow(MarksyElevation.Floating, CircleShape) else Modifier)
                     .clip(CircleShape)
                     .background(MarksyTheme.SurfaceRaised)
-                    .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                    .border(MarksySpace.BorderAccent, MarksyTheme.PrimaryEmerald, CircleShape)
                     .padding(start = MarksySpace.Wide, end = MarksySpace.Tight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Lead, fontWeight = FontWeight.Normal)
+                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Body, maxLines = 1)
                     inner()
                 }
                 if (value.isNotEmpty()) {
-                    IconButton(onClick = { onValueChange("") }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
-                    }
+                    MarksyIconButton(Icons.Default.Close, "Clear search", { onValueChange("") }, tint = MarksyTheme.TextSecondary)
                 }
                 trailing?.invoke()
             }
@@ -261,10 +244,10 @@ fun BoxScope.OneHandToggleButtons(options: List<Triple<String, ImageVector, Stri
             Box(
                 Modifier
                     .size(FloatingButtonSize)
-                    .shadow(6.dp, CircleShape)
+                    .shadow(MarksyElevation.Floating, CircleShape)
                     .clip(CircleShape)
                     .background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
-                    .border(1.5.dp, MarksyTheme.PrimaryEmerald, CircleShape)
+                    .border(MarksySpace.BorderAccent, MarksyTheme.PrimaryEmerald, CircleShape)
                     .clickable(onClickLabel = label) { onSelected(key) },
                 contentAlignment = Alignment.Center
             ) {
@@ -281,7 +264,7 @@ private fun FloatingRoundButton(icon: ImageVector, label: String, active: Boolea
         Box(
             Modifier
                 .size(FloatingButtonSize)
-                .shadow(6.dp, CircleShape)
+                .shadow(MarksyElevation.Floating, CircleShape)
                 .clip(CircleShape)
                 .background(MarksyTheme.PrimaryEmerald)
                 .clickable(onClick = onClick),
@@ -293,11 +276,11 @@ private fun FloatingRoundButton(icon: ImageVector, label: String, active: Boolea
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp)
-                    .size(16.dp)
+                    .offset(x = MarksySpace.Hair, y = -MarksySpace.Hair)
+                    .size(MarksySize.ActiveDot)
                     .clip(CircleShape)
                     .background(MarksyTheme.YellowImportant)
-                    .border(2.dp, MarksyTheme.Background, CircleShape)
+                    .border(MarksySpace.BorderRing, MarksyTheme.Background, CircleShape)
             )
         }
     }

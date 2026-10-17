@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marksy.os.MarksyFormat
 import com.marksy.os.alerts.PriceAlertRules
@@ -59,8 +58,7 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
                     mine.forEach { a ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${if (a.above) "Above" else "Below"} ${MarksyFormat.rupees(a.price)}", color = MarksyTheme.TextPrimary, style = MarksyType.Body, modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.Close, "Remove alert", tint = MarksyTheme.TextSecondary,
-                                modifier = Modifier.size(28.dp).clip(CircleShape).clickable { PriceAlertStore.remove(context, listOf(a.id)) }.padding(MarksySpace.Inner))
+                            MarksyIconButton(Icons.Default.Close, "Remove alert", { PriceAlertStore.remove(context, listOf(a.id)) }, tint = MarksyTheme.TextSecondary)
                         }
                     }
                 }

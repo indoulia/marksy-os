@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.MarketDataState
@@ -99,6 +98,9 @@ private const val MOVERS = 5
 
 private data class Mover(val symbol: String, val price: Double?, val change: Double?)
 
+// Percent change that fills a mover's bar.
+private const val MOVE_FOR_FULL_BAR = 40.0 / 11
+
 /** Gainers, losers or most active as one list with a toggle; the bar's length follows the day's change. */
 @Composable
 private fun MoversCard(title: String, sets: Map<String, List<Mover>>, onOpen: ((String) -> Unit)?) {
@@ -119,8 +121,8 @@ private fun MoversCard(title: String, sets: Map<String, List<Mover>>, onOpen: ((
                     Text(m.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
                     m.price?.let { Text(MarksyFormat.rupees(it), color = MarksyTheme.TextPrimary, style = MarksyType.Body, maxLines = 1) }
                     m.change?.let { c ->
-                        Box(Modifier.width((kotlin.math.abs(c) * 11).coerceAtMost(40.0).dp).height(6.dp).clip(MarksyShape.Badge).background(tint))
-                        Text(MarksyFormat.percent(c), color = tint, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 52.dp))
+                        Box(Modifier.width(MarksySize.MoverBar * (kotlin.math.abs(c) / MOVE_FOR_FULL_BAR).coerceAtMost(1.0).toFloat()).height(MarksySize.Bar).clip(MarksyShape.Badge).background(tint))
+                        Text(MarksyFormat.percent(c), color = tint, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = MarksySize.ColumnValue))
                     }
                 }
             }

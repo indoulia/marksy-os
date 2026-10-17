@@ -152,7 +152,7 @@ private fun KeptOptionCard(c: TipCandidateEntity, now: Long, onRemove: () -> Uni
 @Composable
 private fun TeaserCard(w: CaptureWorkflowEntity, inbox: CaptureInbox, now: Long) {
     val failure = w.failureCode
-    MarksyCard(border = MarksyTheme.YellowImportant.copy(alpha = 0.4f)) {
+    MarksyCard(border = MarksyTheme.flagBorder(MarksyTheme.YellowImportant)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MarksyBadge(if (w.reason == "REDACTED") "Hidden" else "Teaser", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
             Spacer(Modifier.width(MarksySpace.Gap))

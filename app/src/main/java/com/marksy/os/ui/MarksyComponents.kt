@@ -2,6 +2,21 @@ package com.marksy.os.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.material3.DatePickerState
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.Switch
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -49,13 +64,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 /*
  * Marksy's shared building blocks. Screens compose these with MarksyTheme colours, MarksyType, MarksyShape and
- * MarksySpace instead of styling their own. Also shared: Pill (WatchlistScreen.kt), EmptyState (MainActivity.kt),
- * MarksyDialog (MarksyTheme.kt), MarksySearchField and the floating stack (OneHandControls.kt), CompactTextField,
+ * MarksySpace instead of styling their own. Also shared: EmptyState (MainActivity.kt),
+ * MarksyDialog (MarksyTheme.kt), MarksySearchField and the floating stack (OneHandControls.kt), CompactTextField and SelectField,
  * MarksyLoader, and MarksyFormat for numbers and dates.
  */
 
@@ -77,7 +91,7 @@ fun MarksyCard(
 ) {
     Column(
         modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel, onLongClick, onLongClickLabel).padding(MarksySpace.CardPadding),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
         content = content
     )
 }
@@ -179,8 +193,8 @@ fun SectionLabel(
 ) {
     Row(modifier.fillMaxWidth().padding(top = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
         dot?.let {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(it))
-            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(MarksySize.Dot).clip(CircleShape).background(it))
+            Spacer(Modifier.width(MarksySpace.Gap))
         }
         Text(text.uppercase(), color = MarksyTheme.TextSecondary, style = MarksyType.Label)
         count?.let {
@@ -188,11 +202,11 @@ fun SectionLabel(
             Text("$it", color = MarksyTheme.TextMuted, style = MarksyType.Meta, fontWeight = FontWeight.Bold)
         }
         if (rule) {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(MarksySpace.Gap))
             MarksyDivider(Modifier.weight(1f))
         } else if (trailing != null) Spacer(Modifier.weight(1f))
         trailing?.let {
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(MarksySpace.Gap))
             it()
         }
     }
@@ -201,13 +215,133 @@ fun SectionLabel(
 /** Small tag on a row (SME, LIVE, a severity): accent text, and optionally an icon, on its tinted background. */
 @Composable
 fun MarksyBadge(text: String, color: Color, background: Color, modifier: Modifier = Modifier, icon: ImageVector? = null) {
-    Row(modifier.clip(MarksyShape.Badge).background(background).padding(horizontal = 4.dp, vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.clip(MarksyShape.Badge).background(background).padding(horizontal = MarksySpace.Tight, vertical = MarksySpace.Border), verticalAlignment = Alignment.CenterVertically) {
         icon?.let {
-            Icon(it, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
-            Spacer(Modifier.width(3.dp))
+            Icon(it, contentDescription = null, tint = color, modifier = Modifier.size(MarksySize.IconTiny))
+            Spacer(Modifier.width(MarksySpace.Hair))
         }
         Text(text, color = color, style = MarksyType.Caption, fontWeight = FontWeight.Bold, maxLines = 1)
     }
+}
+
+/**
+ * A status capsule on a row (a return, a score, a fact): [content] on its tinted [background]; tappable when [onClick]
+ * is set. Bigger than [MarksyBadge], smaller than a [Pill].
+ */
+@Composable
+fun MarksyChip(
+    background: Color, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, onClickLabel: String? = null,
+    content: @Composable RowScope.() -> Unit
+) {
+    Row(
+        modifier.clip(MarksyShape.Chip).background(background)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick) else Modifier)
+            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Hair),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content
+    )
+}
+
+/** An icon on a round tile in its source colours (a category, a message source, the profile). */
+@Composable
+fun MarksyIconDisc(
+    icon: ImageVector, tint: Color, background: Color, modifier: Modifier = Modifier, size: Dp = MarksySize.IconLarge,
+    iconSize: Dp = MarksySize.IconSmall, contentDescription: String? = null
+) {
+    Box(modifier.size(size).clip(CircleShape).background(background), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+/**
+ * The one icon button: a [MarksySize.Control] circle, or [MarksySize.ControlSmall] when [small] beside text. [raised]
+ * draws it on the raised surface with a border (filled emerald while [active]).
+ */
+@Composable
+fun MarksyIconButton(
+    icon: ImageVector, contentDescription: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
+    tint: Color = MarksyTheme.PrimaryEmerald, raised: Boolean = false, active: Boolean = false, enabled: Boolean = true, small: Boolean = false
+) {
+    Box(
+        modifier.size(if (small) MarksySize.ControlSmall else MarksySize.Control).clip(CircleShape)
+            .then(
+                if (raised) Modifier.background(if (active) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)
+                else Modifier
+            )
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon, contentDescription = contentDescription, modifier = Modifier.size(MarksySize.Icon),
+            tint = when { !enabled -> MarksyTheme.TextMuted; active -> MarksyTheme.OnAccent; else -> tint }
+        )
+    }
+}
+
+/** The one on/off switch: a [MarksySize.Control] tall track. */
+@Composable
+fun MarksySwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    // Colours come from MarksyMaterialTheme; the height drops Material's 48dp touch box.
+    Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier.height(MarksySize.Control), enabled = enabled)
+}
+
+/** The one dropdown: a raised panel with the Marksy border and shadow, items in Body type. */
+@Composable
+fun MarksyDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    DropdownMenu(
+        expanded = expanded, onDismissRequest = onDismissRequest, modifier = modifier, shape = MarksyShape.Panel,
+        containerColor = MarksyTheme.SurfaceRaised, shadowElevation = MarksyElevation.Menu,
+        border = BorderStroke(MarksySpace.Border, MarksyTheme.BorderGlow), content = content
+    )
+}
+
+@Composable
+fun MarksyMenuItem(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    DropdownMenuItem(
+        text = { Text(text, color = MarksyTheme.TextPrimary, style = MarksyType.Body) }, onClick = onClick,
+        modifier = modifier.height(MarksySize.Control), contentPadding = PaddingValues(horizontal = MarksySpace.Control)
+    )
+}
+
+/** The one date picker popup: Material's calendar on the Marksy dialog shape and surface, with Cancel and OK text buttons. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MarksyDatePickerDialog(state: DatePickerState, onDismissRequest: () -> Unit, onConfirm: () -> Unit) {
+    val colors = DatePickerDefaults.colors(containerColor = MarksyTheme.Surface)
+    DatePickerDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = { MarksyButton("OK", onConfirm, style = MarksyButtonStyle.Text) },
+        dismissButton = { MarksyButton("Cancel", onDismissRequest, style = MarksyButtonStyle.Text) },
+        shape = MarksyShape.Dialog, colors = colors
+    ) { DatePicker(state, colors = colors) }
+}
+
+/** The one bottom sheet: raised surface, the darker scrim and a slim handle, so it stands off the list behind it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MarksyBottomSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MarksyTheme.SurfaceRaised, scrimColor = MarksyTheme.Scrim,
+        dragHandle = {
+            Box(
+                Modifier.padding(top = MarksySpace.Gap, bottom = MarksySpace.Hair).size(width = MarksySize.Handle, height = MarksySize.BarThin)
+                    .clip(CircleShape).background(MarksyTheme.TextMuted)
+            )
+        },
+        content = content
+    )
+}
+
+/** A strip pinned above a page's list (section tabs, filters): page background and margins, so the list scrolls under it. */
+@Composable
+fun MarksyStickyBar(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier.fillMaxWidth().background(MarksyTheme.Background)
+            .padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
+        content = content
+    )
 }
 
 /** Round initials avatar (IPO issuers, senders). */
@@ -233,15 +367,17 @@ fun MarksySegmented(
     color: (String) -> Color = { MarksyTheme.PrimaryEmerald },
     count: (String) -> Int? = { null }
 ) {
+    // Wraps its labels (equal segments) unless the caller gives it a width.
     Row(
-        modifier.clip(MarksyShape.Pill).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Pill).padding(MarksySpace.Hair),
+        modifier.width(IntrinsicSize.Max).height(MarksySize.Control).clip(MarksyShape.Pill).background(MarksyTheme.SurfaceRaised)
+            .border(MarksySpace.Border, MarksyTheme.BorderGlow, MarksyShape.Pill).padding(MarksySpace.Hair),
         horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
     ) {
         options.forEach { option ->
             val on = option == selected
             Row(
-                Modifier.weight(1f).clip(MarksyShape.Pill).background(if (on) color(option) else Color.Transparent)
-                    .clickable { onSelect(option) }.padding(vertical = MarksySpace.Inner),
+                Modifier.weight(1f).fillMaxHeight().clip(MarksyShape.Pill).background(if (on) color(option) else Color.Transparent)
+                    .clickable { onSelect(option) }.padding(horizontal = MarksySpace.Gap),
                 horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -282,7 +418,7 @@ fun MarksyButton(
     enabled: Boolean = true,
     icon: ImageVector? = null
 ) {
-    val padding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+    val padding = PaddingValues(horizontal = MarksySpace.Control)
     val label: @Composable () -> Unit = {
         icon?.let {
             Icon(it, contentDescription = null, modifier = Modifier.size(MarksySize.IconSmall))
@@ -290,43 +426,60 @@ fun MarksyButton(
         }
         Text(text, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
     }
+    // A fixed height: Material buttons otherwise reserve a 48dp touch box around the drawn one.
+    val sized = modifier.height(MarksySize.Control)
     when (style) {
         MarksyButtonStyle.Filled -> Button(
-            onClick, modifier.height(MarksySize.Button), enabled, contentPadding = padding,
+            onClick, sized, enabled, shape = MarksyShape.Pill, contentPadding = padding,
             colors = ButtonDefaults.buttonColors(
                 containerColor = color, contentColor = MarksyTheme.OnAccent,
                 disabledContainerColor = MarksyTheme.SurfaceRaised, disabledContentColor = MarksyTheme.TextMuted
             )
         ) { label() }
         MarksyButtonStyle.Outlined -> OutlinedButton(
-            onClick, modifier.height(MarksySize.Button), enabled, contentPadding = padding,
-            border = androidx.compose.foundation.BorderStroke(MarksySpace.Border, if (enabled) color else MarksyTheme.BorderGlow),
+            onClick, sized, enabled, shape = MarksyShape.Pill, contentPadding = padding,
+            border = BorderStroke(MarksySpace.Border, if (enabled) color else MarksyTheme.BorderGlow),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = color, disabledContentColor = MarksyTheme.TextMuted)
         ) { label() }
         MarksyButtonStyle.Text -> TextButton(
-            onClick, modifier, enabled, colors = ButtonDefaults.textButtonColors(contentColor = color, disabledContentColor = MarksyTheme.TextMuted)
+            onClick, sized, enabled, shape = MarksyShape.Pill, contentPadding = padding,
+            colors = ButtonDefaults.textButtonColors(contentColor = color, disabledContentColor = MarksyTheme.TextMuted)
         ) { label() }
     }
 }
 
-/** Marksy pill (as on the stock fundamentals cards): emerald when selected, muted when unavailable. */
+/**
+ * Marksy pill: emerald when selected, muted when unavailable. [leading] sits before the text (an icon, a source disc)
+ * and [count] after it; [compact] is the small variant for dense rows.
+ */
 @Composable
-internal fun Pill(text: String, selected: Boolean = false, enabled: Boolean = true, compact: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun Pill(
+    text: String, selected: Boolean = false, enabled: Boolean = true, compact: Boolean = false, modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null, count: Int? = null, onClick: () -> Unit
+) {
     val shape = MarksyShape.Pill
     val fill by animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
-    Text(
-        text,
-        color = when { selected -> MarksyTheme.OnAccent; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
-        style = if (compact) MarksyType.Caption else MarksyType.Small,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        maxLines = 1,
-        // No reserved 48dp box: wrapped rows of them wasted space, and Compose still widens the hit area at touch time.
-        modifier = modifier.clip(shape)
+    Row(
+        // Min height, not fixed, so large font scales grow the pill instead of clipping it.
+        modifier.heightIn(min = MarksySize.ControlSmall)
+            .clip(shape)
             .background(fill)
             .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = if (compact) 8.dp else 10.dp, vertical = if (compact) 3.dp else 6.dp)
-    )
+            .padding(horizontal = if (compact) MarksySpace.ControlCompact else MarksySpace.Control),
+        horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leading?.invoke()
+        Text(
+            text,
+            color = when { selected -> MarksyTheme.OnAccent; enabled -> MarksyTheme.TextPrimary; else -> MarksyTheme.TextMuted },
+            style = if (compact) MarksyType.Caption else MarksyType.Small,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1
+        )
+        count?.let { CountBadge(it, selected) }
+    }
 }
 
 /** A one-line "nothing here" inside a card or section; a whole empty page uses EmptyState. */
