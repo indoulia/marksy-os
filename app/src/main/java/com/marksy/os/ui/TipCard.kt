@@ -201,14 +201,8 @@ internal fun SideBadge(sell: Boolean) =
     MarksyBadge(if (sell) "SELL" else "BUY", if (sell) MarksyTheme.Negative else MarksyTheme.Positive, if (sell) MarksyTheme.BadgeUrgentBg else MarksyTheme.BadgeTradingBg)
 
 @Composable
-private fun ChipPill(text: String, color: androidx.compose.ui.graphics.Color, background: androidx.compose.ui.graphics.Color, onClick: (() -> Unit)?) {
-    Text(
-        text, color = color, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold, maxLines = 1,
-        modifier = Modifier.clip(MarksyShape.Pill).background(background)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Hair)
-    )
-}
+private fun ChipPill(text: String, color: androidx.compose.ui.graphics.Color, background: androidx.compose.ui.graphics.Color, onClick: (() -> Unit)?) =
+    MarksyChip(background, onClick = onClick) { Text(text, color = color, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold, maxLines = 1) }
 
 /** "Marksy 72 ›" / "Trust 58 ›" in its score band; opens the scorecard behind it. */
 @Composable

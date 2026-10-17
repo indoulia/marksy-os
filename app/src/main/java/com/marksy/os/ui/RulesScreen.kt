@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.intelligence.RuleEngine
 import com.marksy.os.intelligence.RuleStore
 import kotlinx.coroutines.launch
@@ -52,11 +51,11 @@ fun RulesScreen(padding: PaddingValues) {
             MarksyCard(border = MarksyTheme.PrimaryEmerald) {
                 MarksyCardHeader("Custom rule builder")
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
+                    Text("IF", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(MarksySize.ColumnNarrow))
                     Text("Notification contains BUY", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("THEN", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(40.dp))
+                    Text("THEN", color = MarksyTheme.PrimaryEmerald, fontWeight = FontWeight.Bold, style = MarksyType.Small, modifier = Modifier.width(MarksySize.ColumnNarrow))
                     Text("Send to Trading Dashboard", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
                 }
                 MarksyButton("+ Add Custom Rule", onClick = { editingRule = null; showEditor = true }, modifier = Modifier.fillMaxWidth())
@@ -129,16 +128,7 @@ private fun RuleToggleCard(
                 MarksyCardHeader(rule.name)
                 Text(ruleDescription(rule), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, modifier = Modifier.padding(top = MarksySpace.Hair))
             }
-            Switch(
-                checked = rule.enabled,
-                onCheckedChange = onEnabledChanged,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MarksyTheme.OnAccent,
-                    checkedTrackColor = MarksyTheme.PrimaryEmerald,
-                    uncheckedThumbColor = MarksyTheme.TextMuted,
-                    uncheckedTrackColor = MarksyTheme.SurfaceRaised
-                )
-            )
+            MarksySwitch(checked = rule.enabled, onCheckedChange = onEnabledChanged)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             MarksyButton("Test on history", onClick = onTest, style = MarksyButtonStyle.Text)

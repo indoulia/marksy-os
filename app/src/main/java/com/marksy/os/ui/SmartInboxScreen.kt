@@ -25,7 +25,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -34,7 +33,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.PersonalLearning
@@ -280,7 +278,7 @@ private fun NeedCard(
 ) {
     val event = need.thread.latest
     val (tint, tintBg) = urgencyColors(need.reason.urgency)
-    MarksyCard(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions", border = lerp(MarksyTheme.BorderGlow, tint, 0.38f)) {
+    MarksyCard(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = "Thread actions", border = MarksyTheme.flagBorder(tint)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MarksyBadge(need.reason.chip, tint, tintBg, icon = urgencyIcon(need.reason.urgency))
             Spacer(Modifier.weight(1f))
@@ -314,11 +312,8 @@ private fun NeedCard(
 }
 
 @Composable
-private fun SourceIcon(style: SourceStyle, size: Dp, iconSize: Dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(style.source.background), contentAlignment = Alignment.Center) {
-        Icon(style.icon, contentDescription = null, tint = style.source.accent, modifier = Modifier.size(iconSize))
-    }
-}
+private fun SourceIcon(style: SourceStyle, size: Dp, iconSize: Dp) =
+    MarksyIconDisc(style.icon, style.source.accent, style.source.background, size = size, iconSize = iconSize)
 
 private data class RowText(val headline: String, val detail: String, val bodyLed: Boolean)
 
@@ -361,9 +356,7 @@ internal fun SourceStackCard(
             }
             Text(compactTime(stack.latestAt).orEmpty(), color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             if (stack.unread > 0) {
-                IconButton(onClick = { group.markRead(stack) }, modifier = Modifier.size(MarksySize.Touch)) {
-                    Icon(Icons.Default.DoneAll, contentDescription = "Mark all from ${stack.label} read", tint = MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
-                }
+                MarksyIconButton(Icons.Default.DoneAll, "Mark all from ${stack.label} read", { group.markRead(stack) }, tint = MarksyTheme.TextSecondary)
             }
         }
         (if (expanded) stack.threads else stack.threads.take(STACK_VISIBLE)).forEach { thread ->
@@ -491,7 +484,7 @@ private fun EarlierList(
     group: GroupSwipe,
     onClearAll: () -> Unit
 ) {
-    MarksyGroupCard(Modifier.animateContentSize(), border = MarksyTheme.BorderGlow.copy(alpha = 0.6f)) {
+    MarksyGroupCard(Modifier.animateContentSize(), border = MarksyTheme.flagBorder(MarksyTheme.BorderGlow)) {
         stacks.forEachIndexed { index, stack ->
             if (index > 0) MarksyDivider()
             val key = EARLIER_PREFIX + stack.key

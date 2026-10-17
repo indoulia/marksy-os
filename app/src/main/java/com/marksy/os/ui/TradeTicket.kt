@@ -10,9 +10,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 
 enum class TradeSide { BUY, SELL }
@@ -41,7 +38,7 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
     var submitted by remember { mutableStateOf(false) }
     val tint = if (side == TradeSide.BUY) MarksyTheme.Positive else MarksyTheme.Negative
     val price = if (type == "Limit") limit.toDoubleOrNull() else intent.price
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MarksyTheme.SurfaceRaised) {
+    MarksyBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = MarksySpace.Gutter).padding(bottom = MarksySpace.Gutter), verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(intent.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Heading, modifier = Modifier.weight(1f))
@@ -61,7 +58,7 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Quantity", color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(1f))
                 Stepper(Icons.Default.Remove, "Fewer") { if (quantity > 1) { quantity--; submitted = false } }
-                Text("$quantity", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
+                Text("$quantity", color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.width(MarksySize.ColumnValue))
                 Stepper(Icons.Default.Add, "More") { quantity++; submitted = false }
             }
             price?.let { Text("Approx. ${MarksyFormat.rupees(it * quantity)}", color = MarksyTheme.TextSecondary, style = MarksyType.Small) }
@@ -83,13 +80,11 @@ fun TradeTicketSheet(intent: TradeIntent, onDismiss: () -> Unit) {
 private fun Choice(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Small, modifier = Modifier.weight(1f))
-        MarksySegmented(options, selected, onSelect, Modifier.width(176.dp))
+        MarksySegmented(options, selected, onSelect)
     }
 }
 
 @Composable
 private fun Stepper(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Box(Modifier.size(36.dp).clip(CircleShape).background(MarksyTheme.Surface).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = label, tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon))
-    }
+    MarksyIconButton(icon, label, onClick, tint = MarksyTheme.TextPrimary, raised = true)
 }

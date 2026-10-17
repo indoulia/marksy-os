@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.data.MemoryRepository
 import com.marksy.os.data.local.MemoryEntryEntity
 import com.marksy.os.intelligence.PersonalMemory
@@ -30,7 +29,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
     MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
             MarksyCard {
-            MarksyCardHeader("Personal memory", trailing = { Switch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) }) })
+            MarksyCardHeader("Personal memory", trailing = { MarksySwitch(checked = enabled, onCheckedChange = { v -> enabled = v; repo.setEnabled(v) }) })
             Text(
                 "Built only from notifications on this device. Turning it off stops learning; use Erase to delete what was learned.",
                 color = MarksyTheme.TextMuted, style = MarksyType.Meta
@@ -42,7 +41,7 @@ fun MemoryScreen(repo: MemoryRepository, padding: PaddingValues) {
             val ofKind = entries.filter { it.kind == kind.name }
             item(key = "k-${kind.name}") {
                 SectionLabel(kind.label, ofKind.size, trailing = if (kind != PersonalMemory.Kind.PREFERENCE) ({
-                    Switch(
+                    MarksySwitch(
                         checked = kindState.getValue(kind),
                         enabled = enabled,
                         onCheckedChange = { v -> kindState = kindState + (kind to v); repo.setKindEnabled(kind, v) }

@@ -2,6 +2,13 @@ package com.marksy.os.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.material3.DatePickerState
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material3.Switch
 import androidx.compose.material3.DropdownMenuItem
@@ -84,7 +91,7 @@ fun MarksyCard(
 ) {
     Column(
         modifier.fillMaxWidth().marksyCard(border, fill).tappable(onClick, onClickLabel, onLongClick, onLongClickLabel).padding(MarksySpace.CardPadding),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
         content = content
     )
 }
@@ -296,13 +303,43 @@ fun MarksyMenuItem(text: String, onClick: () -> Unit, modifier: Modifier = Modif
     )
 }
 
+/** The one date picker popup: Material's calendar on the Marksy dialog shape and surface, with Cancel and OK text buttons. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MarksyDatePickerDialog(state: DatePickerState, onDismissRequest: () -> Unit, onConfirm: () -> Unit) {
+    val colors = DatePickerDefaults.colors(containerColor = MarksyTheme.Surface)
+    DatePickerDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = { MarksyButton("OK", onConfirm, style = MarksyButtonStyle.Text) },
+        dismissButton = { MarksyButton("Cancel", onDismissRequest, style = MarksyButtonStyle.Text) },
+        shape = MarksyShape.Dialog, colors = colors
+    ) { DatePicker(state, colors = colors) }
+}
+
+/** The one bottom sheet: raised surface, the darker scrim and a slim handle, so it stands off the list behind it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MarksyBottomSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MarksyTheme.SurfaceRaised, scrimColor = MarksyTheme.Scrim,
+        dragHandle = {
+            Box(
+                Modifier.padding(top = MarksySpace.Gap, bottom = MarksySpace.Hair).size(width = MarksySize.Handle, height = MarksySize.BarThin)
+                    .clip(CircleShape).background(MarksyTheme.TextMuted)
+            )
+        },
+        content = content
+    )
+}
+
 /** A strip pinned above a page's list (section tabs, filters): page background and margins, so the list scrolls under it. */
 @Composable
 fun MarksyStickyBar(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier.fillMaxWidth().background(MarksyTheme.Background)
             .padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner),
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap),
         content = content
     )
 }
@@ -340,7 +377,7 @@ fun MarksySegmented(
             val on = option == selected
             Row(
                 Modifier.weight(1f).fillMaxHeight().clip(MarksyShape.Pill).background(if (on) color(option) else Color.Transparent)
-                    .clickable { onSelect(option) }.padding(horizontal = MarksySpace.Control),
+                    .clickable { onSelect(option) }.padding(horizontal = MarksySpace.Gap),
                 horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {

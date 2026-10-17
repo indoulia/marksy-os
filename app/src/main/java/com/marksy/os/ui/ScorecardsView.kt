@@ -12,8 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -33,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.EntityScorecardDto
@@ -58,8 +55,6 @@ import java.time.ZoneOffset
 
 internal val ScorecardQuerySaver = Saver<ScorecardQuery, String>(save = { it.encode() }, restore = { ScorecardQuery.decode(it) })
 internal val ScorecardTrailSaver = Saver<List<ScorecardSource>, String>(save = { ScorecardNav.encode(it) }, restore = { ScorecardNav.decode(it) })
-
-private val OutcomeBarWidth = 110.dp
 
 /** Trust: Marksy vs external, then channels, finfluencers or engines by trust under one §8.3 filter; a row opens in place, its record a tap further. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -97,10 +92,7 @@ internal fun ScorecardsView(
 
     Column(Modifier.fillMaxSize()) {
         // Sticky: the lists and their period stay put while the rows scroll under them.
-        Column(
-            Modifier.fillMaxWidth().background(MarksyTheme.Background).padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
-            verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)
-        ) {
+        MarksyStickyBar {
             MarksySegmented(
                 ScorecardEntity.entries.map { it.name }, query.entity.name, { onQueryChange(query.copy(entity = ScorecardEntity.valueOf(it))) }, Modifier.fillMaxWidth(),
                 label = { TrustModel.tabLabel(ScorecardEntity.valueOf(it)) }, count = { TrustModel.count(ScorecardEntity.valueOf(it), channels, callers) }
@@ -185,7 +177,7 @@ internal fun ScorecardsView(
 internal fun ScoreBadge(score: Int?, modifier: Modifier = Modifier) {
     val band = score?.let(TipTrack::band)
     Box(
-        modifier.widthIn(min = 34.dp).height(30.dp).clip(MarksyShape.Chip).background(band?.let(::bandBackground) ?: MarksyTheme.SurfaceRaised).padding(horizontal = MarksySpace.Tight),
+        modifier.widthIn(min = MarksySize.Avatar).height(MarksySize.Avatar).clip(MarksyShape.Chip).background(band?.let(::bandBackground) ?: MarksyTheme.SurfaceRaised).padding(horizontal = MarksySpace.Tight),
         contentAlignment = Alignment.Center
     ) {
         Text(score?.toString() ?: "—", color = band?.let(::trackColor) ?: MarksyTheme.TextMuted, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -194,7 +186,7 @@ internal fun ScoreBadge(score: Int?, modifier: Modifier = Modifier) {
 
 /** Follow as a star: a 44dp button around a [size] circle, filled while following. */
 @Composable
-internal fun FollowStar(following: Boolean, name: String, onToggle: (Boolean) -> Unit, size: Dp = 30.dp) {
+internal fun FollowStar(following: Boolean, name: String, onToggle: (Boolean) -> Unit, size: Dp = MarksySize.Avatar) {
     val label = if (following) "Unfollow $name" else "Follow $name"
     Box(
         Modifier.size(MarksySize.Touch).clip(CircleShape).clickable(role = Role.Button, onClickLabel = label) { onToggle(!following) }
@@ -256,7 +248,7 @@ private fun TrustRow(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                        OutcomeBar(c.successful, c.failed, c.expired, 0, Modifier.width(OutcomeBarWidth))
+                        OutcomeBar(c.successful, c.failed, c.expired, 0, Modifier.width(MarksySize.ProgressWidth))
                         Text(TrustModel.closedLine(b), color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -294,7 +286,7 @@ private fun UnscoredRow(e: EntityScorecardDto, onOpen: () -> Unit) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 NameAndTag(e)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
-                    Box(Modifier.width(OutcomeBarWidth).height(MarksySize.Dot).clip(CircleShape).background(MarksyTheme.Track)) {
+                    Box(Modifier.width(MarksySize.ProgressWidth).height(MarksySize.Dot).clip(CircleShape).background(MarksyTheme.Track)) {
                         if (done > 0f) Box(Modifier.fillMaxWidth(done).fillMaxHeight().clip(CircleShape).background(MarksyTheme.TextMuted))
                     }
                     Text(words, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -356,18 +348,12 @@ internal fun ScorecardFilterDialog(
         val state = rememberDatePickerState(
             initialSelectedDateMillis = ((if (start) q.startDate else q.endDate) ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         )
-        DatePickerDialog(
-            onDismissRequest = { pickingStart = null },
-            confirmButton = {
-                MarksyButton("OK", {
-                    state.selectedDateMillis?.let { ms ->
-                        val day = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
-                        q = if (start) q.copy(startDate = day) else q.copy(endDate = day)
-                    }
-                    pickingStart = null
-                }, style = MarksyButtonStyle.Text)
-            },
-            dismissButton = { MarksyButton("Cancel", { pickingStart = null }, style = MarksyButtonStyle.Text) }
-        ) { DatePicker(state) }
+        MarksyDatePickerDialog(state, onDismissRequest = { pickingStart = null }, onConfirm = {
+            state.selectedDateMillis?.let { ms ->
+                val day = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
+                q = if (start) q.copy(startDate = day) else q.copy(endDate = day)
+            }
+            pickingStart = null
+        })
     }
 }

@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
 import com.marksy.os.market.SeriesPointDto
@@ -168,7 +167,7 @@ internal fun ValueRing(fraction: Float, color: Color, size: Dp, stroke: Dp, dash
             val inset = w / 2
             val arcSize = Size(this.size.width - w, this.size.height - w)
             if (dashed) {
-                drawCircle(MarksyTheme.TextMuted, radius = (this.size.minDimension - w) / 2, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))))
+                drawCircle(MarksyTheme.TextMuted, radius = (this.size.minDimension - w) / 2, style = Stroke(MarksyDraw.Fine.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(MarksyDraw.Dash.toPx(), MarksyDraw.DashGap.toPx()))))
             } else {
                 drawArc(MarksyTheme.SurfaceRaised, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(w))
                 if (fraction > 0f) drawArc(color, -90f, 360f * fraction, false, Offset(inset, inset), arcSize, style = Stroke(w, cap = StrokeCap.Round))
@@ -191,7 +190,7 @@ internal fun TrustRing(trust: Int?, size: Dp, stroke: Dp, numberStyle: TextStyle
 
 /** Hit / stop / expired filled, open outlined, each by its share of the calls. */
 @Composable
-internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier: Modifier = Modifier, height: Dp = 6.dp) {
+internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier: Modifier = Modifier, height: Dp = MarksySize.Bar) {
     val shares = ScorecardGraphics.shares(listOf(hits, stops, expired, open))
     val colors = listOf(MarksyTheme.PrimaryEmerald, MarksyTheme.Negative, MarksyTheme.TextMuted, MarksyTheme.SecondaryCyan)
     Canvas(modifier.fillMaxWidth().height(height).clip(CircleShape).background(MarksyTheme.SurfaceRaised)) {
@@ -200,7 +199,7 @@ internal fun OutcomeBar(hits: Int, stops: Int, expired: Int, open: Int, modifier
             val w = size.width * s
             if (w > 0f) {
                 if (i == 3) {
-                    val line = 1.5.dp.toPx()
+                    val line = MarksyDraw.Fine.toPx()
                     drawRoundRect(colors[i], Offset(x + line / 2, line / 2), Size(w - line, size.height - line), CornerRadius(size.height / 2), style = Stroke(line))
                 } else drawRect(colors[i], Offset(x, 0f), Size(w, size.height))
             }
@@ -227,14 +226,14 @@ internal fun Sparkline(values: List<Double>, color: Color, modifier: Modifier = 
     Canvas(modifier) {
         val (lo, hi) = ScorecardGraphics.bounds(values)
         val pts = ScorecardGraphics.chartPoints(values, lo, hi)
-        val pad = 2.dp.toPx()
+        val pad = MarksyDraw.Inset.toPx()
         val path = Path()
         pts.forEachIndexed { i, (x, y) ->
             val px = pad + x * (size.width - 2 * pad)
             val py = pad + y * (size.height - 2 * pad)
             if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
         }
-        drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(path, color, style = Stroke(MarksyDraw.Line.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -247,10 +246,7 @@ internal fun ReturnBadge(fraction: Double?, style: TextStyle = MarksyType.Body, 
         fraction >= 0 -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
         else -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
     }
-    Text(
-        LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold,
-        maxLines = 1, modifier = Modifier.clip(MarksyShape.Chip).background(bg).padding(horizontal = MarksySpace.Gap, vertical = MarksySpace.Hair)
-    )
+    MarksyChip(bg) { Text(LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold, maxLines = 1) }
 }
 
 @Composable

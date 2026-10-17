@@ -30,7 +30,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import com.marksy.os.upstox.UpstoxOAuth
@@ -79,16 +78,11 @@ class UpstoxSignInActivity : ComponentActivity() {
             MarksyMaterialTheme {
                 Box(Modifier.fillMaxSize().background(MarksyTheme.Background).systemBarsPadding().imePadding()) {
                     AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
-                    if (busy) Box(Modifier.fillMaxSize().background(MarksyTheme.Background.copy(alpha = .9f)), contentAlignment = Alignment.Center) {
+                    if (busy) Box(Modifier.fillMaxSize().background(MarksyTheme.Scrim), contentAlignment = Alignment.Center) {
                         MarksyLoader("Finishing the Upstox sign-in…")
                     }
                     problem?.let { message ->
-                        val shape = MarksyShape.Panel
-                        Column(
-                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(MarksySpace.Wide)
-                                .background(MarksyTheme.Surface, shape).border(MarksySpace.Border, MarksyTheme.Warning, shape).padding(MarksySpace.Section),
-                            verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)
-                        ) {
+                        MarksyCard(Modifier.align(Alignment.BottomCenter).padding(MarksySpace.Wide), border = MarksyTheme.Warning) {
                             Text(message, color = MarksyTheme.TextPrimary, style = MarksyType.Body)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                                 Pill("Try again") { retry() }

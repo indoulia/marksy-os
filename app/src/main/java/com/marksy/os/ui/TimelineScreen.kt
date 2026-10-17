@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.data.local.NotificationEventEntity
 
 @Composable
@@ -67,7 +66,7 @@ private fun TimelineNodeRow(
     ) {
         // Time + category icon share one column instead of two, so the card gets the width back.
         Column(
-            modifier = Modifier.width(46.dp),
+            modifier = Modifier.width(MarksySize.ColumnNarrow),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -77,15 +76,7 @@ private fun TimelineNodeRow(
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(MarksySpace.Tight))
-            Box(
-                modifier = Modifier
-                    .size(MarksySize.IconLarge)
-                    .clip(CircleShape)
-                    .background(tile.background),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, contentDescription = null, tint = tile.accent, modifier = Modifier.size(MarksySize.IconSmall))
-            }
+            MarksyIconDisc(icon, tile.accent, tile.background)
         }
 
         Spacer(Modifier.width(MarksySpace.ListGap))

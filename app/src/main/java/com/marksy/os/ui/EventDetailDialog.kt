@@ -61,7 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,13 +77,14 @@ private fun Modifier.scrollbar(state: ScrollState): Modifier = drawWithContent {
     val max = state.maxValue
     if (max <= 0 || max == Int.MAX_VALUE) return@drawWithContent
     val viewport = size.height
-    val thumb = (viewport * viewport / (viewport + max)).coerceAtLeast(24.dp.toPx())
+    val thumb = (viewport * viewport / (viewport + max)).coerceAtLeast(MarksyDraw.ScrollbarMin.toPx())
     val top = (viewport - thumb) * state.value / max
+    val width = MarksyDraw.Tick.toPx()
     drawRoundRect(
         color = MarksyTheme.PrimaryEmerald.copy(alpha = 0.7f),
-        topLeft = Offset(size.width - 3.dp.toPx(), top),
-        size = Size(3.dp.toPx(), thumb),
-        cornerRadius = CornerRadius(1.5.dp.toPx())
+        topLeft = Offset(size.width - width, top),
+        size = Size(width, thumb),
+        cornerRadius = CornerRadius(width / 2)
     )
 }
 
@@ -146,16 +146,7 @@ fun EventDetailDialog(
                     )
                 }
                 Spacer(Modifier.width(MarksySpace.Inner))
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .size(MarksySize.Avatar)
-                        .clip(CircleShape)
-                        .background(MarksyTheme.SurfaceRaised)
-                        .border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = MarksyTheme.TextPrimary, modifier = Modifier.size(MarksySize.Icon))
-                }
+                MarksyIconButton(Icons.Default.Close, "Close", onDismiss, tint = MarksyTheme.TextPrimary, raised = true)
             }
             // Only the middle scrolls; the title above and Archive/Open below stay in view.
             Column(Modifier.weight(1f, fill = false).scrollbar(scrollState).verticalScroll(scrollState), verticalArrangement = Arrangement.spacedBy(MarksySpace.ListGap)) {

@@ -60,7 +60,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
@@ -344,7 +343,7 @@ private fun PortfolioHero(
         }
         if (series.size >= 2) {
             // Relative to the period start: Sparkline's scale always includes zero.
-            Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.Positive else MarksyTheme.Negative, Modifier.fillMaxWidth().height(52.dp))
+            Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.Positive else MarksyTheme.Negative, Modifier.fillMaxWidth().height(MarksySize.Sparkline))
         }
         if (series.size >= 2 || nifty != null) Row(verticalAlignment = Alignment.CenterVertically) {
             if (series.size >= 2) Text(if (period == PortfolioPeriod.D1) "9:15 am" else "${period.title} ago", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
@@ -392,7 +391,7 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
         Modifier.fillMaxWidth().clip(MarksyShape.Chip).clickable(onClickLabel = if (open) "Hide allocation" else "Show allocation", onClick = onToggle),
         verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
     ) {
-        Row(Modifier.fillMaxWidth().height(8.dp).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
+        Row(Modifier.fillMaxWidth().height(MarksySize.BarWide).clip(MarksyShape.Badge), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Hair)) {
             top.forEachIndexed { i, s -> Box(Modifier.weight(s.pct.toFloat().coerceAtLeast(0.5f)).fillMaxHeight().background(SliceColors[i])) }
             if (rest.isNotEmpty()) Box(Modifier.weight(rest.sumOf { it.pct }.toFloat().coerceAtLeast(0.5f)).fillMaxHeight().background(MarksyTheme.BorderGlow))
         }
@@ -423,18 +422,18 @@ private fun AllocationBar(rows: List<HoldingRow>, open: Boolean, onToggle: () ->
 private fun AllocationRow(slice: AllocationSlice, max: Double, line: Double?) {
     val over = line != null && PortfolioFlags.concentrated(slice.pct)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(slice.name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(92.dp))
-        BoxWithConstraints(Modifier.weight(1f).height(8.dp)) {
-            Box(Modifier.fillMaxWidth().height(6.dp).align(Alignment.Center).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised))
+        Text(slice.name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(MarksySize.ColumnLabel))
+        BoxWithConstraints(Modifier.weight(1f).height(MarksySize.BarWide)) {
+            Box(Modifier.fillMaxWidth().height(MarksySize.Bar).align(Alignment.Center).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised))
             Box(
-                Modifier.fillMaxWidth((slice.pct / max).coerceIn(0.0, 1.0).toFloat()).height(6.dp).align(Alignment.CenterStart)
+                Modifier.fillMaxWidth((slice.pct / max).coerceIn(0.0, 1.0).toFloat()).height(MarksySize.Bar).align(Alignment.CenterStart)
                     .clip(MarksyShape.Badge).background(if (over) MarksyTheme.YellowImportant else MarksyTheme.BlueFinance)
             )
-            line?.let { Box(Modifier.offset(x = maxWidth * (it / max).toFloat()).width(2.dp).fillMaxHeight().background(MarksyTheme.YellowImportant)) }
+            line?.let { Box(Modifier.offset(x = maxWidth * (it / max).toFloat()).width(MarksyDraw.Line).fillMaxHeight().background(MarksyTheme.YellowImportant)) }
         }
         Text(
             "${MarksyFormat.number(slice.pct, 1)}%", color = if (over) MarksyTheme.YellowImportant else MarksyTheme.TextPrimary, style = MarksyType.Meta,
-            textAlign = TextAlign.End, modifier = Modifier.width(44.dp)
+            textAlign = TextAlign.End, modifier = Modifier.width(MarksySize.ColumnNarrow)
         )
     }
 }
@@ -454,7 +453,7 @@ private fun NeedsCard(item: NeedsLook, sectorPct: Map<String, Double>, onWhy: ()
     val r = item.row
     val h = r.holding
     val (fg, bg) = severityColors(item.primary.severity)
-    MarksyCard(border = fg.copy(alpha = .55f), onClick = onWhy, onClickLabel = "Why ${h.symbol} needs a look") {
+    MarksyCard(border = MarksyTheme.flagBorder(fg), onClick = onWhy, onClickLabel = "Why ${h.symbol} needs a look") {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MarksyBadge(item.primary.reason, fg, bg, icon = flagIcon(item.primary))
             Spacer(Modifier.weight(1f))
@@ -580,7 +579,7 @@ private fun HoldingLine(
             Text(pnl?.let { MarksyFormat.signedRupees(it, 0) } ?: "—", color = pnlColor(pnl), style = MarksyType.Subhead, fontWeight = FontWeight.Bold)
             Text(
                 pct?.let { MarksyFormat.percent(it) }.orEmpty(), color = pnlColor(pct), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 58.dp)
+                textAlign = TextAlign.End, modifier = Modifier.widthIn(min = MarksySize.ColumnValue)
             )
         }
         Row {
@@ -590,7 +589,7 @@ private fun HoldingLine(
         if (!expanded) {
             // Full width is 25% of the portfolio.
             Box(
-                Modifier.padding(top = MarksySpace.Inner).fillMaxWidth((r.weightPct / 25).coerceIn(0.0, 1.0).toFloat()).height(2.dp)
+                Modifier.padding(top = MarksySpace.Inner).fillMaxWidth((r.weightPct / 25).coerceIn(0.0, 1.0).toFloat()).height(MarksyDraw.Line)
                     .clip(MarksyShape.Badge).background(MarksyTheme.BlueFinance.copy(alpha = .6f))
             )
         } else {
@@ -633,9 +632,7 @@ private fun HoldingDetail(r: HoldingRow, period: PortfolioPeriod, onOpen: () -> 
 @Composable
 private fun ConnectCard(providers: List<PortfolioProvider>, onSignIn: () -> Unit) {
     MarksyCard {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.BadgeTradingBg), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.PieChart, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconLarge))
-        }
+        MarksyIconDisc(Icons.Default.PieChart, MarksyTheme.PrimaryEmerald, MarksyTheme.BadgeTradingBg, size = MarksySize.AvatarLarge, iconSize = MarksySize.IconLarge)
         MarksyCardHeader("See what you own, next to live prices")
         Text(
             "Holdings need an Upstox sign-in once a day; Upstox's market-data token can't read them. Sign in to see today's and " +
@@ -663,7 +660,7 @@ private fun LoadFailedCard(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun SignedOutCard(fetchedAt: Long, livePrices: Boolean, reason: String?, onSignIn: () -> Unit) {
-    MarksyCard(border = MarksyTheme.Warning.copy(alpha = .55f)) {
+    MarksyCard(border = MarksyTheme.flagBorder(MarksyTheme.Warning)) {
         MarksyBadge("Signed out of Upstox", MarksyTheme.Warning, MarksyTheme.BadgeImportantBg, icon = Icons.Default.Schedule)
         MarksyCardHeader(reason ?: "Upstox ends every sign-in at 3:30 am")
         Text(

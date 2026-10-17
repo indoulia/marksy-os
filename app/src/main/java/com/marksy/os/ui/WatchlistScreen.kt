@@ -53,7 +53,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.MarksyContainer
 import com.marksy.os.data.local.WatchAdd
@@ -92,15 +91,15 @@ val LocalWatchlistAdder = compositionLocalOf<WatchlistAdder?> { null }
 
 /** Small bookmark on any stock row: filled once the stock is in a watchlist; opens the add popup. */
 @Composable
-fun WatchlistButton(symbol: String, modifier: Modifier = Modifier) {
+fun WatchlistButton(symbol: String, modifier: Modifier = Modifier, inline: Boolean = false) {
     val adder = LocalWatchlistAdder.current ?: return
     val s = symbol.trim().uppercase()
     val watched = s in adder.watched
-    Icon(
+    MarksyIconButton(
         if (watched) Icons.Filled.BookmarkAdded else Icons.Outlined.BookmarkAdd,
         contentDescription = if (watched) "$s is in a watchlist" else "Add $s to a watchlist",
-        tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary,
-        modifier = modifier.size(30.dp).clip(CircleShape).clickable { adder.open(s) }.padding(MarksySpace.Inner)
+        onClick = { adder.open(s) }, modifier = modifier, inline = inline,
+        tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
     )
 }
 

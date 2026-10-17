@@ -24,7 +24,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.MarketIntelligenceRepository
@@ -245,26 +244,13 @@ private fun MarketUpdateCard(event: NotificationEventEntity, onClick: () -> Unit
 internal fun MarketTabGrid(selected: String, counts: Map<String, Int?>, onSelect: (String) -> Unit) {
     val holdings by PortfolioChrome.holdings.collectAsState()
     val all = counts + (MarketTab.PORTFOLIO.name to holdings)
-    Column(
-        Modifier.fillMaxWidth().background(MarksyTheme.Background).padding(start = MarksySpace.Gutter, end = MarksySpace.Gutter, top = MarksySpace.Tight, bottom = MarksySpace.Gap),
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
-    ) {
-        MarketSections.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                row.forEach { (name, label) ->
-                    val on = name == selected
-                    Row(
-                        Modifier.weight(1f).clip(MarksyShape.Pill).background(if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
-                            .border(MarksySpace.Border, if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, MarksyShape.Pill)
-                            .clickable(onClickLabel = label) { onSelect(name) }.padding(vertical = MarksySpace.Inner),
-                        horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner, androidx.compose.ui.Alignment.CenterHorizontally),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Text(label, color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
-                        all[name]?.let { CountBadge(it, on) }
-                    }
+    MarksyStickyBar {
+        Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+            MarketSections.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+                    row.forEach { (name, label) -> Pill(label, selected = name == selected, modifier = Modifier.weight(1f), count = all[name]) { onSelect(name) } }
+                    repeat(3 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
                 }
-                repeat(3 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
             }
         }
     }

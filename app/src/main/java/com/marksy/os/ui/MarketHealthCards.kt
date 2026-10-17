@@ -6,7 +6,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marksy.os.market.MarketDataState
@@ -23,7 +22,7 @@ private fun HealthCard(title: String, tone: Color, source: String, content: @Com
     MarksyCard {
         MarksyCardHeader(title, titleColor = tone)
         content()
-        Text(source, color = MarksyTheme.TextMuted.copy(alpha = .7f), style = MarksyType.Caption)
+        Text(source, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
     }
 }
 

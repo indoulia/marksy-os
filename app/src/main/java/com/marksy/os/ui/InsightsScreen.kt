@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.InsightsModel
 import com.marksy.os.intelligence.HomePeriod
@@ -108,9 +107,9 @@ fun InsightsScreen(
 @Composable
 private fun DonutChart(slices: List<Pair<Int, Color>>, total: Int) {
     val track = MarksyTheme.SurfaceRaised
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(96.dp)) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(MarksySize.Donut)) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = Stroke(width = 12.dp.toPx())
+            val stroke = Stroke(width = MarksyDraw.DonutRing.toPx())
             val inset = stroke.width / 2
             val arcSize = Size(size.width - stroke.width, size.height - stroke.width)
             drawArc(track, 0f, 360f, useCenter = false, topLeft = Offset(inset, inset), size = arcSize, style = stroke)
@@ -159,7 +158,7 @@ private fun BreakdownLegendRow(label: String, count: String, color: Color, onCli
     Row(Modifier.clip(MarksyShape.Chip).clickable(onClick = onClick).padding(vertical = MarksySpace.Hair), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(MarksySize.Dot).clip(CircleShape).background(color))
         Spacer(Modifier.width(MarksySpace.Gap))
-        Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.width(84.dp))
+        Text(label, color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.width(MarksySize.ColumnLabel))
         Text(count, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold)
     }
 }

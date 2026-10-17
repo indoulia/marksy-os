@@ -46,7 +46,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
@@ -80,7 +79,7 @@ fun CapturedInboxView(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, stackBy: StackBy, onStackBy: (StackBy) -> Unit) {
-    Column(Modifier.widthIn(max = 260.dp).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
+    Column(Modifier.widthIn(max = MarksySize.MenuWidth).padding(start = MarksySpace.CardPadding, end = MarksySpace.CardPadding, top = MarksySpace.Gap, bottom = MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
         Text("SHOW", color = MarksyTheme.TextMuted, style = MarksyType.Label)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             listOf(ShowOnly.ALL to "All", ShowOnly.TIPS to "Tips", ShowOnly.NEEDS_YOU to "Needs you").forEach { (v, l) -> Pill(l, selected = show == v) { onShow(v) } }
@@ -177,7 +176,7 @@ private fun ExpandChevron(open: Boolean) =
 private fun NeedCard(need: NeedItem, now: Long, onOpen: () -> Unit, onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit) {
     val r = need.row
     val failed = need.kind == NeedKind.RETRY
-    MarksyCard(border = if (failed) MarksyTheme.RedUrgent.copy(alpha = 0.45f) else MarksyTheme.YellowImportant.copy(alpha = 0.4f), onClick = onOpen) {
+    MarksyCard(border = MarksyTheme.flagBorder(if (failed) MarksyTheme.RedUrgent else MarksyTheme.YellowImportant), onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (failed) MarksyBadge("Not sent", MarksyTheme.RedUrgent, MarksyTheme.BadgeUrgentBg) else MarksyBadge("Waiting ${need.waitingMinutes} min", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
             Spacer(Modifier.width(MarksySpace.Gap))

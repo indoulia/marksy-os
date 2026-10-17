@@ -12,7 +12,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.marksy.os.intelligence.PersonalLearning
 import com.marksy.os.ai.ModelInfo
 import com.marksy.os.ai.ModelState
@@ -37,7 +36,7 @@ fun LearningScreen(
     MarksyList(Modifier.background(MarksyTheme.Background).padding(bottom = padding.calculateBottomPadding())) {
         item {
             MarksyCard {
-            MarksyCardHeader("Learn from my interactions", trailing = { Switch(checked = enabled, onCheckedChange = onEnabledChanged) })
+            MarksyCardHeader("Learn from my interactions", trailing = { MarksySwitch(checked = enabled, onCheckedChange = onEnabledChanged) })
             Text(
                 "Opens, resolves, snoozes and ignored notifications adjust ranking by at most ±${PersonalLearning.MAX_LEARNED_ADJUSTMENT}. " +
                     "Your corrections always win. Nothing leaves this device.",

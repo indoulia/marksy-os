@@ -15,8 +15,6 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -28,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
@@ -344,9 +341,9 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
         }
     }
     val color = laneColor(lane)
-    MarksyCard(border = color.copy(alpha = 0.6f)) {
+    MarksyCard(border = MarksyTheme.flagBorder(color)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IpoAvatar(ipo.companyName, size = 24)
+            IpoAvatar(ipo.companyName, size = MarksySize.AvatarSmall)
             Spacer(Modifier.width(MarksySpace.Gap))
             Text(listOfNotNull(ipo.sector, if (ipo.isSme) "SME" else "Mainboard", ipo.terms?.exchanges.display()).joinToString(" · "), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -447,16 +444,16 @@ private fun SubscriptionBody(days: List<IpoLifecycle.SubscriptionDay>, sme: Bool
 @Composable
 private fun SubscriptionBar(name: String, sub: String, value: Double, scale: Double, total: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.width(84.dp)) {
+        Column(Modifier.width(MarksySize.ColumnLabel)) {
             Text(name, color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = if (total) FontWeight.Bold else FontWeight.Medium)
             Text(sub, color = MarksyTheme.TextMuted, style = MarksyType.Caption, maxLines = 1)
         }
-        BoxWithConstraints(Modifier.weight(1f).height(10.dp).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
+        BoxWithConstraints(Modifier.weight(1f).height(MarksySize.BarThick).clip(MarksyShape.Badge).background(MarksyTheme.SurfaceRaised)) {
             val fill = (value / scale).coerceIn(0.015, 1.0).toFloat()
             Box(Modifier.fillMaxWidth(fill).fillMaxHeight().clip(MarksyShape.Badge).background(if (value < 1) MarksyTheme.Warning else MarksyTheme.PrimaryEmerald))
-            Box(Modifier.offset(x = maxWidth * (1 / scale).toFloat()).width(1.5.dp).fillMaxHeight().background(MarksyTheme.TextPrimary))
+            Box(Modifier.offset(x = maxWidth * (1 / scale).toFloat()).width(MarksyDraw.Fine).fillMaxHeight().background(MarksyTheme.TextPrimary))
         }
-        Text(IpoLifecycle.times(value), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
+        Text(IpoLifecycle.times(value), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.width(MarksySize.ColumnValue))
     }
 }
 
@@ -491,14 +488,12 @@ private fun Stepper(value: String, sub: String, canDown: Boolean, canUp: Boolean
 
 @Composable
 private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(40.dp).clip(CircleShape).background(MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)) {
-        Icon(icon, label, tint = if (enabled) MarksyTheme.PrimaryEmerald else MarksyTheme.TextMuted)
-    }
+    MarksyIconButton(icon, label, onClick, raised = true, enabled = enabled)
 }
 
 @Composable
 private fun Callout(text: String) {
-    MarksyCard(border = MarksyTheme.Warning.copy(alpha = 0.5f), fill = MarksyTheme.BadgeImportantBg) {
+    MarksyCard(border = MarksyTheme.flagBorder(MarksyTheme.Warning), fill = MarksyTheme.BadgeImportantBg) {
       Row {
         Icon(Icons.Default.Info, null, tint = MarksyTheme.Warning, modifier = Modifier.size(MarksySize.IconSmall).padding(top = MarksySpace.Border))
         Spacer(Modifier.width(MarksySpace.Inner))
@@ -607,7 +602,7 @@ private fun DatesBody(
     rows.forEachIndexed { i, r ->
         val past = !r.at.isAfter(now)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(when { i == next -> MarksyTheme.PrimaryEmerald; past -> MarksyTheme.TextMuted; else -> MarksyTheme.SurfaceRaised }).border(MarksySpace.Border, if (i == next) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, CircleShape))
+            Box(Modifier.size(MarksySize.StepDot).clip(CircleShape).background(when { i == next -> MarksyTheme.PrimaryEmerald; past -> MarksyTheme.TextMuted; else -> MarksyTheme.SurfaceRaised }).border(MarksySpace.Border, if (i == next) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, CircleShape))
             Spacer(Modifier.width(MarksySpace.ListGap))
             Column(Modifier.weight(1f)) {
                 Text(r.title, color = if (past) MarksyTheme.TextMuted else MarksyTheme.TextPrimary, style = MarksyType.Body, fontWeight = if (i == next) FontWeight.Bold else FontWeight.Medium)
@@ -615,9 +610,10 @@ private fun DatesBody(
             }
             events.firstOrNull { it.key == r.key }?.let { e ->
                 val on = keyOf(e) in reminderKeys
-                IconButton(onClick = { onReminder(e, !on) }, modifier = Modifier.size(40.dp)) {
-                    Icon(if (on) Icons.Default.Notifications else Icons.Outlined.NotificationsNone, if (on) "Cancel reminder: ${r.title}" else "Remind me: ${r.title}", tint = if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary, modifier = Modifier.size(MarksySize.Icon))
-                }
+                MarksyIconButton(
+                    if (on) Icons.Default.Notifications else Icons.Outlined.NotificationsNone, if (on) "Cancel reminder: ${r.title}" else "Remind me: ${r.title}",
+                    { onReminder(e, !on) }, tint = if (on) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
+                )
             }
         }
     }
@@ -643,9 +639,7 @@ private fun RemindersDialog(
                             Text(e.title, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
                             Text(e.whenText, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
                         }
-                        Switch(
-                            checked = on, onCheckedChange = { onReminder(e, it) }
-                        )
+                        MarksySwitch(checked = on, onCheckedChange = { onReminder(e, it) })
                     }
                 }
             }
@@ -698,7 +692,7 @@ private fun PredictionCard(entry: IpoHistoryEntryDto, full: Boolean) {
 
 @Composable
 internal fun DetailRow(row: IpoDetailFormatter.Row) {
-    val indent = (row.depth * 12).dp
+    val indent = MarksySpace.CardPadding * row.depth
     if (row.paragraph) {
         Row(Modifier.padding(start = indent, top = MarksySpace.Hair), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Icon(Icons.Default.Circle, null, tint = MarksyTheme.TextMuted, modifier = Modifier.padding(top = MarksySpace.Inner).size(MarksySize.Dot))

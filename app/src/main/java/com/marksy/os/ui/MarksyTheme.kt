@@ -155,6 +155,7 @@ object MarksySpace {
 }
 
 object MarksySize {
+    /** The icon on a badge. */
     val IconTiny = 11.dp
     val IconSmall = 14.dp
     val Icon = 18.dp
@@ -166,8 +167,9 @@ object MarksySize {
     val StepDot = 10.dp
     /** The yellow dot on a floating button with a filter or search applied. */
     val ActiveDot = 16.dp
+    val AvatarSmall = 24.dp
     val Avatar = 32.dp
-    /** A round icon tile beside a card title (profile, holdings, reminders). */
+    /** A round icon tile at the top of a card (profile, holdings sign-in). */
     val AvatarLarge = 40.dp
     /** Every button, non-compact pill, text and search field, select, segmented control and stepper. */
     val Control = 32.dp
@@ -179,6 +181,18 @@ object MarksySize {
     val HeaderButton = 36.dp
     /** Round floating buttons. */
     val Touch = 44.dp
+    /** The bottom sheet's drag handle. */
+    val Handle = 36.dp
+    /** Ask Marksy's greeting orb, and its size once a conversation starts. */
+    val Orb = 130.dp
+    val OrbSmall = 56.dp
+    /** A day in the calendar grid. */
+    val DayCell = 38.dp
+    /** A swipe action in the tray behind a row. */
+    val SwipeAction = 52.dp
+    /** A row and the column of a scroll wheel picker. */
+    val WheelRow = 40.dp
+    val Wheel = 64.dp
     /** Widest a floating filter panel's extra sections grow. */
     val MenuWidth = 260.dp
     /** Widest a chat bubble grows. */
@@ -191,18 +205,30 @@ object MarksySize {
     val ColumnNarrow = 44.dp
     val ColumnValue = 56.dp
     val ColumnLabel = 84.dp
+    /** A progress bar beside a row's text. */
+    val ProgressWidth = 110.dp
+    /** Longest a mover's change bar grows. */
+    val MoverBar = 40.dp
+    /** A row and a cell in a dense table (market depth, seasonality). */
+    val TableRow = 24.dp
+    val TableCell = 50.dp
     /** Thickness of a progress or split bar. */
-    val Bar = 6.dp
     val BarThin = 4.dp
+    val Bar = 6.dp
+    val BarWide = 8.dp
     val BarThick = 10.dp
-    /** Height of a chart, a sparkline and a small range strip. */
+    /** Heights of the charts, smallest to largest, and of a range strip and the price track. */
+    val Strip = 14.dp
+    val PriceTrack = 16.dp
+    val PriceTrackLarge = 22.dp
+    val Sparkline = 52.dp
+    val ChartMini = 70.dp
+    val BarChart = 90.dp
+    val Donut = 96.dp
+    val ChartSmall = 120.dp
+    val BarChartTall = 150.dp
     val Chart = 200.dp
     val ChartTall = 224.dp
-    val ChartSmall = 120.dp
-    val Sparkline = 52.dp
-    val Strip = 14.dp
-    /** The bottom sheet's drag handle. */
-    val Handle = 36.dp
 }
 
 /** Shadow depth: floating buttons and the search field, and the panels that open over a page. */
@@ -211,18 +237,39 @@ object MarksyElevation {
     val Menu = 10.dp
 }
 
-/** Canvas geometry shared by every chart: line weights, marker radii and dash lengths. */
+/** Canvas geometry shared by every chart: line weights, marker sizes, dash lengths and insets. */
 object MarksyDraw {
     val Hairline = 1.dp
     val Fine = 1.5.dp
     val Line = 2.dp
+    /** A tick or marker line, and the scrollbar. */
+    val Tick = 3.dp
     val Track = 4.dp
-    /** Radius of a highlighted point (the crosshair, the price on a range). */
+    /** Radius of a highlighted point (the crosshair, a price on a range). */
     val Marker = 5.dp
     /** Radius of the last point on a line. */
     val Point = 3.dp
+    /** Room between a chart's marks and its edge or labels. */
+    val Inset = 3.dp
+    /** Rounding on a drawn mark (an entry zone, an exit diamond). */
+    val Corner = 3.dp
     val Dash = 4.dp
     val DashGap = 3.dp
+    /** A dotted line's dot. */
+    val Dot = 2.dp
+    /** A legend's line sample. */
+    val Swatch = 12.dp
+    val DonutRing = 12.dp
+    /** The price track's marks: the recommended ring and current dot, the entry zone and tick, the exit diamond. */
+    val Ring = 12.dp
+    val Zone = 10.dp
+    val TickTall = 14.dp
+    val Diamond = 11.dp
+    /** The stock chart's price-label column and time-axis band. */
+    val AxisGutter = 40.dp
+    val AxisBand = 16.dp
+    /** Shortest the scrollbar thumb gets. */
+    val ScrollbarMin = 24.dp
 }
 
 /** How far a finger must travel before a swipe counts. */

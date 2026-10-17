@@ -34,16 +34,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val ActionWidth = 52.dp
+private val ActionWidth = MarksySize.SwipeAction
 // Opening needs a deliberate swipe (distance or fling) so accidental nudges don't reveal actions; closing needs only a nudge.
-private val NudgeThreshold = 8.dp
-private val OpenThreshold = 64.dp
-private val OpenFlingVelocity = 1200.dp
+private val NudgeThreshold = MarksyGesture.Nudge
+private val OpenThreshold = MarksyGesture.SwipeOpen
+private val OpenFlingVelocity = MarksyGesture.Fling
 
 /**
  * Swipe either way to reveal Archive / Hide. Archive moves it out of active lists, Hide only drops it from the
@@ -148,7 +147,7 @@ private fun SwipeAction(icon: ImageVector, label: String, tint: Color, onClick: 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(30.dp))
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(MarksySize.IconLarge))
     }
 }
 

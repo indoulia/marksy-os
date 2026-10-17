@@ -33,7 +33,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
 import com.marksy.os.market.InstrumentLifecycleDto
 import com.marksy.os.market.LedgerCalls
@@ -187,7 +186,7 @@ private fun ChartCard(
         if (overlays.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             overlays.distinctBy { it.label }.forEach { o -> Text(o.label, color = o.color, style = MarksyType.Caption, fontWeight = FontWeight.SemiBold) }
         }
-        Box(Modifier.fillMaxWidth().height(if (prefs.volume) 224.dp else 200.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(if (prefs.volume) MarksySize.ChartTall else MarksySize.Chart), contentAlignment = Alignment.Center) {
             when {
                 candles == null -> MarksyLoader("Loading chart…")
                 candles.size < 2 -> Text("No chart data for ${range.label}", color = MarksyTheme.TextMuted, style = MarksyType.Small)
@@ -206,13 +205,8 @@ private fun ChartCard(
 }
 
 @Composable
-private fun ChartIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
-    Icon(
-        icon, contentDescription = label, tint = if (active) MarksyTheme.OnAccent else MarksyTheme.PrimaryEmerald,
-        modifier = Modifier.size(28.dp).clip(CircleShape).background(if (active) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised)
-            .border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape).clickable(onClick = onClick).padding(MarksySpace.Inner)
-    )
-}
+private fun ChartIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) =
+    MarksyIconButton(icon, label, onClick, raised = true, active = active)
 
 @Composable
 private fun StatsCard(q: UpstoxQuote, live: StockLive) {
@@ -272,7 +266,7 @@ private fun VolumeTrend(daily: List<Candle>, average: Long?) {
             Text("Volume trend", color = MarksyTheme.TextMuted, style = MarksyType.Meta, modifier = Modifier.weight(1f))
             average?.let { Text("20D avg ${compact(it)}", color = MarksyTheme.TextMuted, style = MarksyType.Caption) }
         }
-        Row(Modifier.fillMaxWidth().height(90.dp).padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().height(MarksySize.BarChart).padding(top = MarksySpace.Tight), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.Bottom) {
             days.forEach { c ->
                 val above = average != null && c.volume > average
                 Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Bottom) {
@@ -291,11 +285,11 @@ private fun RangeBar(label: String, low: Double, high: Double, price: Double) {
     Column(Modifier.fillMaxWidth()) {
         Text(label, color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         val at = if (high > low) ((price - low) / (high - low)).coerceIn(0.0, 1.0).toFloat() else .5f
-        Canvas(Modifier.fillMaxWidth().height(14.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(MarksySize.Strip)) {
             val mid = size.height / 2
-            drawLine(MarksyTheme.Divider, Offset(0f, mid), Offset(size.width, mid), 4.dp.toPx(), StrokeCap.Round)
-            drawLine(MarksyTheme.PrimaryEmerald, Offset(0f, mid), Offset(size.width * at, mid), 4.dp.toPx(), StrokeCap.Round)
-            drawCircle(MarksyTheme.TextPrimary, 5.dp.toPx(), Offset(size.width * at, mid))
+            drawLine(MarksyTheme.Divider, Offset(0f, mid), Offset(size.width, mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
+            drawLine(MarksyTheme.PrimaryEmerald, Offset(0f, mid), Offset(size.width * at, mid), MarksyDraw.Track.toPx(), StrokeCap.Round)
+            drawCircle(MarksyTheme.TextPrimary, MarksyDraw.Marker.toPx(), Offset(size.width * at, mid))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(MarksyFormat.rupees(low), color = MarksyTheme.TextSecondary, style = MarksyType.Meta)
@@ -325,7 +319,7 @@ private fun DepthCard(q: UpstoxQuote) {
                 Text("Total", color = MarksyTheme.TextSecondary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
             }
             val share = buy.toFloat() / (buy + sell)
-            Row(Modifier.fillMaxWidth().height(6.dp).clip(MarksyShape.Badge)) {
+            Row(Modifier.fillMaxWidth().height(MarksySize.Bar).clip(MarksyShape.Badge)) {
                 Box(Modifier.weight(share.coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.Positive))
                 Box(Modifier.weight((1 - share).coerceAtLeast(.01f)).fillMaxHeight().background(MarksyTheme.Negative))
             }
@@ -353,7 +347,7 @@ private fun DepthSide(title: String, levels: List<DepthLevel>, tint: Color, sell
         Row(Modifier.fillMaxWidth().padding(top = MarksySpace.Hair, bottom = MarksySpace.Hair)) { cells("Qty", "Orders", "Price", MarksyTheme.TextMuted, MarksyTheme.TextMuted, MarksyType.Caption) }
         Box(Modifier.fillMaxWidth().height(MarksySpace.Border).background(tint.copy(alpha = .5f)))
         levels.take(5).forEach { l ->
-            Box(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight).height(22.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.fillMaxWidth().padding(top = MarksySpace.Tight).height(MarksySize.TableRow), contentAlignment = Alignment.CenterStart) {
                 // The bar grows from the centre of the book, so the two sides read against each other.
                 Box(
                     Modifier.align(if (sell) Alignment.CenterStart else Alignment.CenterEnd)
