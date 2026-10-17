@@ -20,7 +20,7 @@ Column key: Det = detection implemented, Gate = gate enforced, NoReq = no-outbou
 | WhatsApp accessibility service | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
 | Telegram notifications | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
 | Gmail connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Calendar connector | Yes | Yes (same worker gate) | Shared worker test | Shared | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
+| Calendar connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
 | Added lines on an existing row | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
 | Classifier-version re-queue | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
 | Retry, Send now, stale IN_FLIGHT reset, offline | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
@@ -31,17 +31,20 @@ Column key: Det = detection implemented, Gate = gate enforced, NoReq = no-outbou
 Evidence (tests):
 - Every automatic channel × CE option, maybe-option, later hedge, CALL wording, P/E ratio; option while the capture list is unknown: `CaptureGateTest.optionAndMaybeOptionCallsStayOnThePhoneOnEveryRoute`.
 - Option-thread follow-ups: `CaptureGateTest.aFollowUpToAnOptionThreadNeverQueuesOnItsOwn`.
-- Zero client calls across the first run, offline retry, user Retry, Send now, stale reset and a Gmail row: `TradingDeliveryRunTest.optionAndMaybeOptionCallsNeverReachTheClientOnAnyAttempt`.
-- Zero client calls from appended lines, classifier re-queue and the accessibility connector (group unknown and group): `IngestionPipelineTest.optionCallsFromEveryIngestionPathNeverReachTheClient`.
+- Zero client calls through the real delivery run (option and maybe-option rows from broker app, SMS, WhatsApp, Telegram, Gmail and Calendar packages) across the first run, offline retry, user Retry, Send now and stale reset: `TradingDeliveryRunTest.optionAndMaybeOptionCallsNeverReachTheClientOnAnyAttempt`.
+- Zero client calls from appended lines, classifier re-queue and the accessibility connector (a group row asserted PENDING, then kept; rows without a group flag never queue): `IngestionPipelineTest.optionCallsFromEveryIngestionPathNeverReachTheClient`.
+- Zero client calls from rows synced by the real `GmailConnector` and `CalendarConnector`, with a stock control that is sent: `ConnectorSyncTest.connectorOptionCallsNeverReachTheClient`.
+- Zero client calls for queued flagged or contract-shaped screenshots (screen capture, shared, picked): `TradingDeliveryRunTest.aQueuedOptionScreenshotNeverReachesTheClient`.
 - Both run-level tests fail with the `decide` check switched off (checked 2026-10-17).
 - Client refusal kept, not failed (calls and screenshots): `TradingDeliveryRunTest.aCallTheClientRefusesAsAnOptionIsKeptNotFailed`, `TradingDeliveryPolicyTest.anOptionTheClientRefusesIsKeptNotFailed`.
 - No HTTP request: `MarksyTipsApiClientRecordedReceiptTest.anOptionOrMaybeOptionCallIsNeverRequested`.
-- Review correction (A): `CandidateDeliveryPolicyTest.aConfirmedStockTipTakesTheOrdinaryStockPath`, `CaptureGatewayTest.confirmingAStockTipKeepsTheOptionFlag`, `CaptureDaoTest` kept list and retention.
+- Review correction (A), stored only when every stock rule passes (Send or Keep): `CandidateDeliveryPolicyTest.aConfirmedStockTipTakesTheOrdinaryStockPath`, `CaptureGatewayTest.confirmingAStockTipKeepsTheOptionFlag`, `CaptureDaoTest` kept list and retention.
+- Screenshot option words outside the first call ("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)") flag a maybe-option, symbol kept: `TipExtractorTest.aLaterCallOrAHedgeNoteKeepsTheStockSymbolButStaysLocalUntilReviewed`.
 - Rules, forms and false positives: `OptionGateTest` (CALL/PUT, spacing, case, fused, expiry, mixed, "Call me…", "call 98765…", "put SL"), `TipExtractorTest`.
 - Server: `test_trade_call_parser` (CALL/PUT forms, ordinary "call"/"put"), `test_tip_matching` (CALL/PUT symbols, premium floor), `test_api_tips_ingest` (CALL/PUT kept out of index tracking).
 
 Retention: automatic messages unchanged (7 days, 30 trading). Screenshot option calls kept until Remove, text cleared at 30 days; one confirmed as a stock tip (`stock-confirmed`) follows the ordinary 30-day rule.
 
-Known over-blocks (stay on the phone, by design): a message mixing a stock call with any option words; "<3+ digit number> calls/puts" in prose ("1000 calls hit target"); "@ 1450 put SL 1420" without punctuation. On the server a BUY limit more than 50% under the market is rejected as off-market.
+Known over-blocks (stay on the phone, by design): a message mixing a stock call with any option words (a screenshot of one needs the reviewer's stock confirmation); "<3+ digit number> calls/puts" in prose ("1000 calls hit target"); "@ 1450 put SL 1420" without punctuation. On the server a BUY limit more than 50% under the market is rejected as off-market.
 
 Open: release build and physical-phone verification NOT VERIFIED; server deploy BLOCKED (approval).

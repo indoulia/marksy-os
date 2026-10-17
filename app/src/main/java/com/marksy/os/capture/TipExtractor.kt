@@ -86,7 +86,7 @@ object TipExtractor {
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
         val found = symbols.singleOrNull()
-        val option = firstCallOption(flat, sideHits, found)
+        val option = captureOption(flat, sideHits, found)
         if (option.signal != OptionGate.Signal.NONE) ambiguities += Ambiguity.OPTION_CONTRACT
         // A bare "18 PE" may be a P/E ratio or a put: its symbol is kept, but it stays on the phone unless review confirms a stock tip.
         if (option.signal == OptionGate.Signal.AMBIGUOUS) ambiguities += Ambiguity.OPTION_AMBIGUOUS
@@ -129,11 +129,19 @@ object TipExtractor {
         }
     }
 
-    /** The option reading of [text]'s first call: what its capture's option flag was read from. */
-    fun firstCallOption(text: String): OptionGate.Reading {
+    /** The option reading a capture of [text] is flagged with. */
+    fun captureOption(text: String): OptionGate.Reading {
         val flat = flatten(text)
         val sideHits = sideHits(flat, levels(flat))
-        return firstCallOption(flat, sideHits, sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty().singleOrNull())
+        return captureOption(flat, sideHits, sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty().singleOrNull())
+    }
+
+    // Option words outside the first call ("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)") may be what its levels price: a maybe-option.
+    private fun captureOption(flat: String, sideHits: List<Pair<MatchResult, TipSide>>, symbol: String?): OptionGate.Reading {
+        val first = firstCallOption(flat, sideHits, symbol)
+        if (first.signal != OptionGate.Signal.NONE) return first
+        val rest = readOption(flat)
+        return if (rest.signal == OptionGate.Signal.NONE) first else OptionGate.Reading(OptionGate.Signal.AMBIGUOUS, rest.evidence)
     }
 
     /** The option rules over [text] with P/E valuations blanked; right after the side word and [symbol], any strike counts. */

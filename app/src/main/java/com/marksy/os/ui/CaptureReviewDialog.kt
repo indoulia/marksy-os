@@ -97,7 +97,7 @@ fun CaptureReviewDialog(
     // Off until the reviewer says so; editing fields never clears an option flag.
     var stock by remember(key) { mutableStateOf(false) }
     val flagged = Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes
-    val reading = remember(key) { TipExtractor.firstCallOption(candidate.extractedText.orEmpty()) }
+    val reading = remember(key) { TipExtractor.captureOption(candidate.extractedText.orEmpty()) }
 
     val fields = TipFields(
         symbol.trim().uppercase().ifEmpty { null }, side, entry.toDoubleOrNull(), target.toDoubleOrNull(), stopLoss.toDoubleOrNull(),
@@ -198,7 +198,7 @@ private fun level(v: Double?): String = v?.let { BigDecimal.valueOf(it).stripTra
 
 private fun optionReason(reading: OptionGate.Reading): String = when {
     reading.evidence == null -> CaptureMessages.ambiguity(Ambiguity.OPTION_CONTRACT).orEmpty()
-    reading.signal == OptionGate.Signal.AMBIGUOUS -> "“${reading.evidence}” may be a put option or a P/E ratio, so this tip is treated as an option call."
+    reading.signal == OptionGate.Signal.AMBIGUOUS -> "“${reading.evidence}” may make this an option call, so it is treated as one."
     else -> "Read as an option call because of “${reading.evidence}”: its levels would be the option's price."
 }
 

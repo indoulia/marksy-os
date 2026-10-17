@@ -4,6 +4,12 @@ import androidx.room.Room
 import com.marksy.os.data.MetricsRecorder
 import com.marksy.os.data.local.ConnectorEventEntity
 import com.marksy.os.data.local.MarksyDatabase
+import com.marksy.os.gateway.CaptureContext
+import com.marksy.os.gateway.CaptureGate
+import com.marksy.os.gateway.CapturedMessage
+import com.marksy.os.gateway.MarksyGatewayClient
+import com.marksy.os.gateway.MarksyInsight
+import com.marksy.os.gateway.TradingDeliveryRun
 import com.marksy.os.intelligence.EventIntelligencePipeline
 import com.marksy.os.intelligence.LocationMemory
 import kotlinx.coroutines.runBlocking
@@ -177,6 +183,38 @@ class ConnectorSyncTest {
 
     private fun msg(id: String, from: String, subject: String, labels: List<String> = listOf("INBOX")) =
         GmailApi.Message(id, from, subject, "snippet $id", t0 - hour, labels)
+
+    // Option-tip safety B: option and maybe-option calls synced by the Gmail and Calendar connectors never reach the client.
+    @Test
+    fun connectorOptionCallsNeverReachTheClient() = runBlocking {
+        syncer.setEnabled(GmailConnector.ID, true)
+        syncer.setEnabled(CalendarConnector.ID, true)
+        val api = FakeGmail().apply {
+            messages["o"] = GmailApi.Message("o", "research@broker.com", "Trade idea", "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150", t0 - hour, listOf("INBOX"))
+            messages["m"] = GmailApi.Message("m", "research@broker.com", "Trade idea", "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400", t0 - hour, listOf("INBOX"))
+            messages["s"] = GmailApi.Message("s", "research@broker.com", "Trade idea", "BUY INFY @ 1450 TGT 1500 SL 1420", t0 - hour, listOf("INBOX"))
+        }
+        syncer.sync(GmailConnector(api, Tokens()))
+        syncer.sync(calendar(FakeCalendar(listOf(inst(1, t0 + 2 * hour, title = "BUY NIFTY 24500 CALL @ 180 TGT 220 SL 150")))))
+        val dao = db.notificationEventDao()
+        val queued = rows().filter { it.deliveryState == "PENDING" }
+        val sent = mutableListOf<String>()
+        val client = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val context = CaptureContext(rows().map { it.sourcePackage }.toSet(), emptySet(), emptySet(), "user-1", "salt")
+
+        TradingDeliveryRun(dao, client, context).drain()
+
+        assertTrue(sent.toString(), sent.none { "24500" in it || "18 PE" in it })
+        assertEquals(1, sent.count { "INFY" in it })
+        queued.filter { "INFY" !in it.body }.forEach { assertEquals(CaptureGate.OPTION_UNSUPPORTED, dao.getById(it.id)!!.deliveryNote) }
+        assertTrue(rows().none { it.deliveryState == "PENDING" })
+    }
 
     @Test
     fun gmailIsHonestlyNotConfiguredWithoutOAuth() {

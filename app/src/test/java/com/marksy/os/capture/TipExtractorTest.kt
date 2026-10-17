@@ -148,7 +148,7 @@ class TipExtractorTest {
     }
 
     @Test
-    fun aLaterCallOrAHedgeNoteNeverMakesTheFirstStockCallAnOption() {
+    fun aLaterCallOrAHedgeNoteKeepsTheStockSymbolButStaysLocalUntilReviewed() {
         listOf(
             "BUY TCS @ 3500 TARGET 3600 SL 3400 | BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150",
             "BUY TCS @ 3500 TARGET 3600 SL 3400. Hedge with 24500 PE",
@@ -157,9 +157,14 @@ class TipExtractorTest {
         ).forEach { text ->
             val tip = candidate(text)
             assertEquals(text, TipFields("TCS", TipSide.BUY, 3500.0, 3600.0, 3400.0), tip.fields)
-            assertEquals(text, CaptureState.EXTRACTED, tip.state)
-            assertFalse(text, Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+            assertEquals(text, CaptureState.REVIEW_REQUIRED, tip.state)
+            assertTrue(text, tip.ambiguities.containsAll(setOf(Ambiguity.OPTION_CONTRACT, Ambiguity.OPTION_AMBIGUOUS)))
         }
+        // e2 review #163: a contract named after the levels may be what the levels price.
+        val after = candidate("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)")
+        assertEquals("NIFTY", after.fields.symbol)
+        assertTrue(after.ambiguities.containsAll(setOf(Ambiguity.OPTION_CONTRACT, Ambiguity.OPTION_AMBIGUOUS)))
+        assertEquals(CaptureState.EXTRACTED, candidate("BUY TCS @ 3500 TARGET 3600 SL 3400, trades at 18 PE").state)
         val optionFirst = candidate("BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150 | BUY TCS @ 3500 TARGET 3600 SL 3400")
         assertEquals(TipFields("NIFTY 24500 CE", TipSide.BUY, 180.0, 220.0, 150.0), optionFirst.fields)
         assertTrue(Ambiguity.OPTION_CONTRACT in optionFirst.ambiguities)

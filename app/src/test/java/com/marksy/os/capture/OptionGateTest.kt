@@ -50,13 +50,13 @@ class OptionGateTest {
             "SELL NIFTY 28-OCT-2026 24500 PUT below 120 TGT 90 SL 140",
             "BUY BANKNIFTY 24TH OCT 52000 Call above 300 tgt 360 sl 260"
         ).forEach { assertEquals(it, Signal.OPTION, OptionGate.classify(it).signal) }
-        assertEquals("NIFTY 24 OCT 24500 CALL", TipExtractor.firstCallOption("BUY NIFTY 24 OCT 24500 CALL @ 180 TGT 220 SL 150").contract)
+        assertEquals("NIFTY 24 OCT 24500 CALL", TipExtractor.captureOption("BUY NIFTY 24 OCT 24500 CALL @ 180 TGT 220 SL 150").contract)
         assertTrue(OptionGate.looksLikeContract("NIFTY24500CALL"))
         assertTrue(OptionGate.looksLikeContract("BANKNIFTY 52000 PUT"))
-        // Mixed: the whole message blocks, but a screenshot's flag still comes from its first call only.
+        // Mixed: the whole message blocks; a screenshot keeps its first call's stock symbol as a maybe-option.
         val mixed = "BUY TCS @ 3500 TGT 3600 SL 3400 | BUY NIFTY 24500 CALL @ 180"
         assertEquals(Signal.OPTION, OptionGate.classify(mixed).signal)
-        assertEquals(Signal.NONE, TipExtractor.firstCallOption(mixed).signal)
+        assertEquals(Signal.AMBIGUOUS, TipExtractor.captureOption(mixed).signal)
     }
 
     // Every route sends the whole message, so a contract anywhere in it counts, even after a stock call.
@@ -84,11 +84,14 @@ class OptionGateTest {
         listOf("TCS", "M&M", "BAJAJ-AUTO", "SPICE", null, "").forEach { assertFalse("$it", OptionGate.looksLikeContract(it)) }
     }
 
-    // A capture's flag comes from its first call only, so the review shows that call's words, not a later hedge.
+    // A capture is an option when its first call names one, and a maybe-option when only the rest of the text does.
     @Test
-    fun theFirstCallsOptionWordsAreWhatReviewShows() {
-        assertEquals(Signal.OPTION to "NIFTY 24500 CE", TipExtractor.firstCallOption("BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150").let { it.signal to it.evidence })
-        assertEquals(Signal.NONE, TipExtractor.firstCallOption("BUY TCS @ 3500 TARGET 3600 SL 3400 | BUY NIFTY 24500 CE @ 180").signal)
-        assertEquals(Signal.AMBIGUOUS to "18 PE", TipExtractor.firstCallOption("BUY TCS (18 PE) @ 3500, target 3600, stop 3400").let { it.signal to it.evidence })
+    fun theWordsReviewShowsComeFromTheFirstCallThenTheRest() {
+        val first = TipExtractor.captureOption("BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150")
+        assertEquals(Triple(Signal.OPTION, "NIFTY 24500 CE", "NIFTY 24500 CE"), Triple(first.signal, first.evidence, first.contract))
+        val later = TipExtractor.captureOption("BUY TCS @ 3500 TARGET 3600 SL 3400 | BUY NIFTY 24500 CE @ 180")
+        assertEquals(Triple(Signal.AMBIGUOUS, "NIFTY 24500 CE", null), Triple(later.signal, later.evidence, later.contract))
+        assertEquals(Signal.AMBIGUOUS to "18 PE", TipExtractor.captureOption("BUY TCS (18 PE) @ 3500, target 3600, stop 3400").let { it.signal to it.evidence })
+        assertEquals(Signal.NONE, TipExtractor.captureOption("BUY TCS @ 3500 TARGET 3600 SL 3400, trades at 18 PE").signal)
     }
 }

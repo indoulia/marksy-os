@@ -192,8 +192,14 @@ class IngestionPipelineTest {
         val stock = raw("org.telegram.messenger", "g2", "Tips Group", "Good evening").copy(groupConversation = true)
         pipeline.ingest(stock)
         pipeline.ingest(stock.copy(body = "Good evening\nBUY IDEA CMP 9.5 SL 8.9 TGT 11"))
-        pipeline.ingest(raw("com.whatsapp", "wa1", "Tips Group", option, ConnectorRegistry.WHATSAPP_ACCESSIBILITY))
-        pipeline.ingest(raw("com.whatsapp", "wa2", "Tips Group", "SELL NIFTY 24500 PE below 120 TGT 90 SL 140", ConnectorRegistry.WHATSAPP_ACCESSIBILITY).copy(groupConversation = true))
+        // The accessibility service sets no group flag, so its rows never queue; a group row would still be stopped at delivery.
+        val ungrouped = pipeline.ingest(raw("com.whatsapp", "wa1", "Tips Group", option, ConnectorRegistry.WHATSAPP_ACCESSIBILITY)) as IngestionPipeline.Result.Stored
+        assertEquals("NOT_APPLICABLE", dao.getById(ungrouped.eventId)!!.deliveryState)
+        val accessibility = listOf(
+            raw("com.whatsapp", "wa2", "Tips Group", "SELL NIFTY 24500 PE below 120 TGT 90 SL 140", ConnectorRegistry.WHATSAPP_ACCESSIBILITY),
+            raw("com.whatsapp", "wa3", "Tips Group", "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400", ConnectorRegistry.WHATSAPP_ACCESSIBILITY)
+        ).map { (pipeline.ingest(it.copy(groupConversation = true)) as IngestionPipeline.Result.Stored).eventId }
+        accessibility.forEach { assertEquals("PENDING", dao.getById(it)!!.deliveryState) }
         val requeued = dao.insert(
             NotificationEventEntity(
                 sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = "r1", eventFingerprint = "r1", title = "Idea", body = option,
@@ -216,7 +222,7 @@ class IngestionPipelineTest {
 
         assertEquals(listOf("BUY IDEA CMP 9.5 SL 8.9 TGT 11"), sent)
         assertEquals(0, dao.findPendingCapture(50).size)
-        assertEquals(CaptureGate.OPTION_UNSUPPORTED, dao.getById(requeued)!!.deliveryNote)
+        (accessibility + requeued).forEach { assertEquals("NOT_APPLICABLE" to CaptureGate.OPTION_UNSUPPORTED, dao.getById(it)!!.let { e -> e.deliveryState to e.deliveryNote }) }
     }
 
     // 4b review I2: a local group row that gains a call sends only the new line, with no sender name, recorded or not.

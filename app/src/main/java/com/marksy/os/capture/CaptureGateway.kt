@@ -189,7 +189,10 @@ class CaptureGateway(
                 sourceName = if (candidate.sourceVerified) candidate.sourceName else picked?.displayName
             )
         }
-        val confirmed = if (stockConfirmed && to == CaptureState.ACCEPTED) CandidateDeliveryPolicy.confirmedAsStock(reviewed) else reviewed
+        // The stock correction stands only if the tip passes every stock rule a Send checks; otherwise it stays a kept option.
+        val asStock = CandidateDeliveryPolicy.confirmedAsStock(reviewed)
+        val stock = stockConfirmed && to == CaptureState.ACCEPTED && CandidateDeliveryPolicy.mayQueue(asStock.copy(userChoseSend = true), registry)
+        val confirmed = if (stock) asStock else reviewed
         val queued = decision == ReviewDecision.SEND && CandidateDeliveryPolicy.mayQueue(confirmed, registry)
         dao.updateCandidate(confirmed.copy(deliveryState = (if (queued) DeliveryState.PENDING else DeliveryState.NOT_APPLICABLE).name))
         moveEvidence(candidate.evidenceId, from, to)
