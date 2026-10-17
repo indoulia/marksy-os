@@ -191,16 +191,33 @@ object IpoLifecycle {
         }
     }
 
-    fun stageWord(ipo: IpoListItemDto, now: ZonedDateTime): String = when (laneOf(ipo, now)) {
+    fun stageWord(ipo: IpoListItemDto, now: ZonedDateTime, detail: IpoDetailDto? = null): String = when (laneOf(ipo, now)) {
         Lane.TODAY -> closeAt(ipo)?.let { Duration.between(now, it) }?.takeIf { !it.isNegative && it.toMinutes() < 60 }?.let { "closes in ${leftText(it)}" } ?: "closes 5 pm"
         Lane.OPEN -> ipo.closesOn.localDate()?.let { "open till ${dm(it)}" } ?: "open"
         Lane.UPCOMING -> ipo.opensOn.localDate()?.let { "opens ${dm(it)}" } ?: "opens soon"
-        Lane.ALLOTMENT -> ipo.listsOn.localDate()?.let { "allotment · lists ${dm(it)}" } ?: "allotment"
-        Lane.LISTED -> ipo.listsOn.localDate()?.let { "listed ${dm(it)}" } ?: "listed"
+        Lane.ALLOTMENT -> allotDate(detail).let { allot ->
+            when {
+                allotOut(allot, now) -> "allotment out"
+                allot == now.toLocalDate() -> "allotment tonight"
+                allot != null -> "allotment ${dm(allot)}"
+                else -> ipo.listsOn.localDate()?.let { "allotment · lists ${dm(it)}" } ?: "allotment"
+            }
+        }
+        Lane.LISTED -> detail?.outcome?.listingReturnPercent?.let { "listed ${pct(it)}" } ?: ipo.listsOn.localDate()?.let { "listed ${dm(it)}" } ?: "listed"
         null -> "stage not established"
     }
 
-    fun detailNote(ipo: IpoListItemDto, now: ZonedDateTime) = "${ipo.companyName} · ${stageWord(ipo, now)}"
+    fun detailNote(ipo: IpoListItemDto, now: ZonedDateTime, detail: IpoDetailDto? = null) = "${ipo.companyName} · ${stageWord(ipo, now, detail)}"
+
+    /** Trading days from [from] to [to] inclusive, skipping weekends and [holidays]. */
+    fun businessDays(from: LocalDate, to: LocalDate, holidays: Map<LocalDate, String>): Int =
+        generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.count { it.dayOfWeek.value <= 5 && it !in holidays }
+
+    /** "day 2 of 3" for an open issue, else null when the dates are unknown or today is outside the window. */
+    fun openDayText(open: LocalDate?, close: LocalDate?, today: LocalDate, holidays: Map<LocalDate, String>): String? {
+        if (open == null || close == null || today.isBefore(open) || today.isAfter(close)) return null
+        return "day ${businessDays(open, today, holidays)} of ${businessDays(open, close, holidays)}"
+    }
 
     /** "Best X +11.8% · worst Y −3.0%" across issues whose listing result is in. */
     fun listedSummary(items: List<IpoListItemDto>, details: Map<String, IpoDetailDto>): String? {

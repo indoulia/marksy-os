@@ -62,12 +62,13 @@ private data class Sec(val key: String, val title: String, val sub: String, val 
 fun IpoDetailScreen(
     repository: MarketIntelligenceRepository, ipo: IpoListItemDto, padding: PaddingValues, now: ZonedDateTime,
     reminders: Map<String, Long>, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
-    remindersOpen: Boolean, onRemindersClose: () -> Unit, holidays: Map<LocalDate, String> = emptyMap()
+    remindersOpen: Boolean, onRemindersClose: () -> Unit, holidays: Map<LocalDate, String> = emptyMap(), onLoaded: (IpoDetailDto) -> Unit = {}
 ) {
     val reminderKeys = reminders.keys
     val detail by produceState(MarketDataState.Loading as MarketDataState<IpoDetailDto>, ipo.id) { value = repository.ipoDetail(ipo.id) }
     val history by produceState(MarketDataState.Loading as MarketDataState<List<IpoHistoryEntryDto>>, ipo.id) { value = repository.ipoHistory(ipo.id) }
     val loaded = (detail as? MarketDataState.Loaded)?.value
+    LaunchedEffect(loaded) { loaded?.let(onLoaded) }
     val summary = loaded?.summary?.takeIf { it.companyName.isNotBlank() } ?: ipo
     val lane = IpoLifecycle.laneOf(summary, now)
     val stage = if (lane == Lane.TODAY) Lane.OPEN else lane
@@ -79,6 +80,8 @@ fun IpoDetailScreen(
     val events = IpoLifecycle.reminderEvents(dates, now)
     val keyOf = { e: IpoLifecycle.ReminderEvent -> IpoLifecycle.reminderKey(ipo.id, e.key) }
     var allotOpen by rememberSaveable { mutableStateOf(false) }
+    var calcKey by rememberSaveable(ipo.id) { mutableStateOf("") }
+    var calcLots by rememberSaveable(ipo.id) { mutableIntStateOf(0) }
     // A reminder set before a date moved re-arms for the new time.
     LaunchedEffect(events, reminders) {
         events.forEach { e -> reminders[keyOf(e)]?.takeIf { it != e.at.toInstant().toEpochMilli() }?.let { onReminder(e, true) } }
@@ -97,10 +100,10 @@ fun IpoDetailScreen(
         null -> emptyList()
         else -> order
     }
-    val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder, nowPrice, holidays)
+    val sections = buildSections(summary, loaded, (history as? MarketDataState.Loaded)?.value.orEmpty(), stage, now, dates, events, reminderKeys, keyOf, onReminder, nowPrice, holidays, calcKey, calcLots) { k, l -> calcKey = k; calcLots = l }
 
     MarksyList(Modifier.background(MarksyTheme.Background), bottom = maxOf(padding.calculateBottomPadding(), oneHandStackBottomPadding(3))) {
-        item(key = "hero") { HeroCard(summary, loaded, lane, dates, now, nowPrice) { allotOpen = true } }
+        item(key = "hero") { HeroCard(summary, loaded, lane, dates, now, nowPrice, holidays) { allotOpen = true } }
         when (val d = detail) {
             is MarketDataState.Loading -> item { MarksyLoader("Loading IPO details…") }
             is MarketDataState.Error -> item { EmptyState("Details unavailable", d.message) }
@@ -121,7 +124,7 @@ private fun buildSections(
     ipo: IpoListItemDto, detail: IpoDetailDto?, history: List<IpoHistoryEntryDto>, stage: Lane?, now: ZonedDateTime,
     dates: Map<String, LocalDate>, events: List<IpoLifecycle.ReminderEvent>, reminderKeys: Set<String>,
     keyOf: (IpoLifecycle.ReminderEvent) -> String, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit,
-    nowPrice: Double?, holidays: Map<LocalDate, String>
+    nowPrice: Double?, holidays: Map<LocalDate, String>, calcKey: String, calcLots: Int, onCalc: (String, Int) -> Unit
 ): Map<String, Sec> {
     val out = LinkedHashMap<String, Sec>()
     fun add(s: Sec?) { s?.let { out[it.key] = it } }
@@ -150,8 +153,8 @@ private fun buildSections(
     val lotSize = IpoLifecycle.lotSize(ipo)
     val upper = IpoLifecycle.upper(ipo)
     add(
-        if (lotCost != null && lotSize != null && upper != null) Sec("calc", "Lot calculator", IpoLifecycle.minBid(ipo)?.let { "From ${IpoLifecycle.inr(it)}" } ?: "") {
-            CalculatorBody(ipo, stage, lotCost, lotSize, upper, now, events.firstOrNull { it.key == "open" }, reminderKeys, keyOf, onReminder)
+        if (lotCost != null && lotSize != null && upper != null) Sec("calc", "Lot calculator", calcPick(ipo, stage, lotCost, lotSize, upper, now, calcKey, calcLots).let { "${IpoLifecycle.lotsText(it.lots)} · ${IpoLifecycle.inr(it.quote.amount)}" }) {
+            CalculatorBody(ipo, stage, lotCost, lotSize, upper, now, calcKey, calcLots, onCalc, events.firstOrNull { it.key == "open" }, reminderKeys, keyOf, onReminder)
         } else Sec("calc", "Lot calculator", "Needs the price band") {
             if (upper == null && (stage == Lane.UPCOMING || stage == null)) BandAlertBody(ipo) else MutedText("The lot size is not out yet.")
         }
@@ -260,7 +263,7 @@ private fun chipBg(lane: Lane?) = when (lane) {
 }
 
 @Composable
-private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, dates: Map<String, LocalDate>, now: ZonedDateTime, nowPrice: Double?, onCheckAllotment: () -> Unit) {
+private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, dates: Map<String, LocalDate>, now: ZonedDateTime, nowPrice: Double?, holidays: Map<LocalDate, String>, onCheckAllotment: () -> Unit) {
     val L = IpoLifecycle
     val band = ipo.terms?.priceBand.bounds()
     val bandText = band?.let { (lo, hi) -> "₹${IpoDetailFormatter.number(lo)}–${IpoDetailFormatter.number(hi)}" }
@@ -279,7 +282,7 @@ private fun HeroCard(ipo: IpoListItemDto, detail: IpoDetailDto?, lane: Lane?, da
         Lane.TODAY, Lane.OPEN -> {
             val left = close?.let { Duration.between(now, it) }?.takeIf { !it.isNegative }
             val live = L.subscriptionDays(ipo.subscription).lastOrNull()?.date == now.toLocalDate()
-            chip = if (lane == Lane.TODAY) "Closes today" else dates["close"]?.let { "Open till ${L.dm(it)}" } ?: "Open"
+            chip = if (lane == Lane.TODAY) "Closes today" else L.openDayText(dates["open"], dates["close"], now.toLocalDate(), holidays)?.let { "Open · $it" } ?: dates["close"]?.let { "Open till ${L.dm(it)}" } ?: "Open"
             big = if (lane == Lane.TODAY) left?.let { "${L.leftText(it)} left" } ?: "Closing" else dates["close"]?.let { "Closes ${L.day(it)}, 5 pm" } ?: "Open now"
             sub = if (lane == Lane.TODAY) "Bid, then approve the UPI mandate in your UPI app, by 5 pm today (the usual cutoff)."
             else left?.let { "${L.leftText(it)} left. Approve the UPI mandate by 5 pm that day (the usual cutoff)." } ?: "Approve the UPI mandate by 5 pm on the closing day."
@@ -504,27 +507,38 @@ private fun Callout(text: String) {
 
 private fun signedInr(n: Double) = MarksyFormat.signedRupees(n.roundToLong().toDouble(), 0)
 
+private class CalcPick(val cats: List<IpoLifecycle.LotCategory>, val cat: IpoLifecycle.LotCategory, val lots: Int, val quote: IpoLifecycle.LotQuote)
+
+/** The chosen category and lots (a blank key or 0 lots means the first category at its minimum) with the quote they give. */
+private fun calcPick(ipo: IpoListItemDto, stage: Lane?, lotCost: Double, lotSize: Int, upper: Double, now: ZonedDateTime, catKey: String, lotsIn: Int): CalcPick {
+    val cats = IpoLifecycle.lotCategories(lotCost, ipo.isSme)
+    val cat = cats.firstOrNull { it.key == catKey } ?: cats[0]
+    val n = lotsIn.coerceIn(cat.minLots, cat.maxLots)
+    val poolTimes = if (stage == Lane.UPCOMING) null else ipo.subscription?.latest?.get(cat.pool)?.times
+    val poolName = if (cat.pool == "RETAIL") poolLabel(ipo) else "NII"
+    val lowest = IpoLifecycle.gmpSummary(ipo.gmp, upper, now)?.lowestPremium
+    return CalcPick(cats, cat, n, IpoLifecycle.lotQuote(cats, cat, n, lotSize, upper, poolTimes, lowest, poolName))
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CalculatorBody(
     ipo: IpoListItemDto, stage: Lane?, lotCost: Double, lotSize: Int, upper: Double, now: ZonedDateTime,
+    catKey: String, lotsIn: Int, onCalc: (String, Int) -> Unit,
     openEvent: IpoLifecycle.ReminderEvent?, reminderKeys: Set<String>, keyOf: (IpoLifecycle.ReminderEvent) -> String, onReminder: (IpoLifecycle.ReminderEvent, Boolean) -> Unit
 ) {
-    val cats = remember(lotCost, ipo.isSme) { IpoLifecycle.lotCategories(lotCost, ipo.isSme) }
-    var catKey by rememberSaveable(ipo.id) { mutableStateOf(cats[0].key) }
-    val cat = cats.firstOrNull { it.key == catKey } ?: cats[0]
-    var lots by rememberSaveable(ipo.id) { mutableIntStateOf(cat.minLots) }
-    val n = lots.coerceIn(cat.minLots, cat.maxLots)
+    val pick = calcPick(ipo, stage, lotCost, lotSize, upper, now, catKey, lotsIn)
+    val cats = pick.cats
+    val cat = pick.cat
+    val n = pick.lots
+    val q = pick.quote
     val poolTimes = if (stage == Lane.UPCOMING) null else ipo.subscription?.latest?.get(cat.pool)?.times
-    val poolName = if (cat.pool == "RETAIL") poolLabel(ipo) else "NII"
     val gmp = IpoLifecycle.gmpSummary(ipo.gmp, upper, now)
-    val lowest = gmp?.lowestPremium
-    val q = IpoLifecycle.lotQuote(cats, cat, n, lotSize, upper, poolTimes, lowest, poolName)
     val catName = cat.label.substringBefore(" · ")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-        cats.forEach { c -> Pill(c.label, selected = c == cat) { catKey = c.key; lots = c.minLots } }
+        cats.forEach { c -> Pill(c.label, selected = c == cat) { onCalc(c.key, c.minLots) } }
     }
-    Stepper(IpoLifecycle.lotsText(n), "${IpoDetailFormatter.number(n * lotSize)} shares", n > cat.minLots, n < cat.maxLots, { lots = n - 1 }, { lots = n + 1 })
+    Stepper(IpoLifecycle.lotsText(n), "${IpoDetailFormatter.number(n * lotSize)} shares", n > cat.minLots, n < cat.maxLots, { onCalc(cat.key, n - 1) }, { onCalc(cat.key, n + 1) })
     Column {
         Text(IpoLifecycle.inr(q.amount), color = MarksyTheme.TextPrimary, style = MarksyType.Display)
         Legend((if (cat.cutOff) "blocked in your bank at cut-off, ₹${IpoDetailFormatter.number(upper)} a share" else "blocked in your bank at ₹${IpoDetailFormatter.number(upper)} a share; HNI bids cannot use cut-off") +
@@ -537,7 +551,7 @@ private fun CalculatorBody(
     q.next?.let { next ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Above ${IpoLifecycle.lotsText(cat.maxLots)} you bid as ${next.label.substringBefore(" · ")}.", color = MarksyTheme.TextSecondary, style = MarksyType.Small, modifier = Modifier.weight(1f))
-            Pill("Switch") { catKey = next.key; lots = next.minLots }
+            Pill("Switch") { onCalc(next.key, next.minLots) }
         }
     }
     if (cat.pool == "NII" && poolTimes != null) Legend("NII odds use the combined NII figure; the small and big HNI split is not available.")
