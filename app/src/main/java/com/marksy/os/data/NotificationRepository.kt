@@ -126,7 +126,11 @@ class NotificationRepository(
         return dao.resolve(ids, "Resolved by you", nowMillis)
     }
 
-    suspend fun reopenThread(ids: List<Long>, nowMillis: Long = System.currentTimeMillis()): Int = dao.reopen(ids, nowMillis)
+    /** [retractSince]: set when undoing a Done made at that time, so its RESOLVED signal goes too. */
+    suspend fun reopenThread(ids: List<Long>, nowMillis: Long = System.currentTimeMillis(), retractSince: Long? = null): Int {
+        retractSince?.let { learning?.retractAction(ids, PersonalLearning.Signal.RESOLVED, it) }
+        return dao.reopen(ids, nowMillis)
+    }
 
     suspend fun snoozeThread(ids: List<Long>, untilMillis: Long): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.SNOOZED)
@@ -134,7 +138,11 @@ class NotificationRepository(
         return dao.setSnoozedUntil(ids, untilMillis)
     }
 
-    suspend fun unsnoozeThread(ids: List<Long>): Int = dao.setSnoozedUntil(ids, null)
+    /** [retractSince]: set when undoing a snooze made at that time, so its SNOOZED signal goes too. */
+    suspend fun unsnoozeThread(ids: List<Long>, retractSince: Long? = null): Int {
+        retractSince?.let { learning?.retractAction(ids, PersonalLearning.Signal.SNOOZED, it) }
+        return dao.setSnoozedUntil(ids, null)
+    }
 
     suspend fun archiveThread(ids: List<Long>, nowMillis: Long = System.currentTimeMillis()): Int {
         learning?.recordAction(ids, PersonalLearning.Signal.ARCHIVED_UNOPENED)

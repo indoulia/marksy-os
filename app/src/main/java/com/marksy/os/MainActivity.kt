@@ -352,6 +352,20 @@ class MainActivity : ComponentActivity() {
                 if (snackbar.showSnackbar("Archived", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) rows.forEach { vm.unarchive(it.id) }
             }
         }
+        val resolveThreadWithUndo: (List<Long>) -> Unit = { ids ->
+            val at = System.currentTimeMillis()
+            vm.resolveThread(ids)
+            scope.launch {
+                if (snackbar.showSnackbar("Marked done", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.undoResolve(ids, at)
+            }
+        }
+        val snoozeThreadWithUndo: (List<Long>, Long) -> Unit = { ids, until ->
+            val at = System.currentTimeMillis()
+            vm.snoozeThread(ids, until)
+            scope.launch {
+                if (snackbar.showSnackbar("Snoozed", actionLabel = "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.undoSnooze(ids, at)
+            }
+        }
         // "Hide" drops a row from one page only; nothing changes in storage.
         var inboxHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
         var homeHidden by rememberSaveable { mutableStateOf(listOf<Long>()) }
@@ -793,9 +807,9 @@ class MainActivity : ComponentActivity() {
                         InboxActions(
                             markSeen = vm::markThreadSeen,
                             markUnread = { ids -> ids.forEach { vm.setRead(it, false) } },
-                            resolve = vm::resolveThread,
+                            resolve = resolveThreadWithUndo,
                             reopen = vm::reopenThread,
-                            snooze = vm::snoozeThread,
+                            snooze = snoozeThreadWithUndo,
                             archive = vm::archiveThread,
                             prefer = vm::setPreference
                         )
