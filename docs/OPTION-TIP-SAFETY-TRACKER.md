@@ -35,7 +35,7 @@ Evidence (tests):
 - Zero client calls from appended lines, classifier re-queue and the accessibility connector (a group row asserted PENDING, then kept; rows without a group flag never queue): `IngestionPipelineTest.optionCallsFromEveryIngestionPathNeverReachTheClient`.
 - Zero client calls from rows synced by the real `GmailConnector` and `CalendarConnector`, with a stock control that is sent: `ConnectorSyncTest.connectorOptionCallsNeverReachTheClient`.
 - Zero client calls for queued flagged or contract-shaped screenshots (screen capture, shared, picked): `TradingDeliveryRunTest.aQueuedOptionScreenshotNeverReachesTheClient`.
-- Both run-level tests fail with the `decide` check switched off (checked 2026-10-17).
+- `TradingDeliveryRunTest.optionAndMaybeOptionCallsNeverReachTheClientOnAnyAttempt` and `IngestionPipelineTest.optionCallsFromEveryIngestionPathNeverReachTheClient` fail with the `CaptureGate.decide` option check switched off (checked 2026-10-17); the screenshot run test rests on `CandidateDeliveryPolicy.decide`.
 - Client refusal kept, not failed (calls and screenshots): `TradingDeliveryRunTest.aCallTheClientRefusesAsAnOptionIsKeptNotFailed`, `TradingDeliveryPolicyTest.anOptionTheClientRefusesIsKeptNotFailed`.
 - No HTTP request: `MarksyTipsApiClientRecordedReceiptTest.anOptionOrMaybeOptionCallIsNeverRequested`.
 - Review correction (A), stored only when every stock rule passes (Send or Keep): `CandidateDeliveryPolicyTest.aConfirmedStockTipTakesTheOrdinaryStockPath`, `CaptureGatewayTest.confirmingAStockTipKeepsTheOptionFlag`, `CaptureDaoTest` kept list and retention.

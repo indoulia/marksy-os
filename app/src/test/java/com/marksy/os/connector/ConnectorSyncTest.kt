@@ -198,6 +198,8 @@ class ConnectorSyncTest {
         syncer.sync(calendar(FakeCalendar(listOf(inst(1, t0 + 2 * hour, title = "BUY NIFTY 24500 CALL @ 180 TGT 220 SL 150")))))
         val dao = db.notificationEventDao()
         val queued = rows().filter { it.deliveryState == "PENDING" }
+        // Both Gmail option rows reach the queue, so the delivery gate (not the capture rules) is what stops them.
+        assertEquals(2, queued.count { "24500" in it.body || "18 PE" in it.body })
         val sent = mutableListOf<String>()
         val client = object : MarksyGatewayClient {
             override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {

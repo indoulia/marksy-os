@@ -169,7 +169,7 @@ object TipExtractor {
 
     // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
     // Only the first call names the instrument: up to its target or stop and never past the next BUY/SELL, so a later
-    // call or a hedge note ("| BUY NIFTY 24500 CE") never turns a stock call into an option.
+    // call or a hedge note ("| BUY NIFTY 24500 CE") never takes a stock call's symbol (captureOption still flags it maybe-option).
     private fun firstCallOption(flat: String, sideHits: List<Pair<MatchResult, TipSide>>, symbol: String?): OptionGate.Reading {
         val side = sideHits.firstOrNull()?.first
         val callStart = side?.range?.last?.plus(1) ?: 0
