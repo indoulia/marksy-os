@@ -68,11 +68,12 @@ Status only; the backend work lives in `marksy-api`. States: **LOCAL** (commit o
 - **DRC-001 data-rights gate:** PROPOSED; spec text and tests drafted outside the repository. Decisions M2–M10 open; not implemented. Until it exists, no MSV-001 or PSC score may be shown to users. A decision packet (M2–M10, with pending §6c amendments and acceptance criteria) is prepared for approval, outside the repository.
 - **Option-tip safety (owned by the option-tip session):**
   - Already merged: server #120 (NOT DEPLOYED) and app #160 (`a962c55`, not PHONE VERIFIED).
-  - In review: the shared option gate and client block are in app PR [#163](https://github.com/indoulia/marksy-os/pull/163) (`c665404`), and CALL/PUT detection is in server PR [#124](https://github.com/indoulia/marksy-api/pull/124) (`753f25c`). Both are PR OPEN, not merged or deployed.
-  - Independent read-only review (2026-10-17): #124 is ready for merge approval. #163 needs changes:
-    - the stock-tip correction is saved without the stock checks;
-    - on screenshots, a contract named after the first call's levels is not flagged;
-    - zero-HTTP tests are missing for SMS, WhatsApp notifications, Calendar and the screenshot routes.
+  - In review: the shared option gate and client block are in app PR [#163](https://github.com/indoulia/marksy-os/pull/163) (`8cbf7f9`), and CALL/PUT detection is in server PR [#124](https://github.com/indoulia/marksy-api/pull/124) (`753f25c`). Both are PR OPEN, not merged or deployed.
+  - Independent read-only review (2026-10-17): #124 is ready for merge approval. #163 is ready for merge approval at `8cbf7f9`, after a first review found three blocking issues and all three were fixed:
+    - the stock-tip correction now passes every stock check before it is kept;
+    - a screenshot that mentions an option anywhere now goes to review;
+    - real-run zero-request tests now cover every route.
+  - Residual risk: a wrong human "stock tip" confirmation of an option screenshot passes the app's checks. The only backstop is #124's BUY-only off-market check, which is not deployed.
   - Per-channel evidence: `docs/OPTION-TIP-SAFETY-TRACKER.md` (in #163). Automatic-message retention is unchanged.
   - NOT GATED: notification, SMS, chat-notification, re-queue, retry/Send now and pull-connector routes send the cleaned raw text without an option check (`CaptureGate.kt:90-107`).
   - The tips network client has no second block.
