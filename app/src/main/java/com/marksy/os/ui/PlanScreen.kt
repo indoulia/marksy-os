@@ -196,7 +196,7 @@ fun PlanUpcomingCard(items: List<PlanItemEntity>, onOpenPlan: () -> Unit, onAdd:
     val upcoming = remember(items) { PlanModel.upcoming(items, 4) }
     MarksyCard(onClick = onOpenPlan) {
         MarksyCardHeader("Upcoming", icon = Icons.Default.EventNote, trailing = {
-            MarksyIconButton(Icons.Default.Add, "Add reminder", onAdd, inline = true)
+            MarksyIconButton(Icons.Default.Add, "Add reminder", onAdd, small = true)
         })
         if (upcoming.isEmpty()) {
             Text("No bills, EMIs or birthdays coming up", color = MarksyTheme.TextMuted, style = MarksyType.Small)

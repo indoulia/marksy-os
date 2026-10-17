@@ -150,7 +150,7 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
     Row(
         // Pill height and padding, so the action matches the option pills above it.
-        Modifier.heightIn(min = MarksySize.Control).clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Control),
+        Modifier.heightIn(min = MarksySize.ControlSmall).clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Control),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))

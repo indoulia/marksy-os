@@ -145,7 +145,7 @@ object MarksySpace {
     val Gutter = 18.dp
     /** Inside every control (pill, button, field, select) from its edge to its text. */
     val Control = 12.dp
-    /** The same for a compact pill. */
+    /** The same for a compact pill, whose text is smaller. */
     val ControlCompact = 8.dp
     val Border = 1.dp
     /** The emerald ring on floating controls and today's date. */
@@ -171,12 +171,10 @@ object MarksySize {
     val Avatar = 32.dp
     /** A round icon tile at the top of a card (profile, holdings sign-in). */
     val AvatarLarge = 40.dp
-    /** Every button, non-compact pill, text and search field, select, segmented control and stepper. */
+    /** The two control heights. Control: every button, text and search field, select, segmented control and stepper. */
     val Control = 32.dp
-    /** A compact pill. */
-    val ControlCompact = 18.dp
-    /** An icon button inside a line of text (a card header, a quote). */
-    val ControlInline = 24.dp
+    /** Every pill (compact ones too), and an icon button inside a line of text. */
+    val ControlSmall = 28.dp
     /** Round icon buttons in the top bar. */
     val HeaderButton = 36.dp
     /** Round floating buttons. */

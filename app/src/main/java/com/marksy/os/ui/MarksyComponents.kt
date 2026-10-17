@@ -254,16 +254,16 @@ fun MarksyIconDisc(
 }
 
 /**
- * The one icon button: a [MarksySize.Control] circle, or [MarksySize.ControlInline] when [inline] beside text. [raised]
+ * The one icon button: a [MarksySize.Control] circle, or [MarksySize.ControlSmall] when [small] beside text. [raised]
  * draws it on the raised surface with a border (filled emerald while [active]).
  */
 @Composable
 fun MarksyIconButton(
     icon: ImageVector, contentDescription: String?, onClick: () -> Unit, modifier: Modifier = Modifier,
-    tint: Color = MarksyTheme.PrimaryEmerald, raised: Boolean = false, active: Boolean = false, enabled: Boolean = true, inline: Boolean = false
+    tint: Color = MarksyTheme.PrimaryEmerald, raised: Boolean = false, active: Boolean = false, enabled: Boolean = true, small: Boolean = false
 ) {
     Box(
-        modifier.size(if (inline) MarksySize.ControlInline else MarksySize.Control).clip(CircleShape)
+        modifier.size(if (small) MarksySize.ControlSmall else MarksySize.Control).clip(CircleShape)
             .then(
                 if (raised) Modifier.background(if (active) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised).border(MarksySpace.Border, MarksyTheme.BorderGlow, CircleShape)
                 else Modifier
@@ -461,7 +461,7 @@ internal fun Pill(
     val fill by animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
     Row(
         // Min height, not fixed, so large font scales grow the pill instead of clipping it.
-        modifier.heightIn(min = if (compact) MarksySize.ControlCompact else MarksySize.Control)
+        modifier.heightIn(min = MarksySize.ControlSmall)
             .clip(shape)
             .background(fill)
             .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)

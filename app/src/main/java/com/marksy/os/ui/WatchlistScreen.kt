@@ -91,14 +91,14 @@ val LocalWatchlistAdder = compositionLocalOf<WatchlistAdder?> { null }
 
 /** Small bookmark on any stock row: filled once the stock is in a watchlist; opens the add popup. */
 @Composable
-fun WatchlistButton(symbol: String, modifier: Modifier = Modifier, inline: Boolean = false) {
+fun WatchlistButton(symbol: String, modifier: Modifier = Modifier, small: Boolean = false) {
     val adder = LocalWatchlistAdder.current ?: return
     val s = symbol.trim().uppercase()
     val watched = s in adder.watched
     MarksyIconButton(
         if (watched) Icons.Filled.BookmarkAdded else Icons.Outlined.BookmarkAdd,
         contentDescription = if (watched) "$s is in a watchlist" else "Add $s to a watchlist",
-        onClick = { adder.open(s) }, modifier = modifier, inline = inline,
+        onClick = { adder.open(s) }, modifier = modifier, small = small,
         tint = if (watched) MarksyTheme.PrimaryEmerald else MarksyTheme.TextSecondary
     )
 }

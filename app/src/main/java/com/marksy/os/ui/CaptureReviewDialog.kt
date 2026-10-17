@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -150,8 +150,8 @@ fun CaptureReviewDialog(
                         symbol, { symbol = it }, Modifier.weight(1f), label = "Symbol",
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
                     )
-                    // Pills and field share the control height, so bottom alignment lines them up.
-                    Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
+                    // The field's height, so the smaller side pills centre on the symbol field.
+                    Row(Modifier.heightIn(min = MarksySize.Control), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
                         TipSide.entries.forEach { s -> Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s) { side = s } }
                     }
                 }

@@ -45,7 +45,7 @@ internal fun QuoteGrid(items: List<Triple<String, String, Double?>>, watchable: 
                     Column(Modifier.weight(1f).clip(MarksyShape.Chip).then(if (onOpen != null) Modifier.clickable { onOpen(name) } else Modifier)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(name, color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            if (watchable) WatchlistButton(name, inline = true)
+                            if (watchable) WatchlistButton(name, small = true)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(price, color = MarksyTheme.TextPrimary, style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
