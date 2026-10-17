@@ -99,7 +99,9 @@ fun CaptureReviewDialog(
     val flagged = Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes
     val reading = remember(key) { TipExtractor.captureOption(candidate.extractedText.orEmpty()) }
     val index = flagged && OptionGate.isOptionIndex(symbol)
-    val confirming = stock && !index
+    // Written option wording ("3500 CE") is never corrected to a stock tip; only a maybe-option ("18 PE") is (mockup 1d).
+    val written = remember(key) { CandidateDeliveryPolicy.writtenOption(candidate) }
+    val confirming = stock && !index && written == null
 
     val fields = TipFields(
         symbol.trim().uppercase().ifEmpty { null }, side, entry.toDoubleOrNull(), target.toDoubleOrNull(), stopLoss.toDoubleOrNull(),
@@ -141,7 +143,7 @@ fun CaptureReviewDialog(
                     .forEach { Text(it, color = MarksyTheme.Warning, style = MarksyType.Small) }
                 if (flagged) {
                     Text(optionReason(reading), color = MarksyTheme.Warning, style = MarksyType.Small)
-                    if (!index) Pill("It's a stock tip, not an option call", selected = stock) { stock = !stock }
+                    if (!index && written == null) Pill("It's a stock tip, not an option call", selected = stock) { stock = !stock }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
@@ -171,7 +173,10 @@ fun CaptureReviewDialog(
                 MarksyCard {
                     Text(
                         if (canSend) "Send to Marksy sends only: ${line.orEmpty()}, from $sourceName. Nothing else leaves your phone."
-                        else sendBlocked(candidate.sourceVerified, line, source, flagged && !confirming, OptionGate.looksLikeContract(fields.symbol), fields.symbol.takeIf { index }),
+                        else sendBlocked(
+                            candidate.sourceVerified, line, source, flagged && !confirming, OptionGate.looksLikeContract(fields.symbol), fields.symbol.takeIf { index },
+                            written?.let { it.evidence ?: "" }, candidate.extractedText.isNullOrBlank()
+                        ),
                         color = MarksyTheme.TextPrimary, style = MarksyType.Small
                     )
                     Text("Keep on phone sends nothing.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -204,8 +209,12 @@ private fun optionReason(reading: OptionGate.Reading): String = when {
     else -> "Read as an option call because of “${reading.evidence}”: its levels would be the option's price."
 }
 
-private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?, option: Boolean, contract: Boolean, index: String?): String = when {
+private fun sendBlocked(
+    verified: Boolean, line: String?, source: CaptureSource?, option: Boolean, contract: Boolean, index: String?, written: String?, textMissing: Boolean
+): String = when {
+    textMissing -> "The screenshot's text is gone, so it stays on this phone. Capture it again to send it."
     index != null -> "$index is an index, so a tip read as an option stays on this phone."
+    written != null -> "The screenshot names an option contract${if (written.isBlank()) "" else " ($written)"}, so it stays on this phone."
     option -> "Marksy can't track options yet, so this tip stays on this phone."
     contract -> "It still looks like an option contract, so it stays on this phone."
     !verified -> "Tips with a source you picked yourself stay on this phone."

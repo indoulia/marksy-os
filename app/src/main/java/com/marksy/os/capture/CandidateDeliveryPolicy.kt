@@ -26,6 +26,7 @@ object CandidateDeliveryPolicy {
     const val CHAT_SOURCE = "chat-source"
     const val UNSUPPORTED_SOURCE = CaptureFailure.UNSUPPORTED_SOURCE
     const val OPTION_UNSUPPORTED = CaptureGate.OPTION_UNSUPPORTED
+    const val RECOGNIZED_TEXT_MISSING = "recognized-text-missing"
 
     private val ticker = Regex("""(?=[A-Z0-9&._-]*[A-Z])[A-Z0-9][A-Z0-9&._-]{0,29}""")
 
@@ -83,6 +84,7 @@ object CandidateDeliveryPolicy {
 
     private fun reviewKeep(candidate: TipCandidateEntity): String? {
         val text = candidate.extractedText.orEmpty()
+        val textKeep = recognizedTextKeep(candidate)
         return when {
             candidate.state != CaptureState.ACCEPTED.name -> NOT_ACCEPTED
             !candidate.userChoseSend -> KEPT_ON_PHONE
@@ -91,6 +93,7 @@ object CandidateDeliveryPolicy {
             Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes &&
                 (Ambiguity.STOCK_CONFIRMED !in candidate.ambiguityCodes || OptionGate.isOptionIndex(candidate.symbol)) -> OPTION_UNSUPPORTED
             OptionGate.looksLikeContract(candidate.symbol) -> OPTION_UNSUPPORTED
+            textKeep != null -> textKeep
             // A hand-picked source could forge another channel's record; only Android package identity may send.
             !candidate.sourceVerified -> UNVERIFIED_SOURCE
             canonicalLine(candidate.fields) == null -> CaptureGate.NOT_A_CANDIDATE
@@ -98,6 +101,25 @@ object CandidateDeliveryPolicy {
             NotificationClassifier.isOwnAccountEvent("", text) -> CaptureGate.OWN_ACCOUNT
             else -> null
         }
+    }
+
+    /** The recognized text decides, not a stored flag an older app's row may lack (sent lines never carry option words); no text, no send. */
+    fun recognizedTextKeep(candidate: TipCandidateEntity): String? {
+        val text = candidate.extractedText
+        val codes = candidate.ambiguityCodes
+        if (text.isNullOrBlank()) return RECOGNIZED_TEXT_MISSING
+        if (writtenOption(candidate) != null) return OPTION_UNSUPPORTED
+        // Only a maybe-option ("18 PE": a put or a P/E ratio) takes the reviewer's stock correction.
+        val corrected = Ambiguity.OPTION_CONTRACT in codes && Ambiguity.STOCK_CONFIRMED in codes
+        return OPTION_UNSUPPORTED.takeIf { OptionGate.classify(text).signal == OptionGate.Signal.AMBIGUOUS && !corrected }
+    }
+
+    /** Why no correction can make this screenshot a stock tip: written option wording, by either rule set, or a flagged text cut at the stored limit. */
+    fun writtenOption(candidate: TipCandidateEntity): OptionGate.Reading? {
+        val text = candidate.extractedText ?: return null
+        // The extractor also reads a short strike right after the symbol ("BUY IDEA 15 PE") as a contract.
+        listOf(OptionGate.classify(text), TipExtractor.captureOption(text)).firstOrNull { it.signal == OptionGate.Signal.OPTION }?.let { return it }
+        return OptionGate.Reading(OptionGate.Signal.OPTION).takeIf { Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes && text.length >= TipExtractor.MAX_TEXT }
     }
 }
 
@@ -128,7 +150,10 @@ internal class CandidateDeliveryRun(
             if (dao.claimPendingDelivery(candidate.id, attempts, clock()) != 1) continue
             try {
                 val decision = try {
-                    decide(candidate, capture)
+                    // Re-checked right before any request, whatever decided: the client only ever sees the rebuilt line.
+                    decide(candidate, capture).let { d ->
+                        if (d is CaptureDecision.Send) CandidateDeliveryPolicy.recognizedTextKeep(candidate)?.let { CaptureDecision.Keep(it) } ?: d else d
+                    }
                 } catch (cancellation: CancellationException) {
                     dao.updateInFlightDelivery(candidate.id, DeliveryState.PENDING.name, attempts, clock())
                     throw cancellation

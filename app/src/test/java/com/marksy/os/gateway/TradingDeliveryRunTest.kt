@@ -3,6 +3,7 @@ package com.marksy.os.gateway
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.marksy.os.capture.CandidateDeliveryRun
+import com.marksy.os.data.NotificationRepository
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
@@ -205,6 +206,51 @@ class TradingDeliveryRunTest {
             val row = dao.findById(id)!!
             assertEquals("$id", DeliveryState.NOT_APPLICABLE.name to CaptureGate.OPTION_UNSUPPORTED, row.deliveryState to row.deliveryNote)
         }
+    }
+
+    // False-positive guards: "put SL" and "Intraday calls" are ordinary stock-tip wording, so each call is sent exactly once.
+    @Test
+    fun stockTipsSayingPutSlOrIntradayCallsAreSentOnce() = runBlocking {
+        val sent = mutableListOf<String>()
+        val recording = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val put = dao.insert(row("p", 1L).copy(body = "BUY TCS @ 3500 TGT 3600, put SL 3400"))
+        val intraday = dao.insert(row("d", 2L).copy(body = "Intraday calls: BUY INFY @ 1450 TGT 1500 SL 1420"))
+
+        assertFalse(TradingDeliveryRun(dao, recording, capture).drain())
+
+        assertEquals(1, sent.count { "put SL 3400" in it })
+        assertEquals(1, sent.count { "Intraday calls" in it })
+        assertEquals(2, sent.size)
+        listOf(put, intraday).forEach { assertEquals(DeliveryState.DELIVERED.name, dao.findById(it)!!.deliveryState) }
+    }
+
+    // Option-tip safety B: the user's Retry goes through the repository, and a failed option call is still kept on the phone.
+    @Test
+    fun retryingAFailedOptionCallNeverSendsIt() = runBlocking {
+        val sent = mutableListOf<String>()
+        val recording = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val failed = listOf("BUY NIFTY 24500 CE @ 180 TGT 220 SL 150", "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400").mapIndexed { i, body ->
+            dao.insert(row("r$i", i.toLong()).copy(body = body, deliveryState = DeliveryState.FAILED.name))
+        }
+        val repository = NotificationRepository(dao)
+
+        failed.forEach { assertTrue(repository.retryDelivery(it)) }
+        assertFalse(TradingDeliveryRun(dao, recording, capture).drain())
+
+        assertEquals(emptyList<String>(), sent)
+        failed.forEach { assertEquals(DeliveryState.NOT_APPLICABLE.name to CaptureGate.OPTION_UNSUPPORTED, dao.findById(it)!!.let { e -> e.deliveryState to e.deliveryNote }) }
     }
 
     // A flagged or contract-shaped screenshot (shared, picked, teaser or screen capture) that reached the queue still never reaches the client.

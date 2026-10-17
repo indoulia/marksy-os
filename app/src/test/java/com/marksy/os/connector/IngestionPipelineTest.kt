@@ -225,6 +225,39 @@ class IngestionPipelineTest {
         (accessibility + requeued).forEach { assertEquals("NOT_APPLICABLE" to CaptureGate.OPTION_UNSUPPORTED, dao.getById(it)!!.let { e -> e.deliveryState to e.deliveryNote }) }
     }
 
+    // Option-tip safety B: a maybe-option line appended to a group row, or re-queued by the classifier, is kept on the phone.
+    @Test
+    fun maybeOptionLinesFromAppendAndRequeueAreNeverSent() = runBlocking {
+        val dao = db.notificationEventDao()
+        val maybe = "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400"
+        val group = raw("org.telegram.messenger", "g1", "Tips Group", "Good morning").copy(groupConversation = true)
+        pipeline.ingest(group)
+        val appended = (pipeline.ingest(group.copy(body = "Good morning\n$maybe")) as IngestionPipeline.Result.Stored).eventId
+        assertEquals("PENDING", dao.getById(appended)!!.deliveryState)
+        val requeued = dao.insert(
+            NotificationEventEntity(
+                sourcePackage = "com.fivepaisa.trade", sourceName = "5paisa", sourceKey = "r1", eventFingerprint = "r1", title = "Idea", body = maybe,
+                postedAt = t0, category = "MARKET", priority = 10, confidence = .5f, isTrading = false, deliveryState = "NOT_APPLICABLE"
+            )
+        )
+        dao.updateClassification(requeued, "TRADING", 100, .96f, isTrading = true, queue = true)
+        assertEquals("PENDING", dao.getById(requeued)!!.deliveryState)
+
+        val sent = mutableListOf<String>()
+        val client = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val context = CaptureContext(capturePackages = setOf("com.fivepaisa.trade"), chatAllowList = setOf("tips group"), chatSenders = emptySet(), username = "user-1", deviceSalt = "salt")
+        TradingDeliveryRun(dao, client, context).drain()
+
+        assertEquals(emptyList<String>(), sent)
+        listOf(appended, requeued).forEach { assertEquals(it.toString(), "NOT_APPLICABLE" to CaptureGate.OPTION_UNSUPPORTED, dao.getById(it)!!.let { e -> e.deliveryState to e.deliveryNote }) }
+    }
+
     // 4b review I2: a local group row that gains a call sends only the new line, with no sender name, recorded or not.
     @Test
     fun aLocalGroupRowThatGainsACallSendsOnlyTheCallAndNoNames() = runBlocking {
