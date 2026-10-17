@@ -46,16 +46,34 @@ Status only; the backend work lives in `marksy-api`. States: **LOCAL** (commit o
 
 - **PROV-001 provider-provenance record and MSV-001 §6a no-manual-runs rule:** MERGED — marksy-api [#121](https://github.com/indoulia/marksy-api/pull/121), merge `ec85385` (2026-10-17 04:06 UTC). Docs only; NOT DEPLOYED, and no deploy is needed. CI not run (GitHub Actions billing lockout).
 - **OD-9 decision record, with Upstox questions Q-U1/Q-U2 extended to live-quote data:** MERGED — marksy-api [#122](https://github.com/indoulia/marksy-api/pull/122), merge `c555054` (04:10 UTC). Its two doc commits were cherry-picked onto main. The original `docs/od-9-nse-authorization` branch stays LOCAL and must not be merged: it carries unrelated EPIC-5 `marksy_ml` code. The questions are unsent drafts.
-- **marksy-api main is ahead of production:** main `c555054` includes #120 (tips parser, merged by the option-tip session), which is NOT DEPLOYED; production runs `acc20c5`. Any unpinned deploy would ship #120. No deploy is approved.
+- **This status section:** first published by marksy-os PR [#162](https://github.com/indoulia/marksy-os/pull/162), merge `b8d11c3` (2026-10-17).
+- **marksy-api main vs production:** production runs the pinned release `27cffd8`, which is production's `acc20c5` plus only the Postgres probe fix (deployed 2026-10-17 05:14 UTC). Main `c555054` holds #120 (NOT DEPLOYED) but not `27cffd8`. The deploy script therefore refuses the next main deploy until PR #123 merges. A main deploy would also ship #120; none is approved.
 - **Postgres reliability observation:** read-only. Day-0 baseline 2026-10-16 22:03:40 UTC. Daily snapshots at about 22:03 UTC (03:33 IST) through 2026-10-23, run only when prompted; none collected yet after day 0. A 30-minute parallel-worker sample on 2026-10-19 at 16:05 IST, only if prompted. Incidents:
   - 15 Oct: a container OOM kill (confirmed by kernel log and cgroup counter). Another session's note attributes it to its probe; that attribution is reported, not verified.
   - 16 Oct: three shared-memory errors from the PROV-001 audit query.
   - No job failure recorded. No tuning change.
-- **Health-check `role "root"` log noise:** cause CONFIRMED on 2026-10-17 by one controlled `pg_isready` test. In probe commands, the Secret-sourced `$(POSTGRES_USER)` becomes empty (kubelet v1.36.4), and an empty user falls back to root. Fix PROPOSED: a shell-expanded probe command. It needs approval and a Postgres restart, and is best done after the observation window.
-- **Four uncommitted files in the local deployment checkout:** an unfinished SEL-001 coverage-check fix from 2026-10-06 that uses the NSE calendar. LOCAL and of unknown ownership; untouched; disposition awaiting a decision.
-- **PSC-002:** LOCAL docs on `exp/psc-rr-bias` (`d492621`, unpushed). D1 (defer) and fixes 1–18 PROPOSED, not approved. Not implemented.
-- **DRC-001 data-rights gate:** PROPOSED; spec text and tests drafted outside the repository. Decisions M2–M10 open; not implemented. Until it exists, no MSV-001 or PSC score may be shown to users.
-- **Option-tip safety (owned by the option-tip session):** server #120 MERGED, NOT DEPLOYED. App #160 MERGED (`a962c55`), not PHONE VERIFIED. App branch `fix/option-stage0-app` LOCAL (`5fccde5`). Notification, SMS, WhatsApp and Telegram capture still forward option text until the local gate ships. Per-channel evidence belongs in `docs/OPTION-TIP-SAFETY-TRACKER.md`, which that branch will create. Independent read-only review (2026-10-17, at `5fccde5`; code reading only, no tests run):
+  - Pre-change snapshot 2026-10-17 05:12:37 UTC (10:42 IST). Postgres restarted at 05:14:04 UTC, so the container's memory counters restart from zero; the post-restart baseline was taken at 05:21 UTC. Container counters can't be compared across the restart.
+- **Health-check `role "root"` log noise:** FIXED and DEPLOYED 2026-10-17 05:14 UTC.
+  - Cause: confirmed by a controlled `pg_isready` test; an empty user falls back to root.
+  - Fix: both probes now run `sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`. marksy-api PR [#123](https://github.com/indoulia/marksy-api/pull/123), commit `27cffd8`, is PR OPEN and must merge before the next main deploy.
+  - How it shipped: a pinned API release, leaving admin and web unchanged and not shipping #120.
+  - Safeguards: off-site backup `20261017T045443Z` (STORED), then a restore check. Schema, migration head, scheduler and artefacts all passed; the overall NOT_VERIFIABLE comes only from the live job-log table changing during the backup.
+  - Verified after the restart: new pod ready, API health 200, 36 CronJobs resumed, jobs completing, and 0 `FATAL` lines in the first 7 minutes (previously about 18 a minute).
+  - Rollback: a pinned redeploy of `acc20c5` with `MARKSY_API_ALLOW_ROLLBACK=1`, or `kubectl rollout undo deployment/postgres`. Each restarts Postgres.
+- **SEL-001 post-deploy coverage check (the four uncommitted deployment files):** recovered onto `fix/sel001-coverage-nse-calendar` (`d552b41`, from deployment main) and opened as deployment [#10](https://github.com/indoulia/deployment/pull/10). PR OPEN, not to be merged without approval. The original files in the local checkout are untouched.
+  - Tests: the SQL suite passes with `failed=0` in a disposable container, and `test_sources.sh` passes 48/0.
+  - `test_vps_deploy.sh` gives 64 passed / 6 failed, and main gives the same 6 failures: they come from the test environment.
+  - Separately, every deploy since 16 Oct reports coverage FAILED for 8–9 Oct, the outage days.
+- **PSC-002:** LOCAL docs on `exp/psc-rr-bias` (`d492621`, unpushed). D1 (defer) and fixes 1–18 PROPOSED, not approved. Not implemented. A decision packet (D1 and fixes 1–18, with provenance, conflicts and recommendations) is prepared for approval, outside the repository.
+- **DRC-001 data-rights gate:** PROPOSED; spec text and tests drafted outside the repository. Decisions M2–M10 open; not implemented. Until it exists, no MSV-001 or PSC score may be shown to users. A decision packet (M2–M10, with pending §6c amendments and acceptance criteria) is prepared for approval, outside the repository.
+- **Option-tip safety (owned by the option-tip session):**
+  - Already merged: server #120 (NOT DEPLOYED) and app #160 (`a962c55`, not PHONE VERIFIED).
+  - In review: the shared option gate and client block are in app PR [#163](https://github.com/indoulia/marksy-os/pull/163) (`c665404`), and CALL/PUT detection is in server PR [#124](https://github.com/indoulia/marksy-api/pull/124) (`753f25c`). Both are PR OPEN, not merged or deployed.
+  - Independent read-only review (2026-10-17): #124 is ready for merge approval. #163 needs changes:
+    - the stock-tip correction is saved without the stock checks;
+    - on screenshots, a contract named after the first call's levels is not flagged;
+    - zero-HTTP tests are missing for SMS, WhatsApp notifications, Calendar and the screenshot routes.
+  - Per-channel evidence: `docs/OPTION-TIP-SAFETY-TRACKER.md` (in #163). Automatic-message retention is unchanged.
   - NOT GATED: notification, SMS, chat-notification, re-queue, retry/Send now and pull-connector routes send the cleaned raw text without an option check (`CaptureGate.kt:90-107`).
   - The tips network client has no second block.
   - Screenshot routes are partially gated: a symbol edited at review is not re-classified, and only CE/PE wording is detected.
