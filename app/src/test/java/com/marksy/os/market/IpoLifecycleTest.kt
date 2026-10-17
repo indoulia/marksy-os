@@ -221,4 +221,10 @@ class IpoLifecycleTest {
         assertNull(IpoLifecycle.openDayText(LocalDate.of(2026, 10, 1), null, LocalDate.of(2026, 10, 5), holidays))
         assertNull(IpoLifecycle.openDayText(LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 8), LocalDate.of(2026, 10, 5), holidays))
     }
+
+    @Test fun marketTabCountsOpenAndUpcomingOnly() {
+        assertEquals(5, IpoLifecycle.actionableCount(mapOf("OPEN" to 2, "CLOSING_SOON" to 1, "UPCOMING" to 2, "CLOSED" to 4, "ALLOTMENT" to 1, "RECENTLY_LISTED" to 300)))
+        assertEquals(0, IpoLifecycle.actionableCount(mapOf("RECENTLY_LISTED" to 3)))
+        assertNull(IpoLifecycle.actionableCount(null))
+    }
 }

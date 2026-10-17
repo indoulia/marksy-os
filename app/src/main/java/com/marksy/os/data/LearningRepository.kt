@@ -48,6 +48,10 @@ class LearningRepository(
         record(relevant, action)
     }
 
+    /** Undo of a thread action: drops the [action] signals it recorded at or after [sinceMillis]; older ones stay. */
+    suspend fun retractAction(ids: List<Long>, action: PersonalLearning.Signal, sinceMillis: Long): Int =
+        if (ids.isEmpty()) 0 else dao.deleteSignals(ids, action.name, sinceMillis)
+
     /** Idempotent sweep: unseen events older than a day become IGNORED signals. */
     suspend fun sweepIgnored(nowMillis: Long = clock()): Int {
         if (!isEnabled()) return 0

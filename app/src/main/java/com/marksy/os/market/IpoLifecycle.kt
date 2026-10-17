@@ -21,6 +21,11 @@ object IpoLifecycle {
     const val LISTED_STAGE = "RECENTLY_LISTED"
     /** Fetched whole; Listed (hundreds) pages in separately. */
     val PRE_LISTING_STAGES = listOf("OPEN", "CLOSING_SOON", "CLOSED", "ALLOTMENT", "UPCOMING")
+    private val ACTIONABLE_STAGES = setOf("OPEN", "CLOSING_SOON", "UPCOMING")
+
+    /** Market's IPOs tab count: issues still to apply to or plan for; null while the server counts are unknown. */
+    fun actionableCount(byStage: Map<String, Int>?): Int? =
+        byStage?.entries?.filter { it.key.uppercase(Locale.ROOT) in ACTIONABLE_STAGES }?.sumOf { it.value }
     private val CUTOFF = LocalTime.of(17, 0)
 
     enum class Lane(val label: String) { TODAY("Closes today"), OPEN("Open"), ALLOTMENT("Allotment"), UPCOMING("Opens soon"), LISTED("Listed") }

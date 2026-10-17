@@ -5,6 +5,8 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.intelligence.EventExpiry
 import com.marksy.os.market.LedgerCalls
 import com.marksy.os.market.LedgerTipDto
+import com.marksy.os.market.MarketDataState
+import com.marksy.os.market.TipDetailDto
 import com.marksy.os.notification.CaptureMedium
 import org.json.JSONObject
 import java.time.DayOfWeek
@@ -140,6 +142,22 @@ object CapturedModel {
     // CAP-1: delivery stores the ledger tip since 181f982; older rows hold Marksy's comparison reply.
     private fun ledgerTip(raw: String?): LedgerTipDto? = raw?.let {
         runCatching { JSONObject(it).takeIf { j -> !j.has("comparison") && j.has("status") && j.has("symbol") }?.let(LedgerTipDto::parse) }.getOrNull()
+    }
+
+    /** [tone] is null for a note (loading, failed, unavailable) rather than a status. */
+    data class LedgerNow(val text: String, val tone: LedgerCalls.Tone? = null)
+
+    /** CAP-8: a sent tip's ledger status as of now, read on opening its dialog. */
+    fun ledgerNow(state: MarketDataState<TipDetailDto>): LedgerNow {
+        val detail = when (state) {
+            is MarketDataState.Loaded -> state.value
+            is MarketDataState.Stale -> state.value
+            MarketDataState.Loading -> return LedgerNow("Checking Marksy's ledger…")
+            MarketDataState.Unavailable -> return LedgerNow("Sign in to see its status now.")
+            else -> return LedgerNow("Couldn't check its status now.")
+        }
+        val tip = detail.ledger ?: return LedgerNow("Not in Marksy's ledger yet.")
+        return LedgerNow("Marksy status now: ${LedgerCalls.state(tip)}", LedgerCalls.tone(tip))
     }
 
     private fun ledgerTone(t: LedgerTipDto): StatusTone = when (LedgerCalls.tone(t)) {

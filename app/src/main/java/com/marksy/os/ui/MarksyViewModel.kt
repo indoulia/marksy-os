@@ -144,6 +144,9 @@ class MarksyViewModel(
     fun resolveThread(ids: List<Long>) { viewModelScope.launch { repository.resolveThread(ids) } }
     fun reopenThread(ids: List<Long>) { viewModelScope.launch { repository.reopenThread(ids) } }
     fun snoozeThread(ids: List<Long>, untilMillis: Long) { viewModelScope.launch { repository.snoozeThread(ids, untilMillis) } }
+    /** Undo for Done or Snooze taken at [actedAt]; also retracts the learning signal that action recorded. */
+    fun undoResolve(ids: List<Long>, actedAt: Long) { viewModelScope.launch { repository.reopenThread(ids, retractSince = actedAt) } }
+    fun undoSnooze(ids: List<Long>, actedAt: Long) { viewModelScope.launch { repository.unsnoozeThread(ids, retractSince = actedAt) } }
     fun archiveThread(ids: List<Long>) { viewModelScope.launch { repository.archiveThread(ids) } }
 
     fun unarchive(eventId: Long) {

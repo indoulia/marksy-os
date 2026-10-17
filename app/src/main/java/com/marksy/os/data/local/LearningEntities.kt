@@ -65,6 +65,9 @@ interface LearningDao {
     @Query("DELETE FROM learning_signals WHERE createdAt < :cutoff")
     suspend fun pruneSignals(cutoff: Long): Int
 
+    @Query("DELETE FROM learning_signals WHERE eventId IN (:eventIds) AND signal = :signal AND createdAt >= :sinceMillis")
+    suspend fun deleteSignals(eventIds: List<Long>, signal: String, sinceMillis: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertOverride(override: LearningOverrideEntity)
 

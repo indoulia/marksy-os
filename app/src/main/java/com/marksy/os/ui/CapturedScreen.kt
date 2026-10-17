@@ -50,7 +50,9 @@ import com.marksy.os.EmptyState
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.LedgerCalls
+import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.StockMentions
+import com.marksy.os.market.TipDetailDto
 import com.marksy.os.notification.CaptureMedium
 import java.math.BigDecimal
 
@@ -60,13 +62,14 @@ private const val SHOWN_PER_STACK = 2
 @Composable
 fun CapturedInboxView(
     events: List<NotificationEventEntity>, padding: PaddingValues, onFilterSelected: (String) -> Unit, onOpenStock: (String) -> Unit,
-    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
+    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox,
+    fetchTip: (suspend (String) -> MarketDataState<TipDetailDto>)? = null
 ) {
     var show by rememberSaveable { mutableStateOf(ShowOnly.ALL) }
     var stackBy by rememberSaveable { mutableStateOf(StackBy.SOURCE) }
     var query by rememberSaveable { mutableStateOf("") }
     Box(Modifier.fillMaxSize().background(MarksyTheme.Background).padding(padding).consumeWindowInsets(padding)) {
-        CapturedList(events, stackBy, show, query, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox)
+        CapturedList(events, stackBy, show, query, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox, fetchTip)
         OneHandControls(
             filters = inboxFilters,
             selectedFilter = InboxCapturedFilter,
@@ -101,14 +104,15 @@ private fun CapturedFilterSections(show: ShowOnly, onShow: (ShowOnly) -> Unit, s
 @Composable
 private fun CapturedList(
     events: List<NotificationEventEntity>, stackBy: StackBy, show: ShowOnly, query: String, onOpenStock: (String) -> Unit,
-    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox
+    onRetry: (Long) -> Unit, onSendNow: () -> Unit, onAllowBackground: () -> Unit, showHealth: Boolean, onHealthDismiss: () -> Unit, inbox: CaptureInbox,
+    fetchTip: (suspend (String) -> MarketDataState<TipDetailDto>)?
 ) {
     val isSymbol = rememberSymbolCheck()
     val now by produceState(System.currentTimeMillis()) { while (true) { kotlinx.coroutines.delay(60_000); value = System.currentTimeMillis() } }
     val lanes = remember(events, stackBy, show, query, isSymbol, now) {
         CapturedModel.lanes(events, now, stackBy, show, query) { StockMentions.find(it, isSymbol, limit = 1).firstOrNull() }
     }
-    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox, filtered = show != ShowOnly.ALL || query.isNotBlank())
+    CapturedScreen(lanes, now, onOpenStock, onRetry, onSendNow, onAllowBackground, showHealth, onHealthDismiss, inbox, filtered = show != ShowOnly.ALL || query.isNotBlank(), fetchTip = fetchTip)
 }
 
 /** Capture log: what the phone caught and whether Marksy got it, in lanes (Needs you, Today, Earlier, Rejected orders). */
@@ -123,7 +127,9 @@ fun CapturedScreen(
     showHealth: Boolean,
     onHealthDismiss: () -> Unit,
     inbox: CaptureInbox = CaptureInbox(),
-    filtered: Boolean = false
+    filtered: Boolean = false,
+    // Read-only GET /tips/{id}, so a sent tip's dialog can show its ledger status now.
+    fetchTip: (suspend (String) -> MarketDataState<TipDetailDto>)? = null
 ) {
     var toReviewOpen by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -163,7 +169,7 @@ fun CapturedScreen(
             }
         }
     }
-    selected?.let { RowDialog(it, onOpenStock) { selected = null } }
+    selected?.let { RowDialog(it, onOpenStock, fetchTip) { selected = null } }
     if (showHealth) HealthDialog(lanes.health, onHealthDismiss)
 }
 
@@ -304,8 +310,12 @@ internal fun noteLabel(note: String?): String? = when (note) {
 private fun fullTime(ms: Long): String = MarksyFormat.dayTime(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
 
 @Composable
-private fun RowDialog(r: CapturedRow, onOpenStock: (String) -> Unit, onDismiss: () -> Unit) {
+private fun RowDialog(r: CapturedRow, onOpenStock: (String) -> Unit, fetchTip: (suspend (String) -> MarketDataState<TipDetailDto>)?, onDismiss: () -> Unit) {
     val e = r.event
+    val tipId = e.marksyTipId?.takeIf { fetchTip != null && e.deliveryState == DeliveryState.DELIVERED.name }
+    val ledgerNow by produceState<CapturedModel.LedgerNow?>(tipId?.let { CapturedModel.ledgerNow(MarketDataState.Loading) }, tipId) {
+        if (tipId != null && fetchTip != null) value = CapturedModel.ledgerNow(fetchTip(tipId))
+    }
     MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text(r.headline) },
@@ -315,7 +325,13 @@ private fun RowDialog(r: CapturedRow, onOpenStock: (String) -> Unit, onDismiss: 
             Column(verticalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 val lv = r.levels
                 if (lv != null && lv.hasLevels) Text(levelsLine(lv), color = MarksyTheme.TextPrimary, style = MarksyType.Subhead)
-                lv?.status?.let { Text("Marksy status: $it", style = MarksyTheme.DialogBody) }
+                val live = ledgerNow
+                val liveTone = live?.tone
+                if (liveTone != null) Text(live.text, color = toneColor(liveTone), style = MarksyTheme.DialogBody)
+                else {
+                    lv?.status?.let { Text("Marksy status: $it", style = MarksyTheme.DialogBody) }
+                    live?.let { Text(it.text, color = MarksyTheme.TextMuted, style = MarksyType.Meta) }
+                }
                 val horizon = if (r.ledger != null) LedgerCalls.horizonText(r.ledger.horizonSessions) else r.insight.marksyHorizonDays?.let { "$it days" }
                 horizon?.let { Text("Horizon $it", style = MarksyTheme.DialogBody) }
                 Text(e.body, color = MarksyTheme.TextPrimary, style = MarksyType.Body, maxLines = 12, overflow = TextOverflow.Ellipsis)

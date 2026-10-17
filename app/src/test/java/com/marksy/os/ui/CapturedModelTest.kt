@@ -2,12 +2,17 @@ package com.marksy.os.ui
 
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.market.LedgerCalls
+import com.marksy.os.market.LedgerTipDto
+import com.marksy.os.market.MarketDataState
+import com.marksy.os.market.TipDetailDto
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class CapturedModelTest {
     private val ist = ZoneId.of("Asia/Kolkata")
@@ -140,6 +145,17 @@ class CapturedModelTest {
         val closed = lanes(ev(call, response = hit)).today.single().rows.single().levels!!
         assertEquals("Target hit", closed.status)
         assertEquals(StatusTone.POSITIVE, closed.tone)
+    }
+
+    // CAP-8: the dialog reads the ledger's status now; anything short of a ledger record is a quiet note.
+    @Test
+    fun dialogShowsTheLedgerStatusNowOrAQuietNote() {
+        val hit = LedgerTipDto.parse(JSONObject(ledger.replace("\"ACTIVE\"", "\"TARGET_HIT\",\"outcome\":\"SUCCESS\"")))
+        assertEquals(CapturedModel.LedgerNow("Marksy status now: Target hit", LedgerCalls.Tone.POSITIVE), CapturedModel.ledgerNow(MarketDataState.Loaded(TipDetailDto(hit, emptyList()))))
+        assertEquals(CapturedModel.LedgerNow("Checking Marksy's ledger…"), CapturedModel.ledgerNow(MarketDataState.Loading))
+        assertEquals(CapturedModel.LedgerNow("Sign in to see its status now."), CapturedModel.ledgerNow(MarketDataState.Unavailable))
+        assertEquals(CapturedModel.LedgerNow("Couldn't check its status now."), CapturedModel.ledgerNow(MarketDataState.Error("Not available yet")))
+        assertEquals(CapturedModel.LedgerNow("Not in Marksy's ledger yet."), CapturedModel.ledgerNow(MarketDataState.Loaded(TipDetailDto(null, emptyList()))))
     }
 
     @Test
