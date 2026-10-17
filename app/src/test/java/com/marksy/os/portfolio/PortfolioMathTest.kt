@@ -91,4 +91,18 @@ class PortfolioMathTest {
         assertEquals(8, PortfolioMath.window(daily, PortfolioPeriod.W1).size)
         assertEquals(366, PortfolioMath.window(daily, PortfolioPeriod.Y1).size)
     }
+
+    @Test fun sparklineEndsNameTheStartDayAndTodayOrTheCloseTime() {
+        val today = java.time.LocalDate.of(2026, 10, 16)
+        assertEquals("9 Oct" to "today", PortfolioMath.sparkEnds(PortfolioPeriod.W1, today, closed = true))
+        assertEquals("16 Oct" to "today", PortfolioMath.sparkEnds(PortfolioPeriod.Y1, today, closed = false))
+        assertEquals("9:15 am" to "now", PortfolioMath.sparkEnds(PortfolioPeriod.D1, today, closed = false))
+        assertEquals("9:15 am" to "3:30 pm", PortfolioMath.sparkEnds(PortfolioPeriod.D1, today, closed = true))
+    }
+
+    @Test fun showOptionsCountHoldingsByType() {
+        val counts = PortfolioMath.typeCounts(listOf(suzlon, infy, h("GOLDBEES", 5, 60.0, 65.0, null, type = HoldingType.ETF)))
+        assertEquals(2, counts[HoldingType.STOCK])
+        assertEquals(1, counts[HoldingType.ETF])
+    }
 }

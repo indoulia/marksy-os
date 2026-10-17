@@ -242,7 +242,7 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
                     error?.let { e -> item(key = "error") { Caveat("Couldn't refresh from Upstox ($e). Showing holdings from ${compactTime(snap.fetchedAt) ?: "earlier"}.") } }
                     item(key = "hero") {
                         PortfolioHero(
-                            totals, metric, { metric = it }, period, { period = it }, badge, series, nifty,
+                            totals, metric, { metric = it }, period, { period = it }, badge, series, nifty, PortfolioMath.sparkEnds(period, today, freshness == FeedFreshness.CLOSED),
                             rows, allocationOpen, { allocationOpen = !allocationOpen }, allocationBy, { allocationBy = it }
                         )
                     }
@@ -287,9 +287,9 @@ fun PortfolioScreen(padding: PaddingValues, query: String, sortOpen: Boolean, on
         }
     }
 
-    if (sortOpen) PortfolioSortDialog(sort, show, { sort = it }, { show = it }, onSortDismiss)
+    if (sortOpen) PortfolioSortDialog(sort, show, PortfolioMath.typeCounts(holdings), { sort = it }, { show = it }, onSortDismiss)
     why?.let { n -> WhyDialog(n, onOpen = { why = null; onOpenStock(n.row.holding.symbol) }, onDismiss = { why = null }) }
-    alerting?.let { r -> PriceAlertDialog(r.holding.symbol, r.price) { alerting = null } }
+    alerting?.let { r -> PriceAlertDialog(r.holding.symbol, r.price, r.holding.averagePrice) { alerting = null } }
     if (keysOpen) UpstoxAppKeysDialog(repo.store, onDismiss = { keysOpen = false }) { keysOpen = false; launchSignIn() }
 }
 
@@ -314,6 +314,7 @@ private fun PortfolioHero(
     badge: String?,
     series: List<Double>,
     nifty: Double?,
+    sparkEnds: Pair<String, String>,
     rows: List<HoldingRow>,
     allocationOpen: Boolean,
     onAllocationToggle: () -> Unit,
@@ -346,14 +347,14 @@ private fun PortfolioHero(
             Sparkline(series.map { it - series.first() }, if (series.last() >= series.first()) MarksyTheme.Positive else MarksyTheme.Negative, Modifier.fillMaxWidth().height(MarksySize.Sparkline))
         }
         if (series.size >= 2 || nifty != null) Row(verticalAlignment = Alignment.CenterVertically) {
-            if (series.size >= 2) Text(if (period == PortfolioPeriod.D1) "9:15 am" else "${period.title} ago", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            if (series.size >= 2) Text(sparkEnds.first, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
             Spacer(Modifier.weight(1f))
             nifty?.let {
                 Text("NIFTY 50 ", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
                 Text(MarksyFormat.percent(it), color = pnlColor(it), style = MarksyType.Caption, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.weight(1f))
-            if (series.size >= 2) Text("now", color = MarksyTheme.TextMuted, style = MarksyType.Caption)
+            if (series.size >= 2) Text(sparkEnds.second, color = MarksyTheme.TextMuted, style = MarksyType.Caption)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
             PortfolioPeriod.entries.forEach { p -> Pill(p.label, selected = p == period) { onPeriod(p) } }
@@ -709,7 +710,7 @@ private fun HiddenFooter(count: Int, onShow: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PortfolioSortDialog(sort: HoldingSort, show: HoldingType?, onSort: (HoldingSort) -> Unit, onShow: (HoldingType?) -> Unit, onDismiss: () -> Unit) {
+private fun PortfolioSortDialog(sort: HoldingSort, show: HoldingType?, counts: Map<HoldingType, Int>, onSort: (HoldingSort) -> Unit, onShow: (HoldingType?) -> Unit, onDismiss: () -> Unit) {
     MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Sort and show") },
@@ -721,7 +722,7 @@ private fun PortfolioSortDialog(sort: HoldingSort, show: HoldingType?, onSort: (
                 }
                 Text("Show", color = MarksyTheme.TextMuted, style = MarksyType.Small)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                    (listOf<HoldingType?>(null) + HoldingType.entries).forEach { t -> Pill(t?.label ?: "All", selected = t == show) { onShow(t) } }
+                    (listOf<HoldingType?>(null) + HoldingType.entries).forEach { t -> Pill("${t?.label ?: "All"} ${if (t == null) counts.values.sum() else counts[t] ?: 0}", selected = t == show) { onShow(t) } }
                 }
             }
         },

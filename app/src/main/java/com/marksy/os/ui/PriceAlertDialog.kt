@@ -26,7 +26,7 @@ import java.util.Locale
 /** Set a one-time alert when [symbol] crosses a price; lists and removes its existing alerts. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) {
+fun PriceAlertDialog(symbol: String, lastPrice: Double?, average: Double? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val all by PriceAlertStore.alerts(context).collectAsStateWithLifecycle()
     val mine = all.orEmpty().filter { it.symbol == symbol }
@@ -45,6 +45,7 @@ fun PriceAlertDialog(symbol: String, lastPrice: Double?, onDismiss: () -> Unit) 
                 lastPrice?.let { p ->
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                         listOf(-5, -2, 2, 5).forEach { pct -> Pill(MarksyFormat.percent(pct.toDouble(), 0)) { text = MarksyFormat.number(p * (1 + pct / 100.0)).replace(",", "") } }
+                        average?.takeIf { it > 0 }?.let { avg -> Pill("Your average") { text = MarksyFormat.number(avg).replace(",", "") } }
                     }
                 }
                 if (target != null && lastPrice != null) {
