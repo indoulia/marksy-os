@@ -61,8 +61,8 @@ internal object TrustModel {
         return "${whole(wilson)}% $floor × ${MarksyFormat.number(returnFactor(quality), 2)} return factor"
     }
 
-    fun scoreWhy(t: ScorecardTrustDto): String = factors(t, "hit-rate floor")
-        ?.let { "Score = $it. The floor is the low end of the likely hit rate, so few tips can’t score high." }
+    fun scoreWhy(t: ScorecardTrustDto, engine: Boolean = false): String = factors(t, "hit-rate floor")
+        ?.let { "Score = $it. " + if (engine) "The floor is the low end of the likely hit rate, from Marksy's own tips only; external sources never count here." else "The floor is the low end of the likely hit rate, so few tips can’t score high." }
         ?: if (t.minimumCompleted > 0) "A score needs ${t.minimumCompleted} closed tips; ${t.completed} so far." else "Not scored yet."
 
     fun delivered(b: ScorecardBodyDto): String? = b.performance.returnRealizationPct?.let { "${pct(it)} of promised" }

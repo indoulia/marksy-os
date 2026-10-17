@@ -61,6 +61,10 @@ class TrustModelTest {
             "Score = 29% hit-rate floor × 0.78 return factor. The floor is the low end of the likely hit rate, so few tips can’t score high.",
             TrustModel.scoreWhy(t)
         )
+        assertEquals(
+            "Score = 29% hit-rate floor × 0.78 return factor. The floor is the low end of the likely hit rate, from Marksy's own tips only; external sources never count here.",
+            TrustModel.scoreWhy(t, engine = true)
+        )
         assertNull(TrustModel.factors(t.copy(trustScore = null)))
         assertEquals("A score needs 20 closed tips; 4 so far.", TrustModel.scoreWhy(ScorecardTrustDto(null, 4, 20, null, null, 0)))
         assertEquals("62% of promised", TrustModel.delivered(body(realization = 61.8)))

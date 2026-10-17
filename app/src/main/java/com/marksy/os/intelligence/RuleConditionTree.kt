@@ -178,6 +178,7 @@ object RuleConditionTree {
         leaf.field == Field.HOUR -> if (leaf.cmp == Cmp.BETWEEN) "e.g. 22..6" else "0 to 23"
         leaf.cmp == Cmp.BETWEEN -> "e.g. 100..500"
         leaf.field == Field.CATEGORY -> "e.g. PAYMENTS"
+        leaf.field == Field.SENDER -> "e.g. Trading Desk"
         else -> "value"
     }
 

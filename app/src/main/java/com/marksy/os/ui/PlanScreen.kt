@@ -261,7 +261,7 @@ fun PlanItemDialog(
                 }
                 SelectField(
                     date?.let { PlanText.dueLabel(PlanRules.atAlertHour(it, zone), System.currentTimeMillis(), zone) }, { picking = true }, Modifier.fillMaxWidth(),
-                    placeholder = if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date", leadingIcon = Icons.Default.Event
+                    label = "Due date", placeholder = if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date", leadingIcon = Icons.Default.Event
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Recurrence.entries.forEach { r -> Pill(r.label, selected = recurrence == r) { recurrence = r } }
