@@ -27,8 +27,8 @@ class CapturedModelTest {
         deliveryState = state.name, lifecycleState = lifecycle, marksyResponseJson = response
     )
 
-    private fun lanes(vararg e: NotificationEventEntity, now: Long = thu1042, by: StackBy = StackBy.SOURCE, show: ShowOnly = ShowOnly.ALL) =
-        CapturedModel.lanes(e.toList(), now, by, show, symbolOf)
+    private fun lanes(vararg e: NotificationEventEntity, now: Long = thu1042, by: StackBy = StackBy.SOURCE, show: ShowOnly = ShowOnly.ALL, query: String = "") =
+        CapturedModel.lanes(e.toList(), now, by, show, query, symbolOf)
 
     private fun CapturedLanes.todayIds() = today.flatMap { it.rows }.map { it.event.id }
     private fun CapturedLanes.earlierIds() = earlier.flatMap { it.rows }.map { it.event.id }
@@ -71,8 +71,10 @@ class CapturedModelTest {
     @Test
     fun rejectedOwnOrdersGoToTheBottomFoldNotNeedsYou() {
         val rejected = ev("Order for 10 INFY was rejected by exchange", title = "Order rejected", state = DeliveryState.NOT_APPLICABLE, pkg = "com.kite", name = "Kite")
-        val l = lanes(rejected)
-        assertEquals(listOf(rejected.id), l.rejected.map { it.event.id })
+        // CAP-2: Kite's title can be neutral with "rejected" only in the body.
+        val bodyOnly = ev("Your order for 5 IDEA has been rejected: RMS margin", title = "Kite", state = DeliveryState.NOT_APPLICABLE, pkg = "com.kite", name = "Kite")
+        val l = lanes(rejected, bodyOnly)
+        assertEquals(setOf(rejected.id, bodyOnly.id), l.rejected.map { it.event.id }.toSet())
         assertTrue(l.needsYou.isEmpty() && l.today.isEmpty() && l.earlier.isEmpty())
     }
 
@@ -119,6 +121,27 @@ class CapturedModelTest {
         assertEquals("Entry not hit", lv.status)
     }
 
+    // CAP-1: delivery stores the ledger tip, not the old marksyView reply.
+    private val ledger = """{"tipId":"t1","symbol":"TATAPOWER","direction":"BUY","entryLow":432.0,"entryHigh":436.0,"target":448.0,"stopLoss":424.0,"horizonSessions":5,"firstSeenAt":"2026-10-01T05:10:00Z","status":"ACTIVE","entryStatus":"ENTERED","marksyView":{"probability":0.6}}"""
+
+    @Test
+    fun ledgerShapedReplyGivesLevelsAndLedgerStatus() {
+        val row = lanes(ev("Tata Power looks strong, buy 432-436 tgt 448 sl 424", response = ledger)).today.single().rows.single()
+        assertEquals("BUY TATAPOWER", row.headline)
+        val lv = row.levels!!
+        assertEquals(432.0, lv.entry!!, 0.0)
+        assertEquals(436.0, lv.entryHigh!!, 0.0)
+        assertEquals(448.0, lv.target!!, 0.0)
+        assertEquals(424.0, lv.stopLoss!!, 0.0)
+        assertEquals("Active", lv.status)
+        assertEquals(5, row.ledger!!.horizonSessions)
+        assertEquals("Entry 432–436 · Target 448 · SL 424", levelsLine(lv))
+        val hit = ledger.replace("\"ACTIVE\"", "\"TARGET_HIT\",\"outcome\":\"SUCCESS\"")
+        val closed = lanes(ev(call, response = hit)).today.single().rows.single().levels!!
+        assertEquals("Target hit", closed.status)
+        assertEquals(StatusTone.POSITIVE, closed.tone)
+    }
+
     @Test
     fun noResponseStillGetsSideAndSymbolFromTheText() {
         val row = lanes(ev(call)).today.single().rows.single()
@@ -144,6 +167,18 @@ class CapturedModelTest {
         val needs = lanes(tip, own, failed, show = ShowOnly.NEEDS_YOU)
         assertEquals(listOf(failed.id), needs.needsYou.map { it.row.event.id })
         assertTrue(needs.today.isEmpty())
+    }
+
+    @Test
+    fun searchMatchesSourceTitleBodyAndSymbolButHealthCountsAll() {
+        val tata = ev(call, title = "NiftyPro")
+        val infy = ev(sell, title = "Swing Club", name = "Telegram")
+        assertEquals(listOf(tata.id), lanes(tata, infy, query = " tatapower ").todayIds())
+        assertEquals(listOf(infy.id), lanes(tata, infy, query = "swing club").todayIds())
+        assertEquals(listOf(infy.id), lanes(tata, infy, query = "telegram").todayIds())
+        val none = lanes(tata, infy, query = "zzz")
+        assertTrue(none.isEmpty)
+        assertEquals(2, none.health.today)
     }
 
     @Test
