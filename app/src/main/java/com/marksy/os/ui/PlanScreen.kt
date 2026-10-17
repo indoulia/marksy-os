@@ -265,9 +265,9 @@ fun PlanItemDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
-                MarksyButton(
-                    date?.let { PlanText.dueLabel(PlanRules.atAlertHour(it, zone), System.currentTimeMillis(), zone) } ?: if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date",
-                    onClick = { picking = true }, style = MarksyButtonStyle.Outlined, icon = Icons.Default.Event
+                SelectField(
+                    date?.let { PlanText.dueLabel(PlanRules.atAlertHour(it, zone), System.currentTimeMillis(), zone) }, { picking = true }, Modifier.fillMaxWidth(),
+                    placeholder = if (kind == PlanKind.TASK) "Due date (optional)" else "Pick due date", leadingIcon = Icons.Default.Event
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Recurrence.entries.forEach { r -> Pill(r.label, selected = recurrence == r) { recurrence = r } }

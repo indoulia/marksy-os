@@ -334,9 +334,9 @@ internal fun ScorecardFilterDialog(
                 if (periods) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     ScorecardPeriod.entries.forEach { p -> Pill(p.label, selected = q.period == p) { q = q.copy(period = p) } }
                 }
-                if (q.period == ScorecardPeriod.CUSTOM) FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
-                    Pill("From ${q.startDate?.let(ScorecardText::date) ?: "…"}", selected = q.startDate != null) { pickingStart = true }
-                    Pill("To ${q.endDate?.let(ScorecardText::date) ?: "…"}", selected = q.endDate != null) { pickingStart = false }
+                if (q.period == ScorecardPeriod.CUSTOM) Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+                    SelectField(q.startDate?.let(ScorecardText::date), { pickingStart = true }, Modifier.weight(1f), label = "From", placeholder = "Pick a date")
+                    SelectField(q.endDate?.let(ScorecardText::date), { pickingStart = false }, Modifier.weight(1f), label = "To", placeholder = "Pick a date")
                 }
                 if (horizon) {
                     Text("HORIZON", color = MarksyTheme.TextMuted, style = MarksyType.Label)

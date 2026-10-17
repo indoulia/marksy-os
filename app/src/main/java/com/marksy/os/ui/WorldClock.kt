@@ -142,7 +142,7 @@ fun TimeZoneConverterDialog(onDismiss: () -> Unit) {
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { date = date.minusDays(1) }) { Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day", tint = MarksyTheme.TextSecondary) }
-                    Pill(MarksyFormat.weekdayDay(date)) { pickingDate = true }
+                    SelectField(MarksyFormat.weekdayDay(date), { pickingDate = true }, Modifier.weight(1f))
                     IconButton(onClick = { date = date.plusDays(1) }) { Icon(Icons.Default.ChevronRight, contentDescription = "Next day", tint = MarksyTheme.TextSecondary) }
                 }
                 key(wheelsKey) {

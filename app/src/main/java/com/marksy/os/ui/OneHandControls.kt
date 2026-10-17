@@ -44,7 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -116,7 +115,7 @@ fun BoxScope.OneHandControls(
             }
         }
         if (onSearchChange != null) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (searchOpen) {
                     MarksySearchField(searchQuery.orEmpty(), onSearchChange, searchPlaceholder, Modifier.weight(1f), searchSymbols, onSearchSubmit?.let { s -> { s(); searchOpen = false } })
                     Spacer(Modifier.width(MarksySpace.ListGap))
@@ -152,12 +151,13 @@ fun BoxScope.OneHandQuickMenu(options: List<Pair<String, String>>, selected: Str
 @Composable
 private fun MenuActionRow(action: FloatingAction, onClick: () -> Unit) {
     Row(
-        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap),
+        // Pill padding, so the action matches the option pills above it.
+        Modifier.clip(MarksyShape.Pill).clickable(onClick = onClick).padding(horizontal = MarksySpace.ListGap, vertical = MarksySpace.Inner),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.Icon))
-        Spacer(Modifier.width(MarksySpace.Gap))
-        Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Subhead)
+        Icon(action.icon, contentDescription = null, tint = MarksyTheme.PrimaryEmerald, modifier = Modifier.size(MarksySize.IconSmall))
+        Spacer(Modifier.width(MarksySpace.Inner))
+        Text(action.label, color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -175,22 +175,9 @@ private fun FloatingMenuPanel(
             .verticalScroll(rememberScrollState())
             .padding(MarksySpace.Inner),
         horizontalAlignment = align,
-        verticalArrangement = Arrangement.spacedBy(MarksySpace.Hair)
+        verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)
     ) {
-        options.forEach { (key, label) ->
-            val on = key == selected
-            Text(
-                label,
-                color = if (on) MarksyTheme.OnAccent else MarksyTheme.TextPrimary,
-                style = MarksyType.Subhead,
-                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
-                modifier = Modifier
-                    .clip(MarksyShape.Pill)
-                    .background(if (on) MarksyTheme.PrimaryEmerald else Color.Transparent)
-                    .clickable { onPick(key) }
-                    .padding(horizontal = MarksySpace.Gutter, vertical = MarksySpace.ListGap)
-            )
-        }
+        options.forEach { (key, label) -> Pill(label, selected = key == selected) { onPick(key) } }
         extras?.invoke()
     }
 }
@@ -211,17 +198,17 @@ internal fun MarksySearchField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = MarksyType.Lead.copy(color = MarksyTheme.TextPrimary, fontWeight = FontWeight.Normal),
+        textStyle = MarksyType.Body.copy(color = MarksyTheme.TextPrimary),
         cursorBrush = SolidColor(MarksyTheme.PrimaryEmerald),
         keyboardOptions = if (symbols) KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Search)
             else KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); onSubmit?.invoke() }),
         modifier = modifier.focusRequester(focus),
         decorationBox = { inner ->
-            // Same height and lift as the round buttons beside it.
+            // Every input's height; OneHandControls centres it on the round buttons beside it.
             Row(
                 Modifier
-                    .height(FloatingButtonSize)
+                    .height(MarksySize.Field)
                     .shadow(if (lifted) 6.dp else 0.dp, CircleShape)
                     .clip(CircleShape)
                     .background(MarksyTheme.SurfaceRaised)
@@ -230,7 +217,7 @@ internal fun MarksySearchField(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Lead, fontWeight = FontWeight.Normal)
+                    if (value.isEmpty()) Text(placeholder, color = MarksyTheme.TextMuted, style = MarksyType.Body, maxLines = 1)
                     inner()
                 }
                 if (value.isNotEmpty()) {

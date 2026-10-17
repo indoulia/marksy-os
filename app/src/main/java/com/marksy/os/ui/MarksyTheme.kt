@@ -149,8 +149,10 @@ object MarksySize {
     val Button = 32.dp
     /** Round icon buttons in the top bar. */
     val HeaderButton = 36.dp
-    /** Round floating buttons and the search field. */
+    /** Round floating buttons. */
     val Touch = 44.dp
+    /** Every text field, search field and dropdown or picker trigger. */
+    val Field = 36.dp
 }
 
 /** Marksy colours for every Material component (chips, checkboxes, pickers, snackbars) so none fall back to the stock light palette. */

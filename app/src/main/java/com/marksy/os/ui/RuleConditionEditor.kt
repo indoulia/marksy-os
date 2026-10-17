@@ -1,11 +1,9 @@
 package com.marksy.os.ui
 
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Arrangement
@@ -82,10 +80,7 @@ private fun ConditionLeafRow(node: Condition, path: List<Int>, root: Condition, 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
             Pill("not", selected = Tree.isNegated(node), modifier = Modifier.testTag(tag("not", path))) { onChange(Tree.setNegated(root, path, !Tree.isNegated(node))) }
             Box {
-                Row(Modifier.clickable { fieldMenu = true }.testTag(tag("field", path)).padding(MarksySpace.Gap), verticalAlignment = Alignment.CenterVertically) {
-                    Text(Tree.fieldLabel(leaf.field), color = MarksyTheme.TextPrimary, style = MarksyType.Body)
-                    Icon(Icons.Default.ExpandMore, contentDescription = null, tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon))
-                }
+                SelectField(Tree.fieldLabel(leaf.field), { fieldMenu = true }, fieldModifier = Modifier.testTag(tag("field", path)))
                 DropdownMenu(expanded = fieldMenu, onDismissRequest = { fieldMenu = false }) {
                     Field.entries.forEach { f ->
                         DropdownMenuItem(text = { Text(Tree.fieldLabel(f)) }, onClick = { fieldMenu = false; onChange(Tree.setLeaf(root, path, Tree.withField(leaf, f))) }, modifier = Modifier.testTag(tag("field-${f.name}", path)))
