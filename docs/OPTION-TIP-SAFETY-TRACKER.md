@@ -1,7 +1,7 @@
 # Option-tip safety tracker (Proposals A and B, CALL/PUT)
 
 Per-route status only. Marksy tracks no options; an option or maybe-option call must never leave the phone, and the server must never score one as its underlying.
-App: marksy-os `fix/option-stage0-app`. Server backstop: marksy-api `fix/option-callput`. Merge and deploy are not approved.
+App: marksy-os `fix/option-stage0-app`. Server backstop: marksy-api `fix/option-callput`. Merged 2026-10-17 (os #163, api #124); deploy is not approved.
 
 Shared pieces:
 - `OptionGate` (`capture/OptionGate.kt`): one rule set, OPTION / AMBIGUOUS (bare "18 PE") / NONE. Reads CE/PE and CALL/PUT, spaced, fused ("NIFTY24500CALL") or with an expiry, any case. P/E valuations ("trades at 18 PE", "18x PE", "18 PE ratio") are blanked first.
@@ -14,19 +14,19 @@ Column key: Det = detection implemented, Gate = gate enforced, NoReq = no-outbou
 
 | Route | Det | Gate | NoReq | Cov | Ret | Local | Pushed | Merged | Deployed | Phone |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Broker app notifications (listener) | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| SMS (messaging apps) | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| WhatsApp notifications | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| WhatsApp accessibility service | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Telegram notifications | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Gmail connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Calendar connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Added lines on an existing row | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Classifier-version re-queue | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Retry, Send now, stale IN_FLIGHT reset, offline | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Screenshot review (shared, picked, screen capture) | Yes | Yes (review + client) | Yes | Yes | Reviewed | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Client-level hard block (every route) | Yes | Yes | Yes | n/a | n/a | Yes | Yes | BLOCKED | BLOCKED | NOT VERIFIED |
-| Server backstop (`/tips/ingest-text`) | Yes | Yes | n/a | n/a | Unchanged | Yes | Yes | BLOCKED | BLOCKED | n/a |
+| Broker app notifications (listener) | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| SMS (messaging apps) | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| WhatsApp notifications | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| WhatsApp accessibility service | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Telegram notifications | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Gmail connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Calendar connector | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Added lines on an existing row | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Classifier-version re-queue | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Retry, Send now, stale IN_FLIGHT reset, offline | Yes | Yes | Yes | Yes | Unchanged | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Screenshot review (shared, picked, screen capture) | Yes | Yes (review + client) | Yes | Yes | Reviewed | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Client-level hard block (every route) | Yes | Yes | Yes | n/a | n/a | Yes | Yes | Yes | BLOCKED | NOT VERIFIED |
+| Server backstop (`/tips/ingest-text`) | Yes | Yes | n/a | n/a | Unchanged | Yes | Yes | Yes | BLOCKED | n/a |
 
 Evidence (tests):
 - Every automatic channel × CE option, maybe-option, later hedge, CALL wording, P/E ratio; option while the capture list is unknown: `CaptureGateTest.optionAndMaybeOptionCallsStayOnThePhoneOnEveryRoute`.
@@ -38,6 +38,7 @@ Evidence (tests):
 - `TradingDeliveryRunTest.optionAndMaybeOptionCallsNeverReachTheClientOnAnyAttempt` and `IngestionPipelineTest.optionCallsFromEveryIngestionPathNeverReachTheClient` fail with the `CaptureGate.decide` option check switched off (checked 2026-10-17); the screenshot run test rests on `CandidateDeliveryPolicy.decide`.
 - Client refusal kept, not failed (calls and screenshots): `TradingDeliveryRunTest.aCallTheClientRefusesAsAnOptionIsKeptNotFailed`, `TradingDeliveryPolicyTest.anOptionTheClientRefusesIsKeptNotFailed`.
 - No HTTP request: `MarksyTipsApiClientRecordedReceiptTest.anOptionOrMaybeOptionCallIsNeverRequested`.
+- An option index (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, NIFTYNXT50, SENSEX, BANKEX) read as an option can't be corrected to a stock tip (user decision 2026-10-17): `CandidateDeliveryPolicyTest.aFlaggedIndexCannotBeConfirmedAsAStockTip`.
 - Review correction (A), stored only when every stock rule passes (Send or Keep): `CandidateDeliveryPolicyTest.aConfirmedStockTipTakesTheOrdinaryStockPath`, `CaptureGatewayTest.confirmingAStockTipKeepsTheOptionFlag`, `CaptureDaoTest` kept list and retention.
 - Screenshot option words outside the first call ("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)") flag a maybe-option, symbol kept: `TipExtractorTest.aLaterCallOrAHedgeNoteKeepsTheStockSymbolButStaysLocalUntilReviewed`.
 - Rules, forms and false positives: `OptionGateTest` (CALL/PUT, spacing, case, fused, expiry, mixed, "Call me…", "call 98765…", "put SL"), `TipExtractorTest`.

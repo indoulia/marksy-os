@@ -91,6 +91,19 @@ class CandidateDeliveryPolicyTest {
         assertFalse(CandidateDeliveryPolicy.mayQueue(option, registry))
     }
 
+    // User decision 2026-10-17: an index read as an option can't be corrected to a stock tip; its levels may be the premium.
+    @Test
+    fun aFlaggedIndexCannotBeConfirmedAsAStockTip() {
+        listOf("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50", "SENSEX", "BANKEX", "nifty").forEach { index ->
+            val confirmed = CandidateDeliveryPolicy.confirmedAsStock(accepted().copy(symbol = index, ambiguities = Ambiguity.OPTION_CONTRACT))
+            assertEquals(index, CandidateDeliveryPolicy.OPTION_UNSUPPORTED, keep(confirmed))
+            assertFalse(index, CandidateDeliveryPolicy.mayQueue(confirmed, registry))
+        }
+        // An index call with no option words is an ordinary call, and a stock still takes the correction.
+        assertTrue(CandidateDeliveryPolicy.mayQueue(accepted().copy(symbol = "NIFTY"), registry))
+        assertTrue(CandidateDeliveryPolicy.mayQueue(CandidateDeliveryPolicy.confirmedAsStock(accepted().copy(symbol = "NIFTYBEES", ambiguities = Ambiguity.OPTION_CONTRACT)), registry))
+    }
+
     // Option-tip safety A: only the reviewer's "stock tip" confirmation lifts the flag, and only with every stock rule met.
     @Test
     fun aConfirmedStockTipTakesTheOrdinaryStockPath() {
