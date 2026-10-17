@@ -452,11 +452,12 @@ class MainActivity : ComponentActivity() {
             hostOpen -> null
             onWatchlist -> 2
             selectedTab == 2 && marketTabName == MarketTab.STOCKS.name -> 4
+            selectedTab == 2 && marketTabName == MarketTab.OVERVIEW.name -> 5
             else -> null
         }
         fun resetSearch() {
             watchQuery = ""
-            stockQuery = marketSymbol.orEmpty()
+            stockQuery = marketSymbol.takeIf { marketTabName == MarketTab.STOCKS.name }.orEmpty()
         }
         LaunchedEffect(searchPage) { resetSearch() }
         // origin: a tab index, "ask" or "briefing".
@@ -522,8 +523,15 @@ class MainActivity : ComponentActivity() {
 
         // A tip's Marksy or Trust chip opens that scorecard on the Trust tab.
         val openScorecard: (com.marksy.os.market.ScorecardSource) -> Unit = { source -> scorecardTrail = listOf(source); selectedTab = 4 }
+        val onMarket = selectedTab == 2
+        var ipoCount by remember { mutableStateOf<Int?>(null) }
+        LaunchedEffect(onMarket) {
+            if (onMarket) (MarksyContainer.marketIntelligence(applicationContext).ipoStageCounts() as? com.marksy.os.market.MarketDataState.Loaded)
+                ?.let { ipoCount = com.marksy.os.market.IpoLifecycle.actionableCount(it.value.byStage) }
+        }
         val marketTabCounts = mapOf(
             MarketTab.WATCHLIST.name to com.marksy.os.ui.watchlistCurrentId(watchView, watchlists, watchItems)?.let { id -> watchItems.count { it.watchlistId == id } },
+            MarketTab.IPOS.name to ipoCount,
             MarketTab.UPDATES.name to inboxEvents.count { it.category == "MARKET" && it.id !in marketHidden }
         )
 

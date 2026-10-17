@@ -103,7 +103,9 @@ fun MarketScreen(
                 val health by produceState(com.marksy.os.market.MarketDataState.Loading as com.marksy.os.market.MarketDataState<com.marksy.os.market.LiveFeedHealthDto>, refresh.key) {
                     while (true) { value = repository.liveFeedHealth(); kotlinx.coroutines.delay(60_000) }
                 }
-                MarksyRefreshBox(refresh) {
+                val query = stockQuery.trim()
+                if (query.length >= 3) StockSuggestions(query, inner, { onOpenStock?.invoke(it) })
+                else MarksyRefreshBox(refresh) {
                     MarketOverviewScreen(
                         state = state, padding = inner, health = health, onOpenStock = onOpenStock, market = market, live = liveIndices,
                         repository = repository, onTrade = { ticket = it }, onOpenSetups = onOpenSetups, onOpenTip = { pick = it }
@@ -168,11 +170,13 @@ fun MarketScreen(
         // Search and sort only once there are holdings to search.
         val portfolioTools = tab == MarketTab.PORTFOLIO && portfolioHoldings
         val stockSearch = tab == MarketTab.STOCKS
+        val overviewSearch = tab == MarketTab.OVERVIEW
         val onSearch: ((String) -> Unit)? = when {
             portfolioTools -> { q -> portfolioQuery = q }
-            stockSearch -> onStockQueryChange
+            stockSearch || overviewSearch -> onStockQueryChange
             else -> null
         }
+        val openTyped: () -> Unit = { stockQuery.trim().uppercase().takeIf { it.isNotEmpty() }?.let { onOpenStock?.invoke(it) } }
         // The IPO page draws its own stack (filters, search, reminders, watch).
         if (tab != MarketTab.IPOS) OneHandControls(
             filters = emptyList(), // sections live in the sticky tab grid
@@ -180,14 +184,19 @@ fun MarketScreen(
             filterIsView = false,
             onFilterSelected = { onTabSelected(it); if (it != MarketTab.STOCKS.name) onSymbolSelected(null) },
             // The open stock's own symbol is not a search, so the field starts empty on its page.
-            searchQuery = when { portfolioTools -> portfolioQuery; stockSearch -> stockQuery.takeUnless { it.equals(selectedSymbol, ignoreCase = true) }.orEmpty(); else -> null },
+            searchQuery = when { portfolioTools -> portfolioQuery; stockSearch -> stockQuery.takeUnless { it.equals(selectedSymbol, ignoreCase = true) }.orEmpty(); overviewSearch -> stockQuery; else -> null },
             onSearchChange = onSearch,
-            searchPlaceholder = if (stockSearch) "Search symbols…" else "Search holdings…",
-            searchSymbols = stockSearch,
-            onSearchSubmit = onStockSubmit.takeIf { stockSearch },
+            searchPlaceholder = if (stockSearch || overviewSearch) "Search symbols…" else "Search holdings…",
+            searchSymbols = stockSearch || overviewSearch,
+            onSearchSubmit = when {
+                stockSearch -> onStockSubmit
+                overviewSearch -> openTyped
+                else -> null
+            },
             searchResetKey = selectedSymbol,
             actions = listOfNotNull(
-                FloatingAction(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Sort, "Sort and show") { portfolioSort = true }.takeIf { portfolioTools },
+                // Show is a real filter; sort alone is a view choice and leaves the dot off.
+                FloatingAction(androidx.compose.material.icons.Icons.AutoMirrored.Filled.Sort, "Sort and show", active = PortfolioChrome.show.value != null) { portfolioSort = true }.takeIf { portfolioTools },
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
                     ?.let { t -> FloatingAction(androidx.compose.material.icons.Icons.Default.NotificationsActive, "Price alert for ${t.symbol}") { alerting = t } },
                 stockTrade?.takeIf { tab == MarketTab.STOCKS && it.symbol == selectedSymbol }
