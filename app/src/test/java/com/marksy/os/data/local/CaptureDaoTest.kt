@@ -3,6 +3,7 @@ package com.marksy.os.data.local
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -97,6 +98,74 @@ class CaptureDaoTest {
         assertEquals(failed, dao.evidence(failed)?.id)
         assertEquals(keptWorkflow, dao.workflow(keptWorkflow)?.id)
         assertNull(dao.workflow(oldWorkflow))
+    }
+
+    // Nothing went to Marksy, so an approved option call is the only copy: it outlives the 30-day capture cleanup.
+    @Test
+    fun anApprovedOptionCallOutlivesTheCaptureCleanup() = runBlocking {
+        val day = 24 * 60 * 60 * 1000L
+        val now = t0 + 400 * day
+        suspend fun capture(hash: String, state: String, age: Long, ambiguities: String = ""): Pair<Long, Long> {
+            val evidenceId = dao.insertEvidence(evidence(hash = hash, at = now - age * day))
+            return evidenceId to dao.insertCandidate(candidate(evidenceId, at = now - age * day).copy(state = state, ambiguities = ambiguities))
+        }
+        val option = capture("opt", "ACCEPTED", 365, "missing-target,option-contract")
+        val recentOption = capture("new", "ACCEPTED", 10, "option-contract")
+        val stock = capture("stk", "ACCEPTED", 31)
+        val rejectedOption = capture("rej", "REJECTED", 8, "option-contract")
+        val confirmedStock = capture("cfm", "ACCEPTED", 31, "option-contract,stock-confirmed")
+
+        dao.pruneExpired(now)
+
+        // Reviewed fields and status stay until the user removes the tip; the recognized text goes after 30 days.
+        val kept = dao.candidate(option.second)!!
+        assertEquals(listOf("ABC", "BUY", "ACCEPTED", "missing-target,option-contract"), listOf(kept.symbol, kept.side, kept.state, kept.ambiguities))
+        assertEquals(listOf(500.0, 650.0, 470.0), listOf(kept.entry, kept.target, kept.stopLoss))
+        assertNull(kept.extractedText)
+        assertEquals("x", dao.candidate(recentOption.second)?.extractedText)
+        assertEquals(option.first, dao.evidence(option.first)?.id)
+        assertEquals(listOf(recentOption.second, option.second), dao.observeKeptOptions().first().map { it.id })
+        listOf(stock, rejectedOption, confirmedStock).forEach { (evidenceId, candidateId) ->
+            assertNull(dao.candidate(candidateId))
+            assertNull(dao.evidence(evidenceId))
+        }
+    }
+
+    @Test
+    fun removingAKeptOptionDeletesTheTipAndItsScreenshotHashOnly() = runBlocking {
+        suspend fun add(hash: String, state: String, ambiguities: String): Pair<Long, Long> {
+            val evidenceId = dao.insertEvidence(evidence(hash))
+            return evidenceId to dao.insertCandidate(candidate(evidenceId).copy(state = state, ambiguities = ambiguities))
+        }
+        val option = add("r1", "ACCEPTED", "option-contract")
+        val stock = add("r2", "ACCEPTED", "")
+        val toReview = add("r3", "REVIEW_REQUIRED", "option-contract")
+
+        assertEquals(true, dao.removeKeptOption(option.second))
+        assertNull(dao.candidate(option.second))
+        assertNull(dao.evidence(option.first))
+        // Only an approved option call can be removed this way; anything else is left as it is.
+        listOf(stock, toReview).forEach { (evidenceId, candidateId) ->
+            assertEquals(false, dao.removeKeptOption(candidateId))
+            assertEquals(candidateId, dao.candidate(candidateId)?.id)
+            assertEquals(evidenceId, dao.evidence(evidenceId)?.id)
+        }
+    }
+
+    @Test
+    fun keptOptionsAreOnlyApprovedOptionCalls() = runBlocking {
+        suspend fun add(hash: String, state: String, ambiguities: String) =
+            dao.insertCandidate(candidate(dao.insertEvidence(evidence(hash))).copy(state = state, ambiguities = ambiguities))
+        val kept = add("o1", "ACCEPTED", "missing-target,option-contract")
+        add("o2", "ACCEPTED", "")
+        add("o3", "REVIEW_REQUIRED", "option-contract")
+        add("o4", "REJECTED", "option-contract")
+        // Confirmed as a stock tip in review: an ordinary capture, not a kept option.
+        val confirmed = add("o5", "ACCEPTED", "option-contract,stock-confirmed")
+
+        assertEquals(listOf(kept), dao.observeKeptOptions().first().map { it.id })
+        assertEquals(false, dao.removeKeptOption(confirmed))
+        assertEquals(confirmed, dao.candidate(confirmed)?.id)
     }
 
     @Test

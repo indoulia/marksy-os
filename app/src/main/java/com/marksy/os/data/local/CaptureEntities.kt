@@ -12,6 +12,9 @@ import androidx.room.Update
 import com.marksy.os.data.RetentionPolicy
 import kotlinx.coroutines.flow.Flow
 
+// An approved option call never sent to Marksy; one the reviewer confirmed as a stock tip is an ordinary capture.
+private const val KEPT_OPTION = "state = 'ACCEPTED' AND (',' || ambiguities || ',') LIKE '%,option-contract,%' AND (',' || ambiguities || ',') NOT LIKE '%,stock-confirmed,%'"
+
 /** Candidates in one [state] (Health). */
 data class CaptureStateCount(val state: String, val n: Int)
 
@@ -129,6 +132,10 @@ interface CaptureDao {
     @Query("SELECT * FROM tip_candidates WHERE state IN ('EXTRACTED', 'REVIEW_REQUIRED') ORDER BY capturedAt DESC")
     fun observeToReview(): Flow<List<TipCandidateEntity>>
 
+    // Approved option calls: kept on the phone because Marksy tracks no options yet.
+    @Query("SELECT * FROM tip_candidates WHERE $KEPT_OPTION ORDER BY capturedAt DESC")
+    fun observeKeptOptions(): Flow<List<TipCandidateEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWorkflow(workflow: CaptureWorkflowEntity): Long
 
@@ -184,7 +191,11 @@ interface CaptureDao {
         return expireUnreviewedCandidates(cutoff, now)
     }
 
-    @Query("DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
+    // An approved option call is never sent to Marksy, so this row is its only copy: the age cleanup leaves it.
+    @Query(
+        "DELETE FROM tip_candidates WHERE capturedAt < :cutoff AND (state = 'ACCEPTED') = :accepted " +
+            "AND NOT ($KEPT_OPTION)"
+    )
     suspend fun deleteOldCandidates(cutoff: Long, accepted: Boolean): Int
 
     // Evidence goes with its candidate; evidence without one (failures, not a tip) keeps the short window.
@@ -194,12 +205,35 @@ interface CaptureDao {
     @Query("DELETE FROM capture_workflows WHERE createdAt < :cutoff AND (state = 'ACCEPTED') = :accepted")
     suspend fun deleteOldWorkflows(cutoff: Long, accepted: Boolean): Int
 
+    // A kept option keeps its reviewed fields and status until the user removes it; its recognized text goes at 30 days.
+    @Query(
+        "UPDATE tip_candidates SET extractedText = NULL WHERE capturedAt < :cutoff AND extractedText IS NOT NULL " +
+            "AND $KEPT_OPTION"
+    )
+    suspend fun clearOldKeptOptionText(cutoff: Long): Int
+
+    @Query("DELETE FROM tip_candidates WHERE id = :id AND $KEPT_OPTION")
+    suspend fun deleteKeptOption(id: Long): Int
+
+    @Query("DELETE FROM capture_evidence WHERE id = :evidenceId AND id NOT IN (SELECT evidenceId FROM tip_candidates)")
+    suspend fun deleteEvidenceIfUnused(evidenceId: Long): Int
+
+    /** The user's confirmed Remove: an approved option call and its screenshot hash; anything else is left alone. */
+    @Transaction
+    suspend fun removeKeptOption(id: Long): Boolean {
+        val evidenceId = candidate(id)?.evidenceId ?: return false
+        if (deleteKeptOption(id) == 0) return false
+        deleteEvidenceIfUnused(evidenceId)
+        return true
+    }
+
     @Transaction
     suspend fun pruneExpired(nowMillis: Long) {
         val short = RetentionPolicy.captureCutoff(accepted = false, nowMillis = nowMillis)
         val long = RetentionPolicy.captureCutoff(accepted = true, nowMillis = nowMillis)
         deleteOldCandidates(short, accepted = false)
         deleteOldCandidates(long, accepted = true)
+        clearOldKeptOptionText(long)
         deleteOldOrphanEvidence(short)
         deleteOldWorkflows(short, accepted = false)
         deleteOldWorkflows(long, accepted = true)

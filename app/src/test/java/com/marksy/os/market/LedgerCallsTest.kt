@@ -22,6 +22,12 @@ class LedgerCallsTest {
     }
 
     @Test
+    fun anUnsupportedOptionReadsAsUntrackedNotAsMissingMarketData() {
+        assertEquals("Option tracking unsupported · not tracked or scored", LedgerCalls.state(tip(status = "DATA_UNRESOLVED", reason = "OPTION_UNSUPPORTED")))
+        assertEquals("No market data · unresolved symbol", LedgerCalls.state(tip(status = "DATA_UNRESOLVED", reason = "UNRESOLVED_SYMBOL")))
+    }
+
+    @Test
     fun aProvisionalReturnIsLabelledAndAFinalOneIsNot() {
         assertEquals("+2.00% so far · provisional", LedgerCalls.progressText(tip(progress = point(0.02, "PROVISIONAL"))))
         assertEquals("+2.00% so far", LedgerCalls.progressText(tip(progress = point(0.02, "FINAL"))))

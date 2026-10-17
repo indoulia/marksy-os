@@ -144,6 +144,51 @@ class CaptureGatewayTest {
         assertTrue(dao.candidate(local)!!.userChoseSend)
     }
 
+    // Option-tip safety A: the confirmation is stored beside the original flag, never in its place, and only on approval.
+    @Test
+    fun confirmingAStockTipKeepsTheOptionFlag() = runBlocking {
+        val option = "BUY ABC 24 OCT 500 CE @ 500 Target 650 SL 470"
+        suspend fun flagged(hash: String) = candidateId(submit(hash = hash, text = option, hint = "com.research.app", verified = true))
+        val fields = TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0)
+
+        val unconfirmed = flagged("a")
+        gateway.review(unconfirmed, fields, null, ReviewDecision.SEND)
+        assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(unconfirmed)!!.deliveryState)
+        assertTrue(Ambiguity.OPTION_CONTRACT in dao.candidate(unconfirmed)!!.ambiguityCodes)
+        assertEquals(0, queued)
+
+        val confirmed = flagged("b")
+        gateway.review(confirmed, fields, null, ReviewDecision.SEND, stockConfirmed = true)
+        val sent = dao.candidate(confirmed)!!
+        assertEquals(DeliveryState.PENDING.name, sent.deliveryState)
+        assertTrue(sent.ambiguityCodes.containsAll(setOf(Ambiguity.OPTION_CONTRACT, Ambiguity.STOCK_CONFIRMED)))
+        assertEquals(1, queued)
+
+        val rejected = flagged("c")
+        gateway.review(rejected, fields, null, ReviewDecision.REJECT, stockConfirmed = true)
+        assertFalse(Ambiguity.STOCK_CONFIRMED in dao.candidate(rejected)!!.ambiguityCodes)
+
+        val stock = candidateId(submit(hash = "d", hint = "com.research.app", verified = true))
+        gateway.review(stock, fields, null, ReviewDecision.SEND, stockConfirmed = true)
+        assertFalse(Ambiguity.STOCK_CONFIRMED in dao.candidate(stock)!!.ambiguityCodes)
+
+        // Kept on the phone as a stock tip: the correction stands, nothing is queued.
+        val keptStock = flagged("e")
+        gateway.review(keptStock, fields, null, ReviewDecision.KEEP, stockConfirmed = true)
+        assertTrue(Ambiguity.STOCK_CONFIRMED in dao.candidate(keptStock)!!.ambiguityCodes)
+        assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(keptStock)!!.deliveryState)
+        assertEquals(2, queued)
+
+        // A correction that fails a stock rule is not stored, so the tip stays a kept option and keeps its retention.
+        val keptContract = flagged("f")
+        gateway.review(keptContract, TipFields("NIFTY24500CE", TipSide.BUY, 500.0, 650.0, 470.0), null, ReviewDecision.KEEP, stockConfirmed = true)
+        val unverified = candidateId(submit(hash = "g", text = option))
+        gateway.review(unverified, fields, "com.research.app", ReviewDecision.SEND, stockConfirmed = true)
+        listOf(keptContract, unverified).forEach { assertFalse(Ambiguity.STOCK_CONFIRMED in dao.candidate(it)!!.ambiguityCodes) }
+        assertTrue(dao.observeKeptOptions().first().map { it.id }.containsAll(listOf(keptContract, unverified)))
+        assertEquals(2, queued)
+    }
+
     @Test
     fun notificationToCapture() = runBlocking {
         assertNull(gateway.onNotificationStored(teaser(key = "complete", body = tip)))

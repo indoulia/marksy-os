@@ -32,6 +32,16 @@ class TradingDeliveryPolicyTest {
         assertEquals(DeliveryState.FAILED, TradingDeliveryPolicy.retryState(error))
     }
 
+    // An option the client refused stays on the phone with its reason: never retried, never shown as a failure.
+    @Test
+    fun anOptionTheClientRefusesIsKeptNotFailed() {
+        val error = OptionTipBlocked()
+
+        assertFalse(TradingDeliveryPolicy.shouldRetry(error))
+        assertEquals(DeliveryState.NOT_APPLICABLE, TradingDeliveryPolicy.retryState(error))
+        assertEquals(CaptureGate.OPTION_UNSUPPORTED, TradingDeliveryPolicy.failureCode(error))
+    }
+
     @Test
     fun staleCutoffUsesFifteenMinuteRecoveryWindow() {
         val now = 1_000_000L

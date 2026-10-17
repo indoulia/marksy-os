@@ -191,7 +191,8 @@ internal class TradingDeliveryRun(
                         dao.setDeliveryNote(event.id, TradingDeliveryPolicy.failureCode(error))
                         // Deliberately do not log the exception message: backend error
                         // details must never become a notification-content side channel.
-                        Log.w(TAG, "Trading event ${event.id} permanently rejected")
+                        if (state == DeliveryState.NOT_APPLICABLE) Log.i(TAG, "Trading event ${event.id} stays on the phone (${TradingDeliveryPolicy.failureCode(error)})")
+                        else Log.w(TAG, "Trading event ${event.id} permanently rejected")
                     }
                 }
                 )

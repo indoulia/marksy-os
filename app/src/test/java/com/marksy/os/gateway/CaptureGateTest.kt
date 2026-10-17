@@ -459,6 +459,43 @@ class CaptureGateTest {
         assertEquals(CaptureDecision.Keep(CaptureGate.NOT_A_CANDIDATE), CaptureGate.decide(noKey, context))
     }
 
+    // Option-tip safety B: on every automatic route an option or maybe-option call stays on the phone; a P/E ratio does not.
+    @Test
+    fun optionAndMaybeOptionCallsStayOnThePhoneOnEveryRoute() {
+        val routes = listOf<(String) -> NotificationEventEntity>(
+            { event(body = it) },
+            { event(pkg = "com.google.android.apps.messaging", source = "Messages", title = "JD-ZERODH-S", body = it) },
+            { event(pkg = "com.whatsapp", source = "WhatsApp", title = "StockTips: Rahul", group = true, body = "Rahul: $it") },
+            { event(pkg = "org.telegram.messenger", source = "Telegram", title = "StockTips", group = true, body = it) }
+        )
+        val option = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150"
+        val maybe = "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400"
+        val laterHedge = "BUY TCS @ 3500 TGT 3600 SL 3400. Hedge with 24500 PE"
+        val worded = "BUY NIFTY 24500 CALL @ 180 TGT 220 SL 150"
+        routes.forEach { route ->
+            listOf(option, maybe, laterHedge, worded).forEach { body ->
+                assertEquals(body, CaptureDecision.Keep(CaptureGate.OPTION_UNSUPPORTED), CaptureGate.decide(route(body), context))
+            }
+            assertTrue(CaptureGate.decide(route("BUY TCS @ 3500 TGT 3600 SL 3400, trades at 18 PE"), context) is CaptureDecision.Send)
+        }
+        // The contract can sit in an app notification's title.
+        assertEquals(CaptureDecision.Keep(CaptureGate.OPTION_UNSUPPORTED), CaptureGate.decide(event(title = "NIFTY 24500 CE", body = "BUY @ 180 TGT 220 SL 150"), context))
+        // Decided before the capture list is needed, so an option never waits in the queue for it.
+        assertEquals(CaptureDecision.Keep(CaptureGate.OPTION_UNSUPPORTED), CaptureGate.decide(event(body = option), context.copy(capturePackages = null)))
+    }
+
+    // A follow-up to an option thread carries the premium without the contract's name, so it stays folded in the local row.
+    @Test
+    fun aFollowUpToAnOptionThreadNeverQueuesOnItsOwn() {
+        val tg = "org.telegram.messenger"
+        val option = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150"
+        val followUp = "SELL @ 200 TGT 150 SL 220"
+        assertFalse(CaptureGate.requeuesOnUpdate(tg, "TRADING", true, "StockTips", "$option\n$followUp", followUp))
+        // An option call joining a local thread is still its own row, so delivery keeps it with the option status.
+        assertTrue(CaptureGate.requeuesOnUpdate(tg, "TRADING", true, "StockTips", "Good morning\n$option", option))
+        assertTrue(CaptureGate.requeuesOnUpdate(tg, "TRADING", true, "StockTips", "Good morning\nBUY TCS @ 3500 TGT 3600 SL 3400", "BUY TCS @ 3500 TGT 3600 SL 3400"))
+    }
+
     private fun send(event: NotificationEventEntity) = (CaptureGate.decide(event, context) as CaptureDecision.Send).message
 
     private fun event(

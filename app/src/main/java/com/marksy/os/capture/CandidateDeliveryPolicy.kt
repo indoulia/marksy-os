@@ -25,6 +25,7 @@ object CandidateDeliveryPolicy {
     const val UNVERIFIED_SOURCE = "unverified-source"
     const val CHAT_SOURCE = "chat-source"
     const val UNSUPPORTED_SOURCE = CaptureFailure.UNSUPPORTED_SOURCE
+    const val OPTION_UNSUPPORTED = CaptureGate.OPTION_UNSUPPORTED
 
     private val ticker = Regex("""(?=[A-Z0-9&._-]*[A-Z])[A-Z0-9][A-Z0-9&._-]{0,29}""")
 
@@ -63,6 +64,13 @@ object CandidateDeliveryPolicy {
         return source.medium == CaptureMedium.APP_NOTIFICATION && (source.deliverable || !registry.captureListKnown())
     }
 
+    /** The reviewer's "stock tip, not an option" answer, kept beside the original flag; a tip never read as an option is unchanged. */
+    fun confirmedAsStock(candidate: TipCandidateEntity): TipCandidateEntity {
+        val codes = candidate.ambiguities.split(',').filter { it.isNotBlank() }
+        if (Ambiguity.OPTION_CONTRACT !in codes || Ambiguity.STOCK_CONFIRMED in codes) return candidate
+        return candidate.copy(ambiguities = (codes + Ambiguity.STOCK_CONFIRMED).joinToString(","))
+    }
+
     /** E.g. `BUY ABC @ 500 Target 650 SL 470 Intraday`; null unless the reviewed fields are a forwardable call. */
     fun canonicalLine(fields: TipFields): String? {
         if (!fields.forwardable) return null
@@ -78,6 +86,9 @@ object CandidateDeliveryPolicy {
         return when {
             candidate.state != CaptureState.ACCEPTED.name -> NOT_ACCEPTED
             !candidate.userChoseSend -> KEPT_ON_PHONE
+            // Marksy tracks no option contracts yet; sent as a stock line, its premium levels would read as the underlying's.
+            Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes && Ambiguity.STOCK_CONFIRMED !in candidate.ambiguityCodes -> OPTION_UNSUPPORTED
+            OptionGate.looksLikeContract(candidate.symbol) -> OPTION_UNSUPPORTED
             // A hand-picked source could forge another channel's record; only Android package identity may send.
             !candidate.sourceVerified -> UNVERIFIED_SOURCE
             canonicalLine(candidate.fields) == null -> CaptureGate.NOT_A_CANDIDATE
@@ -155,7 +166,8 @@ internal class CandidateDeliveryRun(
                             retryRequested = true
                         } else {
                             dao.setDeliveryNote(candidate.id, TradingDeliveryPolicy.failureCode(error))
-                            log("Capture candidate ${candidate.id} permanently rejected")
+                            log(if (state == DeliveryState.NOT_APPLICABLE) "Capture candidate ${candidate.id} stays on the phone (${TradingDeliveryPolicy.failureCode(error)})"
+                                else "Capture candidate ${candidate.id} permanently rejected")
                         }
                     }
                 )

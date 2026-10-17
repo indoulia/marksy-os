@@ -53,11 +53,17 @@ object LedgerCalls {
 
     fun closedReturn(c: ClosedPredictionDto): Double? = if (c.ledger != null) c.ledger.actualReturn else c.realizedReturn
 
-    fun state(t: LedgerTipDto): String = when (t.status) {
-        STATUS_ACTIVE -> if (t.entryStatus == "WAITING") "Waiting for entry" else "Active"
-        "SOURCE_EXIT", "DIRECTION_HORIZON" -> listOfNotNull(STATUS[t.status], t.outcome?.let(OUTCOME::get)).joinToString(" · ")
-        "INVALIDATED", "UNSCORABLE", "DATA_UNRESOLVED" -> listOfNotNull(STATUS[t.status], t.reason?.let(::words)).joinToString(" · ")
-        else -> STATUS[t.status] ?: words(t.status)
+    const val OPTION_UNSUPPORTED = "Option tracking unsupported · not tracked or scored"
+
+    fun state(t: LedgerTipDto): String = state(t.status, t.reason, t.entryStatus, t.outcome)
+
+    /** A ledger status in words; the accepted reply's bare status and reason read the same way. */
+    fun state(status: String, reason: String?, entryStatus: String? = null, outcome: String? = null): String = when {
+        reason == "OPTION_UNSUPPORTED" -> OPTION_UNSUPPORTED
+        status == STATUS_ACTIVE -> if (entryStatus == "WAITING") "Waiting for entry" else "Active"
+        status in setOf("SOURCE_EXIT", "DIRECTION_HORIZON") -> listOfNotNull(STATUS[status], outcome?.let(OUTCOME::get)).joinToString(" · ")
+        status in setOf("INVALIDATED", "UNSCORABLE", "DATA_UNRESOLVED") -> listOfNotNull(STATUS[status], reason?.let(::words)).joinToString(" · ")
+        else -> STATUS[status] ?: words(status)
     }
 
     fun tone(t: LedgerTipDto): Tone = when (t.outcome) {

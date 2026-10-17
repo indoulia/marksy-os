@@ -84,6 +84,42 @@ class CandidateDeliveryPolicyTest {
     }
 
     @Test
+    fun approvedOptionCallStaysOnThePhoneAsUnsupported() {
+        // Even a ticker-shaped contract ("NIFTY24500CE") is never sent while the server cannot track options.
+        val option = accepted().copy(symbol = "NIFTY24500CE", ambiguities = Ambiguity.OPTION_CONTRACT)
+        assertEquals(CandidateDeliveryPolicy.OPTION_UNSUPPORTED, keep(option))
+        assertFalse(CandidateDeliveryPolicy.mayQueue(option, registry))
+    }
+
+    // Option-tip safety A: only the reviewer's "stock tip" confirmation lifts the flag, and only with every stock rule met.
+    @Test
+    fun aConfirmedStockTipTakesTheOrdinaryStockPath() {
+        val flagged = accepted().copy(ambiguities = Ambiguity.OPTION_CONTRACT)
+        // Editing the fields alone never clears the flag.
+        assertEquals(CandidateDeliveryPolicy.OPTION_UNSUPPORTED, keep(flagged.copy(symbol = "TCS")))
+        val confirmed = CandidateDeliveryPolicy.confirmedAsStock(flagged)
+        assertEquals("option-contract,stock-confirmed", confirmed.ambiguities)
+        assertTrue(CandidateDeliveryPolicy.mayQueue(confirmed, registry))
+        assertEquals("BUY ABC @ 500 Target 650 SL 470 Intraday", (CandidateDeliveryPolicy.decide(confirmed, context) as CaptureDecision.Send).message.text)
+        mapOf(
+            confirmed.copy(symbol = "NIFTY24500CE") to CandidateDeliveryPolicy.OPTION_UNSUPPORTED,
+            confirmed.copy(symbol = "NIFTY 24500 CE") to CandidateDeliveryPolicy.OPTION_UNSUPPORTED,
+            confirmed.copy(symbol = "TATA MOTORS") to CaptureGate.NOT_A_CANDIDATE,
+            confirmed.copy(side = null) to CaptureGate.NOT_A_CANDIDATE,
+            confirmed.copy(target = null, stopLoss = null) to CaptureGate.NOT_A_CANDIDATE,
+            confirmed.copy(sourceVerified = false) to CandidateDeliveryPolicy.UNVERIFIED_SOURCE,
+            confirmed.copy(sourcePackage = "com.zerodha.kite3") to CaptureGate.OUTSIDE_CAPTURE_SET,
+            confirmed.copy(extractedText = "Your order for ABC is executed at 500") to CaptureGate.OWN_ORDER
+        ).forEach { (candidate, reason) ->
+            assertEquals(candidate.symbol, reason, keep(candidate))
+            assertFalse(reason, CandidateDeliveryPolicy.mayQueue(candidate, registry))
+        }
+        // Nothing to confirm on a tip never read as an option; a contract-shaped symbol never sends either way.
+        assertEquals("", CandidateDeliveryPolicy.confirmedAsStock(accepted()).ambiguities)
+        assertEquals(CandidateDeliveryPolicy.OPTION_UNSUPPORTED, keep(accepted().copy(symbol = "NIFTY24500CE")))
+    }
+
+    @Test
     fun userPickedSourceNeverSends() {
         val picked = accepted(verified = false)
         assertEquals(CandidateDeliveryPolicy.UNVERIFIED_SOURCE, keep(picked))

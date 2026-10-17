@@ -8,13 +8,20 @@ object TradingDeliveryPolicy {
     const val STALE_IN_FLIGHT_MS = 15 * 60 * 1000L
 
     fun shouldRetry(error: Throwable): Boolean =
-        error !is MarksyTerminalException && error !is IllegalArgumentException
+        error !is MarksyTerminalException && error !is IllegalArgumentException && error !is OptionTipBlocked
 
-    fun retryState(error: Throwable): DeliveryState =
-        if (shouldRetry(error)) DeliveryState.PENDING else DeliveryState.FAILED
+    fun retryState(error: Throwable): DeliveryState = when {
+        error is OptionTipBlocked -> DeliveryState.NOT_APPLICABLE
+        shouldRetry(error) -> DeliveryState.PENDING
+        else -> DeliveryState.FAILED
+    }
 
     /** A fixed code for a terminal failure; the exception message could carry notification content. */
-    fun failureCode(error: Throwable): String = if (error is MarksyTerminalException) "rejected" else "invalid"
+    fun failureCode(error: Throwable): String = when (error) {
+        is OptionTipBlocked -> CaptureGate.OPTION_UNSUPPORTED
+        is MarksyTerminalException -> "rejected"
+        else -> "invalid"
+    }
 
     fun staleCutoff(nowMillis: Long): Long = nowMillis - STALE_IN_FLIGHT_MS
 }

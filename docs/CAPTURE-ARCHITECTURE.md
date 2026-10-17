@@ -79,9 +79,13 @@ Added by this branch: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PROJECTION
 | OCR text containing a one-time code | Not stored; evidence row `FAILED` code `one-time-code` | 7 days (row only) | No |
 | Reviewed fields (symbol, side, entry, target, SL, horizon) | `tip_candidates` | 7 days (30 accepted) | Yes, only on user Send + verified allow-listed app source, as one canonical line (e.g. `BUY ABC @ 500 Target 650 SL 470 Intraday`) after `TipTextCleaner.clean`, plus app package, channel label, salted device event key, capture time |
 | Workflow row (source package, key, state) | `capture_workflows` | 12 h TTL, row 7 days | No |
-| Notification events | `notification_events` (existing) | 7 days non-trading, 30 days trading | Existing `CaptureGate` rules, unchanged |
+| Notification events | `notification_events` (existing) | 7 days non-trading, 30 days trading | Existing `CaptureGate` rules; an option or maybe-option call (`OptionGate`) never leaves (note `option-unsupported`) |
 | Logs | logcat | n/a | Ids, enum names and fixed codes only; no text, symbol, price, URI or file name |
 | ML Kit usage metrics | Google (see section 6) | Per Google | Possibly; never image content |
+
+An approved option call (flag `option-contract`) is the exception to the 30-day rule: Marksy tracks no options yet, so it is never sent. Its reviewed fields, status and evidence hash stay on the phone until the user removes it (Remove on its Captured card, after a confirmation, deletes the row and the hash); its OCR text is cleared after 30 days. A flagged tip the reviewer marks "It's a stock tip, not an option call" keeps its `option-contract` flag, gains `stock-confirmed`, and follows the ordinary stock rules and 30-day retention; a contract-shaped symbol still never sends. App backup is off (`allowBackup="false"`), so the row is lost with the app's data.
+
+Option calls (tracker: `docs/OPTION-TIP-SAFETY-TRACKER.md`): `OptionGate` is the one rule set (OPTION for CE/PE or CALL/PUT contracts, AMBIGUOUS for a bare "18 PE", or NONE; P/E valuations blanked first). `CaptureGate.decide` keeps any matching message before a payload is built, `MarksyTipsApiClient.capture` refuses one without a request, and a screenshot with a bare "18 PE" or option words outside its first call is flagged `option-contract` plus `option-ambiguous`.
 
 Unreviewed candidates expire after 3 days. Duplicate detection: same hash within 24 h, or workflow already reviewed. Retention runs in `RetentionWorker` with `CaptureGateway.sweep` (expires workflows past TTL, fails sessions stuck over 10 min as `stale-session`).
 

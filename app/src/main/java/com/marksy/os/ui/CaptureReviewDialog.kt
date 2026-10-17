@@ -32,14 +32,17 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.marksy.os.MarksyFormat
+import com.marksy.os.capture.Ambiguity
 import com.marksy.os.capture.CandidateDeliveryPolicy
 import com.marksy.os.capture.CaptureMessages
 import com.marksy.os.capture.CaptureMethod
 import com.marksy.os.capture.CaptureSource
 import com.marksy.os.capture.CaptureSourceRegistry
 import com.marksy.os.capture.CaptureState
+import com.marksy.os.capture.OptionGate
 import com.marksy.os.capture.ReviewDecision
 import com.marksy.os.capture.TipFields
+import com.marksy.os.capture.TipExtractor
 import com.marksy.os.capture.TipSide
 import com.marksy.os.capture.ambiguityCodes
 import com.marksy.os.capture.fields
@@ -63,9 +66,9 @@ fun CaptureReviewHost(candidateId: Long, onDismiss: () -> Unit) {
     // Already decided: say so once instead of opening an empty review.
     LaunchedEffect(loaded) { if (loaded != null && !reviewable) { notice(CaptureMessages.ALREADY_REVIEWED); onDismiss() } }
     if (loaded == null || !reviewable) return
-    CaptureReviewDialog(loaded, remember(registry) { registry.allowListed() }, registry, onDismiss) { fields, source, decision ->
+    CaptureReviewDialog(loaded, remember(registry) { registry.allowListed() }, registry, onDismiss) { fields, source, decision, stockConfirmed ->
         scope.launch {
-            MarksyContainer.captureGateway(context).review(loaded.id, fields, source, decision)
+            MarksyContainer.captureGateway(context).review(loaded.id, fields, source, decision, stockConfirmed)
             onDismiss()
         }
     }
@@ -79,7 +82,7 @@ fun CaptureReviewDialog(
     sources: List<CaptureSource>,
     registry: CaptureSourceRegistry,
     onDismiss: () -> Unit,
-    onDecision: (TipFields, String?, ReviewDecision) -> Unit
+    onDecision: (TipFields, String?, ReviewDecision, Boolean) -> Unit
 ) {
     val key = candidate.id
     val read = candidate.fields
@@ -91,6 +94,10 @@ fun CaptureReviewDialog(
     var horizon by remember(key) { mutableStateOf(read.horizon.orEmpty()) }
     var picked by remember(key) { mutableStateOf(candidate.sourcePackage) }
     var textOpen by remember(key) { mutableStateOf(false) }
+    // Off until the reviewer says so; editing fields never clears an option flag.
+    var stock by remember(key) { mutableStateOf(false) }
+    val flagged = Ambiguity.OPTION_CONTRACT in candidate.ambiguityCodes
+    val reading = remember(key) { TipExtractor.captureOption(candidate.extractedText.orEmpty()) }
 
     val fields = TipFields(
         symbol.trim().uppercase().ifEmpty { null }, side, entry.toDoubleOrNull(), target.toDoubleOrNull(), stopLoss.toDoubleOrNull(),
@@ -99,23 +106,21 @@ fun CaptureReviewDialog(
     val sourcePackage = if (candidate.sourceVerified) candidate.sourcePackage else picked
     val source = registry.resolve(sourcePackage)
     val line = CandidateDeliveryPolicy.canonicalLine(fields)
-    val canSend = CandidateDeliveryPolicy.mayQueue(
-        candidate.copy(
-            state = CaptureState.ACCEPTED.name, userChoseSend = true, symbol = fields.symbol, side = side?.name, entry = fields.entry,
-            target = fields.target, stopLoss = fields.stopLoss, sourcePackage = source?.packageName
-        ),
-        registry
+    val reviewed = candidate.copy(
+        state = CaptureState.ACCEPTED.name, userChoseSend = true, symbol = fields.symbol, side = side?.name, entry = fields.entry,
+        target = fields.target, stopLoss = fields.stopLoss, sourcePackage = source?.packageName
     )
+    val canSend = CandidateDeliveryPolicy.mayQueue(if (stock) CandidateDeliveryPolicy.confirmedAsStock(reviewed) else reviewed, registry)
     val sourceName = source?.displayName ?: candidate.sourceName
 
     MarksyDialog(
         onDismissRequest = onDismiss,
         title = { Text("Review tip") },
-        confirmButton = { MarksyButton("Send to Marksy", { onDecision(fields, sourcePackage, ReviewDecision.SEND) }, enabled = canSend) },
+        confirmButton = { MarksyButton("Send to Marksy", { onDecision(fields, sourcePackage, ReviewDecision.SEND, stock) }, enabled = canSend) },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Tight), verticalAlignment = Alignment.CenterVertically) {
-                MarksyButton("Reject", { onDecision(fields, sourcePackage, ReviewDecision.REJECT) }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
-                MarksyButton("Keep on phone", { onDecision(fields, sourcePackage, ReviewDecision.KEEP) }, style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
+                MarksyButton("Reject", { onDecision(fields, sourcePackage, ReviewDecision.REJECT, stock) }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
+                MarksyButton("Keep on phone", { onDecision(fields, sourcePackage, ReviewDecision.KEEP, stock) }, style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
             }
         },
         text = {
@@ -130,7 +135,12 @@ fun CaptureReviewDialog(
                     "${sourceName ?: "Unknown app"} · ${MarksyFormat.dayTime(Instant.ofEpochMilli(candidate.capturedAt).atZone(ZoneId.systemDefault()))}",
                     color = MarksyTheme.TextMuted, style = MarksyType.Meta
                 )
-                candidate.ambiguityCodes.mapNotNull(CaptureMessages::ambiguity).forEach { Text(it, color = MarksyTheme.Warning, style = MarksyType.Small) }
+                candidate.ambiguityCodes.filter { it != Ambiguity.OPTION_CONTRACT }.mapNotNull(CaptureMessages::ambiguity)
+                    .forEach { Text(it, color = MarksyTheme.Warning, style = MarksyType.Small) }
+                if (flagged) {
+                    Text(optionReason(reading), color = MarksyTheme.Warning, style = MarksyType.Small)
+                    Pill("It's a stock tip, not an option call", selected = stock) { stock = !stock }
+                }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
                     CompactTextField(
@@ -159,7 +169,7 @@ fun CaptureReviewDialog(
                 MarksyCard {
                     Text(
                         if (canSend) "Send to Marksy sends only: ${line.orEmpty()}, from $sourceName. Nothing else leaves your phone."
-                        else sendBlocked(candidate.sourceVerified, line, source),
+                        else sendBlocked(candidate.sourceVerified, line, source, flagged && !stock, OptionGate.looksLikeContract(fields.symbol)),
                         color = MarksyTheme.TextPrimary, style = MarksyType.Small
                     )
                     Text("Keep on phone sends nothing.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
@@ -186,7 +196,15 @@ private val FieldHeight = 40.dp
 
 private fun level(v: Double?): String = v?.let { BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
 
-private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?): String = when {
+private fun optionReason(reading: OptionGate.Reading): String = when {
+    reading.evidence == null -> CaptureMessages.ambiguity(Ambiguity.OPTION_CONTRACT).orEmpty()
+    reading.signal == OptionGate.Signal.AMBIGUOUS -> "“${reading.evidence}” may make this an option call, so it is treated as one."
+    else -> "Read as an option call because of “${reading.evidence}”: its levels would be the option's price."
+}
+
+private fun sendBlocked(verified: Boolean, line: String?, source: CaptureSource?, option: Boolean, contract: Boolean): String = when {
+    option -> "Marksy can't track options yet, so this tip stays on this phone."
+    contract -> "It still looks like an option contract, so it stays on this phone."
     !verified -> "Tips with a source you picked yourself stay on this phone."
     line == null -> "To send, add a symbol, buy or sell, and at least two of entry, target and stop loss."
     else -> "${source?.displayName ?: "This source"} tips can't be sent to Marksy, so this one stays on your phone."

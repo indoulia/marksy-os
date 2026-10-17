@@ -35,8 +35,26 @@ object TipExtractor {
     private val timestamp = Regex("""(?:$DATE)(?:,?\s+(?:$TIME))?|$TIME""", RegexOption.IGNORE_CASE)
     private val exchangePrefix = Regex("""\b(?:nse|bse)\s*:\s*""", RegexOption.IGNORE_CASE)
     private val tickerShape = Regex("""[A-Za-z][A-Za-z0-9&.-]{1,24}""")
-    private val optionAfterSymbol = Regex(
-        """^\s+((?:\d{1,2}\s*)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE)\b""", RegexOption.IGNORE_CASE
+    // Expiry, strike, CE/PE or CALL/PUT: "24 OCT", "24TH OCT", "OCT", "24 OCT 2026", "28-OCT-2026", "28/10" or "28/10/2026", then "24500 CE".
+    private const val CONTRACT_TAIL = """((?:(?:\d{1,2}(?:st|nd|rd|th)?[\s-]?)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:[\s-]?\d{2,4})?|""" +
+        """\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\s+)?(\d[\d,]*(?:\.\d+)?)\s*(CE|PE|CALLS?|PUTS?)\b"""
+    private val optionAfterSymbol = Regex("""^\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
+    // A contract named away from the side word ("NIFTY 24500 CE: BUY above 182"); isContract decides.
+    private val optionAnywhere = Regex("""\b([A-Za-z][A-Za-z0-9&.-]*)\s+$CONTRACT_TAIL""", RegexOption.IGNORE_CASE)
+    private val optionFused = Regex("""\b[A-Za-z][A-Za-z&-]*\d[\d.]*(?:CE|PE|CALLS?|PUTS?)\b""", RegexOption.IGNORE_CASE)
+    // CE after a number is always a call; PE after 4+ digits is a strike, as no P/E ratio is that large.
+    private val optionMarker = Regex("""\d\s*CE\b|\d{4,}\s*PE\b|\d{1,3}(?:,\d{3})+\s*PE\b""", RegexOption.IGNORE_CASE)
+    private val bareNumberPe = Regex("""\d\s*PE\b""", RegexOption.IGNORE_CASE)
+    // "24500 CALL", "52,000 PUTS" or "call option"; a stock "call", "SL 3400 call 98765..." or "put SL" is neither.
+    private val optionWords = Regex("""(?:\b\d{3,}|\b\d{1,3}(?:,\d{3})+)\s*(?:call|put)s?\b(?!\s*\d)|\b(?:call|put)\s+options?\b""", RegexOption.IGNORE_CASE)
+    // A strike and CE/PE as written ("24500 CE", "24,500 PE"): what review shows as the reason a call reads as an option.
+    private val strike = Regex("""\d[\d,]*(?:\.\d+)?\s*(?:CE|PE)\b""", RegexOption.IGNORE_CASE)
+    private val callLevel = Regex("""\b(?:targets?|tgt|tp\d?|t[12]|stop[\s-]*loss|stoploss|s\s*/\s*l|sl|stop)\b""", RegexOption.IGNORE_CASE)
+    // P/E valuations ("trades at 18 PE", "18x PE", "18 PE ratio") are blanked before any option is looked for.
+    private val peRatio = Regex(
+        """\b(?:(?:at|of|trades?|trading|valued|forward|fwd|trailing|ttm)\s+(?:at\s+)?\d{1,3}(?:\.\d+)?\s*(?:x|times)?|\d{1,3}(?:\.\d+)?\s*(?:x|times))\s*PE\b""" +
+            """|\b\d{1,3}(?:\.\d+)?\s*PE\s+(?:ratio|multiple|valuation)\b""",
+        RegexOption.IGNORE_CASE
     )
     private val levelWords = setOf("target", "targets", "tgt", "tp", "sl", "stop", "stoploss", "entry", "cmp", "ltp", "at", "above", "below", "around", "near", "between", "rs", "inr")
     private val fillerWords = setOf(
@@ -46,6 +64,7 @@ object TipExtractor {
         "recommendation", "signal", "alert", "strong", "buy", "sell", "qty", "quantity", "lot", "lots", "fut", "futures", "zone", "range",
         "level", "levels", "dip", "dips", "rise", "if", "when", "upto", "up", "to"
     )
+    private val notUnderlying = levelWords + fillerWords + setOf("accumulate", "kharido", "becho", "ce", "pe", "ratio", "trades", "trading", "valued")
 
     private enum class Kind { TARGET, STOP, ENTRY, LOOSE_ENTRY }
 
@@ -55,12 +74,10 @@ object TipExtractor {
         if (text.isBlank()) return ExtractionResult.NotATip
         // User rule 2026-10-02: a capture carrying a one-time code is dropped whole.
         if (NotificationClassifier.isOneTimeCode("", text) || NotificationClassifier.carriesOneTimeCode("", text)) return ExtractionResult.OneTimeCode
-        val flat = text.replace(Regex("""[\s​]+"""), " ").trim()
+        val flat = flatten(text)
         val levels = levels(flat)
         val firm = levels.any { it.kind != Kind.LOOSE_ENTRY }
-        val buys = buyWord.findAll(flat) + (if (levels.isNotEmpty()) longWord.findAll(flat) else emptySequence())
-        val sells = sellWord.findAll(flat) + (if (levels.isNotEmpty()) shortWord.findAll(flat) else emptySequence())
-        val sideHits = (buys.map { it to TipSide.BUY } + sells.map { it to TipSide.SELL }).sortedBy { it.first.range.first }.toList()
+        val sideHits = sideHits(flat, levels)
         if (sideHits.isEmpty() && !firm) return ExtractionResult.NotATip
 
         val ambiguities = mutableSetOf<String>()
@@ -68,8 +85,12 @@ object TipExtractor {
         val side = sides.singleOrNull()
         if (sides.size > 1) ambiguities += Ambiguity.CONFLICTING_SIDE
         val symbols = sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty()
-        // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
-        val symbol = symbols.singleOrNull()?.let { s -> optionContract(flat, sideHits.first().first, s)?.also { ambiguities += Ambiguity.OPTION_CONTRACT } ?: s }
+        val found = symbols.singleOrNull()
+        val option = captureOption(flat, sideHits, found)
+        if (option.signal != OptionGate.Signal.NONE) ambiguities += Ambiguity.OPTION_CONTRACT
+        // A bare "18 PE" may be a P/E ratio or a put: its symbol is kept, but it stays on the phone unless review confirms a stock tip.
+        if (option.signal == OptionGate.Signal.AMBIGUOUS) ambiguities += Ambiguity.OPTION_AMBIGUOUS
+        val symbol = option.contract ?: found
         if (symbols.size > 1) ambiguities += Ambiguity.AMBIGUOUS_SYMBOL
 
         fun first(vararg kinds: Kind): Double? {
@@ -108,6 +129,54 @@ object TipExtractor {
         }
     }
 
+    /** The option reading a capture of [text] is flagged with. */
+    fun captureOption(text: String): OptionGate.Reading {
+        val flat = flatten(text)
+        val sideHits = sideHits(flat, levels(flat))
+        return captureOption(flat, sideHits, sideHits.firstOrNull()?.let { symbolsNear(flat, it.first) }.orEmpty().singleOrNull())
+    }
+
+    // Option words outside the first call ("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)") may be what its levels price: a maybe-option.
+    private fun captureOption(flat: String, sideHits: List<Pair<MatchResult, TipSide>>, symbol: String?): OptionGate.Reading {
+        val first = firstCallOption(flat, sideHits, symbol)
+        if (first.signal != OptionGate.Signal.NONE) return first
+        val rest = readOption(flat)
+        return if (rest.signal == OptionGate.Signal.NONE) first else OptionGate.Reading(OptionGate.Signal.AMBIGUOUS, rest.evidence)
+    }
+
+    /** The option rules over [text] with P/E valuations blanked; right after the side word and [symbol], any strike counts. */
+    internal fun readOption(text: String, side: MatchResult? = null, symbol: String? = null): OptionGate.Reading {
+        val scan = peRatio.replace(text) { " ".repeat(it.value.length) }
+        if (side != null && symbol != null) optionContract(scan, side, symbol)?.let { return it }
+        optionAnywhere.findAll(scan).firstOrNull(::isContract)?.let {
+            return OptionGate.Reading(OptionGate.Signal.OPTION, it.value.trim(), contractName(it.groupValues[1], it, 2))
+        }
+        optionFused.find(scan)?.let { return OptionGate.Reading(OptionGate.Signal.OPTION, it.value) }
+        fun written(rule: Regex) = strike.findAll(scan).firstOrNull { rule.containsMatchIn(it.value) }?.value
+        if (optionMarker.containsMatchIn(scan)) return OptionGate.Reading(OptionGate.Signal.OPTION, written(optionMarker))
+        optionWords.find(scan)?.let { return OptionGate.Reading(OptionGate.Signal.OPTION, it.value) }
+        if (bareNumberPe.containsMatchIn(scan)) return OptionGate.Reading(OptionGate.Signal.AMBIGUOUS, written(bareNumberPe))
+        return OptionGate.Reading(OptionGate.Signal.NONE)
+    }
+
+    internal fun flatten(text: String): String = text.replace(Regex("""[\s​]+"""), " ").trim()
+
+    private fun sideHits(flat: String, levels: List<Level>): List<Pair<MatchResult, TipSide>> {
+        val buys = buyWord.findAll(flat) + (if (levels.isNotEmpty()) longWord.findAll(flat) else emptySequence())
+        val sells = sellWord.findAll(flat) + (if (levels.isNotEmpty()) shortWord.findAll(flat) else emptySequence())
+        return (buys.map { it to TipSide.BUY } + sells.map { it to TipSide.SELL }).sortedBy { it.first.range.first }.toList()
+    }
+
+    // "SELL NIFTY 24500 CE below 182": the levels are the option's premium, so the whole contract is kept and reviewed.
+    // Only the first call names the instrument: up to its target or stop and never past the next BUY/SELL, so a later
+    // call or a hedge note ("| BUY NIFTY 24500 CE") never takes a stock call's symbol (captureOption still flags it maybe-option).
+    private fun firstCallOption(flat: String, sideHits: List<Pair<MatchResult, TipSide>>, symbol: String?): OptionGate.Reading {
+        val side = sideHits.firstOrNull()?.first
+        val callStart = side?.range?.last?.plus(1) ?: 0
+        val callEnd = listOfNotNull(sideHits.getOrNull(1)?.first?.range?.first, callLevel.find(flat, callStart)?.range?.first).minOrNull() ?: flat.length
+        return readOption(flat.substring(0, callEnd), side, symbol)
+    }
+
     private fun levels(flat: String): List<Level> = level.findAll(flat).mapNotNull { m ->
         val token = m.groupValues[6].trimEnd('.', ',', '|')
         val after = flat.substring(m.range.first + m.value.length - (m.groupValues[6].length - token.length))
@@ -122,11 +191,24 @@ object TipExtractor {
     }.toList()
 
     /** "NIFTY 24 OCT 24500 CE" when an optional expiry, a strike and CE/PE follow [symbol] after the side word, else null. */
-    private fun optionContract(flat: String, side: MatchResult, symbol: String): String? {
+    private fun optionContract(flat: String, side: MatchResult, symbol: String): OptionGate.Reading? {
         val at = flat.indexOf(symbol, side.range.last + 1, ignoreCase = true).takeIf { it >= 0 } ?: return null
         val m = optionAfterSymbol.find(flat.substring(at + symbol.length)) ?: return null
-        val expiry = m.groupValues[1].trim().replace(Regex("""\s+"""), " ").ifEmpty { null }?.uppercase(Locale.ROOT)
-        return listOfNotNull(symbol, expiry, m.groupValues[2].replace(",", ""), m.groupValues[3].uppercase(Locale.ROOT)).joinToString(" ")
+        return OptionGate.Reading(OptionGate.Signal.OPTION, flat.substring(at, at + symbol.length + m.range.last + 1), contractName(symbol, m, 1))
+    }
+
+    // Away from the side word a put needs an expiry or a 3+ digit strike: "TCS 18 PE" may be a P/E ratio.
+    private fun isContract(m: MatchResult): Boolean {
+        if (m.groupValues[1].lowercase(Locale.ROOT) in notUnderlying) return false
+        return m.groupValues[4].equals("CE", ignoreCase = true) || m.groupValues[2].isNotBlank() ||
+            m.groupValues[3].substringBefore('.').count(Char::isDigit) >= 3
+    }
+
+    /** Underlying, expiry, strike and CE/PE from [m], whose expiry is group [first] (strike and type follow it). */
+    private fun contractName(underlying: String, m: MatchResult, first: Int): String {
+        val expiry = m.groupValues[first].trim().replace(Regex("""\s+"""), " ").ifEmpty { null }?.uppercase(Locale.ROOT)
+        return listOfNotNull(underlying.uppercase(Locale.ROOT), expiry, m.groupValues[first + 1].replace(",", ""), m.groupValues[first + 2].uppercase(Locale.ROOT))
+            .joinToString(" ")
     }
 
     // The ticker sits right after the side word; failing that, an all-caps word right before it ("ABC: BUY @ 500").

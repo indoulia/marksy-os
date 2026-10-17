@@ -167,7 +167,7 @@ class CaptureGateway(
     suspend fun captureAuthorized(id: Long): Boolean = openWorkflow(id) != null && moveWorkflow(id, WorkflowState.CAPTURE_AUTHORIZED)
 
     /** The user's review; returns the new state, or null when the candidate is gone or already final. */
-    suspend fun review(candidateId: Long, fields: TipFields, sourcePackage: String?, decision: ReviewDecision): CaptureState? {
+    suspend fun review(candidateId: Long, fields: TipFields, sourcePackage: String?, decision: ReviewDecision, stockConfirmed: Boolean = false): CaptureState? {
         val now = clock()
         val candidate = dao.candidate(candidateId) ?: return null
         val from = CaptureState.valueOf(candidate.state)
@@ -189,8 +189,12 @@ class CaptureGateway(
                 sourceName = if (candidate.sourceVerified) candidate.sourceName else picked?.displayName
             )
         }
-        val queued = decision == ReviewDecision.SEND && CandidateDeliveryPolicy.mayQueue(reviewed, registry)
-        dao.updateCandidate(reviewed.copy(deliveryState = (if (queued) DeliveryState.PENDING else DeliveryState.NOT_APPLICABLE).name))
+        // The stock correction stands only if the tip passes every stock rule a Send checks; otherwise it stays a kept option.
+        val asStock = CandidateDeliveryPolicy.confirmedAsStock(reviewed)
+        val stock = stockConfirmed && to == CaptureState.ACCEPTED && CandidateDeliveryPolicy.mayQueue(asStock.copy(userChoseSend = true), registry)
+        val confirmed = if (stock) asStock else reviewed
+        val queued = decision == ReviewDecision.SEND && CandidateDeliveryPolicy.mayQueue(confirmed, registry)
+        dao.updateCandidate(confirmed.copy(deliveryState = (if (queued) DeliveryState.PENDING else DeliveryState.NOT_APPLICABLE).name))
         moveEvidence(candidate.evidenceId, from, to)
         candidate.workflowId?.let { moveWorkflow(it, if (to == CaptureState.ACCEPTED) WorkflowState.ACCEPTED else WorkflowState.REJECTED) }
         log("capture candidate=$candidateId $decision -> $to queued=$queued")

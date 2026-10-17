@@ -1,6 +1,7 @@
 package com.marksy.os.capture
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -101,6 +102,72 @@ class TipExtractorTest {
         assertNull(CandidateDeliveryPolicy.canonicalLine(sell.fields))
         assertEquals("BANKNIFTY 52000 PE", candidate("Buy BANKNIFTY 52000 PE above 310 target 360 SL 280").fields.symbol)
         assertEquals("NIFTY 24 OCT 24500 CE", candidate("BUY NIFTY 24 OCT 24500 CE above 120 target 160 SL 100").fields.symbol)
+    }
+
+    @Test
+    fun anOptionContractAnywhereInTheTextIsFlagged() {
+        listOf(
+            "BUY NIFTY 24 OCT 2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 24 OCT 2026 24500 CE",
+            "BUY NIFTY 28-OCT-2026 24500 CE @ 120 TGT 180 SL 90" to "NIFTY 28-OCT-2026 24500 CE",
+            "NIFTY 24500 CE: BUY above 182 target 220 SL 160" to "NIFTY 24500 CE",
+            "Nifty 24500 CE: buy above 182 target 220 SL 160" to "NIFTY 24500 CE",
+            "Buy BankNifty 52000 pe above 300 target 360 sl 280" to "BANKNIFTY 52000 PE",
+            "BUY BANKNIFTY 24TH OCT 52000 PE @ 310 TGT 360 SL 280" to "BANKNIFTY 24TH OCT 52000 PE",
+            "BUY BANKNIFTY 24/10 52000 PE @ 310 TGT 360 SL 280" to "BANKNIFTY 24/10 52000 PE",
+            "Buy BANKNIFTY at 52000 PE above 300 target 360 SL 280" to "BANKNIFTY",
+            "BUY NIFTY24500CE @ 120 TGT 180 SL 90" to "NIFTY24500CE"
+        ).forEach { (text, symbol) ->
+            val tip = candidate(text)
+            assertEquals(text, symbol, tip.fields.symbol)
+            assertEquals(text, CaptureState.REVIEW_REQUIRED, tip.state)
+            assertTrue(text, Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        }
+    }
+
+    @Test
+    fun aPeRatioNeverTurnsAStockTipIntoAnOption() {
+        listOf("trades at 18 PE", "trades at 18PE", "trading at 18 pe", "18 P/E", "18 p / e", "P/E 18", "PE ratio 18", "18 PE ratio", "18x PE").forEach { pe ->
+            val text = "BUY TCS @ 3500, target 3600, stop 3400; $pe"
+            val tip = candidate(text)
+            assertEquals(text, TipFields("TCS", TipSide.BUY, 3500.0, 3600.0, 3400.0), tip.fields)
+            assertEquals(text, CaptureState.EXTRACTED, tip.state)
+            assertEquals(text, emptySet<String>(), tip.ambiguities)
+            assertEquals(text, "BUY TCS @ 3500 Target 3600 SL 3400", CandidateDeliveryPolicy.canonicalLine(tip.fields))
+        }
+    }
+
+    @Test
+    fun aBarePeThatMayBeARatioStaysLocalUntilReviewedWithItsSymbolKept() {
+        val tip = candidate("BUY TCS (18 PE) @ 3500, target 3600, stop 3400")
+        assertEquals("TCS", tip.fields.symbol)
+        assertEquals(CaptureState.REVIEW_REQUIRED, tip.state)
+        // Option-tip safety B: a maybe-option is treated as an option until the reviewer confirms a stock tip.
+        assertTrue(Ambiguity.OPTION_CONTRACT in tip.ambiguities)
+        assertTrue(Ambiguity.OPTION_AMBIGUOUS in tip.ambiguities)
+        assertEquals("BUY TCS @ 3500 Target 3600 SL 3400", CandidateDeliveryPolicy.canonicalLine(tip.fields))
+    }
+
+    @Test
+    fun aLaterCallOrAHedgeNoteKeepsTheStockSymbolButStaysLocalUntilReviewed() {
+        listOf(
+            "BUY TCS @ 3500 TARGET 3600 SL 3400 | BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150",
+            "BUY TCS @ 3500 TARGET 3600 SL 3400. Hedge with 24500 PE",
+            "BUY TCS @ 3500 TARGET 3600 SL 3400 and NIFTY 24500 CE @ 180",
+            "BUY TCS @ 3500, target 3600, stop 3400 (18 PE)"
+        ).forEach { text ->
+            val tip = candidate(text)
+            assertEquals(text, TipFields("TCS", TipSide.BUY, 3500.0, 3600.0, 3400.0), tip.fields)
+            assertEquals(text, CaptureState.REVIEW_REQUIRED, tip.state)
+            assertTrue(text, tip.ambiguities.containsAll(setOf(Ambiguity.OPTION_CONTRACT, Ambiguity.OPTION_AMBIGUOUS)))
+        }
+        // e2 review #163: a contract named after the levels may be what the levels price.
+        val after = candidate("BUY NIFTY @ 180 TGT 220 SL 150 (24500 CE)")
+        assertEquals("NIFTY", after.fields.symbol)
+        assertTrue(after.ambiguities.containsAll(setOf(Ambiguity.OPTION_CONTRACT, Ambiguity.OPTION_AMBIGUOUS)))
+        assertEquals(CaptureState.EXTRACTED, candidate("BUY TCS @ 3500 TARGET 3600 SL 3400, trades at 18 PE").state)
+        val optionFirst = candidate("BUY NIFTY 24500 CE @ 180 TARGET 220 SL 150 | BUY TCS @ 3500 TARGET 3600 SL 3400")
+        assertEquals(TipFields("NIFTY 24500 CE", TipSide.BUY, 180.0, 220.0, 150.0), optionFirst.fields)
+        assertTrue(Ambiguity.OPTION_CONTRACT in optionFirst.ambiguities)
     }
 
     @Test

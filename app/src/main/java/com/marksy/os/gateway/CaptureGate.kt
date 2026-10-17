@@ -1,5 +1,6 @@
 package com.marksy.os.gateway
 
+import com.marksy.os.capture.OptionGate
 import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.notification.CaptureMedium
 import com.marksy.os.notification.ChatLabels
@@ -62,6 +63,7 @@ object CaptureGate {
     const val EMPTY_TEXT = "empty-text"
     // Fix round 1 finding C1: an SMS title that isn't shaped like a sender id is never a consented channel.
     const val SMS_NOT_SENDER_ID = "sms-not-sender-id"
+    const val OPTION_UNSUPPORTED = "option-unsupported"
 
     fun decide(event: NotificationEventEntity, context: CaptureContext): CaptureDecision {
         require(context.deviceSalt.isNotBlank()) { "deviceSalt must not be blank (fix round 1, defence in depth)" }
@@ -69,6 +71,8 @@ object CaptureGate {
         val medium = CaptureMedium.of(appPackage)
         if (event.sourceKey.isBlank()) return CaptureDecision.Keep(NOT_A_CANDIDATE)
         textKeep(medium, event.category, event.title, event.body)?.let { return CaptureDecision.Keep(it) }
+        // Marksy tracks no options: a premium read as a stock price corrupts the ledger. Decided before the capture list is needed.
+        if (OptionGate.blocks("${event.title}\n${event.body}")) return CaptureDecision.Keep(OPTION_UNSUPPORTED)
         val label = when (medium) {
             CaptureMedium.APP_NOTIFICATION -> {
                 val packages = context.capturePackages ?: return CaptureDecision.Wait
@@ -119,13 +123,15 @@ object CaptureGate {
         }
     }
 
-    /** Lines added to a local row are their own capture only if they queue alone and the thread holds no own order, holding or code. */
+    /** Lines added to a local row are their own capture only if they queue alone and the thread holds no own order, holding, code or option. */
     fun requeuesOnUpdate(
         sourcePackage: String, category: String, chatGroup: Boolean?, title: String, thread: String, added: String, chatAllowList: Set<String>? = null
     ): Boolean {
         val medium = CaptureMedium.of(sourcePackage)
         if (NotificationClassifier.carriesOneTimeCode(title, thread)) return false
         if (!medium.isChat && (NotificationClassifier.isOwnOrderEvent(title, thread) || NotificationClassifier.isOwnAccountEvent(title, thread))) return false
+        // A follow-up to an option thread carries its premium without the contract's name; an option line itself still splits off.
+        if (OptionGate.blocks("$title\n$thread") && !OptionGate.blocks("$title\n$added")) return false
         return queues(sourcePackage, category, chatGroup, title, added, chatAllowList)
     }
 

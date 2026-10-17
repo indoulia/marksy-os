@@ -132,7 +132,8 @@ fun CapturedScreen(
 
     MarksyList {
         captureToReview(inbox, now, toReviewOpen) { toReviewOpen = !toReviewOpen }
-        if (lanes.isEmpty && inbox.isEmpty) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
+        captureKeptOptions(inbox, now)
+        if (lanes.isEmpty && inbox.isEmpty && inbox.keptOptions.isEmpty()) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
             item { SectionLabel("Needs you", lanes.needsYou.size, MarksyTheme.Negative) }
             items(lanes.needsYou, key = { "n${it.row.event.id}" }) { NeedCard(it, now, { selected = it.row }, onRetry, onSendNow, onAllowBackground) }
@@ -275,6 +276,7 @@ internal fun noteLabel(note: String?): String? = when (note) {
     "one-to-one-chat" -> "Only group chats are sent; this was a one-to-one chat."
     "outside-capture-set", "sms-not-sender-id" -> "This source is not on your capture list."
     "not-a-candidate" -> "Not a tip, so nothing was sent."
+    "option-unsupported" -> "Option call: option tracking unsupported, not sent to Marksy."
     else -> "Kept on this phone ($note)."
 }
 
