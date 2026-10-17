@@ -42,43 +42,30 @@ Audit found that the existing API already implements the `SCR-001` Wilson-lower-
 
 ## Data-rights, score governance and Postgres reliability workstream (2026-10-17)
 
-Status only; the backend work lives in `marksy-api`. States: **LOCAL** (commit on one machine) · **PUSHED** · **PR OPEN** · **MERGED** · **DEPLOYED** · **PHONE VERIFIED**. Each one says nothing about the next.
+Status only; the backend work lives in `marksy-api`. Artifact states: **LOCAL** · **PUSHED** · **PR OPEN** · **MERGED** · **DEPLOYED** · **PHONE VERIFIED**, each saying nothing about the next. Workstream states: **COMPLETE** (closure evidence in hand) · **READY_FOR_APPROVAL** · **IN_PROGRESS** · **BLOCKED** · **DEFERRED** · **NOT_AUTHORIZED**. Re-verified 2026-10-17 06:15–07:30 UTC against GitHub, the repositories and read-only production checks; earlier reports were not relied on.
 
-- **PROV-001 provider-provenance record and MSV-001 §6a no-manual-runs rule:** MERGED — marksy-api [#121](https://github.com/indoulia/marksy-api/pull/121), merge `ec85385` (2026-10-17 04:06 UTC). Docs only; NOT DEPLOYED, and no deploy is needed. CI not run (GitHub Actions billing lockout).
-- **OD-9 decision record, with Upstox questions Q-U1/Q-U2 extended to live-quote data:** MERGED — marksy-api [#122](https://github.com/indoulia/marksy-api/pull/122), merge `c555054` (04:10 UTC). Its two doc commits were cherry-picked onto main. The original `docs/od-9-nse-authorization` branch stays LOCAL and must not be merged: it carries unrelated EPIC-5 `marksy_ml` code. The questions are unsent drafts.
-- **This status section:** first published by marksy-os PR [#162](https://github.com/indoulia/marksy-os/pull/162), merge `b8d11c3` (2026-10-17).
-- **marksy-api main vs production:** production runs the pinned release `27cffd8`, which is production's `acc20c5` plus only the Postgres probe fix (deployed 2026-10-17 05:14 UTC). Main `c555054` holds #120 (NOT DEPLOYED) but not `27cffd8`. The deploy script therefore refuses the next main deploy until PR #123 merges. A main deploy would also ship #120; none is approved.
-- **Postgres reliability observation:** read-only. Day-0 baseline 2026-10-16 22:03:40 UTC. Daily snapshots at about 22:03 UTC (03:33 IST) through 2026-10-23, run only when prompted; none collected yet after day 0. A 30-minute parallel-worker sample on 2026-10-19 at 16:05 IST, only if prompted. Incidents:
-  - 15 Oct: a container OOM kill (confirmed by kernel log and cgroup counter). Another session's note attributes it to its probe; that attribution is reported, not verified.
-  - 16 Oct: three shared-memory errors from the PROV-001 audit query.
-  - No job failure recorded. No tuning change.
-  - Pre-change snapshot 2026-10-17 05:12:37 UTC (10:42 IST). Postgres restarted at 05:14:04 UTC, so the container's memory counters restart from zero; the post-restart baseline was taken at 05:21 UTC. Container counters can't be compared across the restart.
-- **Health-check `role "root"` log noise:** FIXED and DEPLOYED 2026-10-17 05:14 UTC.
-  - Cause: confirmed by a controlled `pg_isready` test; an empty user falls back to root.
-  - Fix: both probes now run `sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`. marksy-api PR [#123](https://github.com/indoulia/marksy-api/pull/123), commit `27cffd8`, is PR OPEN and must merge before the next main deploy.
-  - How it shipped: a pinned API release, leaving admin and web unchanged and not shipping #120.
-  - Safeguards: off-site backup `20261017T045443Z` (STORED), then a restore check. Schema, migration head, scheduler and artefacts all passed; the overall NOT_VERIFIABLE comes only from the live job-log table changing during the backup.
-  - Verified after the restart: new pod ready, API health 200, 36 CronJobs resumed, jobs completing, and 0 `FATAL` lines in the first 7 minutes (previously about 18 a minute).
-  - Rollback: a pinned redeploy of `acc20c5` with `MARKSY_API_ALLOW_ROLLBACK=1`, or `kubectl rollout undo deployment/postgres`. Each restarts Postgres.
-- **SEL-001 post-deploy coverage check (the four uncommitted deployment files):** recovered onto `fix/sel001-coverage-nse-calendar` (`d552b41`, from deployment main) and opened as deployment [#10](https://github.com/indoulia/deployment/pull/10). PR OPEN, not to be merged without approval. The original files in the local checkout are untouched.
-  - Tests: the SQL suite passes with `failed=0` in a disposable container, and `test_sources.sh` passes 48/0.
-  - `test_vps_deploy.sh` gives 64 passed / 6 failed, and main gives the same 6 failures: they come from the test environment.
-  - Separately, every deploy since 16 Oct reports coverage FAILED for 8–9 Oct, the outage days.
-- **PSC-002:** LOCAL docs on `exp/psc-rr-bias` (`d492621`, unpushed). D1 (defer) and fixes 1–18 PROPOSED, not approved. Not implemented. A decision packet (D1 and fixes 1–18, with provenance, conflicts and recommendations) is prepared for approval, outside the repository.
-- **DRC-001 data-rights gate:** PROPOSED; spec text and tests drafted outside the repository. Decisions M2–M10 open; not implemented. Until it exists, no MSV-001 or PSC score may be shown to users. A decision packet (M2–M10, with pending §6c amendments and acceptance criteria) is prepared for approval, outside the repository.
-- **Option-tip safety (owned by the option-tip session):**
-  - Already merged: server #120 (NOT DEPLOYED) and app #160 (`a962c55`, not PHONE VERIFIED).
-  - In review: the shared option gate and client block are in app PR [#163](https://github.com/indoulia/marksy-os/pull/163) (`8cbf7f9`), and CALL/PUT detection is in server PR [#124](https://github.com/indoulia/marksy-api/pull/124) (`753f25c`). Both are PR OPEN, not merged or deployed.
-  - Independent read-only review (2026-10-17): #124 is ready for merge approval. #163 is ready for merge approval at `8cbf7f9`, after a first review found three blocking issues and all three were fixed:
-    - the stock-tip correction now passes every stock check before it is kept;
-    - a screenshot that mentions an option anywhere now goes to review;
-    - real-run zero-request tests now cover every route.
-  - Residual risk: a wrong human "stock tip" confirmation of an option screenshot passes the app's checks. The only backstop is #124's BUY-only off-market check, which is not deployed.
-  - Per-channel evidence: `docs/OPTION-TIP-SAFETY-TRACKER.md` (in #163). Automatic-message retention is unchanged.
-  - NOT GATED: notification, SMS, chat-notification, re-queue, retry/Send now and pull-connector routes send the cleaned raw text without an option check (`CaptureGate.kt:90-107`).
-  - The tips network client has no second block.
-  - Screenshot routes are partially gated: a symbol edited at review is not re-classified, and only CE/PE wording is detected.
-  - Automatic-message retention is unchanged.
+- **Production (read-only check 2026-10-17 06:20 UTC):** API runs the pinned release `27cffd8` (annotation deployed 05:14:29 UTC; the VPS checkout is detached at it); deployment checkout `335829b` = deployment main. marksy-api main `c868b1a` = production's `acc20c5` + #120, #121, #122, #124; it lacks `27cffd8`. No Alembic migration between `27cffd8` and main.
+- **1. Postgres health-check fix — READY_FOR_APPROVAL (merge #123).**
+  - DEPLOYED 2026-10-17 05:14 UTC via pinned `27cffd8`; no further restart is needed.
+  - marksy-api PR [#123](https://github.com/indoulia/marksy-api/pull/123) (`27cffd8`): PR OPEN, one file, both probes `sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`, nothing else in `postgres.yaml` changed; merges cleanly into `c868b1a`.
+  - Why it blocks every forward deploy: a main deploy refuses the detached VPS checkout until main contains it (`deployment/server/lib/sources.sh:48`), and a pinned deploy refuses a commit that doesn't descend from `27cffd8` (`:93`).
+  - Cause, safeguards and verification: controlled `pg_isready` test (empty user falls back to root); off-site backup `20261017T045443Z` (STORED) and restore check; new pod ready, API health 200, 36 CronJobs resumed, 0 `FATAL` in the first 7 minutes (previously about 18 a minute).
+  - Rollback: a pinned redeploy of `acc20c5` with `MARKSY_API_ALLOW_ROLLBACK=1`, or `kubectl rollout undo deployment/postgres`; each restarts Postgres.
+  - Closure: #123 merged, and the next deploy ships a main that contains it.
+- **2. Option-tip safety — IN_PROGRESS (follow-up PRs, deploy and phone verification).**
+  - MERGED, NOT DEPLOYED: api #120 (`a947fed`), api #124 (`c868b1a`, tree identical to the tested head `753f25c`), app #160 (`a962c55`), app #163 (`78bb275`, code identical to `2e44faa`).
+  - Tests: marksy-api full suite on `c868b1a` (+2 characterization cases) 9392 passed, 23 skipped, 0 failed (2026-10-17, local; CI blocked by Actions billing). App CI passed on `2e44faa`.
+  - Follow-ups on app branch `fix/screenshot-ocr-recheck`: an option index can't be stock-corrected (`d4d7a5b`, from the option-tip session); route-gap tests (`c7eac0c`); a screenshot's recognized text is re-read with `OptionGate` before any send, whatever its flags, and missing text fails closed (`49b554a`); written option wording can never be stock-corrected (`e73fade`). Before the fix an unflagged option screenshot was really POSTed. App JVM suite at `e73fade`: 960 tests, 0 failures, 0 errors, 0 skipped (2026-10-17). Per-route evidence: `docs/OPTION-TIP-SAFETY-TRACKER.md`.
+  - The 50% BUY entry floor in #124 is a trading-policy change awaiting its own decision. A separation patch is prepared but not applied (changing #124's floor tests needs explicit approval). Option safety doesn't rely on the floor: a premium read as its underlying is voided unscored (marksy-api `d906722`, local).
+  - Closure: follow-up PRs merged, API deployed, release build verified on the phone.
+- **3. Coordinated release — NOT_AUTHORIZED.** Order: merge #123 → decide the floor → pinned API deploy of the new main SHA (API only; no migration) → health, DB, jobs, scoring coverage and logs → app build from the merged app main → phone install and checklist (tracker). Each step needs its own approval.
+- **4. SEL-001 post-deploy coverage check — READY_FOR_APPROVAL (merge deployment #10).**
+  - deployment [#10](https://github.com/indoulia/deployment/pull/10) (`d552b41`, base = current main `335829b`, 4 files): sessions come from the NSE calendar (`market_calendar_versions`, `market_holidays`, `market_unexpected_closures`) instead of price bars. SQL suite 28 checks, `failed=0`, in a disposable container (2026-10-17). Read-only check only; no held-out or evaluation boundary changes.
+  - Production calendar is seeded (read-only 06:28 UTC: one NSE version 2026-01-01..2026-12-31, 16 holidays). 8–9 Oct are not registered closures, so they keep reporting MISSING (outage days).
+- **5. PSC-002 — READY_FOR_APPROVAL (decision).** LOCAL docs on marksy-api `exp/psc-rr-bias` (`d492621`, unpushed). D1 (defer) and fixes 1–18 PROPOSED; no decision recorded. Packet: `C:\AIAgent\marksy-decision-packets-2026-10-17\` (checksums verified 2026-10-17). Not implemented.
+- **6. DRC-001 data-rights gate — READY_FOR_APPROVAL (decision).** M2–M10 PROPOSED; draft §6c with DR-01, DR-01b, DR-02..DR-18 outside the repository. Three amendments are pending and not applied (§6c.4 window → M10; §6c.5 adds `SOURCE_EVIDENCE_MISSING` → M9; §6c.1 Yahoo items → M5); the preserved §6c names only `DATA_RIGHTS_NOT_CLEARED` and `SOURCE_NOT_COVERED`. Until it is live, no MSV-001 or PSC score may be shown to users.
+- **7. Postgres observation — IN_PROGRESS (read-only, when prompted).** Day-0 baseline 2026-10-16 22:03:40 UTC. Daily snapshots about 22:03 UTC (03:33 IST) through 2026-10-23; the day-1 snapshot is due 2026-10-17 22:03 UTC. The 2026-10-19 parallel-worker sample is NOT_AUTHORIZED. Incidents so far: 15 Oct container OOM kill; 16 Oct three shared-memory errors from the PROV-001 audit query; no job failure; no tuning change.
+- **8. Standing restrictions — NOT_AUTHORIZED.** Data rights for Upstox (OD-9 Track B), NSE (Track A), Yahoo and pooled customer tips are unresolved; no agent may approve them. November 2026 stays held out until the TG-001 exam has recorded its graded decision and the lock releases (`app/held_out_lock.py`: release 2026-12-12 00:00 UTC; selection gate `30 20 10 * *`, trade geometry `30 20 11 * *`). No deploy 2026-12-10 00:00 IST to TG check 4; no manual MSV-001 report runs.
 
 ## Status (2026-09-27)
 
