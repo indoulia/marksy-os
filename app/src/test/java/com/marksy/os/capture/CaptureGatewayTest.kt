@@ -5,6 +5,10 @@ import com.marksy.os.data.local.CaptureDao
 import com.marksy.os.data.local.DeliveryState
 import com.marksy.os.data.local.MarksyDatabase
 import com.marksy.os.data.local.NotificationEventEntity
+import com.marksy.os.gateway.CaptureContext
+import com.marksy.os.gateway.CapturedMessage
+import com.marksy.os.gateway.MarksyGatewayClient
+import com.marksy.os.gateway.MarksyInsight
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -187,6 +191,34 @@ class CaptureGatewayTest {
         listOf(keptContract, unverified).forEach { assertFalse(Ambiguity.STOCK_CONFIRMED in dao.candidate(it)!!.ambiguityCodes) }
         assertTrue(dao.observeKeptOptions().first().map { it.id }.containsAll(listOf(keptContract, unverified)))
         assertEquals(2, queued)
+    }
+
+    // Option-tip safety B: an option screenshot from a picked image or a screen capture is reviewed, then kept on the phone, never sent.
+    @Test
+    fun optionScreenshotsFromEveryMethodAreReviewedAndNeverSent() = runBlocking {
+        val option = "BUY ABC 24 OCT 500 CE @ 500 Target 650 SL 470"
+        val fields = TipFields("ABC", TipSide.BUY, 500.0, 650.0, 470.0)
+        val picked = submit(hash = "a", text = option, method = CaptureMethod.USER_SELECTED_IMAGE, hint = "com.research.app", verified = true) as CaptureOutcome.Candidate
+        val workflow = authorizedWorkflow()
+        val projected = submit(hash = "b", text = option, method = CaptureMethod.MEDIA_PROJECTION, workflowId = workflow) as CaptureOutcome.Candidate
+        assertEquals(WorkflowState.REVIEW_REQUIRED.name, workflowState(workflow))
+        listOf(picked.id, projected.id).forEach { assertTrue(Ambiguity.OPTION_CONTRACT in dao.candidate(it)!!.ambiguityCodes) }
+
+        listOf(picked.id, projected.id).forEach { gateway.review(it, fields, null, ReviewDecision.SEND) }
+        val sent = mutableListOf<String>()
+        val client = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val context = CaptureContext(setOf("com.research.app"), emptySet(), emptySet(), "user-1", "salt")
+        assertFalse(CandidateDeliveryRun(dao, client, context).drain())
+
+        assertEquals(emptyList<String>(), sent)
+        assertEquals(0, queued)
+        listOf(picked.id, projected.id).forEach { assertEquals(DeliveryState.NOT_APPLICABLE.name, dao.candidate(it)!!.deliveryState) }
     }
 
     @Test

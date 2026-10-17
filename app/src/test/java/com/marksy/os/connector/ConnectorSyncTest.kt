@@ -218,6 +218,40 @@ class ConnectorSyncTest {
         assertTrue(rows().none { it.deliveryState == "PENDING" })
     }
 
+    // Calendar rows carry the call in the title: both the option and the maybe-option are queued, then kept on the phone.
+    @Test
+    fun calendarOptionAndMaybeOptionTitlesAreQueuedThenNeverSent() = runBlocking {
+        syncer.setEnabled(CalendarConnector.ID, true)
+        syncer.sync(
+            calendar(
+                FakeCalendar(
+                    listOf(
+                        inst(1, t0 + 2 * hour, title = "BUY NIFTY 24500 CE @ 180 TGT 220 SL 150"),
+                        inst(2, t0 + 3 * hour, title = "BUY TCS (18 PE) @ 3500 TGT 3600 SL 3400")
+                    )
+                )
+            )
+        )
+        val dao = db.notificationEventDao()
+        val queued = rows().filter { it.deliveryState == "PENDING" }
+        assertEquals(1, queued.count { "24500" in it.title + it.body })
+        assertEquals(1, queued.count { "18 PE" in it.title + it.body })
+        val sent = mutableListOf<String>()
+        val client = object : MarksyGatewayClient {
+            override suspend fun capture(eventId: Long, message: CapturedMessage): Result<MarksyInsight> {
+                sent += message.text
+                return Result.success(MarksyInsight(eventId, "ok"))
+            }
+            override suspend fun captureList() = Result.success(emptySet<String>())
+        }
+        val context = CaptureContext(rows().map { it.sourcePackage }.toSet(), emptySet(), emptySet(), "user-1", "salt")
+
+        TradingDeliveryRun(dao, client, context).drain()
+
+        assertEquals(emptyList<String>(), sent)
+        queued.forEach { assertEquals(CaptureGate.OPTION_UNSUPPORTED, dao.getById(it.id)!!.deliveryNote) }
+    }
+
     @Test
     fun gmailIsHonestlyNotConfiguredWithoutOAuth() {
         val gmail = GmailConnector(FakeGmail(), tokens = null)
