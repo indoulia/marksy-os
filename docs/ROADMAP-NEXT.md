@@ -40,6 +40,27 @@ This is a reuse-first cross-repository workstream. Merged 2026-10-15 (marksy-api
 
 Audit found that the existing API already implements the `SCR-001` Wilson-lower-bound Trust Score, canonical tip scorecards, and the API/OS already contain Trust and Predictions screens. Therefore this work must extend only demonstrated gaps: do not create a second Trust Score, do not confuse `app/prediction_trust_score.py` with an individual tip metric, and do not redesign existing screens. The per-tip 0–100 metric is **Target Progress** (position between stop-loss and target, not a probability); "Prediction Score" is reserved for a future calibrated estimate and is not built here. Historical source reliability remains shadow-only until a separate evidence-based decision approves any production use.
 
+## Data-rights, score governance and Postgres reliability workstream (2026-10-17)
+
+Status only; the backend work lives in `marksy-api`. States: **LOCAL** (commit on one machine) · **PUSHED** · **PR OPEN** · **MERGED** · **DEPLOYED** · **PHONE VERIFIED**. Each one says nothing about the next.
+
+- **PROV-001 provider-provenance record and MSV-001 §6a no-manual-runs rule:** MERGED — marksy-api [#121](https://github.com/indoulia/marksy-api/pull/121), merge `ec85385` (2026-10-17 04:06 UTC). Docs only; NOT DEPLOYED, and no deploy is needed. CI not run (GitHub Actions billing lockout).
+- **OD-9 decision record, with Upstox questions Q-U1/Q-U2 extended to live-quote data:** MERGED — marksy-api [#122](https://github.com/indoulia/marksy-api/pull/122), merge `c555054` (04:10 UTC). Its two doc commits were cherry-picked onto main. The original `docs/od-9-nse-authorization` branch stays LOCAL and must not be merged: it carries unrelated EPIC-5 `marksy_ml` code. The questions are unsent drafts.
+- **marksy-api main is ahead of production:** main `c555054` includes #120 (tips parser, merged by the option-tip session), which is NOT DEPLOYED; production runs `acc20c5`. Any unpinned deploy would ship #120. No deploy is approved.
+- **Postgres reliability observation:** read-only. Day-0 baseline 2026-10-16 22:03:40 UTC. Daily snapshots at about 22:03 UTC (03:33 IST) through 2026-10-23, run only when prompted; none collected yet after day 0. A 30-minute parallel-worker sample on 2026-10-19 at 16:05 IST, only if prompted. Incidents:
+  - 15 Oct: a container OOM kill (confirmed by kernel log and cgroup counter). Another session's note attributes it to its probe; that attribution is reported, not verified.
+  - 16 Oct: three shared-memory errors from the PROV-001 audit query.
+  - No job failure recorded. No tuning change.
+- **Health-check `role "root"` log noise:** cause CONFIRMED on 2026-10-17 by one controlled `pg_isready` test. In probe commands, the Secret-sourced `$(POSTGRES_USER)` becomes empty (kubelet v1.36.4), and an empty user falls back to root. Fix PROPOSED: a shell-expanded probe command. It needs approval and a Postgres restart, and is best done after the observation window.
+- **Four uncommitted files in the local deployment checkout:** an unfinished SEL-001 coverage-check fix from 2026-10-06 that uses the NSE calendar. LOCAL and of unknown ownership; untouched; disposition awaiting a decision.
+- **PSC-002:** LOCAL docs on `exp/psc-rr-bias` (`d492621`, unpushed). D1 (defer) and fixes 1–18 PROPOSED, not approved. Not implemented.
+- **DRC-001 data-rights gate:** PROPOSED; spec text and tests drafted outside the repository. Decisions M2–M10 open; not implemented. Until it exists, no MSV-001 or PSC score may be shown to users.
+- **Option-tip safety (owned by the option-tip session):** server #120 MERGED, NOT DEPLOYED. App #160 MERGED (`a962c55`), not PHONE VERIFIED. App branch `fix/option-stage0-app` LOCAL (`5fccde5`). Notification, SMS, WhatsApp and Telegram capture still forward option text until the local gate ships. Per-channel evidence belongs in `docs/OPTION-TIP-SAFETY-TRACKER.md`, which that branch will create. Independent read-only review (2026-10-17, at `5fccde5`; code reading only, no tests run):
+  - NOT GATED: notification, SMS, chat-notification, re-queue, retry/Send now and pull-connector routes send the cleaned raw text without an option check (`CaptureGate.kt:90-107`).
+  - The tips network client has no second block.
+  - Screenshot routes are partially gated: a symbol edited at review is not re-classified, and only CE/PE wording is detected.
+  - Automatic-message retention is unchanged.
+
 ## Status (2026-09-27)
 
 This covers the Android app (this repo) only. Backend work in `marksy-api` is tracked there. 559 unit tests pass.
