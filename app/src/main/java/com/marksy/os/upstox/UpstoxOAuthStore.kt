@@ -11,8 +11,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The user's Upstox app keys, today's OAuth token and the last holdings, each slot Keystore-encrypted; all slots
- * share this store's one alias (same pattern as [UpstoxTokenStore]). Keys and token are only ever sent to api.upstox.com.
+ * The user's Upstox app keys, today's OAuth token, the last holdings and the sandbox token, each slot Keystore-encrypted;
+ * all slots share this store's one alias (same pattern as [UpstoxTokenStore]). Only api.upstox.com and the sandbox host receive them.
  */
 class UpstoxOAuthStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -52,6 +52,26 @@ class UpstoxOAuthStore(context: Context) {
 
     fun clearToken() {
         preferences.edit().remove(ACCESS_TOKEN).remove(ivName(ACCESS_TOKEN)).remove(ISSUED_AT).apply()
+    }
+
+    /** For practice orders only; null once expired. Only the sandbox order client and Settings may read it. */
+    fun sandboxToken(now: Long = System.currentTimeMillis()): String? {
+        val expires = sandboxExpiresAt() ?: return null
+        return if (now < expires) read(SANDBOX_TOKEN) else null
+    }
+
+    fun sandboxExpiresAt(): Long? =
+        preferences.getLong(SANDBOX_EXPIRES_AT, 0L).takeIf { it != 0L && preferences.contains(SANDBOX_TOKEN) }
+
+    fun saveSandboxToken(token: String, now: Long) {
+        val value = token.trim()
+        require(value.isNotEmpty()) { "blank sandbox token" }
+        write(SANDBOX_TOKEN, value)
+        preferences.edit().putLong(SANDBOX_EXPIRES_AT, UpstoxJwt.sandboxExpiry(value, now)).apply()
+    }
+
+    fun clearSandboxToken() {
+        preferences.edit().remove(SANDBOX_TOKEN).remove(ivName(SANDBOX_TOKEN)).remove(SANDBOX_EXPIRES_AT).apply()
     }
 
     fun saveHoldings(json: String) = write(HOLDINGS, json)
@@ -116,6 +136,8 @@ class UpstoxOAuthStore(context: Context) {
         const val ISSUED_AT = "issued_at"
         const val HOLDINGS = "holdings"
         const val HIDDEN = "hidden"
+        const val SANDBOX_TOKEN = "sandbox_token"
+        const val SANDBOX_EXPIRES_AT = "sandbox_expires_at"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
     }
