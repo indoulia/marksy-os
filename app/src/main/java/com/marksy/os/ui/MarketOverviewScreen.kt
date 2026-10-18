@@ -154,7 +154,7 @@ private fun MarksyPicksCard(repository: com.marksy.os.market.MarketIntelligenceR
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${p.symbol} tip") { onOpenTip(m) }, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Text(p.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Spacer(Modifier.weight(1f))
+                    Text(pickMeta(p), color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, modifier = Modifier.weight(1f))
                     m.trade?.let { t -> MarksyButton(if (t.side == TradeSide.SELL) "Sell" else "Buy", { onTrade(t) }) }
                 }
                 m.track?.let { PriceTrackView(it) }
@@ -164,6 +164,9 @@ private fun MarksyPicksCard(repository: com.marksy.os.market.MarketIntelligenceR
 }
 
 private const val PICKS = 3
+
+/** The pick's time frame only: its model confidence is unvalidated (owner decision 2026-10-18). */
+internal fun pickMeta(p: com.marksy.os.market.ActivePredictionDto) = "${p.horizon}-day"
 
 
 /** Formats a raw `marketStatus`/`marketSession` value from the API (e.g. `MARKET_HOURS`) for display. */

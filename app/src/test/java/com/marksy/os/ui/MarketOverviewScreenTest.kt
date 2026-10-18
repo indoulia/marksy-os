@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import com.marksy.os.market.MarketDataState
 import com.marksy.os.market.MarketMoverDto
 import com.marksy.os.market.MarketSummaryDto
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +23,16 @@ class MarketOverviewScreenTest {
         indexes = listOf(com.marksy.os.market.IndexQuoteDto("NIFTY 50", 25143.2, 0.42, 105.1)),
         sectorLeaders = emptyList(), sectorLaggards = emptyList(), topGainers = gainers, topLosers = emptyList()
     )
+
+    @Test
+    fun pickMetaKeepsTheTimeFrameButNotTheUnvalidatedConfidence() {
+        val pick = com.marksy.os.market.ActivePredictionDto(
+            predictionId = 1, symbol = "PGHL", companyName = "PGHL", exchange = "NSE", price = 5098.0, targetPrice = 5376.0, stopLoss = 4966.4,
+            horizon = 3, remainingTradingDays = 3, distanceToTargetPercent = null, distanceToStopLossPercent = null, confidence = 0.72, trustScore = null,
+            trustQuality = null, status = "ACTIVE", lifecycleState = "ACTIVE", isActionableNow = true, lifecycleDetail = null, entryPrice = 5120.0, compositeOpportunityScore = null
+        )
+        assertEquals("3-day", pickMeta(pick))
+    }
 
     @Test
     fun loadedStateShowsIndexAndMarketStatus() {
