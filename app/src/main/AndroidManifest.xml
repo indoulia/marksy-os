@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.marksy.os">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -41,6 +42,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MarksyOS">
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
 
         <!-- Gemma's GPU backend; optional, MediaPipe falls back to CPU without it. -->
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
