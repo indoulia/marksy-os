@@ -19,6 +19,10 @@ local.properties
 # Local git worktrees for isolated feature work
 .worktrees/
 
+# Upstox setup QR codes hold credentials
+upstox-qr*.png
+sample-qr*.png
+
 # Local screenshots from device/offscreen checks
 .claude_screenshot_*.png
 .scratch_*.png

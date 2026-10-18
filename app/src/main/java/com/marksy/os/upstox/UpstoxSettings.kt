@@ -43,6 +43,10 @@ data class UpstoxDraft(
 
     fun discard() = UpstoxDraft(saved)
 
+    /** The form after a save: back to [newSaved], keeping only fields the save did not store (a rejected Analytics Token). */
+    fun afterSave(newSaved: UpstoxSaved, result: UpstoxSettingsSaver.Result): UpstoxDraft =
+        changes().filterKeys { it !in result.saved }.entries.fold(UpstoxDraft(newSaved)) { d, (field, value) -> d.edit(field, value) }
+
     /** Trimmed fields Save would write. */
     fun changes(): Map<UpstoxField, String> = UpstoxField.entries.mapNotNull { field ->
         val value = text(field).trim()

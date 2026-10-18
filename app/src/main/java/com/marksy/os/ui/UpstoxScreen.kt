@@ -66,17 +66,25 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
     val scope = rememberCoroutineScope()
     val repo = remember { PortfolioRepository(context) }
     val saver = remember { UpstoxSettingsSaver(repo.store, store, ::checkAnalyticsToken) }
-    var version by remember { mutableIntStateOf(0) }
-    val saved = remember(version) { UpstoxSaved.load(repo.store, store) }
-    val signedIn = remember(version) { repo.store.accessToken() != null }
-    val hasAccountData = remember(version) { saved.hasSecret || saved.sandboxExpiresAt != null || repo.store.holdings() != null }
-    var draft by remember(saved) { mutableStateOf(UpstoxDraft(saved)) }
+    var saved by remember { mutableStateOf(UpstoxSaved.load(repo.store, store)) }
+    var signedIn by remember { mutableStateOf(repo.store.accessToken() != null) }
+    var hasAccountData by remember { mutableStateOf(saved.hasSecret || saved.sandboxExpiresAt != null || repo.store.holdings() != null) }
+    var draft by remember { mutableStateOf(UpstoxDraft(saved)) }
     var notice by remember { mutableStateOf<Notice?>(null) }
     var busy by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(false) }
     var help by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     SecureWindow()
+
+    fun reload(): UpstoxSaved {
+        val fresh = UpstoxSaved.load(repo.store, store)
+        saved = fresh
+        signedIn = repo.store.accessToken() != null
+        hasAccountData = fresh.hasSecret || fresh.sandboxExpiresAt != null || repo.store.holdings() != null
+        return fresh
+    }
+    fun reset() { draft = UpstoxDraft(reload()) }
 
     fun take(scanned: String?) {
         when (val result = scanned?.let(UpstoxQrImport::parse) ?: UpstoxQrImport.Rejected("No QR code found in that image.")) {
@@ -88,7 +96,7 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch { take(UpstoxQrImage.fromUri(context, uri)) }
     }
-    val signIn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { version++ }
+    val signIn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { reset() }
     val edit: (UpstoxField, String) -> Unit = { field, text -> draft = draft.edit(field, text) }
     val problem = draft.problem()
 
@@ -99,34 +107,41 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
         ) {
             notice?.let { NoticeCard(it) }
             LiveAccountCard(draft, saved, signedIn, edit,
-                onSignIn = { signIn.launch(Intent(context, UpstoxSignInActivity::class.java)) },
-                onRemoveAnalytics = { store.clear(); onChanged(); version++ })
-            SandboxCard(draft, saved, edit, onRemove = { repo.store.clearSandboxToken(); version++ })
+                onSignIn = { if (!busy) signIn.launch(Intent(context, UpstoxSignInActivity::class.java)) },
+                onRemoveAnalytics = { if (!busy) { store.clear(); onChanged(); reset() } })
+            SandboxCard(draft, saved, edit, onRemove = { if (!busy) { repo.store.clearSandboxToken(); reset() } })
             if (draft.dirty && problem != null) Text(problem, color = MarksyTheme.Negative, style = MarksyType.Small)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (draft.dirty) MarksyButton("Discard", { draft = draft.discard(); notice = null }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary, enabled = !busy)
                 MarksyButton(if (busy) "Checking…" else "Save & test", {
                     busy = true
                     scope.launch {
-                        val result = saver.save(draft, System.currentTimeMillis())
-                        notice = Notice.Done(saveMessage(result), result.analytics != TokenCheck.REJECTED)
-                        busy = false
-                        version++
-                        onChanged()
+                        try {
+                            val result = saver.save(draft, System.currentTimeMillis())
+                            notice = Notice.Done(saveMessage(result), result.analytics != TokenCheck.REJECTED)
+                            draft = draft.afterSave(reload(), result)
+                            onChanged()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            notice = Notice.Done("Couldn't save on this phone. Try again.", ok = false)
+                        } finally {
+                            busy = false
+                        }
                     }
                 }, enabled = draft.dirty && problem == null && !busy)
             }
             if (busy) MarksyInlineLoader("Contacting Upstox…")
             if (hasAccountData) {
-                MarksyButton("Disconnect Upstox", { confirm = true }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative)
+                MarksyButton("Disconnect Upstox", { confirm = true }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative, enabled = !busy)
                 Text("Forgets the app keys, today's sign-in, saved holdings and the sandbox token. The Analytics Token stays.", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
         }
         OneHandControls(
             filters = emptyList(), selectedFilter = "", onFilterSelected = {},
             actions = listOf(
-                FloatingAction(Icons.AutoMirrored.Filled.HelpOutline, "How to make the QR") { help = true },
-                FloatingAction(Icons.Default.QrCodeScanner, "Import from QR") { sheet = true }
+                FloatingAction(Icons.AutoMirrored.Filled.HelpOutline, "How to make the QR") { if (!busy) help = true },
+                FloatingAction(Icons.Default.QrCodeScanner, "Import from QR") { if (!busy) sheet = true }
             )
         )
     }
@@ -169,7 +184,7 @@ fun UpstoxScreen(store: UpstoxTokenStore, padding: PaddingValues, onChanged: () 
         title = { Text("Disconnect Upstox?") },
         text = { Text("Marksy forgets your app keys, today's sign-in, the saved holdings, the sandbox token and Upstox's login cookies. Your Analytics Token stays.") },
         dismissButton = { MarksyButton("Cancel", { confirm = false }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextSecondary) },
-        confirmButton = { MarksyButton("Disconnect", { repo.disconnect(); confirm = false; notice = null; version++ }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative) }
+        confirmButton = { MarksyButton("Disconnect", { repo.disconnect(); confirm = false; notice = null; reset() }, style = MarksyButtonStyle.Text, color = MarksyTheme.Negative) }
     )
 }
 
@@ -198,10 +213,18 @@ private fun LiveAccountCard(
         }
         Text("Quotes, holdings, positions, funds and today's orders. This side never places orders.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         SecretField(draft, UpstoxField.ANALYTICS_TOKEN, if (saved.hasAnalytics) "Saved · paste or import to replace" else "Paste or import your Analytics Token", onEdit)
-        if (saved.hasAnalytics) MetaAction(
-            saved.analyticsExpiresAt?.let { "Market data · valid until ${fullDay(it)}." } ?: "Market data · saved.",
-            MarksyTheme.TextMuted, onRemoveAnalytics
-        )
+        if (saved.hasAnalytics) {
+            val exp = saved.analyticsExpiresAt
+            val expired = exp != null && exp <= System.currentTimeMillis()
+            MetaAction(
+                when {
+                    exp == null -> "Market data · saved."
+                    expired -> "Market data · expired ${fullDay(exp)}."
+                    else -> "Market data · valid until ${fullDay(exp)}."
+                },
+                if (expired) MarksyTheme.Negative else MarksyTheme.TextMuted, onRemoveAnalytics
+            )
+        }
         SecretField(draft, UpstoxField.API_KEY, "Paste or import your API key", onEdit)
         SecretField(draft, UpstoxField.API_SECRET, if (saved.hasSecret) "Saved · leave blank to keep it" else "Paste or import your API secret", onEdit)
         SecretField(draft, UpstoxField.REDIRECT, UpstoxOAuth.DEFAULT_REDIRECT, onEdit, secret = false)
@@ -317,7 +340,7 @@ private val QR_STEPS = listOf(
     "Upstox Developer Apps › your one live app. Redirect URL ${UpstoxOAuth.DEFAULT_REDIRECT}. Copy the API key and secret. Don't create a second live app: Upstox keeps only the newest.",
     "Analytics Token › Generate. Read-only, valid for a year.",
     "Sandbox token: only after Upstox confirms a sandbox app can't remove your live app (see docs/UPSTOX-SETUP.md). Valid for 30 days.",
-    "On your computer, offline: python tools/make_upstox_qr.py. It asks for each value without showing it and saves upstox-qr.png.",
+    "On your computer, offline: python tools/make_upstox_qr.py. It asks for each secret without showing it and saves upstox-qr.png in your home folder.",
     "Here: Import from QR, check the fields, Save & test. Then delete the PNG."
 )
 

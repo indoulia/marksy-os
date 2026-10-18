@@ -5,8 +5,8 @@ The QR is NOT encrypted: anyone with the image can read the keys. Treat the PNG 
 password file, never use an online QR site, and delete it after importing it in Marksy.
 
     pip install segno
-    python tools/make_upstox_qr.py [--out upstox-qr.png] [--force]
-    python tools/make_upstox_qr.py --sample --out sample-qr.png   # fake values, to test the import
+    python tools/make_upstox_qr.py [--out PATH] [--force]   # default: upstox-qr.png in your home folder
+    python tools/make_upstox_qr.py --sample --out sample-qr.png     # fake values, to test the import
 
 On Windows run it in PowerShell or Windows Terminal (in Git Bash use: winpty python ...),
 so the hidden prompts work.
@@ -75,7 +75,7 @@ def ask():
 
 def main():
     parser = argparse.ArgumentParser(description="Make a Marksy Upstox QR code offline.")
-    parser.add_argument("--out", default="upstox-qr.png", help="PNG to write (default upstox-qr.png)")
+    parser.add_argument("--out", default=os.path.join(os.path.expanduser("~"), "upstox-qr.png"), help="PNG to write (default: upstox-qr.png in your home folder)")
     parser.add_argument("--force", action="store_true", help="overwrite an existing file")
     parser.add_argument("--sample", action="store_true", help="use fake values, to test the import")
     args = parser.parse_args()
@@ -93,7 +93,11 @@ def main():
     text = json.dumps({"type": TYPE, "v": VERSION, **fields}, separators=(",", ":"))
     if len(text.encode("utf-8")) > MAX_BYTES:
         sys.exit("The code would be over 4 KB.")
-    segno.make(text, error="m", micro=False).save(args.out, scale=6, border=4)
+    try:
+        code = segno.make(text, error="m", micro=False)
+    except segno.DataOverflowError:
+        sys.exit("Too much for one QR code. Leave out a field, import this code, then make a second one for the rest.")
+    code.save(args.out, scale=6, border=4)
     if os.name == "posix":
         os.chmod(args.out, 0o600)
     print(f"Saved {args.out} with: {', '.join(fields)}.")

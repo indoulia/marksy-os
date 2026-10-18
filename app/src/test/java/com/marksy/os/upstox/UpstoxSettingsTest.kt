@@ -122,6 +122,32 @@ class UpstoxSettingsTest {
     }
 
     @Test
+    fun aSaveOfOnlyTheSecretLeavesACleanForm() {
+        runBlocking {
+            oauth.saveCredentials("key-1", "secret-1", UpstoxOAuth.DEFAULT_REDIRECT)
+            val d = draft().edit(UpstoxField.API_SECRET, "secret-2")
+            val r = saver().save(d, now)
+            val after = d.afterSave(UpstoxSaved.load(oauth, analytics), r)
+            assertFalse(after.dirty)
+            assertEquals("", after.text(UpstoxField.API_SECRET))
+            assertEquals("secret-2", oauth.credentials()?.apiSecret)
+        }
+    }
+
+    @Test
+    fun aRejectedTokenStaysInTheFormAfterSave() {
+        runBlocking {
+            val d = draft().apply(qr(UpstoxField.API_KEY to "key-2", UpstoxField.API_SECRET to "secret-2", UpstoxField.ANALYTICS_TOKEN to "bad.a.b"))
+            val r = saver(TokenCheck.REJECTED).save(d, now)
+            val after = d.afterSave(UpstoxSaved.load(oauth, analytics), r)
+            assertEquals("bad.a.b", after.text(UpstoxField.ANALYTICS_TOKEN))
+            assertEquals(setOf(UpstoxField.ANALYTICS_TOKEN), after.changes().keys)
+            assertEquals("key-2", after.text(UpstoxField.API_KEY))
+            assertTrue(after.fromQr.isEmpty())
+        }
+    }
+
+    @Test
     fun anUnreachableCheckStillSavesTheAnalyticsToken() {
         runBlocking {
             val result = saver(TokenCheck.UNREACHABLE).save(draft().edit(UpstoxField.ANALYTICS_TOKEN, "good.a.b"), now)
