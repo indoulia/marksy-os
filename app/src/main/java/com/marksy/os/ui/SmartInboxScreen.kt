@@ -195,7 +195,7 @@ const val InboxCapturedFilter = "CAPTURED"
 
 /** The Inbox filter list: the categories, with the captured-call log next to Trading so a long list never scrolls it out of sight. */
 val inboxFilters: List<Pair<String, String>> = SmartInboxModel.Filter.entries.flatMap { f ->
-    listOf(f.name to f.label) + if (f == SmartInboxModel.Filter.TRADING) listOf(InboxCapturedFilter to "Captured calls") else emptyList()
+    listOf(f.name to f.label) + if (f == SmartInboxModel.Filter.TRADING) listOf(InboxCapturedFilter to "Captured tips") else emptyList()
 }
 
 /** Header note for the Inbox tab: what needs the user and how much is new, or the active filter. */

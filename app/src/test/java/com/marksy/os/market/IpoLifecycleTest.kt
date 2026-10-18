@@ -21,6 +21,16 @@ class IpoLifecycleTest {
         retailAllocation = odds?.let { IpoAllocationDto(it, null) }
     )
 
+    @Test fun anchorLockInsOnlyForMainboardWithAnchorAndKnownDates() {
+        val open = LocalDate.of(2026, 10, 5); val allot = LocalDate.of(2026, 10, 9)
+        assertEquals(LocalDate.of(2026, 11, 8) to LocalDate.of(2027, 1, 7), IpoLifecycle.anchorLockIns(false, 500.0, open, allot))
+        assertNull(IpoLifecycle.anchorLockIns(true, 500.0, open, allot))
+        assertNull(IpoLifecycle.anchorLockIns(false, null, open, allot))
+        assertNull(IpoLifecycle.anchorLockIns(false, 0.0, open, allot))
+        assertNull(IpoLifecycle.anchorLockIns(false, 500.0, open, null))
+        assertNull(IpoLifecycle.anchorLockIns(false, 500.0, LocalDate.of(2022, 6, 30), allot))
+    }
+
     private val book = listOf(
         ipo("today", "CLOSING_SOON", closes = "2026-10-01"), ipo("later", "OPEN", closes = "2026-10-05"),
         ipo("allot", "CLOSED", lists = "2026-10-07", odds = 0.25), ipo("up2", "UPCOMING", opens = "2026-10-09"),

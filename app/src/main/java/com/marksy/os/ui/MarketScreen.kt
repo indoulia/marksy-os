@@ -29,7 +29,7 @@ import com.marksy.os.data.local.NotificationEventEntity
 import com.marksy.os.market.MarketIntelligenceRepository
 
 // Watchlist is Market's home; Predictions live on Trading (Marksy picks).
-enum class MarketTab(val label: String) { WATCHLIST("Watchlist"), PORTFOLIO("Portfolio"), OVERVIEW("Overview"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
+enum class MarketTab(val label: String) { OVERVIEW("Overview"), WATCHLIST("Watchlist"), PORTFOLIO("Portfolio"), STOCKS("Stocks"), IPOS("IPOs"), UPDATES("Updates") }
 
 /** Market's section filter, shared with WatchlistScreen (shown for WATCHLIST); STOCKS only hosts stock detail. */
 val MarketSections = MarketTab.entries.filter { it != MarketTab.STOCKS }.map { it.name to it.label }

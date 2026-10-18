@@ -66,7 +66,6 @@ internal data class TipCardModel(
 
 /** Builds tip cards from the ledger and Marksy feeds. */
 internal object TipCards {
-    private fun confidence(c: Double) = MarksyFormat.percent(if (c <= 1) c * 100 else c, 0, signed = false)
 
     fun meta(t: LedgerTipDto): String {
         val open = LedgerCalls.isActive(t)
@@ -149,7 +148,7 @@ internal object TipCards {
         val meta = when {
             ended -> listOfNotNull("Marksy", horizon, PicksBasis.day(p.scanSessionDate)?.let { "recommended $it" },
                 t?.closedAt?.takeIf { !TipTrack.voided(t) }?.let { "closed ${LedgerCalls.day(it)}" })
-            t == null || TipTrack.waiting(t) -> listOf("Marksy", horizon, "confidence ${confidence(p.confidence)}")
+            t == null || TipTrack.waiting(t) -> listOf("Marksy", horizon)
             else -> listOfNotNull("Marksy", horizon, p.publishedAt?.let(TipTrack::dayTime)?.let { "recommended $it" })
         }.joinToString(" · ")
         return TipCardModel(

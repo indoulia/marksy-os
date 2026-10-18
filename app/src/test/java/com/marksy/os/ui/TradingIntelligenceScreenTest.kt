@@ -216,7 +216,7 @@ class TradingIntelligenceScreenTest {
         assertEquals(null, TradingLists.historySummary(null))
     }
 
-    // Regression (device, 2026-10-15): Inbox's long filter list pushed Close and Add screenshot off screen, then scrolled Captured calls out of sight.
+    // Regression (device, 2026-10-15): Inbox's long filter list pushed Close and Add screenshot off screen, then scrolled Captured tips out of sight.
     @Test
     fun capturedFilterPanelLeavesItsButtonsOnScreen() {
         compose.setContent { CapturedInboxView(emptyList(), PaddingValues(), {}, {}, {}, {}, {}, false, {}, CaptureInbox()) }
@@ -225,7 +225,7 @@ class TradingIntelligenceScreenTest {
 
         compose.onNodeWithContentDescription("Close filters").assertIsDisplayed()
         compose.onNodeWithContentDescription("Add screenshot").assertIsDisplayed()
-        compose.onNodeWithText("Captured calls").assertIsDisplayed()
+        compose.onNodeWithText("Captured tips").assertIsDisplayed()
     }
 
     // Prod 2026-10-15: KIRLOSBROS predictions 2003 and 2004 share ledger tip 46 (2004's own tip is its MERGED_DUPLICATE follower).

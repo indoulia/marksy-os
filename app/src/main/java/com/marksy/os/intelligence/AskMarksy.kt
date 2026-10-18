@@ -621,7 +621,7 @@ object AskMarksy {
         "my tips" to act(Page.TRADING, "Open", "Open tips"), "tips" to act(Page.TRADING, "Open", "Open tips"),
         "scorecards" to act(Page.TRUST), "scorecard" to act(Page.TRUST), "track record" to act(Page.TRUST),
         "trust" to act(Page.TRUST), "trust score" to act(Page.TRUST), "trust scores" to act(Page.TRUST),
-        "captured" to act(Page.INBOX, "CAPTURED", "Captured calls"), "captured trades" to act(Page.INBOX, "CAPTURED", "Captured calls"),
+        "captured" to act(Page.INBOX, "CAPTURED", "Captured tips"), "captured trades" to act(Page.INBOX, "CAPTURED", "Captured tips"),
         "market" to act(Page.MARKET, "OVERVIEW"), "overview" to act(Page.MARKET, "OVERVIEW", "Overview"), "market overview" to act(Page.MARKET, "OVERVIEW", "Overview"),
         "indices" to act(Page.MARKET, "OVERVIEW", "Overview"), "stocks" to act(Page.MARKET, "WATCHLIST", "Watchlist"), "stock search" to act(Page.MARKET, "WATCHLIST", "Watchlist"),
         "ipo" to act(Page.MARKET, "IPOS", "IPOs"), "ipos" to act(Page.MARKET, "IPOS", "IPOs"),

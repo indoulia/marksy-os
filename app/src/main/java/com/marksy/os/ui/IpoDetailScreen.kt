@@ -196,6 +196,9 @@ private fun buildSections(
                 // "No anchor round" and "a report Marksy cannot read" are different answers.
                 val unread = d.anchorState?.takeIf { it !in setOf("MISSING", "EMPTY", "AVAILABLE") }?.lowercase()?.replace('_', ' ')?.replaceFirstChar { it.titlecase() }
                 KvRow("Anchor book", d.anchorCrore?.let { "₹${IpoDetailFormatter.number(it)} Cr" } ?: unread ?: "Not out yet")
+                IpoLifecycle.anchorLockIns(ipo.isSme, d.anchorCrore, dates["open"], dates["allot"])?.let { (half, rest) ->
+                    KvRow("Anchor lock-in", "Half ends ${IpoLifecycle.dm(half)} · rest ${IpoLifecycle.dm(rest)}")
+                }
             }
         }
     )

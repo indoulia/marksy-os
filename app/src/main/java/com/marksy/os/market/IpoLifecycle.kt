@@ -334,6 +334,13 @@ object IpoLifecycle {
         dates["list"]?.let { ReminderEvent("list", "Listing day", "${day(it)}, 9:55 am · trading starts at 10:00", it.atTime(9, 55).atZone(IST)) }
     ).filter { it.at.isAfter(now) }
 
+    private val ANCHOR_RULE_FROM = LocalDate.of(2022, 7, 1)
+
+    /** SEBI ICDR Sch. XIII cl. 10(j): half the anchor shares lock in 30 days from allotment, the rest 90; mainboard issues opening from 1 Jul 2022 only. */
+    fun anchorLockIns(isSme: Boolean, anchorCrore: Double?, opensOn: LocalDate?, allotment: LocalDate?): Pair<LocalDate, LocalDate>? =
+        if (isSme || anchorCrore == null || anchorCrore <= 0 || opensOn == null || opensOn < ANCHOR_RULE_FROM || allotment == null) null
+        else allotment.plusDays(30) to allotment.plusDays(90)
+
     fun reminderKey(ipoId: String, event: String) = "ipo|$ipoId|$event"
 
     /** Per-stage fetches merged; a stage that failed keeps its rows from [previous] so a lane never silently vanishes. */
