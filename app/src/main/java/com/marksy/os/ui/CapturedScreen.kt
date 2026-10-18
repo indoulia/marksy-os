@@ -58,7 +58,7 @@ import java.math.BigDecimal
 
 private const val SHOWN_PER_STACK = 2
 
-/** Inbox › Captured calls: the capture log under the shared Inbox filter, with its Show options and Add screenshot on the stack. */
+/** Inbox › Captured tips: the capture log under the shared Inbox filter, with its Show options and Add screenshot on the stack. */
 @Composable
 fun CapturedInboxView(
     events: List<NotificationEventEntity>, padding: PaddingValues, onFilterSelected: (String) -> Unit, onOpenStock: (String) -> Unit,
@@ -133,6 +133,7 @@ fun CapturedScreen(
 ) {
     var toReviewOpen by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var keptOpen by rememberSaveable { mutableStateOf(false) }
     var earlierOpen by rememberSaveable { mutableStateOf(false) }
     var rejectedOpen by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf<CapturedRow?>(null) }
@@ -144,7 +145,7 @@ fun CapturedScreen(
 
     MarksyList {
         captureToReview(inbox, now, toReviewOpen) { toReviewOpen = !toReviewOpen }
-        captureKeptOptions(inbox, now)
+        captureKeptOptions(inbox, now, keptOpen) { keptOpen = !keptOpen }
         if (lanes.isEmpty && filtered) item { EmptyState("Nothing matches", "Try another Show option, or clear the search.") }
         else if (lanes.isEmpty && inbox.isEmpty && inbox.keptOptions.isEmpty()) item { EmptyState("Nothing captured yet", "Tips from groups, SMS and research apps, and broker orders, appear here once your phone catches them.") }
         if (lanes.needsYou.isNotEmpty()) {
@@ -279,6 +280,8 @@ private fun deliveryChip(r: CapturedRow): Triple<String, Color, Color> = when (r
 private fun sourceOf(r: CapturedRow) = CapturedModel.sourceLabel(r.event)
 
 private fun price(v: Double): String = BigDecimal(v).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+
+internal fun optionPricesLine(f: com.marksy.os.capture.TipFields): String = listOfNotNull(f.entry?.let { "Entry ${price(it)}" }, f.target?.let { "Target ${price(it)}" }, f.stopLoss?.let { "SL ${price(it)}" }).joinToString(" · ")
 
 internal fun levelsLine(lv: TipLevels): String = listOfNotNull(
     lv.entry?.let { e -> "Entry ${price(e)}" + (lv.entryHigh?.takeIf { it != e }?.let { "–${price(it)}" } ?: "") },

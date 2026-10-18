@@ -6,7 +6,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
@@ -119,8 +124,17 @@ fun LazyListScope.captureToReview(inbox: CaptureInbox, now: Long, expanded: Bool
 }
 
 /** Approved option calls: they stay on this phone and are never shown as sent. */
-fun LazyListScope.captureKeptOptions(inbox: CaptureInbox, now: Long) {
-    items(inbox.keptOptions, key = { "o${it.id}" }) { KeptOptionCard(it, now) { inbox.onRemoveOption(it.id) } }
+fun LazyListScope.captureKeptOptions(inbox: CaptureInbox, now: Long, expanded: Boolean, onToggle: () -> Unit) {
+    if (inbox.keptOptions.isEmpty()) return
+    item(key = "kept-options") {
+        MarksyGroupCard(border = MarksyTheme.flagBorder(MarksyTheme.YellowImportant)) {
+            Row(Modifier.marksyRow(onClick = onToggle), verticalAlignment = Alignment.CenterVertically) {
+                Text("Kept on this phone · ${inbox.keptOptions.size} option tips", color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Icon(Icons.Default.ExpandMore, contentDescription = if (expanded) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (expanded) 180f else 0f))
+            }
+        }
+    }
+    if (expanded) items(inbox.keptOptions, key = { "o${it.id}" }) { KeptOptionCard(it, now) { inbox.onRemoveOption(it.id) } }
 }
 
 @Composable
@@ -136,13 +150,14 @@ private fun KeptOptionCard(c: TipCandidateEntity, now: Long, onRemove: () -> Uni
             dismissButton = { MarksyButton("Cancel", { confirming = false }, style = MarksyButtonStyle.Text, color = MarksyTheme.TextPrimary) }
         )
     }
-    MarksyCard {
+    MarksyCard(border = MarksyTheme.flagBorder(MarksyTheme.YellowImportant)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(listOfNotNull(f.symbol, f.side?.name).joinToString(" · ").ifEmpty { "Option call" }, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(MarksySpace.Inner))
             Text(compactTime(c.capturedAt, now) ?: "", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         }
         MarksyBadge("Approved — option tracking unsupported", MarksyTheme.YellowImportant, MarksyTheme.BadgeImportantBg)
+        optionPricesLine(f).takeIf { it.isNotEmpty() }?.let { Text("Option prices · $it", color = MarksyTheme.TextPrimary, style = MarksyType.Small) }
         Text("Kept on this phone. Not sent to Marksy.", color = MarksyTheme.TextSecondary, style = MarksyType.Small)
         Pill("Remove") { confirming = true }
     }

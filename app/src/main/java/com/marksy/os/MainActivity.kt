@@ -294,7 +294,7 @@ class MainActivity : ComponentActivity() {
         var historyScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.HistoryScope.ALL) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
-        var marketTabName by rememberSaveable { mutableStateOf(MarketTab.WATCHLIST.name) }
+        var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var ipoNote by remember { mutableStateOf<String?>(null) }
         var stockQuery by rememberSaveable { mutableStateOf("") }
@@ -505,7 +505,7 @@ class MainActivity : ComponentActivity() {
                     marketTabName = stockReturnMarketTab ?: MarketTab.OVERVIEW.name
                     when (origin) { "ask" -> showAsk = true; "briefing" -> showBriefing = true; else -> selectedTab = origin.toInt() }
                 }
-                else -> { marketSymbol = null; stockQuery = ""; marketTabName = MarketTab.WATCHLIST.name }
+                else -> { marketSymbol = null; stockQuery = ""; marketTabName = MarketTab.OVERVIEW.name }
             }
         }
         val onHome = selectedTab == 0 && !hostOpen
@@ -736,7 +736,7 @@ class MainActivity : ComponentActivity() {
                                 val (view, scope) = com.marksy.os.ui.tradingRoute(a.arg)
                                 tradingFilter = view; scope?.let { historyScope = it }; selectedTab = 3
                             }
-                            AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.WATCHLIST.name; selectedTab = 2 }
+                            AskMarksy.Page.MARKET -> { marketTabName = a.arg ?: MarketTab.OVERVIEW.name; selectedTab = 2 }
                             AskMarksy.Page.STOCK -> a.arg?.let { openStockFrom(it, "ask") } ?: run { marketTabName = MarketTab.WATCHLIST.name; selectedTab = 2 }
                             AskMarksy.Page.TRUST -> selectedTab = 4
                             AskMarksy.Page.SETTINGS -> selectedTab = tabs.size

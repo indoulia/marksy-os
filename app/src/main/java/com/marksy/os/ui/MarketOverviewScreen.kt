@@ -154,10 +154,7 @@ private fun MarksyPicksCard(repository: com.marksy.os.market.MarketIntelligenceR
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${p.symbol} tip") { onOpenTip(m) }, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                     Text(p.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(
-                        "${p.horizon}-day · ${MarksyFormat.percent(if (p.confidence <= 1) p.confidence * 100 else p.confidence, 0, signed = false)}",
-                        color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, modifier = Modifier.weight(1f)
-                    )
+                    Spacer(Modifier.weight(1f))
                     m.trade?.let { t -> MarksyButton(if (t.side == TradeSide.SELL) "Sell" else "Buy", { onTrade(t) }) }
                 }
                 m.track?.let { PriceTrackView(it) }
