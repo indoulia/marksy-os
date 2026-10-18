@@ -91,6 +91,8 @@ class UpstoxQrImportTest {
             .forEach { assertTrue(it, UpstoxQrImport.parse(with(""""redirect_uri":"$it"""")) is UpstoxQrImport.Ok) }
         listOf("http://example.com/cb", "ftp://127.0.0.1/cb", "marksy://cb", "javascript:alert(1)")
             .forEach { assertEquals(it, "The redirect URL must be https, or http to 127.0.0.1 on this phone.", refused(with(""""redirect_uri":"$it""""))) }
+        assertEquals("The redirect URL can't contain a backslash.", refused(with(""""redirect_uri":"http://127.0.0.1\\@evil.com"""")))
+        assertEquals("The redirect URL can't have a user name or a #fragment.", refused(with(""""redirect_uri":"https://@example.com"""")))
         listOf("https://user:pw@example.com/cb", "https://example.com/cb#x")
             .forEach { assertEquals(it, "The redirect URL can't have a user name or a #fragment.", refused(with(""""redirect_uri":"$it""""))) }
     }

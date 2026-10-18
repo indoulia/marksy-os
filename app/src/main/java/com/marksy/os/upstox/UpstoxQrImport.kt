@@ -77,9 +77,10 @@ sealed class UpstoxQrImport {
             if (analytics != null && analytics == sandbox) "The same token is in both token fields." else null
 
         private fun redirectProblem(value: String): String? {
+            if ('\\' in value) return "The redirect URL can't contain a backslash."
             val url = value.toHttpUrlOrNull()
             if (url == null || !(url.isHttps || url.host in LOOPBACK)) return "The redirect URL must be https, or http to 127.0.0.1 on this phone."
-            if (url.username.isNotEmpty() || url.password.isNotEmpty() || url.fragment != null) return "The redirect URL can't have a user name or a #fragment."
+            if ('@' in value || url.fragment != null) return "The redirect URL can't have a user name or a #fragment."
             return null
         }
 
