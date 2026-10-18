@@ -25,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -148,11 +149,14 @@ fun CaptureReviewDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap), verticalAlignment = Alignment.Bottom) {
                     CompactTextField(
                         symbol, { symbol = it }, Modifier.weight(1f), label = "Symbol",
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                        fieldModifier = Modifier.testTag(ReviewSymbolTag)
                     )
-                    // The field's height, so the smaller side pills centre on the symbol field.
+                    // Owner decision 2026-10-18: Buy/Sell take the field's control height, the one exception to small pills.
                     Row(Modifier.heightIn(min = MarksySize.Control), horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically) {
-                        TipSide.entries.forEach { s -> Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s) { side = s } }
+                        TipSide.entries.forEach { s ->
+                            Pill(s.name.lowercase().replaceFirstChar { it.uppercase() }, selected = side == s, tall = true, modifier = Modifier.testTag(reviewSideTag(s))) { side = s }
+                        }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
@@ -218,3 +222,7 @@ private fun sendBlocked(
     line == null -> "To send, add a symbol, buy or sell, and at least two of entry, target and stop loss."
     else -> "${source?.displayName ?: "This source"} tips can't be sent to Marksy, so this one stays on your phone."
 }
+
+/** Test tags for the review dialog's symbol field and side pills. */
+internal const val ReviewSymbolTag = "review-symbol"
+internal fun reviewSideTag(side: TipSide) = "review-side-${side.name}"

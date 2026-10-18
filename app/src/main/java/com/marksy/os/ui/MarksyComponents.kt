@@ -455,13 +455,16 @@ fun MarksyButton(
 @Composable
 internal fun Pill(
     text: String, selected: Boolean = false, enabled: Boolean = true, compact: Boolean = false, modifier: Modifier = Modifier,
-    leading: (@Composable () -> Unit)? = null, count: Int? = null, onClick: () -> Unit
+    leading: (@Composable () -> Unit)? = null, count: Int? = null,
+    /** Control height instead of the small pill height, for a pill sitting beside a field (review dialog Buy/Sell). */
+    tall: Boolean = false,
+    onClick: () -> Unit
 ) {
     val shape = MarksyShape.Pill
     val fill by animateColorAsState(if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.SurfaceRaised, label = "pill")
     Row(
         // Min height, not fixed, so large font scales grow the pill instead of clipping it.
-        modifier.heightIn(min = MarksySize.ControlSmall)
+        modifier.heightIn(min = if (tall) MarksySize.Control else MarksySize.ControlSmall)
             .clip(shape)
             .background(fill)
             .border(MarksySpace.Border, if (selected) MarksyTheme.PrimaryEmerald else MarksyTheme.BorderGlow, shape)
