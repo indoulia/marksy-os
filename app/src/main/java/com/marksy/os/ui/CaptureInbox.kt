@@ -129,7 +129,7 @@ fun LazyListScope.captureKeptOptions(inbox: CaptureInbox, now: Long, expanded: B
     item(key = "kept-options") {
         MarksyGroupCard(border = MarksyTheme.flagBorder(MarksyTheme.YellowImportant)) {
             Row(Modifier.marksyRow(onClick = onToggle), verticalAlignment = Alignment.CenterVertically) {
-                Text("Kept on this phone · ${inbox.keptOptions.size} option tips", color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("Kept on this phone · ${inbox.keptOptions.size} option ${if (inbox.keptOptions.size == 1) "tip" else "tips"}", color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 Icon(Icons.Default.ExpandMore, contentDescription = if (expanded) "Collapse" else "Expand", tint = MarksyTheme.TextMuted, modifier = Modifier.size(MarksySize.Icon).rotate(if (expanded) 180f else 0f))
             }
         }
