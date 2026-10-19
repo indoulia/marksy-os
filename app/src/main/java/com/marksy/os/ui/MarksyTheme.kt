@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,6 +106,7 @@ object MarksyType {
     val Meta = TextStyle(fontSize = 11.sp)
     /** Section and lane labels; callers uppercase the text. */
     val Label = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+    val Code = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace)
     val Caption = TextStyle(fontSize = 10.sp)
     /** Caps beside a price (RECOMMENDED, ENTRY): small enough that a six-digit price fits beside it on a 360dp phone. */
     val PriceLabel = TextStyle(fontSize = 9.sp, fontWeight = FontWeight.SemiBold)

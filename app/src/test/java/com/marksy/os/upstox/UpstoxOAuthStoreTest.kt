@@ -107,4 +107,48 @@ class UpstoxOAuthStoreTest {
             .putString("api_secret", "garbage").putString("api_secret_iv", "AAAAAAAAAAAAAAAA").commit()
         assertFalse(UpstoxOAuthStore(context).hasCredentials())
     }
+
+    private fun jwt(expSeconds: Long): String {
+        val enc = java.util.Base64.getUrlEncoder().withoutPadding()
+        return enc.encodeToString("""{"alg":"none"}""".toByteArray()) + "." + enc.encodeToString("""{"exp":$expSeconds}""".toByteArray()) + ".sig"
+    }
+
+    @Test
+    fun sandboxTokenIsEncryptedAndStopsAtItsExpiry() {
+        val store = UpstoxOAuthStore(context)
+        val exp = issued + 10 * 24 * 60 * 60 * 1000L
+        val token = jwt(exp / 1000)
+        store.saveSandboxToken(token, issued)
+        assertEquals(exp, store.sandboxExpiresAt())
+        assertEquals(token, UpstoxOAuthStore(context).sandboxToken(exp - 1))
+        assertNull(store.sandboxToken(exp))
+        val raw = context.getSharedPreferences("upstox_oauth", Context.MODE_PRIVATE).all.values.joinToString()
+        assertFalse(raw.contains(token))
+    }
+
+    @Test
+    fun aSandboxTokenWithoutExpiryLastsThirtyDays() {
+        val store = UpstoxOAuthStore(context)
+        store.saveSandboxToken("opaque-sandbox-token", issued)
+        assertEquals(issued + UpstoxJwt.SANDBOX_VALIDITY_MS, store.sandboxExpiresAt())
+    }
+
+    @Test
+    fun anAlreadyExpiredSandboxTokenIsNeverUsable() {
+        val store = UpstoxOAuthStore(context)
+        store.saveSandboxToken(jwt(issued / 1000 - 60), issued)
+        assertNull(store.sandboxToken(issued))
+    }
+
+    @Test
+    fun clearAndDisconnectForgetTheSandboxToken() {
+        val store = UpstoxOAuthStore(context)
+        store.saveSandboxToken("opaque-sandbox-token", issued)
+        store.clearSandboxToken()
+        assertNull(store.sandboxExpiresAt())
+        store.saveSandboxToken("opaque-sandbox-token", issued)
+        store.disconnect()
+        assertNull(store.sandboxToken(issued))
+        assertNull(store.sandboxExpiresAt())
+    }
 }
