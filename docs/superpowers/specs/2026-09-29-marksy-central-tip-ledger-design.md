@@ -26,8 +26,12 @@ every caller inside it — Marksy included — gets one universal, auditable sco
 5. Call terms (channel, symbol, direction, stated entry, target, stop-loss, stated horizon) and `first_seen_at`
    are immutable. Tips and receipts are never deleted. A call that fails intake is never a tip: it waits in
    `tip_intake_reviews` (amended 2026-10-14, see `2026-10-14-tip-intake-review-queue-design.md`; migration 0193
-   moved earlier failures there verbatim).
-6. A revised tip is a new tip. The original is tracked on its own terms to its own end.
+   moved earlier failures there verbatim). Note 2026-11-24: the intake review was reverted, so
+   `tip_intake_reviews` and `ck_tips_validated_only` do not exist in marksy-api; rejected and pending calls are
+   `tips` rows (UNSCORABLE / DATA_UNRESOLVED / PENDING_CHECK).
+6. A revised tip is a new tip. The original is tracked on its own terms to its own end if it was entered when
+   the revision arrived; otherwise it is INVALIDATED (`REVISED`), closed at the revision time. Nothing is deleted
+   (amended 2026-11-24; Marksy calls unchanged).
 7. Re-parsing applies only to unparsed receipts. It may create a tip (dated from the receipt's original server
    time only if no market minute has passed since, else from the re-parse — intake review spec §6) but never
    alters or duplicates an existing tip.
@@ -188,13 +192,17 @@ name its reason, and only an admin can resubmit it (intake review spec §3, §6)
 - `entry_mid = (entry_low + entry_high) / 2`. Return fields stay null while WAITING.
 - Not entered by the close of session min(5, N) → INVALIDATED (`NEVER_ENTERED`).
 - Target touched while still WAITING → INVALIDATED (`TARGET_BEFORE_ENTRY`).
+- Revised by its source while still WAITING → INVALIDATED (`REVISED`), judged on bars before the revision
+  (intraday bars if the daily bar touched the entry; without them the entry counts). Applies only to sessions
+  not yet tracked (2026-11-24).
 - Entry and an exit in the same session: with intraday bars only bars at or after the entry count; with daily
   bars only, entry is taken first and §6.4 applies.
 
 ### 6.4 Exits (entered tips, evaluated session by session)
 
 1. Target and stop-loss both touched in one session: with intraday bars the first touched wins; without them
-   the stop-loss wins.
+   the stop-loss wins. An entered tip whose session opens at or past the target is TARGET_HIT at the open even
+   if the stop-loss trades later; an open past the stop-loss is STOP_LOSS_HIT at the open (2026-11-24).
 2. Exit price is the level, unless the session opened beyond it (gap), then the session open.
 3. Target → TARGET_HIT. Stop-loss → STOP_LOSS_HIT.
 4. Horizon: at the close of session N, exit price = that session's official close. A tip with a target or a
