@@ -17,11 +17,27 @@ class ScorecardGraphicsTest {
         assertEquals(.59f, ScorecardGraphics.ringFraction(59.0), 1e-6f)
         assertEquals(1f, ScorecardGraphics.ringFraction(140.0))
 
+        // The same 65/45 bands as every Trust chip, so a ring and the chip that opened it agree.
         assertEquals(MarksyTheme.TextMuted, ScorecardGraphics.tone(null))
-        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.tone(29.9))
-        assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(30.0))
-        assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(59.0))
-        assertEquals(MarksyTheme.PrimaryEmerald, ScorecardGraphics.tone(60.0))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.tone(44.0))
+        assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(45.0))
+        assertEquals(MarksyTheme.YellowImportant, ScorecardGraphics.tone(64.0))
+        assertEquals(MarksyTheme.PrimaryEmerald, ScorecardGraphics.tone(65.0))
+        for (s in 0..100) assertEquals(trackColor(TipTrack.band(s)), ScorecardGraphics.tone(s.toDouble()))
+    }
+
+    // A return printed as 0.00% is neither a gain nor a loss.
+    @Test
+    fun aReturnPrintedAsZeroIsNeutral() {
+        assertEquals(MarksyTheme.TextMuted, ScorecardGraphics.returnTone(null))
+        assertEquals(MarksyTheme.TextSecondary, ScorecardGraphics.returnTone(0.0))
+        assertEquals(MarksyTheme.TextSecondary, ScorecardGraphics.returnTone(-0.00001))
+        assertEquals(MarksyTheme.PrimaryEmerald, ScorecardGraphics.returnTone(0.0001))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0001))
+        // A caller's −0.03% average printed with one decimal reads "0.0%", so it is neutral at that precision.
+        assertEquals(MarksyTheme.TextSecondary, ScorecardGraphics.returnTone(-0.0003, decimals = 1))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0003))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0006, decimals = 1))
     }
 
     @Test
@@ -100,7 +116,7 @@ class ScorecardGraphicsTest {
     fun theGaugeDrawsAShortfallBelowZeroRedBySizeAndKeepsBandsAboveIt() {
         assertEquals(.43f to MarksyTheme.RedUrgent, ScorecardGraphics.gauge(-43.0))
         assertEquals(1f to MarksyTheme.RedUrgent, ScorecardGraphics.gauge(-150.0))
-        assertEquals(.38f to MarksyTheme.YellowImportant, ScorecardGraphics.gauge(38.0))
+        assertEquals(.5f to MarksyTheme.YellowImportant, ScorecardGraphics.gauge(50.0))
         assertEquals(1f to MarksyTheme.PrimaryEmerald, ScorecardGraphics.gauge(250.0))
         assertEquals(0f to MarksyTheme.TextMuted, ScorecardGraphics.gauge(null))
     }

@@ -48,7 +48,7 @@ internal fun trackColor(tone: TrackTone): Color = when (tone) {
 
 /**
  * The one price track for every tip row: stop-loss left, target right (mirrored for a SELL), recommended ring, entry tick or
- * zone, current dot (pulsing while the tip is live), exit diamond; then SL/T and the 2×2 block. [backdrop] is the fill behind it.
+ * zone, current dot (pulsing only while its price streams live), exit diamond; then SL/T and the 2×2 block. [backdrop] is the fill behind it.
  */
 @Composable
 internal fun PriceTrackView(track: PriceTrack, modifier: Modifier = Modifier, backdrop: Color = MarksyTheme.Surface, large: Boolean = false, block: Boolean = true) {
@@ -84,7 +84,7 @@ internal fun PriceBlock(track: PriceTrack, modifier: Modifier = Modifier) {
     val cells = listOf(
         track.recommendedText?.let { Triple("RECOMMENDED", it, MarksyTheme.TextPrimary) },
         track.entryText?.let { Triple("ENTRY", it, MarksyTheme.Warning) },
-        track.currentText?.let { Triple("CURRENT", it, if (track.live && track.returnFraction != null) toneColor else MarksyTheme.TextPrimary) },
+        track.currentText?.let { Triple(track.currentCaption, it, if (track.live && track.returnFraction != null) toneColor else MarksyTheme.TextPrimary) },
         track.slot?.let { Triple(it.caption, it.text, if (it.exited) toneColor else MarksyTheme.TextSecondary) }
     )
     val compact = track.slot?.compact
@@ -143,7 +143,7 @@ internal fun DrawScope.pulseRing(phase: Float, center: Offset, radius: Float, co
 
 @Composable
 private fun TrackBar(track: PriceTrack, backdrop: Color, large: Boolean, modifier: Modifier) {
-    val pulse = rememberPulse(track.live && track.current != null)
+    val pulse = rememberPulse(track.live && track.streaming && track.current != null)
     val toneColor = trackColor(track.tone)
     val fill = if (track.fillPositive) MarksyTheme.Positive else MarksyTheme.Negative
     val nowColor = if (track.live) (if (track.returnFraction == null) MarksyTheme.TextPrimary else toneColor) else MarksyTheme.TextMuted

@@ -17,14 +17,20 @@ internal data class CallPrice(val price: Double?, val label: String?, val live: 
             if (quote == null) return CallPrice(storedClose, storedClose?.let { "Close · " + (storedAt?.let(::sessionDay) ?: "date unknown") }, live = false)
             val traded = quote.tradeTime?.let { Instant.ofEpochMilli(it).atZone(IST) }
             val at = traded?.let { if (it.toLocalDate() == today) MarksyFormat.time(it) else MarksyFormat.dayTime(it) }
-            // A streaming feed still carries an illiquid stock's trade from an earlier day; that price is not live.
-            val live = feed == FeedFreshness.LIVE && (traded == null || traded.toLocalDate() == today)
+            val live = streaming(quote, feed, today)
             val label = when {
                 live -> "Live" + at?.let { " · $it" }.orEmpty()
                 feed == FeedFreshness.LIVE || feed == FeedFreshness.CLOSED -> "Last trade" + at?.let { " · $it" }.orEmpty()
                 else -> "Not live" + at?.let { " · last trade $it" }.orEmpty()
             }
             return CallPrice(quote.lastPrice, label, live)
+        }
+
+        /** A quote the feed streams live now: the only price whose marker pulses. */
+        fun streaming(quote: UpstoxLtp, feed: FeedFreshness, today: LocalDate): Boolean {
+            // A streaming feed still carries an illiquid stock's trade from an earlier day; that price is not live.
+            val traded = quote.tradeTime?.let { Instant.ofEpochMilli(it).atZone(IST) }
+            return feed == FeedFreshness.LIVE && (traded == null || traded.toLocalDate() == today)
         }
 
         /** The Setups note when the backend names no scan session: the stored close's session, never a time of day. */

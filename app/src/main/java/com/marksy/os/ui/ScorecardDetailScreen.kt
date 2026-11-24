@@ -243,7 +243,8 @@ private fun ReturnsCard(series: List<SeriesPointDto>) {
     val points = if (series.size == 1) series + series else series
     val realised = points.map { it.realisedCum * 100 }
     val promised = points.map { it.promisedCum * 100 }
-    val tint = ScorecardGraphics.returnTone(realised.last())
+    // returnTone takes a fraction; `realised` is already in percent.
+    val tint = ScorecardGraphics.returnTone(points.last().realisedCum)
     MarksyCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             Caption("RETURNS · DELIVERED VS PROMISED", Modifier.weight(1f))
@@ -334,6 +335,6 @@ private fun SymbolChip(s: TopSymbolDto, onClick: () -> Unit) {
     val ret = s.avgActualReturn
     MarksyChip(MarksyTheme.SurfaceRaised, onClick = onClick, onClickLabel = "View ${s.symbol}") {
         Text("${s.symbol} ${s.calls}", color = MarksyTheme.TextSecondary, style = MarksyType.Meta, maxLines = 1)
-        ret?.let { Text(" · " + MarksyFormat.percent(it * 100, 1), color = ScorecardGraphics.returnTone(it), style = MarksyType.Meta, maxLines = 1) }
+        ret?.let { Text(" · " + MarksyFormat.percent(it * 100, 1), color = ScorecardGraphics.returnTone(it, decimals = 1), style = MarksyType.Meta, maxLines = 1) }
     }
 }

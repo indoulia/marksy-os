@@ -84,13 +84,13 @@ class TradingIntelligenceScreenTest {
     private val scorecardFilters = mutableListOf<String>()
     private var summaryReads = 0
 
-    private fun engineCard(id: Int, name: String, invalidated: Int = 12, open: Int = 5) = EntityScorecardDto(
+    private fun engineCard(id: Int, name: String, invalidated: Int = 12, open: Int = 5, trust: Int = 40) = EntityScorecardDto(
         "caller", id, name, 7, "Marksy",
         ScorecardBodyDto(
             ScorecardCountsDto(total = 55 + invalidated + open, open = open, successful = 20, failed = 25, expired = 10, completed = 55, exited = 4,
                 invalidated = invalidated, unscorable = 0, dataUnresolved = 0),
             ScorecardPerformanceDto(44.4, 55.6, 36.4, -0.004, null, null, null, null, null),
-            ScorecardTrustDto(40, 55, 10, null, null, invalidated)
+            ScorecardTrustDto(trust, 55, 10, null, null, invalidated)
         ),
         engine = true
     )
@@ -104,8 +104,9 @@ class TradingIntelligenceScreenTest {
         }
         override suspend fun scorecards(entity: String, filter: String): EntityScorecardListDto {
             scorecardFilters += "$entity?$filter"
+            // Lifetime (no period) and the last 30 days differ, so a test can tell which one a number came from.
             return EntityScorecardListDto("v", entity, ScorecardFilterEchoDto("LAST_30_DAYS", null, null, "FIRST_SEEN", null, null, null, null, null, "2026-10-15T00:00:00Z"),
-                listOf(engineCard(3, "Rating engine"), engineCard(2, "Prediction engine")))
+                listOf(engineCard(3, "Rating engine"), engineCard(2, "Prediction engine", trust = if (filter.isEmpty()) 47 else 40)))
         }
         override suspend fun performanceSummary(range: String): PerformanceSummaryDto? { summaryReads++; return null }
         override suspend fun closedPredictions(cursor: String?) = closedPage(cursor)
@@ -198,11 +199,65 @@ class TradingIntelligenceScreenTest {
     @Test
     fun marksyTrackRecordIsThePredictionEngineLedgerScorecard() {
         compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository(), historyScope = HistoryScope.MARKSY) }
-        awaitText("LAST 30 DAYS · 55 COMPLETED")
+        awaitText("MARKSY · LAST 30 DAYS · 55 COMPLETED")
 
         compose.onNodeWithText("20 succeeded · 25 failed · 10 expired · 36.4% hit").assertIsDisplayed()
-        assertEquals(listOf("caller?period=LAST_30_DAYS"), scorecardFilters)
+        assertEquals(listOf("caller?", "caller?period=LAST_30_DAYS"), scorecardFilters.sorted())
         assertEquals(0, summaryReads)
+    }
+
+    // History · All mixes every source, so Marksy's own 30-day record would not add up to the list under it.
+    @Test
+    fun historyAllShowsNoMarksyOnlyStrip() {
+        compose.setContent { TradingIntelligenceScreen(PaddingValues(), selectedFilter = "History", marketRepository = repository()) }
+        awaitText("TCS")
+        compose.waitUntil(20_000) { scorecardFilters.size == 2 }
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText("LAST 30 DAYS", substring = true).assertCountEquals(0)
+    }
+
+    // Every other Trust chip is a Lifetime headline and the page it opens defaults to Lifetime, so Marksy's is too.
+    @Test
+    fun marksyTrustChipIsLifetimeAndTheStripIsTheLast30Days() = runBlocking {
+        val feed = TradingFeed(repository())
+        feed.load()
+        assertEquals(47, feed.engine?.body?.trust?.trustScore)
+        assertEquals(40, feed.engineRecord?.body?.trust?.trustScore)
+    }
+
+    // A page that fails leaves the list short: its counts are not final until a retry reads the rest.
+    @Test
+    fun aFailedPageKeepsCountsOpenUntilARetryReadsTheRest() = runBlocking {
+        var failOnce = true
+        closedPage = { c ->
+            when {
+                c == null -> ClosedPredictionPageDto(listOf(closedCall(1, "TCS", "t1")), "p2")
+                failOnce -> { failOnce = false; throw java.io.IOException("timeout") }
+                else -> ClosedPredictionPageDto(listOf(closedCall(2, "INFY", "t2")), null)
+            }
+        }
+        val feed = TradingFeed(repository())
+        feed.load()
+        assertTrue(feed.marksyClosed.failed)
+        assertFalse(feed.ready(feed.historyLists(HistoryScope.MARKSY)))
+        assertTrue(feed.ready(feed.historyLists(HistoryScope.MINE)))
+        assertEquals(listOf(feed.marksyClosed), feed.failedLists(feed.historyLists(HistoryScope.ALL)))
+
+        feed.retry(feed.failedLists(feed.historyLists(HistoryScope.ALL)))
+        assertFalse(feed.marksyClosed.failed)
+        assertEquals(2, feed.marksyClosed.items.size)
+        assertTrue(feed.ready(feed.historyLists(HistoryScope.ALL)))
+    }
+
+    // All's counts wait for the Following lists too, since All includes them.
+    @Test
+    fun allCountsWaitForEveryListTheyInclude() {
+        val feed = TradingFeed(repository())
+        assertTrue(feed.followingOpen in feed.openLists(OpenScope.ALL))
+        assertTrue(feed.followingClosed in feed.historyLists(HistoryScope.ALL))
+        assertTrue(feed.myClosed in feed.openLists(OpenScope.MINE))
+        assertFalse(feed.ready(feed.openLists(OpenScope.ALL)))
     }
 
     @Test

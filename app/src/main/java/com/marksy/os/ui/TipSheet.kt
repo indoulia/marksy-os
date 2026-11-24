@@ -78,6 +78,7 @@ internal fun TipSheetContent(
         SheetHeader(m, impliedStatus)
         if (m.scores.isNotEmpty()) ScoreLines(m.scores, onScore)
         m.track?.let { PriceTrackView(it, backdrop = MarksyTheme.SurfaceRaised, large = true, block = false) }
+        targetProgress(m)?.let { Text(it, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         m.track?.let { PriceChart(it, progress) }
         SheetPrices(m, progress)
         if (t != null && t.alsoBy.isNotEmpty()) AlsoTippedBy(t, onRow = onSourceRow)
@@ -86,6 +87,13 @@ internal fun TipSheetContent(
             MarksyButton("View stock", { onOpenStock(m.symbol) }, Modifier.weight(1f), style = MarksyButtonStyle.Outlined, color = MarksyTheme.TextPrimary)
         }
     }
+}
+
+/** An open tip's Target Progress (TPR-001) or why it has none; the stored close is left out when the CURRENT cell shows it. */
+private fun targetProgress(m: TipCardModel): String? {
+    val t = m.ledger?.takeIf(LedgerCalls::isOpen) ?: return null
+    val sameClose = m.track?.closeCaption != null && m.track.current == t.targetProgress?.price
+    return LedgerCalls.targetProgressLine(t, withClose = !sameClose)
 }
 
 /** The sheet for a tip known only by id; a tip the ledger cannot serve says why in a dialog. */
@@ -97,8 +105,13 @@ internal fun TipSheetFor(
     val detail by produceState<MarketDataState<com.marksy.os.market.TipDetailDto>>(MarketDataState.Loading, tipId) { value = repository.tipDetail(tipId) }
     val t = (detail as? MarketDataState.Loaded)?.value?.ledger
     val quotes = rememberUpstoxQuotes(remember(t?.symbol) { listOfNotNull(t?.symbol) })
+    val freshness = rememberFeedFreshness()
+    val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
     when {
-        t != null -> TipSheet(TipCards.ledger(t, quotes[t.symbol]?.lastPrice, LocalDate.now(ZoneId.of("Asia/Kolkata"))), repository, onDismiss, onTrade, onOpenStock, onScore)
+        t != null -> TipSheet(
+            TipCards.ledger(t, quotes[t.symbol]?.lastPrice, today, quotes[t.symbol]?.let { CallPrice.streaming(it, freshness, today) } == true),
+            repository, onDismiss, onTrade, onOpenStock, onScore
+        )
         detail is MarketDataState.Loading -> Unit
         else -> MarksyDialog(
             onDismissRequest = onDismiss,
@@ -124,14 +137,14 @@ private fun SheetHeader(m: TipCardModel, impliedStatus: String?) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
                 Text(m.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Title, maxLines = 1)
                 SideBadge(m.sell)
-                if (m.status != impliedStatus) Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TipTrack.shownStatus(m.status, impliedStatus)?.let { Text(it, color = trackColor(m.statusTone), style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             val meta = TipTrack.sheetMeta(m.meta, recommendedCell = m.track?.recommendedText != null)
             if (meta.isNotEmpty()) Text(meta, color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         m.returnFraction?.let { r ->
             Column(horizontalAlignment = Alignment.End) {
-                Text(TipTrack.percent(r).orEmpty(), color = trackColor(m.track?.tone ?: if (r >= 0) TrackTone.POSITIVE else TrackTone.NEGATIVE), style = MarksyType.Title)
+                Text(TipTrack.percent(r).orEmpty(), color = trackColor(m.track?.tone ?: TipTrack.returnTone(r)), style = MarksyType.Title)
                 Text("from entry", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
             }
         }
@@ -143,7 +156,7 @@ private fun SheetHeader(m: TipCardModel, impliedStatus: String?) {
 private fun PriceChart(track: PriceTrack, progress: List<ProgressPointDto>) {
     val points = progress.mapNotNull { p -> p.close?.let { p.sessionDate to it } }
     if (points.size < 2) return
-    val pulse = rememberPulse(track.live)
+    val pulse = rememberPulse(track.live && track.streaming)
     val line = if (track.returnFraction == null) MarksyTheme.TextPrimary else trackColor(track.tone)
     val levels = listOfNotNull(track.stop, track.target, track.recommended, track.entryRef) + points.map { it.second }
     val lo = levels.min(); val hi = levels.max()
@@ -196,10 +209,11 @@ private fun SheetPrices(m: TipCardModel, progress: List<ProgressPointDto>) {
     val cells = listOfNotNull(
         track?.recommendedText?.let { SheetCell("RECOMMENDED", it, MarksyTheme.TextPrimary, t?.firstSeenAt?.let(TipTrack::dayTime)) },
         track?.entryText?.let { SheetCell("ENTRY", it, MarksyTheme.Warning, if (track.bought) t?.enteredOn?.let(TipTrack::date)?.let { d -> "bought ${MarksyFormat.day(d)}" } else null) },
-        track?.currentText?.let { SheetCell("CURRENT", it, if (track.live && track.returnFraction != null) tone else MarksyTheme.TextPrimary, now.label?.takeIf { quotes[m.symbol] != null || track.live }) },
+        // A stored close names its day in the caption; a quote says how live it is.
+        track?.currentText?.let { SheetCell(track.currentCaption, it, if (track.live && track.returnFraction != null) tone else MarksyTheme.TextPrimary, now.label?.takeIf { track.closeCaption == null && quotes[m.symbol] != null }) },
         track?.slot?.let { SheetCell(it.caption, it.text.substringBefore(" · "), if (it.exited) tone else MarksyTheme.TextSecondary, it.note) },
-        best?.let { (v, d) -> SheetCell("BEST", TipTrack.percent(v).orEmpty(), MarksyTheme.Positive, d) },
-        worst?.let { (v, d) -> SheetCell("WORST", TipTrack.percent(v).orEmpty(), MarksyTheme.Negative, d) }
+        best?.let { (v, d) -> SheetCell("BEST", TipTrack.percent(v).orEmpty(), trackColor(TipTrack.returnTone(v)), d) },
+        worst?.let { (v, d) -> SheetCell("WORST", TipTrack.percent(v).orEmpty(), trackColor(TipTrack.returnTone(v)), d) }
     )
     CellGrid(cells.map { c -> { CellBox(c.caption, c.value, c.color, c.note) } })
 }

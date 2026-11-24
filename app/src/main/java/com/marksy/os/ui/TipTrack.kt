@@ -35,13 +35,19 @@ internal data class PriceTrack(
     val current: Double?,
     val exit: Double?,
     val slot: ExitSlot?,
-    /** Open tip: the current marker pulses. */
+    /** Open tip: its current price is tracked. */
     val live: Boolean,
     /** Voided before buy. */
     val muted: Boolean,
     /** From entry, as a fraction. */
-    val returnFraction: Double?
+    val returnFraction: Double?,
+    /** The current price is a streaming Upstox quote: only then does its marker pulse. */
+    val streaming: Boolean = false,
+    /** "CLOSE 18 NOV" when the current price is Marksy's stored close, not a quote. */
+    val closeCaption: String? = null
 ) {
+    val currentCaption: String get() = closeCaption ?: "CURRENT"
+
     val hasBar: Boolean get() = stop != null && target != null && stop != target
 
     /** 0 at the stop, 1 at the target; the same formula mirrors a SELL, whose stop sits above its target. */
@@ -55,12 +61,7 @@ internal data class PriceTrack(
     /** Where the fill starts once bought: the bought price, else a single stated entry level. */
     val entryRef: Double? get() = if (!bought) null else entered ?: zoneLow?.takeIf { it == zoneHigh }
 
-    val tone: TrackTone get() = when {
-        muted -> TrackTone.MUTED
-        returnFraction == null || returnFraction == 0.0 -> TrackTone.NEUTRAL
-        returnFraction > 0 -> TrackTone.POSITIVE
-        else -> TrackTone.NEGATIVE
-    }
+    val tone: TrackTone get() = if (muted) TrackTone.MUTED else TipTrack.returnTone(returnFraction)
 
     /** The fill's colour: the return's sign, else which way the end sits from entry. */
     val fillPositive: Boolean get() = returnFraction?.let { it >= 0 } ?: run {
@@ -90,6 +91,8 @@ internal object TipTrack {
     const val ENTERED = "ENTERED"
     private val HORIZON = setOf("HORIZON_EXPIRED", "DIRECTION_HORIZON")
     private val WORDS = mapOf("TARGET_HIT" to "Target hit", "STOP_LOSS_HIT" to "Stop-loss hit", "HORIZON_EXPIRED" to "Expired", LedgerCalls.STATUS_INVALIDATED to "Voided before buy")
+    // marksy-api voids an unentered tip that a revised tip replaced.
+    private const val REVISED = "REVISED"
 
     fun price(v: Double): String = MarksyFormat.rupees(v)
 
@@ -112,20 +115,35 @@ internal object TipTrack {
 
     fun voided(t: LedgerTipDto): Boolean = t.status == LedgerCalls.STATUS_INVALIDATED
 
-    fun bought(t: LedgerTipDto): Boolean = !waiting(t) && !voided(t) && (t.entryStatus == ENTERED || t.enteredPrice != null || t.exitPrice != null)
+    /** History's voided fold, outside its count: voided before buy, or rejected at intake. */
+    fun folded(t: LedgerTipDto): Boolean = voided(t) || t.status == LedgerCalls.STATUS_UNSCORABLE
+
+    fun bought(t: LedgerTipDto): Boolean =
+        !waiting(t) && !voided(t) && !LedgerCalls.isPendingCheck(t) && (t.entryStatus == ENTERED || t.enteredPrice != null || t.exitPrice != null)
 
     /** "Waiting to buy", "Active", "Target hit", "Voided before buy"; other closes keep the ledger's words. */
     fun status(status: String, entryStatus: String?): String = when (status) {
         LedgerCalls.STATUS_ACTIVE -> if (entryStatus == WAITING) "Waiting to buy" else "Active"
+        LedgerCalls.STATUS_PENDING_CHECK -> LedgerCalls.state(status, null)
         else -> WORDS[status] ?: status.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
     }
 
-    fun status(t: LedgerTipDto): String = WORDS[t.status] ?: if (LedgerCalls.isActive(t)) status(t.status, t.entryStatus) else LedgerCalls.state(t)
+    fun status(t: LedgerTipDto): String = when {
+        voided(t) && t.reason == REVISED -> "${WORDS[t.status]} · revised"
+        else -> WORDS[t.status] ?: if (LedgerCalls.isActive(t)) status(t.status, t.entryStatus) else LedgerCalls.state(t)
+    }
+
+    /** A card's status beside a list that already names [implied]: nothing when equal, else only what it adds ("Revised"). */
+    fun shownStatus(status: String, implied: String?): String? = when {
+        status == implied -> null
+        implied != null && status.startsWith("$implied · ") -> status.removePrefix("$implied · ").replaceFirstChar { it.titlecase() }
+        else -> status
+    }
 
     fun statusTone(t: LedgerTipDto): TrackTone = when {
         voided(t) -> TrackTone.MUTED
         waiting(t) -> TrackTone.WARNING
-        LedgerCalls.isActive(t) -> TrackTone.POSITIVE
+        LedgerCalls.isActive(t) -> TrackTone.NEUTRAL
         else -> when (LedgerCalls.tone(t)) {
             LedgerCalls.Tone.POSITIVE -> TrackTone.POSITIVE
             LedgerCalls.Tone.NEGATIVE -> TrackTone.NEGATIVE
@@ -136,7 +154,7 @@ internal object TipTrack {
 
     /** From entry: a live price against the bought price, else the ledger's latest; none while waiting. */
     fun returnOf(t: LedgerTipDto, live: Double?): Double? = when {
-        waiting(t) || voided(t) -> null
+        waiting(t) || voided(t) || LedgerCalls.isPendingCheck(t) -> null
         !LedgerCalls.isActive(t) -> t.actualReturn
         t.enteredPrice != null && live != null -> fromEntry(t.enteredPrice, live, t.direction == "SELL")
         else -> t.targetProgress?.currentReturn ?: t.latestProgress?.returnToDate
@@ -158,39 +176,48 @@ internal object TipTrack {
             note = t.sessionsElapsed?.let { e -> t.horizonSessions?.let { n -> "day $e of $n" } }, compact = day(by))
     }
 
-    fun of(t: LedgerTipDto, live: Double? = null, fallbackCurrent: Double? = null): PriceTrack {
+    /** [streaming]: [live] is a streaming quote; without one an open tip shows the stored close ([fallbackAt] stamps [fallbackCurrent]). */
+    fun of(t: LedgerTipDto, live: Double? = null, fallbackCurrent: Double? = null, streaming: Boolean = false, fallbackAt: String? = null): PriceTrack {
         val active = LedgerCalls.isActive(t)
+        val tp = t.targetProgress
+        val stored = if (live != null || !active) null else tp?.price?.let { it to (tp.priceSessionDate ?: tp.priceAt) } ?: fallbackCurrent?.let { it to fallbackAt }
         return PriceTrack(
             sell = t.direction == "SELL", stop = t.stopLoss?.takeIf { it > 0 }, target = t.target?.takeIf { it > 0 }, recommended = t.recommendedPrice,
             zoneLow = t.entryLow ?: t.entryHigh, zoneHigh = t.entryHigh ?: t.entryLow, entered = t.enteredPrice, bought = bought(t),
-            current = live ?: if (active) t.targetProgress?.price ?: fallbackCurrent else null,
-            exit = t.exitPrice, slot = slot(t), live = active, muted = voided(t), returnFraction = returnOf(t, live)
+            current = live ?: stored?.first,
+            exit = t.exitPrice, slot = slot(t), live = active, muted = voided(t), returnFraction = returnOf(t, live),
+            streaming = streaming && active && live != null, closeCaption = stored?.let { closeCaption(it.second) }
         )
     }
 
+    /** "CLOSE 18 NOV", or "CLOSE" when the stored close has no date. */
+    fun closeCaption(at: String?): String = "CLOSE" + (at?.let(::date)?.let { " " + MarksyFormat.day(it).uppercase() } ?: "")
+
     /** A Marksy call: its ledger tip, with Marksy's own levels filling any the ledger lacks. */
-    fun of(p: ActivePredictionDto, live: Double?): PriceTrack {
+    fun of(p: ActivePredictionDto, live: Double?, streaming: Boolean = false): PriceTrack {
         val t = p.ledger
         if (t == null) return PriceTrack(
             sell = p.targetPrice < p.entryPrice, stop = p.stopLoss.takeIf { it > 0 }, target = p.targetPrice.takeIf { it > 0 }, recommended = null,
             zoneLow = p.entryPrice.takeIf { it > 0 }, zoneHigh = p.entryPrice.takeIf { it > 0 }, entered = null, bought = false,
-            current = live ?: p.price, exit = null, slot = null, live = LedgerCalls.isLive(p), muted = false, returnFraction = null
+            current = live ?: p.price, exit = null, slot = null, live = LedgerCalls.isLive(p), muted = false, returnFraction = null,
+            streaming = streaming && live != null && LedgerCalls.isLive(p), closeCaption = if (live == null && p.price != null) closeCaption(p.lastPriceAt) else null
         )
         val filled = t.copy(
             direction = t.direction ?: if (p.targetPrice < p.entryPrice) "SELL" else "BUY",
             target = t.target ?: p.targetPrice.takeIf { it > 0 }, stopLoss = t.stopLoss ?: p.stopLoss.takeIf { it > 0 },
             entryLow = t.entryLow ?: p.entryPrice.takeIf { it > 0 }, entryHigh = t.entryHigh ?: p.entryPrice.takeIf { it > 0 }
         )
-        return of(filled, live, fallbackCurrent = p.price).let { if (LedgerCalls.isLive(p)) it else it.copy(live = false) }
+        return of(filled, live, fallbackCurrent = p.price, streaming = streaming, fallbackAt = p.lastPriceAt)
+            .let { if (LedgerCalls.isLive(p)) it else it.copy(live = false, streaming = false) }
     }
 
     fun of(c: ClosedPredictionDto, live: Double?): PriceTrack? = c.ledger?.let { of(it, live) }
 
     /** A captured tip: the levels Marksy read from the message and the live price; nothing about its ledger state. */
-    fun of(lv: TipLevels, live: Double?, open: Boolean): PriceTrack = PriceTrack(
+    fun of(lv: TipLevels, live: Double?, open: Boolean, streaming: Boolean = false): PriceTrack = PriceTrack(
         sell = lv.side == "SELL" || lv.side == "SHORT", stop = lv.stopLoss, target = lv.target, recommended = null,
         zoneLow = lv.entry, zoneHigh = lv.entry, entered = null, bought = false, current = live, exit = null, slot = null,
-        live = open, muted = false, returnFraction = null
+        live = open, muted = false, returnFraction = null, streaming = streaming && open && live != null
     )
 
     fun buyable(t: LedgerTipDto, today: LocalDate): Boolean = waiting(t) && t.buyBy?.let(::date)?.let { !it.isBefore(today) } != false
@@ -201,11 +228,21 @@ internal object TipTrack {
     fun trade(symbol: String, track: PriceTrack): TradeIntent =
         TradeIntent(symbol, if (track.sell) TradeSide.SELL else TradeSide.BUY, track.current, track.target, track.stop)
 
-    fun band(score: Int): TrackTone = when {
+    /** A return's tone by the sign it prints with at [decimals]; none, or one printed as 0.00%, is neutral. */
+    fun returnTone(fraction: Double?, decimals: Int = 2): TrackTone = when (fraction?.let { LedgerCalls.signTone(it, decimals) }) {
+        LedgerCalls.Tone.POSITIVE -> TrackTone.POSITIVE
+        LedgerCalls.Tone.NEGATIVE -> TrackTone.NEGATIVE
+        else -> TrackTone.NEUTRAL
+    }
+
+    /** The one set of score bands (Trust chips, rings, sheet lines): 65+ positive, 45+ warning, else negative. */
+    fun band(score: Double): TrackTone = when {
         score >= 65 -> TrackTone.POSITIVE
         score >= 45 -> TrackTone.WARNING
         else -> TrackTone.NEGATIVE
     }
+
+    fun band(score: Int): TrackTone = band(score.toDouble())
 
     fun trustChip(score: Int?, source: ScorecardSource?): ScoreChip? = score?.let { ScoreChip("Trust", it, band(it), source) }
 
@@ -217,13 +254,26 @@ internal object TipTrack {
         return null
     }
 
-    fun sameSource(t: LedgerTipDto, o: AlsoTippedDto): Boolean = o.channel?.channelId == t.channel?.channelId && o.caller?.callerId == t.caller?.callerId
+    /** Same channel (a copy without its caller still is), else the same caller. */
+    fun sameSource(t: LedgerTipDto, o: AlsoTippedDto): Boolean {
+        val channel = t.channel?.channelId
+        if (channel != o.channel?.channelId) return false
+        val a = t.caller?.callerId
+        val b = o.caller?.callerId
+        return a == b || (channel != null && (a == null || b == null))
+    }
 
     fun sourcesChip(t: LedgerTipDto): SourcesChip? {
-        val others = t.alsoBy.filterNot { sameSource(t, it) }.distinctBy { it.channel?.channelId to it.caller?.callerId }.size
+        // Per channel, its named callers (at least one); a copy without its caller adds no source.
+        val others = t.alsoBy.filterNot { sameSource(t, it) }.groupBy { it.channel?.channelId }.entries.sumOf { (channel, rows) ->
+            val callers = rows.map { it.caller?.callerId }.toSet()
+            if (channel == null) callers.size else maxOf(1, (callers - null).size)
+        }
+        // `repeats` counts the later copies, not the tip itself.
+        val given = maxOf((t.repeats ?: 0) + 1, t.alsoBy.size + 1)
         val label = when {
             others > 0 -> "+$others source" + if (others == 1) "" else "s"
-            (t.repeats ?: 0) > 1 || t.alsoBy.isNotEmpty() -> "given ${maxOf(t.repeats ?: 0, t.alsoBy.size + 1)}×"
+            given >= 2 -> "given $given×"
             else -> return null
         }
         return SourcesChip(label, t.alsoBy)
@@ -278,7 +328,7 @@ internal data class WatchSignal(val text: String, val tone: TrackTone, val trade
 internal object WatchSignals {
     /** The customer's own open tip first, then Marksy's live call, else "No open tip". */
     fun of(symbol: String, mine: List<MyTipDto>, marksy: List<ActivePredictionDto>, live: Double?, today: LocalDate): WatchSignal {
-        mine.map { it.tip }.firstOrNull { it.symbol == symbol && LedgerCalls.isActive(it) }?.let { t ->
+        mine.map { it.tip }.firstOrNull { it.symbol == symbol && LedgerCalls.isOpen(it) }?.let { t ->
             val track = TipTrack.of(t, live)
             if (TipTrack.waiting(t)) return WatchSignal(listOfNotNull("Waiting to buy", track.entryText?.let { "zone $it" }).joinToString(" · "), TrackTone.WARNING, TipTrack.trade(symbol, track).takeIf { TipTrack.buyable(t, today) })
             return WatchSignal(listOfNotNull("Open tip", TipTrack.percent(track.returnFraction)?.let { "$it from entry" }).joinToString(" · "), track.tone, null)

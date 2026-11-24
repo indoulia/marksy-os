@@ -38,6 +38,20 @@ internal class Paged<T>(private val key: ((T) -> Any)? = null, private val fetch
     private var cursor: String? = null
     private var busy = false
 
+    /** Reads the up-front pages, then counts are final. */
+    suspend fun loadAll() {
+        var pages = 0
+        while (hasMore && pages++ < MAX_PAGES) more()
+        settled = true
+    }
+
+    /** Picks up again from the page that failed. */
+    suspend fun retry() {
+        if (!failed) return
+        failed = false; hasMore = true; settled = false
+        loadAll()
+    }
+
     suspend fun more() {
         if (busy || !hasMore) return
         busy = true
@@ -65,6 +79,8 @@ internal inline fun <T, R> MarketDataState<T>.map(f: (T) -> R): MarketDataState<
 
 // The ledger's §8.1 record, not `/performance/summary`: that price-only label record also counts calls withdrawn before entry.
 internal val TrackRecordQuery = ScorecardQuery(entity = ScorecardEntity.ENGINE, period = ScorecardPeriod.LAST_30_DAYS)
+// Lifetime, like every other Trust chip and the Trust page a chip opens.
+private val EngineTrustQuery = ScorecardQuery(entity = ScorecardEntity.ENGINE)
 private val MyRecordQuery = ScorecardQuery(period = ScorecardPeriod.LAST_30_DAYS)
 // marksy-api `CALLER_PREDICTION_ENGINE`: the engine whose calls Trading shows.
 private const val PREDICTION_ENGINE = "Prediction engine"
@@ -82,9 +98,10 @@ internal data class ClosedSections(val shown: List<ClosedCall>, val invalidated:
 
 // Rows fold only on a shared ledger tip id, never on symbol, outcome or return; a row without a ledger stays its own call.
 internal fun closedSections(items: List<ClosedPredictionDto>): ClosedSections {
-    val calls = items.groupBy { c -> c.ledger?.tipId?.takeIf { it.isNotEmpty() }?.let { "t:$it" } ?: "p:${c.id}" }
+    val calls = items.filter { c -> c.ledger?.let(LedgerCalls::listed) != false }
+        .groupBy { c -> c.ledger?.tipId?.takeIf { it.isNotEmpty() }?.let { "t:$it" } ?: "p:${c.id}" }
         .values.map { ClosedCall(it.first(), it.size) }
-    val (invalidated, shown) = calls.partition { it.row.ledger?.status == LedgerCalls.STATUS_INVALIDATED }
+    val (invalidated, shown) = calls.partition { it.row.ledger?.let(TipTrack::folded) == true }
     return ClosedSections(shown, invalidated)
 }
 
@@ -107,13 +124,40 @@ internal class TradingFeed(private val repo: MarketIntelligenceRepository) {
     // Keyset-paged on a re-rankable score: a re-rank between pages can repeat a call (kept once) or skip one (open marksy-api follow-up).
     val marksyActive = Paged<ActivePredictionDto>({ it.predictionId }) { c -> repo.activePredictions(c).map { it.items to it.nextCursor } }
     val marksyClosed = Paged<ClosedPredictionDto> { c -> repo.closedPredictions(c).map { it.items to it.nextCursor } }
-    /** The Prediction engine's last-30-days scorecard: Marksy tips' Trust chip and History's record. */
+    /** The Prediction engine's Lifetime scorecard: Marksy tips' Trust chip and sheet line. */
     var engine by mutableStateOf<EntityScorecardDto?>(null)
+    /** Its last-30-days scorecard: History · Marksy's record. */
+    var engineRecord by mutableStateOf<EntityScorecardDto?>(null)
     var myRecord by mutableStateOf<ScorecardBodyDto?>(null)
 
+    /** The lists behind Open's cards; the closed feeds too, where an older server lists a PENDING_CHECK tip. */
+    fun openLists(scope: OpenScope): List<Paged<*>> = when (scope) {
+        OpenScope.MINE -> listOf(myOpen, myClosed)
+        OpenScope.FOLLOWING -> listOf(followingOpen, followingClosed)
+        OpenScope.MARKSY -> listOf(marksyActive)
+        OpenScope.ALL -> listOf(myOpen, myClosed, marksyActive, followingOpen, followingClosed)
+    }
+
+    fun historyLists(scope: HistoryScope): List<Paged<*>> = when (scope) {
+        HistoryScope.MINE -> listOf(myClosed)
+        HistoryScope.FOLLOWING -> listOf(followingClosed)
+        HistoryScope.MARKSY -> listOf(marksyClosed, marksyActive)
+        HistoryScope.ALL -> listOf(myClosed, marksyClosed, marksyActive, followingClosed)
+    }
+
+    val setupsLists: List<Paged<*>> get() = listOf(marksyActive)
+
+    /** A count is final once every list behind it has read its pages and none stopped short. */
+    fun ready(lists: List<Paged<*>>): Boolean = lists.all { it.settled && !it.failed }
+
+    fun failedLists(lists: List<Paged<*>>): List<Paged<*>> = lists.filter { it.failed }
+
+    suspend fun retry(lists: List<Paged<*>>) = coroutineScope { lists.forEach { p -> launch { p.retry() } } }
+
     suspend fun load() = coroutineScope {
-        listOf(myOpen, marksyActive, myClosed, marksyClosed, followingOpen, followingClosed).forEach { p -> launch { var pages = 0; while (p.hasMore && pages++ < MAX_PAGES) p.more(); p.settled = true } }
-        launch { engine = (repo.scorecards(ScorecardEntity.ENGINE, TrackRecordQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard) }
+        listOf(myOpen, marksyActive, myClosed, marksyClosed, followingOpen, followingClosed).forEach { p -> launch { p.loadAll() } }
+        launch { engine = (repo.scorecards(ScorecardEntity.ENGINE, EngineTrustQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard) }
+        launch { engineRecord = (repo.scorecards(ScorecardEntity.ENGINE, TrackRecordQuery) as? MarketDataState.Loaded)?.value?.items?.let(::predictionEngineCard) }
         launch { myRecord = (repo.myScorecard(MyRecordQuery) as? MarketDataState.Loaded)?.value?.body }
     }
 }
@@ -166,35 +210,42 @@ internal data class TradingLists(
         fun build(
             myOpen: List<MyTipDto>, myClosed: List<MyTipDto>, active: List<ActivePredictionDto>, closed: List<ClosedPredictionDto>,
             engine: EntityScorecardDto?, quotes: Map<String, UpstoxLtp>, today: LocalDate,
-            followingOpen: List<MyTipDto> = emptyList(), followingClosed: List<MyTipDto> = emptyList()
+            followingOpen: List<MyTipDto> = emptyList(), followingClosed: List<MyTipDto> = emptyList(), streaming: Set<String> = emptySet()
         ): TradingLists {
             fun now(symbol: String) = quotes[symbol]?.lastPrice
-            val (live, ended) = active.partition(LedgerCalls::isLive)
+            fun mine(item: MyTipDto) = TipCards.mine(item, now(item.tip.symbol), today, item.tip.symbol in streaming)
+            fun marksy(p: ActivePredictionDto) = TipCards.marksy(p, now(p.symbol), today, engine, p.symbol in streaming)
+            // An older server lists a PENDING_CHECK tip as closed: it stays open until its first price check. A merged duplicate never lists.
+            fun split(open: List<MyTipDto>, done: List<MyTipDto>): Pair<List<MyTipDto>, List<MyTipDto>> {
+                val (pending, closedTips) = done.filter { LedgerCalls.listed(it.tip) }.partition { LedgerCalls.isOpen(it.tip) }
+                return (open.filter { LedgerCalls.listed(it.tip) } + pending).distinctBy { it.tip.tipId } to closedTips
+            }
+            val (mineOpenTips, mineClosedTips) = split(myOpen, myClosed)
+            val (followedOpenTips, followedClosedTips) = split(followingOpen, followingClosed)
+            val (live, ended) = active.filter { p -> p.ledger?.let(LedgerCalls::listed) != false }.partition(LedgerCalls::isLive)
             // A live call waits for its entry in Setups; once bought it is an open tip. Without a ledger it stays a setup.
             val (waiting, bought) = live.partition { p -> p.ledger?.let(TipTrack::waiting) ?: true }
             val sections = closedSections(closed)
             val closedTips = closed.mapNotNull { it.ledger?.tipId?.takeIf(String::isNotEmpty) }.toSet()
             // An ended call the closed list already has is shown once, from the closed list.
             val endedCards = ended.filter { p -> p.ledger?.tipId?.takeIf(String::isNotEmpty)?.let { it !in closedTips } ?: true }
-                .map { TipCards.marksy(it, now(it.symbol), today, engine) }
-            val mineClosed = myClosed.map { TipCards.mine(it, now(it.tip.symbol), today) }
-            val followedClosed = followingClosed.map { TipCards.mine(it, now(it.tip.symbol), today) }
+                .map(::marksy)
+            val mineClosed = mineClosedTips.map(::mine)
+            val followedClosed = followedClosedTips.map(::mine)
             return TradingLists(
-                mineOpen = myOpen.map { TipCards.mine(it, now(it.tip.symbol), today) },
-                marksyOpen = bought.map { TipCards.marksy(it, now(it.symbol), today, engine) },
+                mineOpen = mineOpenTips.map(::mine),
+                marksyOpen = bought.map(::marksy),
                 setups = waiting.sortedWith(compareByDescending<ActivePredictionDto> { it.isActionableNow }.thenByDescending { it.compositeOpportunityScore ?: -1.0 })
-                    .map { TipCards.marksy(it, now(it.symbol), today, engine) to it },
+                    .map { marksy(it) to it },
                 mineHistory = mineClosed.filterNot { it.voided },
                 marksyHistory = sections.shown.map { TipCards.closed(it, now(it.row.symbol), engine) } + endedCards.filterNot { it.voided },
                 mineVoided = mineClosed.filter { it.voided },
                 marksyVoided = sections.invalidated.map { TipCards.closed(it, now(it.row.symbol), engine) } + endedCards.filter { it.voided },
-                followingOpen = followingOpen.map { TipCards.mine(it, now(it.tip.symbol), today) },
+                followingOpen = followedOpenTips.map(::mine),
                 followingHistory = followedClosed.filterNot { it.voided },
                 followingVoided = followedClosed.filter { it.voided }
             )
         }
-
-        private fun tone(v: Double?) = when { v == null || v == 0.0 -> TrackTone.NEUTRAL; v > 0 -> TrackTone.POSITIVE; else -> TrackTone.NEGATIVE }
 
         /** Open: how the live tips stand from entry, and how many still wait to be bought. */
         fun openSummary(cards: List<TipCardModel>): TradingSummary {
@@ -204,7 +255,7 @@ internal data class TradingLists(
             return TradingSummary(
                 "LIVE · FROM ENTRY",
                 listOfNotNull("${returns.count { it > 0 }} up", "${returns.count { it < 0 }} down", "$waiting waiting to buy".takeIf { waiting > 0 }).joinToString(" · "),
-                avg?.let { MarksyFormat.percent(it * 100, 1) }, tone(avg)
+                avg?.let { MarksyFormat.percent(it * 100, 1) }, TipTrack.returnTone(avg, 1)
             )
         }
 
@@ -213,18 +264,18 @@ internal data class TradingLists(
             "MARKSY · STILL BUYABLE", scan?.let(PicksBasis::label)?.let { "from $it" } ?: "from the latest scan", null, TrackTone.NEUTRAL
         )
 
-        /** History: the server's last-30-days record, never one recomputed on the phone. */
-        fun historySummary(r: ScorecardBodyDto?): TradingSummary? {
+        /** History: the server's last-30-days record, never one recomputed on the phone; [owner] names whose it is. */
+        fun historySummary(r: ScorecardBodyDto?, owner: String? = null): TradingSummary? {
             val c = r?.counts ?: return null
             if (c.completed == 0) return null
             val avg = r.performance.avgActualReturn
             return TradingSummary(
-                "LAST 30 DAYS · ${c.completed} COMPLETED",
+                listOfNotNull(owner, "LAST 30 DAYS", "${c.completed} COMPLETED").joinToString(" · "),
                 listOfNotNull(
                     "${c.successful} succeeded", "${c.failed} failed", "${c.expired} expired",
                     r.performance.hitRatePct?.let { MarksyFormat.percent(it, 1, signed = false) + " hit" }
                 ).joinToString(" · "),
-                TipTrack.percent(avg), tone(avg)
+                TipTrack.percent(avg), TipTrack.returnTone(avg)
             )
         }
     }

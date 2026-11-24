@@ -294,6 +294,7 @@ class MainActivity : ComponentActivity() {
         var historyScope by rememberSaveable { mutableStateOf(com.marksy.os.ui.HistoryScope.ALL) }
         var scorecardQuery by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardQuerySaver) { mutableStateOf(com.marksy.os.market.ScorecardQuery()) }
         var scorecardTrail by rememberSaveable(stateSaver = com.marksy.os.ui.ScorecardTrailSaver) { mutableStateOf(emptyList<com.marksy.os.market.ScorecardSource>()) }
+        var trustEcho by remember { mutableStateOf<com.marksy.os.market.ScorecardFilterEchoDto?>(null) }
         var marketTabName by rememberSaveable { mutableStateOf(MarketTab.OVERVIEW.name) }
         var marketSymbol by rememberSaveable { mutableStateOf<String?>(null) }
         var ipoNote by remember { mutableStateOf<String?>(null) }
@@ -457,10 +458,11 @@ class MainActivity : ComponentActivity() {
             selectedTab == 2 -> MarketTab.entries.firstOrNull { it.name == marketTabName }?.label
             selectedTab == 3 -> com.marksy.os.ui.tradingTitleNote(tradingFilter, picksScan, openScope, historyScope)
             selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter -> capturedNote
-            selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery)
+            selectedTab == 4 -> com.marksy.os.ui.trustTitleNote(scorecardQuery, trustEcho)
             selectedTab == 1 -> com.marksy.os.ui.inboxTitleNote(inboxSummary, inboxFilterName)
             else -> null
         }
+        val titleSub = if (!showPlan && !hostOpen && !onWatchlist && selectedTab == 4) com.marksy.os.ui.trustTitleSub(trustEcho) else null
         // Leaving a searchable page drops its half-typed query.
         val searchPage = when {
             hostOpen -> null
@@ -535,8 +537,11 @@ class MainActivity : ComponentActivity() {
             else -> UpstoxLiveState.Loading
         }
 
-        // A tip's Marksy or Trust chip opens that scorecard on the Trust tab.
-        val openScorecard: (com.marksy.os.market.ScorecardSource) -> Unit = { source -> scorecardTrail = listOf(source); selectedTab = 4 }
+        // A tip's Trust chip opens that scorecard on the Trust tab, at the Lifetime record the chip shows.
+        val openScorecard: (com.marksy.os.market.ScorecardSource) -> Unit = { source ->
+            scorecardQuery = scorecardQuery.copy(period = com.marksy.os.market.ScorecardPeriod.LIFETIME, startDate = null, endDate = null, horizon = null)
+            scorecardTrail = listOf(source); selectedTab = 4
+        }
         val onMarket = selectedTab == 2
         var ipoCount by remember { mutableStateOf<Int?>(null) }
         LaunchedEffect(onMarket) {
@@ -601,13 +606,16 @@ class MainActivity : ComponentActivity() {
                             )
                             titleNote?.let {
                                 if (!tabPage) Spacer(Modifier.width(MarksySpace.Tight))
-                                // The title keeps its width; a long note wraps, then ellipsizes.
-                                Text(
-                                    it, color = MarksyTheme.PrimaryEmerald, style = if (tabPage) MarksyType.Lead else MarksyType.Caption,
-                                    fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false).let { m -> if (selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter) m.clickable { showCaptureHealth = true } else m }
-                                )
+                                // The title keeps its width; a long note wraps, then ellipsizes. Trust names its counted window beneath.
+                                Column(Modifier.weight(1f, fill = false)) {
+                                    Text(
+                                        it, color = MarksyTheme.PrimaryEmerald, style = if (tabPage) MarksyType.Lead else MarksyType.Caption,
+                                        fontWeight = FontWeight.SemiBold, maxLines = if (tabPage) 1 else 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.let { m -> if (selectedTab == 1 && inboxFilterName == com.marksy.os.ui.InboxCapturedFilter) m.clickable { showCaptureHealth = true } else m }
+                                    )
+                                    titleSub?.let { s -> Text(s, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                                }
                             }
                             if (titleLive) {
                                 Spacer(Modifier.width(MarksySpace.Tight))
@@ -878,7 +886,8 @@ class MainActivity : ComponentActivity() {
                     onQueryChange = { if (it.entity != scorecardQuery.entity) scorecardTrail = emptyList(); scorecardQuery = it },
                     trail = scorecardTrail,
                     onTrailChange = { scorecardTrail = it },
-                    onOpenStock = { openStockFrom(it, "4") }
+                    onOpenStock = { openStockFrom(it, "4") },
+                    onEcho = { trustEcho = it }
                 )
                 else -> MoreScreen(
                     access = notificationAccessEnabled,

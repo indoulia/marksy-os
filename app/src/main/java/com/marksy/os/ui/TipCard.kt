@@ -68,7 +68,7 @@ internal data class TipCardModel(
 internal object TipCards {
 
     fun meta(t: LedgerTipDto): String {
-        val open = LedgerCalls.isActive(t)
+        val open = LedgerCalls.isOpen(t)
         return listOfNotNull(
             t.channel?.name?.ifBlank { null } ?: t.caller?.name?.ifBlank { null },
             t.channel?.type?.let(LedgerCalls::channelType)?.replaceFirstChar { it.titlecase() },
@@ -106,40 +106,40 @@ internal object TipCards {
         prediction(validatedPrediction)
     )
 
-    fun mine(item: MyTipDto, live: Double?, today: LocalDate): TipCardModel {
+    fun mine(item: MyTipDto, live: Double?, today: LocalDate, streaming: Boolean = false): TipCardModel {
         val t = item.tip
-        val track = TipTrack.of(t, live)
+        val track = TipTrack.of(t, live, streaming = streaming)
         return TipCardModel(
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
             meta = meta(t), returnFraction = track.returnFraction, track = track,
             trust = TipTrack.trustChip(item), sources = TipTrack.sourcesChip(t),
             trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t,
             scores = scores(item, validatedPrediction(t)),
-            voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
+            voided = TipTrack.folded(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
 
     /** A tip read by id (a Following alert): no scorecards come with it. */
-    fun ledger(t: LedgerTipDto, live: Double?, today: LocalDate): TipCardModel {
-        val track = TipTrack.of(t, live)
+    fun ledger(t: LedgerTipDto, live: Double?, today: LocalDate, streaming: Boolean = false): TipCardModel {
+        val track = TipTrack.of(t, live, streaming = streaming)
         return TipCardModel(
             key = "tip-${t.tipId}", symbol = t.symbol, sell = t.direction == "SELL", status = TipTrack.status(t), statusTone = TipTrack.statusTone(t),
             meta = meta(t), returnFraction = track.returnFraction, track = track, sources = TipTrack.sourcesChip(t),
             trade = TipTrack.trade(t.symbol, track).takeIf { TipTrack.buyable(t, today) }, ledger = t,
             scores = scores(MyTipDto(t, null, null, emptyList(), 0), validatedPrediction(t)),
-            voided = TipTrack.voided(t), at = t.closedAt ?: t.firstSeenAt
+            voided = TipTrack.folded(t), at = t.closedAt ?: t.firstSeenAt
         )
     }
 
     /** A Marksy call from the active feed: a setup while waiting, an open tip once bought, or one that ended early. */
-    fun marksy(p: ActivePredictionDto, live: Double?, today: LocalDate, engine: EntityScorecardDto?): TipCardModel {
+    fun marksy(p: ActivePredictionDto, live: Double?, today: LocalDate, engine: EntityScorecardDto?, streaming: Boolean = false): TipCardModel {
         val t = p.ledger
-        val track = TipTrack.of(p, live)
+        val track = TipTrack.of(p, live, streaming)
         val engineSource = engine?.let(ScorecardSource::of)
         val ended = !LedgerCalls.isLive(p)
         val horizon = "${p.horizon}-day"
         val status = when {
-            ended && t != null && LedgerCalls.isActive(t) -> "Withdrawn · result pending"
+            ended && t != null && LedgerCalls.isOpen(t) -> "Withdrawn · result pending"
             t != null -> TipTrack.status(t)
             ended -> p.lifecycleState.lowercase().replace('_', ' ').replaceFirstChar { it.titlecase() }
             // An older backend sends no ledger: a live call then sits in Setups as one still to buy.
@@ -153,12 +153,12 @@ internal object TipCards {
         }.joinToString(" · ")
         return TipCardModel(
             key = "m-${p.predictionId}", symbol = p.symbol, sell = track.sell, status = status,
-            statusTone = when { t != null && !(ended && LedgerCalls.isActive(t)) -> TipTrack.statusTone(t); ended -> TrackTone.MUTED; else -> TrackTone.WARNING },
+            statusTone = when { t != null && !(ended && LedgerCalls.isOpen(t)) -> TipTrack.statusTone(t); ended -> TrackTone.MUTED; else -> TrackTone.WARNING },
             meta = meta, returnFraction = track.returnFraction, track = track,
             trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), trade = TipTrack.trade(p.symbol, track).takeIf { TipTrack.buyable(p, today) }, ledger = t,
             scores = engineScores(engine, engineSource, validatedPrediction(t)),
-            voided = (t?.let(TipTrack::voided) ?: (p.lifecycleState == LedgerCalls.STATUS_INVALIDATED)) && ended,
+            voided = (t?.let(TipTrack::folded) ?: (p.lifecycleState == LedgerCalls.STATUS_INVALIDATED)) && ended,
             at = t?.closedAt ?: t?.firstSeenAt ?: p.publishedAt.orEmpty()
         )
     }
@@ -183,7 +183,7 @@ internal object TipCards {
             trust = TipTrack.trustChip(engine?.body?.trust?.trustScore, engineSource),
             sources = t?.let(TipTrack::sourcesChip), ledger = t,
             scores = engineScores(engine, engineSource, validatedPrediction(t)),
-            voided = t?.let(TipTrack::voided) == true, at = t?.closedAt ?: row.asOf.orEmpty()
+            voided = t?.let(TipTrack::folded) == true, at = t?.closedAt ?: row.asOf.orEmpty()
         )
     }
 }
@@ -242,13 +242,13 @@ internal fun TipHeader(m: TipCardModel, onTrade: (TradeIntent) -> Unit, impliedS
                 Text(m.symbol, color = MarksyTheme.TextPrimary, style = MarksyType.Subhead, fontWeight = FontWeight.Bold, maxLines = 1)
                 SideBadge(m.sell)
                 // A status the list already states (Open's "Active", a fold's own name) is left off the card.
-                if (m.status != impliedStatus) Text(m.status, color = trackColor(m.statusTone), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TipTrack.shownStatus(m.status, impliedStatus)?.let { Text(it, color = trackColor(m.statusTone), style = MarksyType.Meta, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             if (m.meta.isNotEmpty()) Text(m.meta, color = MarksyTheme.TextMuted, style = MarksyType.Meta, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
             val r = m.returnFraction
-            Text(TipTrack.percent(r) ?: "—", color = if (r == null) MarksyTheme.TextSecondary else trackColor(m.track?.tone ?: if (r > 0) TrackTone.POSITIVE else if (r < 0) TrackTone.NEGATIVE else TrackTone.NEUTRAL), style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(TipTrack.percent(r) ?: "—", color = if (r == null) MarksyTheme.TextSecondary else trackColor(m.track?.tone ?: TipTrack.returnTone(r)), style = MarksyType.Lead, fontWeight = FontWeight.Bold, maxLines = 1)
             m.trade?.let { t -> MarksyButton(if (t.side == TradeSide.SELL) "Sell" else "Buy", { onTrade(t) }) }
         }
     }
@@ -267,7 +267,7 @@ internal fun AlsoRows(t: LedgerTipDto, rows: List<AlsoTippedDto>, onRow: (AlsoTi
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Day by day") { onRow(o) }.padding(vertical = MarksySpace.Inner)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(TipTrack.alsoSource(t, o), color = MarksyTheme.TextPrimary, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    TipTrack.percent(ret)?.let { Text(it, color = if (ret!! >= 0) MarksyTheme.Positive else MarksyTheme.Negative, style = MarksyType.Small, fontWeight = FontWeight.Bold) }
+                    TipTrack.percent(ret)?.let { Text(it, color = trackColor(TipTrack.returnTone(ret)), style = MarksyType.Small, fontWeight = FontWeight.Bold) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -318,7 +318,7 @@ private fun DayRows(rows: List<DayRow>) {
             Text(d.day, color = MarksyTheme.TextSecondary, style = MarksyType.Body, modifier = Modifier.weight(1f))
             if (closes) Text(d.close.orEmpty(), color = MarksyTheme.TextPrimary, style = MarksyType.Body, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
             Text(
-                TipTrack.percent(d.fromEntry) ?: "—", color = d.fromEntry?.let { if (it >= 0) MarksyTheme.Positive else MarksyTheme.Negative } ?: MarksyTheme.TextMuted,
+                TipTrack.percent(d.fromEntry) ?: "—", color = d.fromEntry?.let { trackColor(TipTrack.returnTone(it)) } ?: MarksyTheme.TextMuted,
                 style = MarksyType.Body, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.weight(1f)
             )
         }

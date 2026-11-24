@@ -262,7 +262,9 @@ private fun TipRow(r: CapturedRow, now: Long, firstRow: Boolean, quotes: Map<Str
         // The shared price track; its block shows the entry, so the levels line is not repeated.
         val open = r.event.lifecycleState != "RESOLVED"
         val live = lv.symbol?.let { quotes[it]?.lastPrice }
-        val track = r.ledger?.let { t -> TipTrack.of(t, live).let { if (open) it else it.copy(live = false) } } ?: TipTrack.of(lv, live, open)
+        val freshness = rememberFeedFreshness()
+        val streaming = lv.symbol?.let { quotes[it] }?.let { CallPrice.streaming(it, freshness, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))) } == true
+        val track = r.ledger?.let { t -> TipTrack.of(t, live, streaming = streaming).let { if (open) it else it.copy(live = false, streaming = false) } } ?: TipTrack.of(lv, live, open, streaming)
         PriceTrackView(track, Modifier.padding(top = MarksySpace.Inner))
     } else if (firstRow || r.keptLocal) {
         Text(r.event.body, color = MarksyTheme.TextSecondary, style = MarksyType.Small, maxLines = if (firstRow) 2 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = MarksySpace.Tight))

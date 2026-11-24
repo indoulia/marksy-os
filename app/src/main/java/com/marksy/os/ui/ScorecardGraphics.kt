@@ -36,13 +36,8 @@ object ScorecardGraphics {
     /** A trust ring's filled share; a real score shows at least a sliver, null shows none. */
     fun ringFraction(score: Double?): Float = score?.let { (maxOf(it, 3.0) / 100).coerceIn(0.0, 1.0).toFloat() } ?: 0f
 
-    /** Red below 30, amber from 30 to 59, green at 60 or above; grey when unknown. */
-    fun tone(score: Double?): Color = when {
-        score == null -> MarksyTheme.TextMuted
-        score >= 60 -> MarksyTheme.PrimaryEmerald
-        score >= 30 -> MarksyTheme.Warning
-        else -> MarksyTheme.Negative
-    }
+    /** The Trust chips' bands (TipTrack.band); grey when unknown. */
+    fun tone(score: Double?): Color = score?.let { trackColor(TipTrack.band(it)) } ?: MarksyTheme.TextMuted
 
     /** The hero bar as 0-1 shares: the Wilson hit-rate interval, and the observed hit rate that always falls inside it. */
     data class HitRateBar(val low: Float, val high: Float, val marker: Float?)
@@ -53,11 +48,8 @@ object ScorecardGraphics {
 
     fun hitRateRangeText(band: TrustBandDto): String = "Hit-rate range ${Math.round(band.low * 100)}–${Math.round(band.high * 100)}%"
 
-    fun returnTone(fraction: Double?): Color = when {
-        fraction == null -> MarksyTheme.TextMuted
-        fraction >= 0 -> MarksyTheme.PrimaryEmerald
-        else -> MarksyTheme.Negative
-    }
+    /** By the sign the return prints with at [decimals]; zero at that precision is neutral, none is muted. */
+    fun returnTone(fraction: Double?, decimals: Int = 2): Color = fraction?.let { trackColor(TipTrack.returnTone(it, decimals)) } ?: MarksyTheme.TextMuted
 
     /** Each count's share of the whole; all zero when nothing is counted. */
     fun shares(counts: List<Int>): List<Float> {
@@ -243,8 +235,11 @@ internal fun ReturnBadge(fraction: Double?, style: TextStyle = MarksyType.Body, 
     val (fg, bg) = when {
         fraction == null && waiting -> MarksyTheme.SecondaryCyan to MarksyTheme.SecondaryCyan.copy(alpha = .12f)
         fraction == null -> MarksyTheme.TextMuted to MarksyTheme.SurfaceRaised
-        fraction >= 0 -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
-        else -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
+        else -> when (TipTrack.returnTone(fraction)) {
+            TrackTone.POSITIVE -> MarksyTheme.PrimaryEmerald to MarksyTheme.BadgeTradingBg
+            TrackTone.NEGATIVE -> MarksyTheme.Negative to MarksyTheme.BadgeUrgentBg
+            else -> MarksyTheme.TextSecondary to MarksyTheme.SurfaceRaised
+        }
     }
     MarksyChip(bg) { Text(LedgerCalls.returnText(fraction) ?: if (waiting) "Waiting" else "—", color = fg, style = style, fontWeight = FontWeight.Bold, maxLines = 1) }
 }

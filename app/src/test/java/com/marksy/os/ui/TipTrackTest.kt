@@ -10,6 +10,7 @@ import com.marksy.os.market.MyTipDto
 import com.marksy.os.market.PredictionScoreDto
 import com.marksy.os.market.ScorecardHeadlineDto
 import com.marksy.os.market.ScorecardSource
+import com.marksy.os.market.TargetProgressDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -129,6 +130,7 @@ class TipTrackTest {
         assertEquals("Waiting to buy", TipTrack.status(tip(entryStatus = "WAITING")))
         assertEquals("Active", TipTrack.status(tip()))
         assertEquals("Voided before buy", TipTrack.status(tip(status = "INVALIDATED")))
+        assertEquals("Unscorable · entry off market", TipTrack.status(tip(status = "UNSCORABLE").copy(reason = "ENTRY_OFF_MARKET")))
         assertEquals("Stop-loss hit", TipTrack.status(tip(status = "STOP_LOSS_HIT")))
         assertEquals(TrackTone.WARNING, TipTrack.statusTone(tip(entryStatus = "WAITING")))
     }
@@ -176,15 +178,105 @@ class TipTrackTest {
         assertEquals(2, lists.history(HistoryScope.ALL).size)
     }
 
+    // `repeats` counts the later copies only, so the tip itself makes the total one more.
     @Test
     fun sourcesChipCountsOtherSourcesOrRepeats() {
         assertNull(TipTrack.sourcesChip(tip()))
+        assertNull(TipTrack.sourcesChip(tip(repeats = 0)))
         assertEquals("+2 sources", TipTrack.sourcesChip(tip(alsoBy = listOf(also(5), also(6), also(6))))!!.label)
         assertEquals("+1 source", TipTrack.sourcesChip(tip(alsoBy = listOf(also(5), also(4, 9))))!!.label)
         assertEquals("given 2×", TipTrack.sourcesChip(tip(alsoBy = listOf(also(4, 9))))!!.label)
-        assertEquals("given 3×", TipTrack.sourcesChip(tip(repeats = 3))!!.label)
+        assertEquals("given 2×", TipTrack.sourcesChip(tip(repeats = 1))!!.label)
+        assertEquals("given 4×", TipTrack.sourcesChip(tip(repeats = 3))!!.label)
+        assertEquals("given 3×", TipTrack.sourcesChip(tip(repeats = 1, alsoBy = listOf(also(4, 9), also(4, 9))))!!.label)
         assertEquals("Options Desk · given again", TipTrack.alsoSource(tip(), also(4, 9)))
         assertEquals("11 Oct · 2 days earlier", TipTrack.alsoWhen(tip(), also(5)))
+    }
+
+    // One copy names the caller and another doesn't: still the same channel, so one source.
+    @Test
+    fun aCopyWithoutItsCallerIsTheSameSource() {
+        assertTrue(TipTrack.sameSource(tip(), also(4)))
+        assertEquals("given 2×", TipTrack.sourcesChip(tip(alsoBy = listOf(also(4))))!!.label)
+        assertTrue(TipTrack.sameSource(tip().copy(caller = null), also(4, 9)))
+        assertFalse(TipTrack.sameSource(tip(), also(4, 10)))
+        assertEquals("+1 source", TipTrack.sourcesChip(tip(alsoBy = listOf(also(5, 9), also(5))))!!.label)
+        assertEquals("+2 sources", TipTrack.sourcesChip(tip(alsoBy = listOf(also(5, 9), also(5, 10), also(5))))!!.label)
+        assertEquals("Options Desk · given again", TipTrack.alsoSource(tip(), also(4)))
+    }
+
+    // Received in market hours, before the first price check: open, neutral, no return, no pulse, no Buy.
+    @Test
+    fun aPendingCheckTipIsCheckingPrice() {
+        val pending = tip(status = "PENDING_CHECK", entryStatus = "WAITING", buyBy = "2026-10-20")
+        assertEquals("Checking price", TipTrack.status(pending))
+        assertEquals(TrackTone.NEUTRAL, TipTrack.statusTone(pending))
+        assertFalse(TipTrack.waiting(pending))
+        assertFalse(TipTrack.bought(pending.copy(entryStatus = "ENTERED")))
+        assertFalse(TipTrack.buyable(pending, today))
+        assertNull(TipTrack.returnOf(pending.copy(enteredPrice = 4460.0), 4500.0))
+        val track = TipTrack.of(pending, live = 4500.0, streaming = true)
+        assertFalse(track.live)
+        assertFalse(track.streaming)
+        assertNull(track.slot)
+        val card = TipCards.mine(MyTipDto(pending, null, null, emptyList(), 0), 4500.0, today)
+        assertNull(card.trade)
+        assertNull(card.returnFraction)
+    }
+
+    @Test
+    fun aRevisedTipIsVoidedBeforeBuyAndTheFoldDoesNotRepeatIt() {
+        val revised = tip(status = "INVALIDATED", entryStatus = "WAITING").copy(reason = "REVISED")
+        assertEquals("Voided before buy · revised", TipTrack.status(revised))
+        assertTrue(TipCards.mine(MyTipDto(revised, null, null, emptyList(), 0), null, today).voided)
+        assertEquals("Revised", TipTrack.shownStatus("Voided before buy · revised", "Voided before buy"))
+        assertNull(TipTrack.shownStatus("Voided before buy", "Voided before buy"))
+        assertEquals("Target hit", TipTrack.shownStatus("Target hit", null))
+    }
+
+    // An open bought tip's word is neutral (its return carries the colour); a return printed as 0.00% is neutral too.
+    @Test
+    fun activeAndZeroReturnsAreNeutral() {
+        assertEquals(TrackTone.NEUTRAL, TipTrack.statusTone(tip()))
+        assertEquals(TrackTone.NEUTRAL, TipTrack.returnTone(-0.00001))
+        assertEquals(TrackTone.NEUTRAL, TipTrack.returnTone(null))
+        assertEquals(TrackTone.NEGATIVE, TipTrack.returnTone(-0.0001))
+        assertEquals(TrackTone.POSITIVE, TipTrack.returnTone(0.0001))
+        assertEquals(TrackTone.NEUTRAL, TipTrack.of(tip(entered = 4460.0), live = 4459.9999).tone)
+    }
+
+    // CURRENT is a live quote only when Upstox streams it; Marksy's stored close names its day instead and never pulses.
+    @Test
+    fun aStoredCloseIsLabelledWithItsDayAndOnlyAStreamingQuotePulses() {
+        val tp = TargetProgressDto("TPR-001", "AVAILABLE", null, 60.0, 33.0, "2026-10-15T04:00:00Z", 4501.0, "2026-10-14", null, null, "FINAL", "CURRENT", null)
+        val stored = TipTrack.of(tip(entered = 4460.0).copy(targetProgress = tp), live = null)
+        assertEquals(4501.0, stored.current!!, 0.0)
+        assertEquals("CLOSE 14 OCT", stored.currentCaption)
+        assertFalse(stored.streaming)
+
+        val quoted = TipTrack.of(tip(entered = 4460.0).copy(targetProgress = tp), live = 4530.0, streaming = true)
+        assertEquals("CURRENT", quoted.currentCaption)
+        assertTrue(quoted.streaming)
+        assertFalse(TipTrack.of(tip(entered = 4460.0), live = 4530.0).streaming)
+        assertEquals("CLOSE", TipTrack.of(tip(entered = 4460.0).copy(targetProgress = tp.copy(priceSessionDate = null)), live = null).currentCaption)
+    }
+
+    // Old servers list a PENDING_CHECK tip as closed: it still reads as open. Merged duplicates never list; intake rejections fold with the voided.
+    @Test
+    fun listsRouteByTipStatus() {
+        val mine = { id: String, status: String, reason: String? -> MyTipDto(tip(status = status).copy(tipId = id, reason = reason), null, null, emptyList(), 0) }
+        val lists = TradingLists.build(
+            myOpen = listOf(mine("a", "ACTIVE", null), mine("p", "PENDING_CHECK", null)),
+            myClosed = listOf(mine("p", "PENDING_CHECK", null), mine("q", "PENDING_CHECK", null), mine("h", "TARGET_HIT", null), mine("d", "MERGED_DUPLICATE", null),
+                mine("u", "UNSCORABLE", "ENTRY_OFF_MARKET"), mine("v", "INVALIDATED", "REVISED")),
+            active = emptyList(), closed = emptyList(), engine = null, quotes = emptyMap(), today = today,
+            followingClosed = listOf(mine("f", "PENDING_CHECK", null))
+        )
+        assertEquals(listOf("tip-a", "tip-p", "tip-q"), lists.open(OpenScope.MINE).map { it.key })
+        assertEquals(listOf("tip-f"), lists.open(OpenScope.FOLLOWING).map { it.key })
+        assertEquals(listOf("tip-h"), lists.history(HistoryScope.MINE).map { it.key })
+        assertEquals(setOf("tip-u", "tip-v"), lists.voided(HistoryScope.MINE).map { it.key }.toSet())
+        assertTrue(lists.history(HistoryScope.FOLLOWING).isEmpty())
     }
 
     // Buy shows only while the entry can still be taken: waiting, and not past its buy-by day.

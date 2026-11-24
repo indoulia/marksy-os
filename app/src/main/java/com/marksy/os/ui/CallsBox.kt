@@ -70,7 +70,7 @@ private fun CallGroup(
     name: String, kind: String?, record: ScorecardHeadlineDto, tips: List<LedgerTipDto>, withCaller: Boolean,
     livePrice: Double?, onOpenTip: (String) -> Unit, follow: FollowState
 ) {
-    val (open, past) = remember(tips) { tips.partition(LedgerCalls::isActive) }
+    val (open, past) = remember(tips) { tips.filter(LedgerCalls::listed).partition(LedgerCalls::isOpen) }
     Column(Modifier.fillMaxWidth().padding(top = MarksySpace.Gap)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -82,7 +82,7 @@ private fun CallGroup(
             }
             FollowPill(follow.following, follow.onToggle)
         }
-        if (tips.isEmpty()) Text("No call on this stock", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
+        if (open.isEmpty() && past.isEmpty()) Text("No tip on this stock", color = MarksyTheme.TextMuted, style = MarksyType.Meta)
         open.forEach { t -> OpenCall(t, withCaller, livePrice) { onOpenTip(t.tipId) } }
         if (past.isNotEmpty()) Collapsible("Past calls (${past.size})", summary = null) {
             past.forEach { t ->
