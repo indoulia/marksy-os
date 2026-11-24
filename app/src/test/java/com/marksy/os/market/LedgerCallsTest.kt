@@ -104,6 +104,39 @@ class LedgerCallsTest {
         assertNull(LedgerCalls.targetProgressLine(tip()))
     }
 
+    // The tip sheet's CURRENT cell already shows the stored close, so the line can leave it out.
+    @Test
+    fun targetProgressCanLeaveTheStoredCloseToThePriceCell() {
+        val t = tip().copy(targetProgress = TargetProgressDto("TPR-001", "AVAILABLE", null, 60.0, 33.33, "2026-10-15T04:00:00Z", 104.0, "2026-10-14", null, null, "FINAL", "CURRENT", null))
+        assertEquals("Target progress 60% · started at 33%", LedgerCalls.targetProgressLine(t, withClose = false))
+        assertEquals("Target progress 60% · started at 33% · 14 Oct daily close ₹104.00", LedgerCalls.targetProgressLine(t))
+    }
+
+    // A tip received in market hours waits for its first price check: open, never history, no return yet.
+    @Test
+    fun aPendingCheckTipIsOpenAndAMergedDuplicateIsNeverListed() {
+        val pending = tip(status = "PENDING_CHECK", entryStatus = "WAITING")
+        assertTrue(LedgerCalls.isOpen(pending))
+        assertFalse(LedgerCalls.isActive(pending))
+        assertEquals("Checking price", LedgerCalls.state(pending))
+        assertEquals(LedgerCalls.Tone.NEUTRAL, LedgerCalls.tone(pending))
+        assertNull(LedgerCalls.progressText(pending))
+        assertTrue(LedgerCalls.isLive(prediction("WATCHING", ledgerJson("PENDING_CHECK"))))
+        assertTrue(LedgerCalls.isOpen(tip()))
+        assertFalse(LedgerCalls.isOpen(tip(status = "TARGET_HIT")))
+        assertFalse(LedgerCalls.listed(tip(status = "MERGED_DUPLICATE")))
+        assertTrue(LedgerCalls.listed(pending))
+    }
+
+    @Test
+    fun aWaitingTipReadsWaitingToBuyAndAReturnPrintedAsZeroIsNeutral() {
+        assertEquals("Waiting to buy", LedgerCalls.state(tip(entryStatus = "WAITING")))
+        assertEquals(LedgerCalls.Tone.NEUTRAL, LedgerCalls.progressTone(tip(progress = point(-0.00001, "FINAL"))))
+        assertEquals(LedgerCalls.Tone.NEGATIVE, LedgerCalls.progressTone(tip(progress = point(-0.0001, "FINAL"))))
+        assertEquals(LedgerCalls.Tone.NEUTRAL, LedgerCalls.signTone(0.0004, decimals = 1))
+        assertEquals(LedgerCalls.Tone.POSITIVE, LedgerCalls.signTone(0.0004))
+    }
+
     @Test
     fun theTargetProgressNoteSaysTheLiveBarIsADifferentPrice() {
         val base = "Where that close sits between stop-loss (0%) and target (100%), not a chance of success."
@@ -134,7 +167,7 @@ class LedgerCallsTest {
         outcome: String? = null,
         reason: String? = null,
         actual: Double? = null,
-        entryStatus: String = "ENTERED",
+        entryStatus: String? = "ENTERED",
         progress: ProgressPointDto? = null,
         predictionId: Int? = null,
         seen: String = "2026-09-21T04:00:00Z",

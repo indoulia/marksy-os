@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.marksy.os.EmptyState
 import com.marksy.os.MarksyFormat
+import kotlinx.coroutines.launch
 
 @Composable
 fun TradingIntelligenceScreen(
@@ -81,17 +82,18 @@ private fun TradingViews(
     }
     val quotes = rememberUpstoxQuotes(symbols)
     val today = LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
-    val lists = remember(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.followingOpen.items, feed.followingClosed.items, feed.engine, quotes, today) {
-        TradingLists.build(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today, feed.followingOpen.items, feed.followingClosed.items)
+    val freshness = rememberFeedFreshness()
+    val streaming = remember(quotes, freshness, today) { quotes.filterValues { CallPrice.streaming(it, freshness, today) }.keys }
+    val lists = remember(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.followingOpen.items, feed.followingClosed.items, feed.engine, quotes, streaming, today) {
+        TradingLists.build(feed.myOpen.items, feed.myClosed.items, feed.marksyActive.items, feed.marksyClosed.items, feed.engine, quotes, today, feed.followingOpen.items, feed.followingClosed.items, streaming)
     }
-    // Counts wait for every up-front page: a first page alone once showed History 19 before it settled at 79.
-    val openReady = feed.myOpen.settled && feed.marksyActive.settled
-    val historyReady = feed.myClosed.settled && feed.marksyClosed.settled && feed.marksyActive.settled
+    // Counts wait for every up-front page of every list behind them (a first page alone once showed History 19, then 79), and a failed page keeps them off.
     val counts = mapOf(
-        TAB_OPEN to lists.open.size.takeIf { openReady },
-        TAB_PICKS to lists.setups.size.takeIf { feed.marksyActive.settled },
-        TAB_HISTORY to lists.history(HistoryScope.ALL).size.takeIf { historyReady }
+        TAB_OPEN to lists.open.size.takeIf { feed.ready(feed.openLists(OpenScope.ALL)) },
+        TAB_PICKS to lists.setups.size.takeIf { feed.ready(feed.setupsLists) },
+        TAB_HISTORY to lists.history(HistoryScope.ALL).size.takeIf { feed.ready(feed.historyLists(HistoryScope.ALL)) }
     )
+    val retryScope = rememberCoroutineScope()
     var ticket by remember { mutableStateOf<TradeIntent?>(null) }
     ticket?.let { TradeTicketSheet(it) { ticket = null } }
     var sheet by remember { mutableStateOf<TipCardModel?>(null) }
@@ -110,15 +112,13 @@ private fun TradingViews(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner), verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 when (view) {
                     TAB_PICKS -> SetupsScope.entries.forEach { s ->
-                        ScopePill(s.label, lists.setups(s, scan).size.takeIf { feed.marksyActive.settled }, s == setupsScope) { setupsScope = s }
+                        ScopePill(s.label, lists.setups(s, scan).size.takeIf { feed.ready(feed.setupsLists) }, s == setupsScope) { setupsScope = s }
                     }
                     TAB_HISTORY -> HistoryScope.entries.forEach { s ->
-                        val ready = if (s == HistoryScope.FOLLOWING) feed.followingClosed.settled else historyReady
-                        ScopePill(s.label, lists.history(s).size.takeIf { ready }, s == historyScope) { onHistoryScope(s) }
+                        ScopePill(s.label, lists.history(s).size.takeIf { feed.ready(feed.historyLists(s)) }, s == historyScope) { onHistoryScope(s) }
                     }
                     else -> OpenScope.entries.forEach { s ->
-                        val ready = if (s == OpenScope.FOLLOWING) feed.followingOpen.settled else openReady
-                        ScopePill(s.label, lists.open(s).size.takeIf { ready }, s == openScope) { onOpenScope(s) }
+                        ScopePill(s.label, lists.open(s).size.takeIf { feed.ready(feed.openLists(s)) }, s == openScope) { onOpenScope(s) }
                     }
                 }
             }
@@ -128,7 +128,7 @@ private fun TradingViews(
             TradingList(view, openScope, setupsScope, historyScope, feed, lists, scan, voidedOpen, { voidedOpen = !voidedOpen }, expanded,
                 onToggle = { k -> expanded = if (k in expanded) expanded - k else expanded + k },
                 onOpen = { sheet = it }, onTrade = { ticket = it }, onScore = onScore, onSourceRow = { t, o -> daily = t to o },
-                repository = repository, onOpenStock = onOpenStock)
+                repository = repository, onOpenStock = onOpenStock, onRetry = { failed -> retryScope.launch { feed.retry(failed) } })
         }
     }
 }
@@ -139,9 +139,10 @@ private fun TradingList(
     scan: com.marksy.os.market.LatestScanDto?, voidedOpen: Boolean, onToggleVoided: () -> Unit, expanded: Set<String>, onToggle: (String) -> Unit,
     onOpen: (TipCardModel) -> Unit, onTrade: (TradeIntent) -> Unit, onScore: (com.marksy.os.market.ScorecardSource) -> Unit,
     onSourceRow: (com.marksy.os.market.LedgerTipDto, com.marksy.os.market.AlsoTippedDto) -> Unit,
-    repository: com.marksy.os.market.MarketIntelligenceRepository, onOpenStock: (String) -> Unit
+    repository: com.marksy.os.market.MarketIntelligenceRepository, onOpenStock: (String) -> Unit, onRetry: (List<Paged<*>>) -> Unit
 ) {
     val following = (view == TAB_OPEN && openScope == OpenScope.FOLLOWING) || (view == TAB_HISTORY && historyScope == HistoryScope.FOLLOWING)
+    val failed = feed.failedLists(when (view) { TAB_PICKS -> feed.setupsLists; TAB_HISTORY -> feed.historyLists(historyScope); else -> feed.openLists(openScope) })
     val cards = when (view) {
         TAB_PICKS -> lists.setups(setupsScope, scan)
         TAB_HISTORY -> lists.history(historyScope)
@@ -156,7 +157,12 @@ private fun TradingList(
     }
     val summary = when (view) {
         TAB_PICKS -> TradingLists.setupsSummary(cards.size, scan).takeIf { cards.isNotEmpty() }
-        TAB_HISTORY -> TradingLists.historySummary(when (historyScope) { HistoryScope.MINE -> feed.myRecord; HistoryScope.FOLLOWING -> null; else -> feed.engine?.body })
+        // Marksy's record matches only Marksy's list; All mixes every source, so it gets none.
+        TAB_HISTORY -> when (historyScope) {
+            HistoryScope.MINE -> TradingLists.historySummary(feed.myRecord)
+            HistoryScope.MARKSY -> TradingLists.historySummary(feed.engineRecord?.body, owner = "MARKSY")
+            else -> null
+        }
         else -> TradingLists.openSummary(cards).takeIf { cards.isNotEmpty() }
     }
     val rows: LazyListScope.() -> Unit = {
@@ -175,6 +181,7 @@ private fun TradingList(
                 TipCard(m, expanded = false, onToggleSources = {}, onOpen = { onOpen(m) }, onTrade = onTrade, onScore = onScore, onSourceRow = {}, impliedStatus = VOIDED)
             }
         }
+        if (failed.isNotEmpty()) item(key = "more-failed") { LoadMoreFailed { onRetry(failed) } }
     }
     if (following) FollowingView(repository, MarksySpace.Wide, onOpenStock, onTrade = onTrade, onScore = onScore, alerts = view == TAB_OPEN, cards = rows)
     else MarksyList(bottom = MarksySpace.Wide, content = rows)
@@ -183,6 +190,15 @@ private fun TradingList(
 @Composable
 private fun ScopePill(label: String, count: Int?, selected: Boolean, onClick: () -> Unit) =
     Pill(label + (count?.let { " $it" } ?: ""), selected = selected, onClick = onClick)
+
+/** A list that stopped short of its end: one line and Retry. */
+@Composable
+private fun LoadMoreFailed(onRetry: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = MarksySpace.Inner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Gap)) {
+        Text("Couldn't load more", color = MarksyTheme.TextMuted, style = MarksyType.Small, maxLines = 1, modifier = Modifier.weight(1f))
+        Pill("Retry", compact = true, onClick = onRetry)
+    }
+}
 
 @Composable
 private fun TradingEmpty(view: String, scope: OpenScope, feed: TradingFeed, lists: TradingLists, scan: com.marksy.os.market.LatestScanDto?, following: Boolean) {

@@ -136,6 +136,24 @@ class TrustModelTest {
         assertEquals("Trust · Lifetime", trustTitleNote(q))
     }
 
+    // The header names the filter the server applied (its echo wins over the request) and when it counted.
+    @Test
+    fun theHeaderSaysWhichWindowTheServerCountedAndWhen() {
+        val echo = ScorecardFilterEchoDto("LAST_30_DAYS", "2026-10-18", "2026-11-17", "first_seen", null, null, null, null, null, "2026-11-17T10:00:00Z")
+        assertEquals("Trust · Last 30 days", trustTitleNote(ScorecardQuery(), echo))
+        assertEquals("Trust · Last 30 days · Up to 1 week", trustTitleNote(ScorecardQuery(), echo.copy(horizon = "UP_TO_1_WEEK")))
+        assertEquals("Trust · 1 Oct – 16 Oct", trustTitleNote(ScorecardQuery(), echo.copy(period = "CUSTOM", startDate = "2026-10-01", endDate = "2026-10-16")))
+        // The range already names the day it ends on, so the as-of keeps only its time (and fits a 360dp header).
+        assertEquals("18 Oct – 17 Nov 2026 · as of 15:30", trustTitleSub(echo))
+        assertEquals("18 Dec 2025 – 17 Jan 2026 · as of 17 Nov, 15:30", trustTitleSub(echo.copy(startDate = "2025-12-18", endDate = "2026-01-17")))
+
+        val lifetime = echo.copy(period = "LIFETIME", startDate = null, endDate = null)
+        assertEquals("Trust · Lifetime", trustTitleNote(ScorecardQuery(), lifetime))
+        assertEquals("as of 17 Nov, 15:30", trustTitleSub(lifetime))
+        assertNull(trustTitleSub(lifetime.copy(asOf = "")))
+        assertNull(trustTitleSub(null))
+    }
+
     @Test
     fun marksyComparesAgainstItsOwnChannel() {
         val marksy = card("Marksy", body(), type = "MARKSY")

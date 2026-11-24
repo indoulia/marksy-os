@@ -79,12 +79,14 @@ object ScorecardText {
 
     fun trust(t: ScorecardTrustDto): String = t.trustScore?.let { "Trust $it" } ?: "Trust —"
 
-    /** The window the server resolved, in IST dates as echoed; "All time" for Lifetime. */
+    /** The window the server resolved, in IST dates as echoed ("18 Oct – 17 Nov 2026"); "All time" for Lifetime. */
     fun range(f: ScorecardFilterEchoDto): String {
-        fun day(iso: String?) = iso?.let { runCatching { MarksyFormat.fullDay(LocalDate.parse(it)) }.getOrDefault(it) }
-        val start = day(f.startDate)
-        val end = day(f.endDate)
-        return if (start == null || end == null) "All time" else "$start – $end (IST)"
+        val start = f.startDate ?: return "All time"
+        val end = f.endDate ?: return "All time"
+        val s = runCatching { LocalDate.parse(start) }.getOrNull()
+        val e = runCatching { LocalDate.parse(end) }.getOrNull() ?: return "$start – $end"
+        if (s == null) return "$start – ${MarksyFormat.fullDay(e)}"
+        return (if (s.year == e.year) MarksyFormat.day(s) else MarksyFormat.fullDay(s)) + " – " + MarksyFormat.fullDay(e)
     }
 
     fun summary(b: ScorecardBodyDto): String = listOfNotNull(

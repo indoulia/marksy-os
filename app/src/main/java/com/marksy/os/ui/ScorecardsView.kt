@@ -62,13 +62,17 @@ internal val ScorecardTrailSaver = Saver<List<ScorecardSource>, String>(save = {
 internal fun ScorecardsView(
     repository: MarketIntelligenceRepository, query: ScorecardQuery, bottomPadding: Dp,
     onQueryChange: (ScorecardQuery) -> Unit = {}, onEditFilter: (ScorecardQuery) -> Unit = {},
-    trail: List<ScorecardSource> = emptyList(), onTrailChange: (List<ScorecardSource>) -> Unit = {}, onOpenStock: (String) -> Unit = {}
+    trail: List<ScorecardSource> = emptyList(), onTrailChange: (List<ScorecardSource>) -> Unit = {}, onOpenStock: (String) -> Unit = {},
+    onEcho: (com.marksy.os.market.ScorecardFilterEchoDto?) -> Unit = {}
 ) {
     // The tabs share one filter, so switching tabs reads nothing new.
     val filter = query.copy(entity = ScorecardEntity.CHANNEL)
     val split by produceState<MarketDataState<ScorecardSummaryDto>>(MarketDataState.Loading, filter) { value = repository.scorecardSummary(filter) }
     val channels by produceState<MarketDataState<EntityScorecardListDto>>(MarketDataState.Loading, filter) { value = repository.scorecards(ScorecardEntity.CHANNEL, filter) }
     val callers by produceState<MarketDataState<EntityScorecardListDto>>(MarketDataState.Loading, filter) { value = repository.scorecards(ScorecardEntity.CALLER, filter) }
+    // The header says which window the server applied and when it counted.
+    val echo = (channels as? MarketDataState.Loaded)?.value?.filter ?: (split as? MarketDataState.Loaded)?.value?.filter
+    LaunchedEffect(echo) { onEcho(echo) }
     val followed by MarketIntelligenceRepository.followed.collectAsState()
     LaunchedEffect(Unit) { repository.follows() }
     val toggleFollow = rememberFollowToggle(repository)

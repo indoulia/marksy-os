@@ -11,6 +11,10 @@ object LedgerCalls {
     const val STATUS_ACTIVE = "ACTIVE"
     // The tracker voids a call only before a valid entry (marksy-api tip_tracker `_void`).
     const val STATUS_INVALIDATED = "INVALIDATED"
+    // Received in market hours, awaiting its first price check (marksy-api lists it with the open tips).
+    const val STATUS_PENDING_CHECK = "PENDING_CHECK"
+    const val STATUS_MERGED_DUPLICATE = "MERGED_DUPLICATE"
+    const val STATUS_UNSCORABLE = "UNSCORABLE"
     private const val DATA_BASIS_PROVISIONAL = "PROVISIONAL"
     private const val DATA_BASIS_FINAL = "FINAL"
     const val TARGET_PROGRESS_AVAILABLE = "AVAILABLE"
@@ -21,7 +25,7 @@ object LedgerCalls {
     private val STATUS = mapOf(
         "TARGET_HIT" to "Target hit", "STOP_LOSS_HIT" to "Stop-loss hit", "SOURCE_EXIT" to "Exited",
         "HORIZON_EXPIRED" to "Expired", "DIRECTION_HORIZON" to "Horizon reached", "INVALIDATED" to "Invalidated",
-        "UNSCORABLE" to "Unscorable", "DATA_UNRESOLVED" to "No market data"
+        "UNSCORABLE" to "Unscorable", "DATA_UNRESOLVED" to "No market data", STATUS_PENDING_CHECK to "Checking price"
     )
     private val OUTCOME = mapOf("SUCCESS" to "Succeeded", "FAILURE" to "Failed")
     private val CHANNEL_TYPE = mapOf(
@@ -34,15 +38,32 @@ object LedgerCalls {
 
     fun isActive(t: LedgerTipDto): Boolean = t.status == STATUS_ACTIVE
 
+    /** Open rather than history: tracked, or still waiting for its first price check. */
+    fun isOpen(t: LedgerTipDto): Boolean = t.status == STATUS_ACTIVE || t.status == STATUS_PENDING_CHECK
+
+    fun isPendingCheck(t: LedgerTipDto): Boolean = t.status == STATUS_PENDING_CHECK
+
+    /** A merged duplicate reads through the tip it follows, so it is never a row of its own. */
+    fun listed(t: LedgerTipDto): Boolean = t.status != STATUS_MERGED_DUPLICATE
+
+    /** A return's colour by the sign it prints with: one that prints as 0.00% is neutral. */
+    fun signTone(fraction: Double, decimals: Int = 2): Tone = MarksyFormat.percent(fraction * 100, decimals).let {
+        when {
+            it.startsWith("+") -> Tone.POSITIVE
+            it.startsWith(MarksyFormat.MINUS) -> Tone.NEGATIVE
+            else -> Tone.NEUTRAL
+        }
+    }
+
     private val MONITOR_ENDED = setOf("INVALIDATED", "DATA_UNRESOLVED")
 
     /** Live on both sides: the tip is open and Marksy has not withdrawn it. Without `ledger` (an older backend) the monitor decides. */
-    fun isLive(p: ActivePredictionDto): Boolean = p.lifecycleState !in MONITOR_ENDED && p.ledger?.let(::isActive) != false
+    fun isLive(p: ActivePredictionDto): Boolean = p.lifecycleState !in MONITOR_ENDED && p.ledger?.let(::isOpen) != false
 
     /** An ended call reads as its ledger result (spec §7); a withdrawal the tracker has not priced yet says so, never "Invalidated". */
     fun endedLine(p: ActivePredictionDto): String? {
         val t = p.ledger ?: return null
-        return if (isActive(t)) "Withdrawn · result pending" else listOfNotNull(state(t), returnText(t.actualReturn)).joinToString(" · ")
+        return if (isOpen(t)) "Withdrawn · result pending" else listOfNotNull(state(t), returnText(t.actualReturn)).joinToString(" · ")
     }
 
     /** The monitor's lifecycle word, dropped once the tip speaks for an ended call. */
@@ -60,7 +81,7 @@ object LedgerCalls {
     /** A ledger status in words; the accepted reply's bare status and reason read the same way. */
     fun state(status: String, reason: String?, entryStatus: String? = null, outcome: String? = null): String = when {
         reason == "OPTION_UNSUPPORTED" -> OPTION_UNSUPPORTED
-        status == STATUS_ACTIVE -> if (entryStatus == "WAITING") "Waiting for entry" else "Active"
+        status == STATUS_ACTIVE -> if (entryStatus == "WAITING") "Waiting to buy" else "Active"
         status in setOf("SOURCE_EXIT", "DIRECTION_HORIZON") -> listOfNotNull(STATUS[status], outcome?.let(OUTCOME::get)).joinToString(" · ")
         status in setOf("INVALIDATED", "UNSCORABLE", "DATA_UNRESOLVED") -> listOfNotNull(STATUS[status], reason?.let(::words)).joinToString(" · ")
         else -> STATUS[status] ?: words(status)
@@ -70,7 +91,7 @@ object LedgerCalls {
         "SUCCESS" -> Tone.POSITIVE
         "FAILURE" -> Tone.NEGATIVE
         "EXPIRED" -> Tone.NEUTRAL
-        else -> if (isActive(t)) Tone.NEUTRAL else Tone.MUTED
+        else -> if (isOpen(t)) Tone.NEUTRAL else Tone.MUTED
     }
 
     fun returnText(fraction: Double?): String? = fraction?.let { MarksyFormat.percent(it * 100) }
@@ -85,24 +106,20 @@ object LedgerCalls {
 
     fun progressTone(t: LedgerTipDto): Tone {
         val value = (if (isActive(t)) t.latestProgress?.returnToDate else t.actualReturn) ?: return Tone.MUTED
-        return when {
-            value > 0 -> Tone.POSITIVE
-            value < 0 -> Tone.NEGATIVE
-            else -> Tone.NEUTRAL
-        }
+        return signTone(value)
     }
 
     /** Shown under an available Target Progress; the server computes the value, the app only words it. */
     fun targetProgressNote(liveBar: Boolean): String =
         "Where that close sits between stop-loss (0%) and target (100%), not a chance of success." + if (liveBar) " The bar uses the live price." else ""
 
-    /** `TPR-001` in words from the server's stored close; null for a closed tip or an older backend, and never a 0 standing in for a missing value. */
-    fun targetProgressLine(t: LedgerTipDto): String? {
+    /** `TPR-001` in words from the server's stored close (left out with [withClose] false); null for a closed tip or an older backend, never a stand-in 0. */
+    fun targetProgressLine(t: LedgerTipDto, withClose: Boolean = true): String? {
         val tp = t.targetProgress ?: return null
         val close = tp.priceSessionDate?.let { d -> runCatching { MarksyFormat.day(LocalDate.parse(d)) }.getOrDefault(d) }
         val started = tp.startValue?.let { "started at ${progressPct(it)}" }
         if (tp.status == TARGET_PROGRESS_AVAILABLE && tp.value != null) return listOfNotNull(
-            "Target progress ${progressPct(tp.value)}", started, storedClose(tp, close)
+            "Target progress ${progressPct(tp.value)}", started, storedClose(tp, close).takeIf { withClose }
         ).joinToString(" · ")
         return when (tp.reason) {
             "NOT_OPEN" -> null

@@ -144,12 +144,13 @@ private fun MarksyPicksCard(repository: com.marksy.os.market.MarketIntelligenceR
     if (setups.isEmpty()) return
     val quotes = rememberUpstoxQuotes(remember(setups) { setups.map { it.symbol } })
     val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
+    val freshness = rememberFeedFreshness()
     MarksyCard {
         MarksyCardHeader("Marksy picks today", trailing = {
             Text("All setups", color = MarksyTheme.PrimaryEmerald, style = MarksyType.Small, fontWeight = FontWeight.SemiBold, modifier = Modifier.clip(MarksyShape.Chip).clickable(onClick = onOpenSetups))
         })
         setups.forEach { p ->
-            val m = TipCards.marksy(p, quotes[p.symbol]?.lastPrice, today, null)
+            val m = TipCards.marksy(p, quotes[p.symbol]?.lastPrice, today, null, quotes[p.symbol]?.let { CallPrice.streaming(it, freshness, today) } == true)
             MarksyDivider()
             Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${p.symbol} tip") { onOpenTip(m) }, verticalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarksySpace.Inner)) {
