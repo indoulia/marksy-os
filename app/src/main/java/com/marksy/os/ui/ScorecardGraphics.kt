@@ -48,8 +48,8 @@ object ScorecardGraphics {
 
     fun hitRateRangeText(band: TrustBandDto): String = "Hit-rate range ${Math.round(band.low * 100)}–${Math.round(band.high * 100)}%"
 
-    /** By the sign the return prints with; 0.00% is neutral, none is muted. */
-    fun returnTone(fraction: Double?): Color = fraction?.let { trackColor(TipTrack.returnTone(it)) } ?: MarksyTheme.TextMuted
+    /** By the sign the return prints with at [decimals]; zero at that precision is neutral, none is muted. */
+    fun returnTone(fraction: Double?, decimals: Int = 2): Color = fraction?.let { trackColor(TipTrack.returnTone(it, decimals)) } ?: MarksyTheme.TextMuted
 
     /** Each count's share of the whole; all zero when nothing is counted. */
     fun shares(counts: List<Int>): List<Float> {

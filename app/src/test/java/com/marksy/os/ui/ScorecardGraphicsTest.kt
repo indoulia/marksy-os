@@ -34,6 +34,10 @@ class ScorecardGraphicsTest {
         assertEquals(MarksyTheme.TextSecondary, ScorecardGraphics.returnTone(-0.00001))
         assertEquals(MarksyTheme.PrimaryEmerald, ScorecardGraphics.returnTone(0.0001))
         assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0001))
+        // A caller's −0.03% average printed with one decimal reads "0.0%", so it is neutral at that precision.
+        assertEquals(MarksyTheme.TextSecondary, ScorecardGraphics.returnTone(-0.0003, decimals = 1))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0003))
+        assertEquals(MarksyTheme.RedUrgent, ScorecardGraphics.returnTone(-0.0006, decimals = 1))
     }
 
     @Test
